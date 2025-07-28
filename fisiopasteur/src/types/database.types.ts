@@ -214,7 +214,7 @@ export type Database = {
           id_especialidad: number | null
           id_usuario: string
           nombre: string
-          rol: string
+          id_rol: string
           telefono: string | null
           usuario: string
         }
@@ -226,7 +226,7 @@ export type Database = {
           id_especialidad?: number | null
           id_usuario?: string
           nombre: string
-          rol: string
+          id_rol: string
           telefono?: string | null
           usuario: string
         }
@@ -238,7 +238,7 @@ export type Database = {
           id_especialidad?: number | null
           id_usuario?: string
           nombre?: string
-          rol?: string
+          id_rol?: string
           telefono?: string | null
           usuario?: string
         }
@@ -250,7 +250,32 @@ export type Database = {
             referencedRelation: "especialidad"
             referencedColumns: ["id_especialidad"]
           },
+          {
+            foreignKeyName: "usuario_id_rol_fkey"
+            columns: ["id_rol"]
+            isOneToOne: false
+            referencedRelation: "rol"
+            referencedColumns: ["id_rol"]
+          },
         ]
+      }
+      rol: {
+        Row: {
+          id_rol: string
+          nombre: string
+          jerarquia: string
+        }
+        Insert: {
+          id_rol?: string
+          nombre: string
+          jerarquia: string
+        }
+        Update: {
+          id_rol?: string
+          nombre?: string
+          jerarquia?: string
+        }
+        Relationships: []
       }
     }
     Views: {
