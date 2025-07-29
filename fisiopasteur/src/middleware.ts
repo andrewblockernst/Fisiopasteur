@@ -17,7 +17,7 @@ export async function middleware(request: NextRequest) {
     '/favicon.svg',
     '/_next',
     '/public',
-    '/test-db',
+    '/utils/tests/base-de-datos',
   ];
 
   // Verificar si la ruta actual es pública
