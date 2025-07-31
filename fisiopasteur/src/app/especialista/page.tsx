@@ -71,9 +71,19 @@ export default function EspecialistasPage() {
       </div>
 
       <EspecialistasTable 
-        especialistas={especialistas} 
+        especialistas={especialistas}
+        especialidades={especialidades}
         onEspecialistaDeleted={async () => {
           // Recargar la lista después de eliminar
+          try {
+            const updatedEspecialistas = await getEspecialistas();
+            setEspecialistas(updatedEspecialistas);
+          } catch (error) {
+            console.error("Error reloading specialists:", error);
+          }
+        }}
+        onEspecialistaUpdated={async () => {
+          // Recargar la lista después de actualizar
           try {
             const updatedEspecialistas = await getEspecialistas();
             setEspecialistas(updatedEspecialistas);

@@ -1,27 +1,36 @@
 import Link from "next/link";
 import Button from "@/components/button";
 import { DeleteEspecialistaButton } from "./delete-button";
+import { useState } from "react";
+import { EditarEspecialistaDialog } from "./editar-especialista-dialog";
+import type { Tables } from "@/types/database.types";
 
-interface Especialista {
-  id_usuario: string;
-  nombre: string;
-  apellido: string;
-  usuario: string;
-  email: string;
-  telefono?: string;
-  color?: string;
-  especialidades?: {
-    id_especialidad: string;
-    nombre: string;
-  }[];
-}
+type Especialidad = Tables<"especialidad">;
+type Usuario = Tables<"usuario"> & { 
+  especialidades?: Especialidad[] 
+};
 
 interface EspecialistasTableProps {
-  especialistas: Especialista[];
-  onEspecialistaDeleted?: () => void; // Nuevo callback
+  especialistas: Usuario[];
+  onEspecialistaDeleted?: () => void;
+  onEspecialistaUpdated?: () => void;
+  especialidades: Especialidad[];
 }
 
-export function EspecialistasTable({ especialistas, onEspecialistaDeleted }: EspecialistasTableProps) {
+export function EspecialistasTable({ 
+  especialistas, 
+  onEspecialistaDeleted, 
+  onEspecialistaUpdated,
+  especialidades 
+}: EspecialistasTableProps) {
+  const [editingEspecialista, setEditingEspecialista] = useState<Usuario | null>(null);
+
+  const handleEditClose = () => {
+    setEditingEspecialista(null);
+    if (onEspecialistaUpdated) {
+      onEspecialistaUpdated();
+    }
+  };
   return (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
       <table className="min-w-full divide-y divide-gray-200">
@@ -96,11 +105,13 @@ export function EspecialistasTable({ especialistas, onEspecialistaDeleted }: Esp
                 {especialista.telefono || "No disponible"}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                <Link href={`/especialista/${especialista.id_usuario}/editar`}>
-                  <Button variant="secondary" className="text-xs">
-                    Editar
-                  </Button>
-                </Link>
+                <Button 
+                  variant="secondary" 
+                  className="text-xs"
+                  onClick={() => setEditingEspecialista(especialista)}
+                >
+                  Editar
+                </Button>
                 <DeleteEspecialistaButton 
                   id={especialista.id_usuario}
                   nombre={`${especialista.nombre} ${especialista.apellido}`}
@@ -111,6 +122,15 @@ export function EspecialistasTable({ especialistas, onEspecialistaDeleted }: Esp
           ))}
         </tbody>
       </table>
+
+      {editingEspecialista && (
+        <EditarEspecialistaDialog
+          isOpen={true}
+          onClose={handleEditClose}
+          especialidades={especialidades}
+          especialista={editingEspecialista}
+        />
+      )}
     </div>
   );
 }

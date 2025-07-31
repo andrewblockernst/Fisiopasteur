@@ -227,7 +227,6 @@ export default function EspecialistaForm({
             {/* Tags seleccionadas */}
             {selectedEspecialidades.length > 0 && (
               <div className="mb-3 p-2 bg-gray-50 rounded-md">
-                <p className="text-xs text-gray-600 mb-2">Seleccionadas:</p>
                 <div className="flex flex-wrap gap-1">
                   {selectedEspecialidades.map((especialidadId) => {
                     const especialidad = especialidades.find(e => e.id_especialidad === especialidadId);
