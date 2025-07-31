@@ -104,24 +104,13 @@ export default function ColorPicker({ value = "#3B82F6", onChange, disabled = fa
           </div>
 
           {/* Close button */}
-          {/* <Button
-
-          /> */}
-          
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="px-3 py-1 bg-slate-600 text-white text-sm rounded hover:bg-slate-700"
-          >
+          <Button onClick={() => setIsOpen(false)} className="mt-2 w-10 h-8" variant="danger"> 
             Cerrar
-          </button>
-          <button
-                type="button"
-                onClick={() => handleColorSelect(customColor)}
-                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-              >
-                Usar
-              </button>
+          </Button>
+
+          <Button onClick={() => handleColorSelect(customColor)} className="mt-2 ml-1 w-10 h-8" variant="primary">
+            Usar
+          </Button>
         </div>
       )}
     </div>

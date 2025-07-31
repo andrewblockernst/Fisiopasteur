@@ -25,7 +25,7 @@ export async function getEspecialistas() {
         )
       )
     `)
-    .eq("id_rol", "2") // Solo especialistas
+    .eq("id_rol", 2) // Solo especialistas
     .order("nombre");
 
   if (error) {
@@ -58,7 +58,7 @@ export async function getEspecialista(id: string) {
       )
     `)
     .eq("id_usuario", id)
-    .eq("id_rol", "2")
+    .eq("id_rol", 2)
     .single();
 
   if (error) {
@@ -166,7 +166,7 @@ export async function updateEspecialista(id: string, formData: FormData) {
     .from("usuario")
     .update(updateData)
     .eq("id_usuario", id)
-    .eq("id_rol", "2"); // Solo especialistas
+    .eq("id_rol", 2); // Solo especialistas
 
   if (errorUsuario) {
     console.error("Error updating especialista:", errorUsuario);
@@ -213,7 +213,7 @@ export async function deleteEspecialista(id: string) {
     .from("usuario")
     .delete()
     .eq("id_usuario", id)
-    .eq("id_rol", "2"); // Solo especialistas
+    .eq("id_rol", 2); // Solo especialistas
 
   if (error) {
     console.error("Error deleting especialista:", error);

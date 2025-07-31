@@ -2,6 +2,7 @@ import { getEspecialistas } from "@/lib/actions/especialista.action";
 import Link from "next/link";
 import Button from "@/components/button";
 import { DeleteEspecialistaButton } from "@/components/especialista/delete-button";
+import { CirclePlus } from 'lucide-react';
 
 export default async function EspecialistasPage() {
   const especialistas = await getEspecialistas();

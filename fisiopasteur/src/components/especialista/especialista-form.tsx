@@ -217,64 +217,69 @@ export default function EspecialistaForm({
               disabled={isSubmitting}
             />
           </div>
-        </div>
 
-        {/* Especialidades - Selector múltiple */}
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Especialidades *
-          </label>
-          
-          {/* Tags seleccionadas */}
-          {selectedEspecialidades.length > 0 && (
-            <div className="mb-4 p-3 bg-gray-50 rounded-md">
-              <p className="text-sm text-gray-600 mb-2">Especialidades seleccionadas:</p>
-              <div className="flex flex-wrap gap-2">
-                {selectedEspecialidades.map((especialidadId) => {
-                  const especialidad = especialidades.find(e => e.id_especialidad === especialidadId);
-                  return (
-                    <span
-                      key={especialidadId}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                    >
-                      {especialidad?.nombre}
-                      <button
-                        type="button"
-                        onClick={() => removeEspecialidad(especialidadId)}
-                        className="ml-2 text-blue-600 hover:text-blue-800"
+          {/* Especialidades - Ahora alineado en el grid */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Especialidades *
+            </label>
+            
+            {/* Tags seleccionadas */}
+            {selectedEspecialidades.length > 0 && (
+              <div className="mb-3 p-2 bg-gray-50 rounded-md">
+                <p className="text-xs text-gray-600 mb-2">Seleccionadas:</p>
+                <div className="flex flex-wrap gap-1">
+                  {selectedEspecialidades.map((especialidadId) => {
+                    const especialidad = especialidades.find(e => e.id_especialidad === especialidadId);
+                    return (
+                      <span
+                        key={especialidadId}
+                        className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800"
                       >
-                        ×
-                      </button>
-                    </span>
-                  );
-                })}
+                        {especialidad?.nombre}
+                        <button
+                          type="button"
+                          onClick={() => removeEspecialidad(especialidadId)}
+                          className="ml-1 text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Lista de especialidades disponibles */}
-          <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
-            {especialidades.map((especialidad) => {
-              const isSelected = selectedEspecialidades.includes(especialidad.id_especialidad);
-              return (
-                <label
-                  key={especialidad.id_especialidad}
-                  className={`flex items-center p-3 cursor-pointer hover:bg-gray-50 ${
-                    isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleEspecialidad(especialidad.id_especialidad)}
-                    className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span className={`text-sm ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`}>
-                    {especialidad.nombre}
-                  </span>
-                </label>
-              );
-            })}
+            {/* Lista compacta de especialidades disponibles */}
+            <div className="border border-gray-300 rounded-md max-h-32 overflow-y-auto">
+              {especialidades.map((especialidad) => {
+                const isSelected = selectedEspecialidades.includes(especialidad.id_especialidad);
+                return (
+                  <label
+                    key={especialidad.id_especialidad}
+                    className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
+                      isSelected ? 'bg-blue-50 border-l-2 border-blue-500' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleEspecialidad(especialidad.id_especialidad)}
+                      className="mr-2 h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className={`text-xs ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`}>
+                      {especialidad.nombre}
+                    </span>
+                  </label>
+                );
+              })}
+              {especialidades.length === 0 && (
+                <div className="px-3 py-2 text-xs text-gray-500 text-center">
+                  No hay especialidades disponibles
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
