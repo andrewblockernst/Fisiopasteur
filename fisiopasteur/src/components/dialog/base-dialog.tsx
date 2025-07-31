@@ -126,8 +126,8 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
 
   const colors = getColors();
 
-  return (
-    <StyledWrapper colors={colors} size={size} isAnimating={isAnimating}>
+return (
+    <StyledWrapper colors={colors} size={size} $isAnimating={isAnimating}>
       <div className="dialog-overlay">
         <div className="dialog-container">
           <div className="dialog-content">
@@ -174,7 +174,7 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
   );
 };
 
-const StyledWrapper = styled.div<{ colors: any; size: DialogSize; isAnimating: boolean }>`
+const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: boolean }>`
   .dialog-overlay {
     position: fixed;
     inset: 0;
@@ -183,7 +183,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; isAnimating: b
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    animation: ${props => props.isAnimating ? 'fadeOut 0.3s ease-out forwards' : 'fadeIn 0.3s ease-out'};
+    animation: ${props => props.$isAnimating ? 'fadeOut 0.3s ease-out forwards' : 'fadeIn 0.3s ease-out'};
   }
 
   .dialog-container {
@@ -195,7 +195,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; isAnimating: b
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
     position: relative;
     text-align: center;
-    animation: ${props => props.isAnimating ? 'scaleOut 0.3s ease-out forwards' : 'scaleIn 0.3s ease-out'};
+    animation: ${props => props.$isAnimating ? 'scaleOut 0.3s ease-out forwards' : 'scaleIn 0.3s ease-out'};
   }
 
   // ...existing styles...
