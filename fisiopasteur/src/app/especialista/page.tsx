@@ -29,7 +29,13 @@ export default async function EspecialistasPage() {
                 Especialidades
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Contacto
+                Color
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Teléfono
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Acciones
               </th>
             </tr>
           </thead>
@@ -51,16 +57,38 @@ export default async function EspecialistasPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {especialista.email}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {Array.isArray(especialista.nombre)
-                    ? "Sin especialidad"
-                    : especialista.especialidad?.nombre || "Sin especialidad"}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex flex-wrap gap-1">
+                    {especialista.especialidades?.length > 0 ? (
+                      especialista.especialidades.map((especialidad) => (
+                        <span
+                          key={especialidad.id_especialidad}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                        >
+                          {especialidad.nombre}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-gray-500">Sin especialidades</span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div
+                      className="w-6 h-6 rounded border border-gray-300 mr-2"
+                      style={{ backgroundColor: especialista.color || "#6B7280" }}
+                    />
+                    <span className="text-xs font-mono text-gray-600">
+                      {especialista.color || "Sin color"}
+                    </span>
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {especialista.telefono || "No disponible"}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  <Link href={`/admin/especialistas/${especialista.id_usuario}/editar`}>
+                  <Link href={`/especialista/${especialista.id_usuario}/editar`}>
                     <Button variant="secondary" className="text-xs">
                       Editar
                     </Button>

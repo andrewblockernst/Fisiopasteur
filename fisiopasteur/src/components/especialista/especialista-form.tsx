@@ -2,6 +2,7 @@
 
 import { createEspecialista, updateEspecialista } from "@/lib/actions/especialista.action";
 import Button from "@/components/button";
+import ColorPicker from "@/components/color-picker";
 import { useState } from "react";
 import Link from "next/link";
 import type { Tables } from "@/types/database.types";
@@ -12,7 +13,7 @@ type Usuario = Tables<"usuario">;
 interface EspecialistaFormProps {
   especialidades: Especialidad[];
   mode: "create" | "edit";
-  initialData?: Usuario;
+  initialData?: Usuario & { especialidades?: Especialidad[] };
 }
 
 export default function EspecialistaForm({ 
@@ -22,6 +23,10 @@ export default function EspecialistaForm({
 }: EspecialistaFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectedEspecialidades, setSelectedEspecialidades] = useState<number[]>(
+    initialData?.especialidades?.map(e => e.id_especialidad) || []
+  );
+  const [selectedColor, setSelectedColor] = useState(initialData?.color || "#3B82F6");
 
   const validateForm = (formData: FormData): boolean => {
     const newErrors: Record<string, string> = {};
@@ -48,40 +53,50 @@ export default function EspecialistaForm({
   };
 
   const handleSubmit = async (formData: FormData) => {
-  if (!validateForm(formData)) return;
+    if (!validateForm(formData)) return;
 
-  try {
-    setIsSubmitting(true);
-    
-    if (mode === "create") {
-      await createEspecialista(formData);
-    } else if (initialData) {
-      await updateEspecialista(initialData.id_usuario, formData);
-    }
-  } catch (error: any) {
-    // Solo mostrar error si NO es un redirect de Next.js
-    if (error?.digest?.includes('NEXT_REDIRECT')) {
-      // Es un redirect exitoso, no hacer nada
-      return;
-    }
-    
-    console.error("Error:", error);
-    alert(`Error al ${mode === "create" ? "crear" : "actualizar"} especialista`);
-    setIsSubmitting(false); // Solo resetear el estado si hay error real
-  }
-  // No poner finally aquí porque interfiere con el redirect
-};
+    // Agregar especialidades seleccionadas al FormData
+    selectedEspecialidades.forEach((especialidadId, index) => {
+      formData.append(`especialidades[${index}]`, especialidadId.toString());
+    });
 
-  const colors = [
-    { value: "#3B82F6", label: "Azul" },
-    { value: "#EF4444", label: "Rojo" },
-    { value: "#10B981", label: "Verde" },
-    { value: "#F59E0B", label: "Amarillo" },
-    { value: "#8B5CF6", label: "Púrpura" },
-    { value: "#EC4899", label: "Rosa" },
-    { value: "#14B8A6", label: "Turquesa" },
-    { value: "#F97316", label: "Naranja" },
-  ];
+    // Agregar color seleccionado
+    formData.set("color", selectedColor);
+
+    try {
+      setIsSubmitting(true);
+      
+      if (mode === "create") {
+        await createEspecialista(formData);
+      } else if (initialData) {
+        await updateEspecialista(initialData.id_usuario, formData);
+      }
+    } catch (error: any) {
+      // Solo mostrar error si NO es un redirect de Next.js
+      if (error?.digest?.includes('NEXT_REDIRECT')) {
+        // Es un redirect exitoso, no hacer nada
+        return;
+      }
+      
+      console.error("Error:", error);
+      alert(`Error al ${mode === "create" ? "crear" : "actualizar"} especialista`);
+      setIsSubmitting(false);
+    }
+  };
+
+  const toggleEspecialidad = (especialidadId: number) => {
+    setSelectedEspecialidades(prev => {
+      if (prev.includes(especialidadId)) {
+        return prev.filter(id => id !== especialidadId);
+      } else {
+        return [...prev, especialidadId];
+      }
+    });
+  };
+
+  const removeEspecialidad = (especialidadId: number) => {
+    setSelectedEspecialidades(prev => prev.filter(id => id !== especialidadId));
+  };
 
   return (
     <div className="bg-white shadow-md rounded-lg p-6">
@@ -191,48 +206,75 @@ export default function EspecialistaForm({
             />
           </div>
 
-          {/* Especialidad */}
-          <div>
-            <label htmlFor="id_especialidad" className="block text-sm font-medium text-gray-700 mb-2">
-              Especialidad
-            </label>
-            <select
-              id="id_especialidad"
-              name="id_especialidad"
-              defaultValue={initialData?.id_especialidad || ""}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Seleccionar especialidad</option>
-              {(especialidades && especialidades.length > 0) ? (
-                especialidades.map((especialidad) => (
-                  <option key={especialidad.id_especialidad} value={especialidad.id_especialidad}>
-                    {especialidad.nombre}
-                  </option>
-                ))
-              ) : (
-                <option disabled value="">No hay especialidades disponibles</option>
-              )}
-            </select>
-          </div>
-
-          {/* Color */}
+          {/* Color de identificación */}
           <div>
             <label htmlFor="color" className="block text-sm font-medium text-gray-700 mb-2">
               Color de identificación
             </label>
-            <select
-              id="color"
-              name="color"
-              defaultValue={initialData?.color || ""}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Seleccionar color</option>
-              {colors.map((color) => (
-                <option key={color.value} value={color.value}>
-                  {color.label}
-                </option>
-              ))}
-            </select>
+            <ColorPicker
+              value={selectedColor}
+              onChange={setSelectedColor}
+              disabled={isSubmitting}
+            />
+          </div>
+        </div>
+
+        {/* Especialidades - Selector múltiple */}
+        <div className="mt-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Especialidades *
+          </label>
+          
+          {/* Tags seleccionadas */}
+          {selectedEspecialidades.length > 0 && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-md">
+              <p className="text-sm text-gray-600 mb-2">Especialidades seleccionadas:</p>
+              <div className="flex flex-wrap gap-2">
+                {selectedEspecialidades.map((especialidadId) => {
+                  const especialidad = especialidades.find(e => e.id_especialidad === especialidadId);
+                  return (
+                    <span
+                      key={especialidadId}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {especialidad?.nombre}
+                      <button
+                        type="button"
+                        onClick={() => removeEspecialidad(especialidadId)}
+                        className="ml-2 text-blue-600 hover:text-blue-800"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Lista de especialidades disponibles */}
+          <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
+            {especialidades.map((especialidad) => {
+              const isSelected = selectedEspecialidades.includes(especialidad.id_especialidad);
+              return (
+                <label
+                  key={especialidad.id_especialidad}
+                  className={`flex items-center p-3 cursor-pointer hover:bg-gray-50 ${
+                    isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleEspecialidad(especialidad.id_especialidad)}
+                    className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className={`text-sm ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`}>
+                    {especialidad.nombre}
+                  </span>
+                </label>
+              );
+            })}
           </div>
         </div>
 

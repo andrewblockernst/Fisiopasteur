@@ -8,8 +8,9 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types"
 type Especialista = Tables<"usuario">;
 type EspecialistaInsert = TablesInsert<"usuario">;
 type EspecialistaUpdate = TablesUpdate<"usuario">;
+type UsuarioEspecialidad = Tables<"usuario_especialidad">;
 
-// Obtener todos los especialistas
+// Obtener todos los especialistas con sus especialidades
 export async function getEspecialistas() {
   const supabase = await createClient();
   
@@ -17,9 +18,11 @@ export async function getEspecialistas() {
     .from("usuario")
     .select(`
       *,
-      especialidad:id_especialidad(
-        id_especialidad,
-        nombre
+      usuario_especialidad(
+        especialidad:id_especialidad(
+          id_especialidad,
+          nombre
+        )
       )
     `)
     .eq("id_rol", "2") // Solo especialistas
@@ -30,10 +33,16 @@ export async function getEspecialistas() {
     throw new Error("Error al obtener especialistas");
   }
 
-  return data;
+  // Transformar los datos para que sea más fácil de usar
+  const especialistasConEspecialidades = data.map(usuario => ({
+    ...usuario,
+    especialidades: usuario.usuario_especialidad?.map(ue => ue.especialidad).filter(Boolean) || []
+  }));
+
+  return especialistasConEspecialidades;
 }
 
-// Obtener un especialista por ID
+// Obtener un especialista por ID con sus especialidades
 export async function getEspecialista(id: string) {
   const supabase = await createClient();
   
@@ -41,9 +50,11 @@ export async function getEspecialista(id: string) {
     .from("usuario")
     .select(`
       *,
-      especialidad:id_especialidad(
-        id_especialidad,
-        nombre
+      usuario_especialidad(
+        especialidad:id_especialidad(
+          id_especialidad,
+          nombre
+        )
       )
     `)
     .eq("id_usuario", id)
@@ -55,45 +66,85 @@ export async function getEspecialista(id: string) {
     throw new Error("Error al obtener especialista");
   }
 
-  return data;
+  // Transformar los datos
+  const especialistaConEspecialidades = {
+    ...data,
+    especialidades: data.usuario_especialidad?.map(ue => ue.especialidad).filter(Boolean) || []
+  };
+
+  return especialistaConEspecialidades;
 }
 
-// Crear especialista
-// Crear especialista
+// Crear especialista con múltiples especialidades
 export async function createEspecialista(formData: FormData) {
   const supabase = await createClient();
 
+  // Obtener especialidades seleccionadas del FormData
+  const especialidadesSeleccionadas: number[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('especialidades[')) {
+      especialidadesSeleccionadas.push(Number(value));
+    }
+  }
+
   const especialistaData: Omit<EspecialistaInsert, 'id_usuario'> = {
-    // No incluir id_usuario, dejar que la base de datos lo genere
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
     email: formData.get("email") as string,
     usuario: formData.get("usuario") as string,
     contraseña: formData.get("contraseña") as string,
     telefono: formData.get("telefono") as string || null,
-    id_especialidad: formData.get("id_especialidad") ? Number(formData.get("id_especialidad")) : null,
-    id_rol: "2", // Siempre especialista
+    id_rol: 2,
     color: formData.get("color") as string || null,
+    id_especialidad: null, // Ya no usamos este campo individual
   };
 
-  const { data, error } = await supabase
+  // Crear el usuario
+  const { data: nuevoUsuario, error: errorUsuario } = await supabase
     .from("usuario")
     .insert(especialistaData)
     .select()
     .single();
 
-  if (error) {
-    console.error("Error creating especialista:", error);
+  if (errorUsuario) {
+    console.error("Error creating especialista:", errorUsuario);
     throw new Error("Error al crear especialista");
+  }
+
+  // Crear las relaciones con especialidades
+  if (especialidadesSeleccionadas.length > 0) {
+    const relacionesEspecialidades = especialidadesSeleccionadas.map(idEspecialidad => ({
+      id_usuario: nuevoUsuario.id_usuario,
+      id_especialidad: idEspecialidad
+    }));
+
+    const { error: errorRelaciones } = await supabase
+      .from("usuario_especialidad")
+      .insert(relacionesEspecialidades);
+
+    if (errorRelaciones) {
+      console.error("Error creating especialidad relations:", errorRelaciones);
+      // Si falla la relación, eliminar el usuario creado
+      await supabase.from("usuario").delete().eq("id_usuario", nuevoUsuario.id_usuario);
+      throw new Error("Error al asignar especialidades");
+    }
   }
 
   revalidatePath("/especialista");
   redirect("/especialista");
 }
 
-// Actualizar especialista
+// Actualizar especialista con múltiples especialidades
 export async function updateEspecialista(id: string, formData: FormData) {
   const supabase = await createClient();
+
+  // Obtener especialidades seleccionadas del FormData
+  const especialidadesSeleccionadas: number[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('especialidades[')) {
+      especialidadesSeleccionadas.push(Number(value));
+    }
+  }
 
   const updateData: EspecialistaUpdate = {
     nombre: formData.get("nombre") as string,
@@ -101,7 +152,6 @@ export async function updateEspecialista(id: string, formData: FormData) {
     email: formData.get("email") as string,
     usuario: formData.get("usuario") as string,
     telefono: formData.get("telefono") as string || null,
-    id_especialidad: formData.get("id_especialidad") ? Number(formData.get("id_especialidad")) : null,
     color: formData.get("color") as string || null,
   };
 
@@ -111,24 +161,51 @@ export async function updateEspecialista(id: string, formData: FormData) {
     updateData.contraseña = contraseña;
   }
 
-  const { data, error } = await supabase
+  // Actualizar el usuario
+  const { error: errorUsuario } = await supabase
     .from("usuario")
     .update(updateData)
     .eq("id_usuario", id)
-    .eq("id_rol", "2") // Solo especialistas
-    .select()
-    .single();
+    .eq("id_rol", "2"); // Solo especialistas
 
-  if (error) {
-    console.error("Error updating especialista:", error);
+  if (errorUsuario) {
+    console.error("Error updating especialista:", errorUsuario);
     throw new Error("Error al actualizar especialista");
   }
 
-  revalidatePath("/admin/especialistas");
-  redirect("/admin/especialistas");
+  // Eliminar relaciones existentes
+  const { error: errorEliminar } = await supabase
+    .from("usuario_especialidad")
+    .delete()
+    .eq("id_usuario", id);
+
+  if (errorEliminar) {
+    console.error("Error deleting existing relations:", errorEliminar);
+    throw new Error("Error al actualizar especialidades");
+  }
+
+  // Crear nuevas relaciones
+  if (especialidadesSeleccionadas.length > 0) {
+    const relacionesEspecialidades = especialidadesSeleccionadas.map(idEspecialidad => ({
+      id_usuario: id,
+      id_especialidad: idEspecialidad
+    }));
+
+    const { error: errorRelaciones } = await supabase
+      .from("usuario_especialidad")
+      .insert(relacionesEspecialidades);
+
+    if (errorRelaciones) {
+      console.error("Error creating new relations:", errorRelaciones);
+      throw new Error("Error al actualizar especialidades");
+    }
+  }
+
+  revalidatePath("/especialista");
+  redirect("/especialista");
 }
 
-// Eliminar especialista
+// Eliminar especialista (las relaciones se eliminan automáticamente por CASCADE)
 export async function deleteEspecialista(id: string) {
   const supabase = await createClient();
 
@@ -143,7 +220,7 @@ export async function deleteEspecialista(id: string) {
     throw new Error("Error al eliminar especialista");
   }
 
-  revalidatePath("/admin/especialistas");
+  revalidatePath("/especialista");
 }
 
 // Obtener especialidades para el formulario
@@ -159,5 +236,6 @@ export async function getEspecialidades() {
     console.error("Error fetching especialidades:", error);
     throw new Error("Error al obtener especialidades");
   }
-  return data;
+
+  return data || [];
 }
