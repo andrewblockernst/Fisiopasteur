@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Toolbar from "@/components/toolbar/toolbar";
+import MobileNavbar from "@/components/navbar/navbar";
 import Image from "next/image";
 
 const geistSans = Geist({
@@ -45,8 +46,13 @@ export default function RootLayout({
           />
         </div>
         
+        {/* Toolbar para desktop */}
         <Toolbar />
-        <main className="lg:pl-20 lg:pt-16">
+        
+        {/* Navbar para mobile */}
+        <MobileNavbar />
+        
+        <main className="lg:pl-20 lg:pt-16 pb-20 lg:pb-0">
           {children}
         </main>
       </body>

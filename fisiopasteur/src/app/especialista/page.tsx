@@ -50,7 +50,7 @@ export default function EspecialistasPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-4 sm:p-6">
         <div className="flex justify-center items-center h-64">
           <div className="text-gray-500">Cargando...</div>
         </div>
