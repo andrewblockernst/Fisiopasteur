@@ -18,6 +18,8 @@ export async function middleware(request: NextRequest) {
     '/_next',
     '/public',
     '/utils/tests/base-de-datos',
+    '/especialista', 
+    '/especialista/nuevo-especialista',
   ];
 
   // Verificar si la ruta actual es pública
