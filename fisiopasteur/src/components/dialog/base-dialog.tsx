@@ -198,12 +198,18 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
     max-height: 90vh;
     background-color: ${props => props.colors.light};
     border-radius: 12px;
-    padding: 2rem;
+    padding: 1.5rem;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
     position: relative;
     text-align: center;
     animation: ${props => props.$isAnimating ? 'scaleOut 0.3s ease-out forwards' : 'scaleIn 0.3s ease-out'};
     overflow-y: auto;
+  }
+
+  @media (min-width: 640px) {
+    .dialog-container {
+      padding: 2rem;
+    }
   }
 
   // ...existing styles...

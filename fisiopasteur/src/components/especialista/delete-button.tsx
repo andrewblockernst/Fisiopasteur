@@ -36,7 +36,7 @@ export function DeleteEspecialistaButton({ id, nombre, onDeleted }: DeleteEspeci
     <>
       <Button
         variant="danger"
-        className="text-xs"
+        className="text-xs flex-1 sm:flex-none"
         onClick={() => setShowDialog(true)}
         disabled={isDeleting}
       >
