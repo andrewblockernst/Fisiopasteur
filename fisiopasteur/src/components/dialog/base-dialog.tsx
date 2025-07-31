@@ -84,7 +84,7 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
     if (customColor) {
       return {
         primary: customColor,
-        light: '#fef2f2',
+        light: '#ffffff',
         medium: customColor,
         dark: customColor
       };
@@ -115,6 +115,12 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
         medium: '#f87171',
         dark: '#9C1838'
       };
+      case 'custom': return {
+        primary: '#9C1838',
+        light: '#ffffff',
+        medium: '#9C1838',
+        dark: '#333333'
+      };
       default: return {
         primary: '#9C1838',
         light: '#fef2f2',
@@ -142,7 +148,7 @@ return (
             </div>
 
             <h3 className="dialog-title">{title}</h3>
-            <p className="dialog-message">{message}</p>
+            <div className="dialog-message">{message}</div>
 
             <div className="dialog-buttons">
               {secondaryButton && (
@@ -187,8 +193,9 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
   }
 
   .dialog-container {
-    width: ${props => props.size === 'sm' ? '320px' : props.size === 'lg' ? '500px' : '400px'};
-    max-width: 90vw;
+    width: ${props => props.size === 'sm' ? '320px' : props.size === 'lg' ? '800px' : '400px'};
+    max-width: 95vw;
+    max-height: 90vh;
     background-color: ${props => props.colors.light};
     border-radius: 12px;
     padding: 2rem;
@@ -196,6 +203,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
     position: relative;
     text-align: center;
     animation: ${props => props.$isAnimating ? 'scaleOut 0.3s ease-out forwards' : 'scaleIn 0.3s ease-out'};
+    overflow-y: auto;
   }
 
   // ...existing styles...

@@ -9,7 +9,7 @@ interface ColorPickerProps {
   disabled?: boolean;
 }
 
-export default function ColorPicker({ value = "#3B82F6", onChange, disabled = false }: ColorPickerProps) {
+export default function ColorPicker({ value = "#9C1838", onChange, disabled = false }: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [customColor, setCustomColor] = useState(value);
 
@@ -46,7 +46,7 @@ export default function ColorPicker({ value = "#3B82F6", onChange, disabled = fa
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
-        className="w-full h-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center px-3 disabled:opacity-50"
+        className="w-full h-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-100 flex items-center px-3 disabled:opacity-50"
       >
         <div
           className="w-6 h-6 rounded border border-gray-300 mr-3"
@@ -104,11 +104,11 @@ export default function ColorPicker({ value = "#3B82F6", onChange, disabled = fa
           </div>
 
           {/* Close button */}
-          <Button onClick={() => setIsOpen(false)} className="mt-2 w-10 h-8" variant="danger"> 
-            Cerrar
+          <Button onClick={() => setIsOpen(false)} variant="secondary" className="mt-4"> 
+            Cancelar
           </Button>
 
-          <Button onClick={() => handleColorSelect(customColor)} className="mt-2 ml-1 w-10 h-8" variant="primary">
+          <Button onClick={() => handleColorSelect(customColor)} variant="primary" className="ml-2">
             Usar
           </Button>
         </div>
