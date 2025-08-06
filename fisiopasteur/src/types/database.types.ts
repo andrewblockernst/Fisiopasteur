@@ -16,19 +16,25 @@ export type Database = {
     Tables: {
       box: {
         Row: {
+          created_at: string | null
           estado: string
           id_box: number
           numero: number
+          updated_at: string | null
         }
         Insert: {
+          created_at?: string | null
           estado: string
           id_box?: number
           numero: number
+          updated_at?: string | null
         }
         Update: {
+          created_at?: string | null
           estado?: string
           id_box?: number
           numero?: number
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -49,19 +55,25 @@ export type Database = {
       }
       evolucion_clinica: {
         Row: {
+          created_at: string | null
           id_evolucion: number
           id_turno: number | null
           observaciones: string | null
+          updated_at: string | null
         }
         Insert: {
+          created_at?: string | null
           id_evolucion?: number
           id_turno?: number | null
           observaciones?: string | null
+          updated_at?: string | null
         }
         Update: {
+          created_at?: string | null
           id_evolucion?: number
           id_turno?: number | null
           observaciones?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -111,6 +123,7 @@ export type Database = {
       paciente: {
         Row: {
           apellido: string
+          created_at: string | null
           direccion: string | null
           dni: string
           edad: number | null
@@ -121,9 +134,11 @@ export type Database = {
           id_paciente: number
           nombre: string
           telefono: string | null
+          updated_at: string | null
         }
         Insert: {
           apellido: string
+          created_at?: string | null
           direccion?: string | null
           dni: string
           edad?: number | null
@@ -134,9 +149,11 @@ export type Database = {
           id_paciente?: number
           nombre: string
           telefono?: string | null
+          updated_at?: string | null
         }
         Update: {
           apellido?: string
+          created_at?: string | null
           direccion?: string | null
           dni?: string
           edad?: number | null
@@ -147,11 +164,31 @@ export type Database = {
           id_paciente?: number
           nombre?: string
           telefono?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rol: {
+        Row: {
+          id: number
+          jerarquia: number
+          nombre: string
+        }
+        Insert: {
+          id: number
+          jerarquia: number
+          nombre: string
+        }
+        Update: {
+          id?: number
+          jerarquia?: number
+          nombre?: string
         }
         Relationships: []
       }
       turno: {
         Row: {
+          created_at: string | null
           estado: string | null
           fecha: string
           hora: string
@@ -160,8 +197,10 @@ export type Database = {
           id_paciente: number | null
           id_turno: number
           precio: number | null
+          updated_at: string | null
         }
         Insert: {
+          created_at?: string | null
           estado?: string | null
           fecha: string
           hora: string
@@ -170,8 +209,10 @@ export type Database = {
           id_paciente?: number | null
           id_turno?: number
           precio?: number | null
+          updated_at?: string | null
         }
         Update: {
+          created_at?: string | null
           estado?: string | null
           fecha?: string
           hora?: string
@@ -180,6 +221,7 @@ export type Database = {
           id_paciente?: number | null
           id_turno?: number
           precio?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -210,36 +252,42 @@ export type Database = {
           apellido: string
           color: string | null
           contraseña: string
+          created_at: string | null
           email: string
           id_especialidad: number | null
+          id_rol: number
           id_usuario: string
           nombre: string
-          id_rol: string
           telefono: string | null
+          updated_at: string | null
           usuario: string
         }
         Insert: {
           apellido: string
           color?: string | null
           contraseña: string
+          created_at?: string | null
           email: string
           id_especialidad?: number | null
+          id_rol: number
           id_usuario?: string
           nombre: string
-          id_rol: string
           telefono?: string | null
+          updated_at?: string | null
           usuario: string
         }
         Update: {
           apellido?: string
           color?: string | null
           contraseña?: string
+          created_at?: string | null
           email?: string
           id_especialidad?: number | null
+          id_rol?: number
           id_usuario?: string
           nombre?: string
-          id_rol?: string
           telefono?: string | null
+          updated_at?: string | null
           usuario?: string
         }
         Relationships: [
@@ -255,27 +303,45 @@ export type Database = {
             columns: ["id_rol"]
             isOneToOne: false
             referencedRelation: "rol"
-            referencedColumns: ["id_rol"]
+            referencedColumns: ["id"]
           },
         ]
       }
-      rol: {
+      usuario_especialidad: {
         Row: {
-          id_rol: string
-          nombre: string
-          jerarquia: string
+          fecha_asignacion: string | null
+          id_especialidad: number
+          id_usuario: string
+          id_usuario_especialidad: number
         }
         Insert: {
-          id_rol?: string
-          nombre: string
-          jerarquia: string
+          fecha_asignacion?: string | null
+          id_especialidad: number
+          id_usuario: string
+          id_usuario_especialidad?: number
         }
         Update: {
-          id_rol?: string
-          nombre?: string
-          jerarquia?: string
+          fecha_asignacion?: string | null
+          id_especialidad?: number
+          id_usuario?: string
+          id_usuario_especialidad?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "usuario_especialidad_id_especialidad_fkey"
+            columns: ["id_especialidad"]
+            isOneToOne: false
+            referencedRelation: "especialidad"
+            referencedColumns: ["id_especialidad"]
+          },
+          {
+            foreignKeyName: "usuario_especialidad_id_usuario_fkey"
+            columns: ["id_usuario"]
+            isOneToOne: false
+            referencedRelation: "usuario"
+            referencedColumns: ["id_usuario"]
+          },
+        ]
       }
     }
     Views: {
