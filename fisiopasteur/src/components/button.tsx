@@ -3,11 +3,11 @@ import React from "react";
 type ButtonVariant = "primary" | "secondary" | "danger" | "warning" | "success";
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "border-blue-700 before:bg-blue-700 hover:bg-blue-50",
-  secondary: "border-gray-700 before:bg-gray-700 hover:bg-gray-50",
-  danger: "border-red-700 before:bg-[#A12347] hover:bg-red-50",
-  warning: "border-yellow-700 before:bg-yellow-500 hover:bg-yellow-50",
-  success: "border-green-700 before:bg-green-700 hover:bg-green-50",
+  primary: "border-[#9C1838] before:bg-[#9C1838] hover:bg-[#bb3556]",
+  secondary: "border-slate-600 before:bg-slate-700 hover:bg-slate-600",
+  danger: "border-red-600 before:bg-red-700 hover:bg-red-600",
+  warning: "border-yellow-600 before:bg-yellow-700 hover:bg-yellow-600",
+  success: "border-green-600 before:bg-green-700 hover:bg-green-600",
 };
 
 interface ButtonProps {
