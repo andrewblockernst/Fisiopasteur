@@ -4,6 +4,7 @@ import "./globals.css";
 import Toolbar from "@/components/toolbar/toolbar";
 import MobileNavbar from "@/components/navbar/navbar";
 import Image from "next/image";
+import BackgroundPattern from "@/components/background-pattern";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,11 +31,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
+        <BackgroundPattern>
         {/* Logo fijo en esquina superior izquierda - Solo visible en desktop */}
         <div className="hidden lg:block fixed top-4 left-4 z-50 bg-white rounded-full p-2 shadow-lg">
           <Image
@@ -55,6 +57,7 @@ export default function RootLayout({
         <main className="lg:pl-20 lg:pt-16 pb-20 lg:pb-0">
           {children}
         </main>
+        </BackgroundPattern>
       </body>
     </html>
   );
