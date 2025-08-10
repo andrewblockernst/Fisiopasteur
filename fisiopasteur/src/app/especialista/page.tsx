@@ -6,6 +6,7 @@ import { EspecialistasTable } from "@/components/especialista/especialista-lista
 import { NuevoEspecialistaDialog } from "@/components/especialista/nuevo-especialista-dialog";
 import { useState, useEffect } from "react";
 import type { Tables } from "@/types/database.types";
+import SkeletonLoader from "@/components/skeleton-loader";
 
 type Especialidad = Tables<"especialidad">;
 type Usuario = Tables<"usuario"> & { 
@@ -30,7 +31,7 @@ export default function EspecialistasPage() {
       } catch (error) {
         console.error("Error loading data:", error);
       } finally {
-        setLoading(false);
+        setTimeout(() => setLoading(false), 300);
       }
     };
 
@@ -49,14 +50,8 @@ export default function EspecialistasPage() {
   };
 
   if (loading) {
-    return (
-      <div className="container mx-auto p-4 sm:p-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-gray-500">Cargando...</div>
-        </div>
-      </div>
-    );
-  }
+  return <SkeletonLoader/>;
+}
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
