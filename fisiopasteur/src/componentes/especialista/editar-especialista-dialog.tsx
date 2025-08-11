@@ -1,28 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import BaseDialog from "@/components/dialog/base-dialog";
+import BaseDialog from "@/componentes/dialog/base-dialog";
 import Image from "next/image";
 import type { Tables } from "@/types/database.types";
 
 type Especialidad = Tables<"especialidad">;
+type Usuario = Tables<"usuario"> & { 
+  especialidades?: Especialidad[] 
+};
 
-interface NuevoEspecialistaDialogProps {
+interface EditarEspecialistaDialogProps {
   isOpen: boolean;
   onClose: () => void;
   especialidades: Especialidad[];
+  especialista: Usuario;
 }
 
-export function NuevoEspecialistaDialog({ 
+export function EditarEspecialistaDialog({ 
   isOpen, 
   onClose, 
-  especialidades 
-}: NuevoEspecialistaDialogProps) {
+  especialidades,
+  especialista
+}: EditarEspecialistaDialogProps) {
   return (
     <BaseDialog
       type="custom"
       size="lg"
-      title="Nuevo Especialista"
+      title="Editar Especialista"
       customIcon={
         <Image
           src="/favicon.svg"
@@ -34,9 +39,10 @@ export function NuevoEspecialistaDialog({
       }
       message={
         <div className="text-left">
-          <div className="text-gray-600 mb-6 text-center">Completa la información para crear un nuevo especialista.</div>
-          <EspecialistaFormWrapper 
+          <div className="text-gray-600 mb-6 text-center">Modifica la información del especialista.</div>
+          <EspecialistaEditFormWrapper 
             especialidades={especialidades}
+            especialista={especialista}
             onSuccess={onClose}
           />
         </div>
@@ -48,43 +54,46 @@ export function NuevoEspecialistaDialog({
   );
 }
 
-interface EspecialistaFormWrapperProps {
+interface EspecialistaEditFormWrapperProps {
   especialidades: Especialidad[];
+  especialista: Usuario;
   onSuccess: () => void;
 }
 
-function EspecialistaFormWrapper({ especialidades, onSuccess }: EspecialistaFormWrapperProps) {
+function EspecialistaEditFormWrapper({ especialidades, especialista, onSuccess }: EspecialistaEditFormWrapperProps) {
   return (
     <div className="max-w-4xl">
-      <EspecialistaFormForDialog 
+      <EspecialistaEditFormForDialog 
         especialidades={especialidades}
-        mode="create"
+        especialista={especialista}
         onSuccess={onSuccess}
       />
     </div>
   );
 }
 
-// Versión modificada del formulario para el dialog
-import { createEspecialista } from "@/lib/actions/especialista.action";
-import Button from "@/components/button";
-import ColorPicker from "@/components/color-picker";
+// Versión modificada del formulario para editar en el dialog
+import { updateEspecialista } from "@/lib/actions/especialista.action";
+import Button from "@/componentes/boton";
+import ColorPicker from "@/componentes/color-selector";
 
-interface EspecialistaFormForDialogProps {
+interface EspecialistaEditFormForDialogProps {
   especialidades: Especialidad[];
-  mode: "create" | "edit";
+  especialista: Usuario;
   onSuccess: () => void;
 }
 
-function EspecialistaFormForDialog({ 
+function EspecialistaEditFormForDialog({ 
   especialidades, 
-  mode,
+  especialista,
   onSuccess
-}: EspecialistaFormForDialogProps) {
+}: EspecialistaEditFormForDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [selectedEspecialidades, setSelectedEspecialidades] = useState<number[]>([]);
-  const [selectedColor, setSelectedColor] = useState("#3B82F6");
+  const [selectedEspecialidades, setSelectedEspecialidades] = useState<number[]>(
+    especialista.especialidades?.map(e => e.id_especialidad) || []
+  );
+  const [selectedColor, setSelectedColor] = useState(especialista.color || "#3B82F6");
 
   const validateForm = (formData: FormData): boolean => {
     const newErrors: Record<string, string> = {};
@@ -93,7 +102,6 @@ function EspecialistaFormForDialog({
     if (!formData.get("apellido")) newErrors.apellido = "El apellido es requerido";
     if (!formData.get("email")) newErrors.email = "El email es requerido";
     if (!formData.get("usuario")) newErrors.usuario = "El usuario es requerido";
-    if (!formData.get("contraseña")) newErrors.contraseña = "La contraseña es requerida";
 
     const email = formData.get("email") as string;
     if (email && !/\S+@\S+\.\S+/.test(email)) {
@@ -115,7 +123,7 @@ function EspecialistaFormForDialog({
 
     try {
       setIsSubmitting(true);
-      await createEspecialista(formData);
+      await updateEspecialista(especialista.id_usuario, formData);
       onSuccess(); // Cerrar el dialog después del éxito
     } catch (error: any) {
       if (error?.digest?.includes('NEXT_REDIRECT')) {
@@ -124,7 +132,7 @@ function EspecialistaFormForDialog({
       }
       
       console.error("Error:", error);
-      alert("Error al crear especialista");
+      alert("Error al actualizar especialista");
       setIsSubmitting(false);
     }
   };
@@ -145,7 +153,7 @@ function EspecialistaFormForDialog({
 
   return (
     <form action={handleSubmit}>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Nombre */}
         <div>
           <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
@@ -155,6 +163,7 @@ function EspecialistaFormForDialog({
             type="text"
             id="nombre"
             name="nombre"
+            defaultValue={especialista.nombre}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
               errors.nombre ? "border-red-500" : "border-gray-300"
             }`}
@@ -172,6 +181,7 @@ function EspecialistaFormForDialog({
             type="text"
             id="apellido"
             name="apellido"
+            defaultValue={especialista.apellido}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
               errors.apellido ? "border-red-500" : "border-gray-300"
             }`}
@@ -189,6 +199,7 @@ function EspecialistaFormForDialog({
             type="email"
             id="email"
             name="email"
+            defaultValue={especialista.email}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
               errors.email ? "border-red-500" : "border-gray-300"
             }`}
@@ -206,6 +217,7 @@ function EspecialistaFormForDialog({
             type="text"
             id="usuario"
             name="usuario"
+            defaultValue={especialista.usuario}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
               errors.usuario ? "border-red-500" : "border-gray-300"
             }`}
@@ -217,18 +229,15 @@ function EspecialistaFormForDialog({
         {/* Contraseña */}
         <div>
           <label htmlFor="contraseña" className="block text-sm font-medium text-gray-700 mb-1">
-            Contraseña *
+            Contraseña (dejar vacío para no cambiar)
           </label>
           <input
             type="password"
             id="contraseña"
             name="contraseña"
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.contraseña ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="Ingresa la contraseña"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+            placeholder="Nueva contraseña (opcional)"
           />
-          {errors.contraseña && <p className="text-red-500 text-xs mt-1">{errors.contraseña}</p>}
         </div>
 
         {/* Teléfono */}
@@ -240,6 +249,7 @@ function EspecialistaFormForDialog({
             type="tel"
             id="telefono"
             name="telefono"
+            defaultValue={especialista.telefono || ""}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
             placeholder="+54 9 11 1234-5678"
           />
@@ -329,7 +339,7 @@ function EspecialistaFormForDialog({
           variant="primary"
           disabled={isSubmitting}
         >
-          {isSubmitting ? "Creando..." : "Crear Especialista"}
+          {isSubmitting ? "Actualizando..." : "Actualizar Especialista"}
         </Button>
       </div>
     </form>

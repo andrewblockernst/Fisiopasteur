@@ -1,6 +1,6 @@
 import Link from "next/link";
-import Button from "@/components/button";
-import { DeleteEspecialistaButton } from "./delete-button";
+import Button from "@/componentes/boton";
+import { DeleteEspecialistaButton } from "./eliminar-boton";
 import { useState } from "react";
 import { EditarEspecialistaDialog } from "./editar-especialista-dialog";
 import type { Tables } from "@/types/database.types";

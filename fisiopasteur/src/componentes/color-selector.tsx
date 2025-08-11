@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Button from "@/components/button"
+import Button from "@/componentes/boton"
 
 interface ColorPickerProps {
   value?: string;

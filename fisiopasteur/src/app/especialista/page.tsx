@@ -1,12 +1,12 @@
 "use client";
 
 import { getEspecialistas, getEspecialidades } from "@/lib/actions/especialista.action";
-import Button from "@/components/button";
-import { EspecialistasTable } from "@/components/especialista/especialista-listado";
-import { NuevoEspecialistaDialog } from "@/components/especialista/nuevo-especialista-dialog";
+import Button from "@/componentes/boton";
+import { EspecialistasTable } from "@/componentes/especialista/especialista-listado";
+import { NuevoEspecialistaDialog } from "@/componentes/especialista/nuevo-especialista-dialog";
 import { useState, useEffect } from "react";
 import type { Tables } from "@/types/database.types";
-import SkeletonLoader from "@/components/skeleton-loader";
+import SkeletonLoader from "@/componentes/skeleton-loader";
 
 type Especialidad = Tables<"especialidad">;
 type Usuario = Tables<"usuario"> & { 
@@ -56,7 +56,7 @@ export default function EspecialistasPage() {
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
       <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold">Gestión de Especialistas</h1>
+        <h2 className="text-2xl sm:text-3xl font-bold">Especialistas</h2>
         <Button 
           variant="primary"
           onClick={() => setShowDialog(true)}
