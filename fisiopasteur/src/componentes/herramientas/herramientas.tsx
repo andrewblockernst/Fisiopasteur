@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-const Toolbar = () => {
+const Herramientas = () => {
   const router = useRouter();
 
   return (
@@ -28,7 +28,8 @@ const Toolbar = () => {
         onClick={() => router.push('/especialista')}
       />
       <IconWrapper icon={<User size={28} />} />
-      <IconWrapper icon={<HelpCircle size={28} />} />
+      <IconWrapper icon={<HelpCircle size={28}
+      onClick={() => router.push('/centro-de-ayuda')} />} />
       <IconWrapper icon={<Settings size={28} />} />
     </aside>
   );
@@ -43,4 +44,4 @@ const IconWrapper = ({ icon, onClick }: { icon: React.ReactNode; onClick?: () =>
   </button>
 );
 
-export default Toolbar;
+export default Herramientas;

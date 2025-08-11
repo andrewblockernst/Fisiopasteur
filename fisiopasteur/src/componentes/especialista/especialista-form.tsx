@@ -1,8 +1,8 @@
 "use client";
 
 import { createEspecialista, updateEspecialista } from "@/lib/actions/especialista.action";
-import Button from "@/components/button";
-import ColorPicker from "@/components/color-picker";
+import Button from "@/componentes/boton";
+import ColorPicker from "@/componentes/color-selector";
 import { useState } from "react";
 import Link from "next/link";
 import type { Tables } from "@/types/database.types";
