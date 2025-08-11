@@ -1,10 +1,12 @@
+//POR CONVENCION DE NEXT.JS NO PUEDO CAMBIAR EL NOMBRE DE ESTE ARCHIVO A no-encontrado.tsx, POR ENDE QUEDA COMO not-found.tsx, POCO BOSTERO DE LA PARTE DE NEXT.JS 🔵🟡🔵
+
 "use client";
 
 import { useEffect, useState } from "react";
-import Button from "@/components/button";
+import Button from "@/componentes/boton";
 import { Bone } from "lucide-react";
 
-export default function NotFound() {
+export default function NoEncontrado() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {

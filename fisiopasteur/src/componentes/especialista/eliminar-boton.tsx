@@ -1,8 +1,8 @@
 "use client";
 
 import { deleteEspecialista } from "@/lib/actions/especialista.action";
-import Button from "@/components/button";
-import BaseDialog from "@/components/dialog/base-dialog";
+import Button from "@/componentes/boton";
+import BaseDialog from "@/componentes/dialog/base-dialog";
 import { useState } from "react";
 
 interface DeleteEspecialistaButtonProps {

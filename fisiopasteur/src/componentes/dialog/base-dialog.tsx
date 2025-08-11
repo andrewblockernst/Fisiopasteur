@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Check, AlertTriangle, Info, X, AlertCircle } from 'lucide-react';
-import Button from '../button';
+import Button from '../boton';
 
 export type DialogType = 'success' | 'warning' | 'info' | 'error' | 'custom';
 export type DialogSize = 'sm' | 'md' | 'lg';

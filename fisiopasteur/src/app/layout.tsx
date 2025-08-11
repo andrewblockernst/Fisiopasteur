@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Toolbar from "@/components/toolbar/toolbar";
-import MobileNavbar from "@/components/navbar/navbar";
+import Herramientas from "@/componentes/herramientas/herramientas";
+import BarraCelular from "@/componentes/barra/barra";
 import Image from "next/image";
-import BackgroundPattern from "@/components/background-pattern";
+import BackgroundPattern from "@/componentes/patron-fondo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,10 +49,10 @@ export default function RootLayout({
         </div>
         
         {/* Toolbar para desktop */}
-        <Toolbar />
+        <Herramientas />
         
         {/* Navbar para mobile */}
-        <MobileNavbar />
+        <BarraCelular />
         
         <main className="lg:pl-20 lg:pt-16 pb-20 lg:pb-0">
           {children}
