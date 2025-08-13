@@ -13,6 +13,7 @@ export async function middleware(request: NextRequest) {
     '/api/test-connection',
     '/status', 
     '/login',
+    '/autenticacion/login',
     '/not-found',
     '/favicon.svg',
     '/_next',
