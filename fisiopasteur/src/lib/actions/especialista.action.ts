@@ -1,5 +1,6 @@
 "use server";
 
+import { supabaseAdmin } from "@/lib/supabase/service-role";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -77,29 +78,38 @@ export async function getEspecialista(id: string) {
 
 // Crear especialista con múltiples especialidades
 export async function createEspecialista(formData: FormData) {
-  const supabase = await createClient();
+  // 1. Crear usuario en Supabase Auth
+  const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: formData.get("email") as string,
+    password: formData.get("contraseña") as string,
+    email_confirm: true,
+    user_metadata: {
+      nombre: formData.get("nombre"),
+      apellido: formData.get("apellido"),
+      rol: "especialista",
+    },
+  });
 
-  // Obtener especialidades seleccionadas del FormData
-  const especialidadesSeleccionadas: number[] = [];
-  for (const [key, value] of formData.entries()) {
-    if (key.startsWith('especialidades[')) {
-      especialidadesSeleccionadas.push(Number(value));
-    }
+  if (authError || !authUser) {
+    console.error("Error creando user en Auth:", authError);
+    throw new Error("No se pudo crear el usuario en Auth");
   }
 
-  const especialistaData: Omit<EspecialistaInsert, 'id_usuario'> = {
+  // 2. Guardar en tabla usuario
+  const especialistaData = {
+    id_usuario: authUser.user.id,
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
-    email: formData.get("email") as string,
+    id_especialidad: null, 
+    telefono: formData.get("telefono") as string || null,
+    email: formData.get("email") as string, 
     usuario: formData.get("usuario") as string,
     contraseña: formData.get("contraseña") as string,
-    telefono: formData.get("telefono") as string || null,
-    id_rol: 2,
     color: formData.get("color") as string || null,
-    id_especialidad: null, // Ya no usamos este campo individual
+    id_rol: 2,
   };
 
-  // Crear el usuario
+  const supabase = await createClient();
   const { data: nuevoUsuario, error: errorUsuario } = await supabase
     .from("usuario")
     .insert(especialistaData)
@@ -107,11 +117,20 @@ export async function createEspecialista(formData: FormData) {
     .single();
 
   if (errorUsuario) {
-    console.error("Error creating especialista:", errorUsuario);
+    // Si falla, eliminar el usuario en Auth (rollback)
+    await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+    console.error("Error creando especialista en tabla:", errorUsuario);
     throw new Error("Error al crear especialista");
   }
 
-  // Crear las relaciones con especialidades
+  // 3. Relacionar especialidades
+  const especialidadesSeleccionadas: number[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith('especialidades[')) {
+      especialidadesSeleccionadas.push(Number(value));
+    }
+  }
+
   if (especialidadesSeleccionadas.length > 0) {
     const relacionesEspecialidades = especialidadesSeleccionadas.map(idEspecialidad => ({
       id_usuario: nuevoUsuario.id_usuario,
@@ -123,9 +142,9 @@ export async function createEspecialista(formData: FormData) {
       .insert(relacionesEspecialidades);
 
     if (errorRelaciones) {
-      console.error("Error creating especialidad relations:", errorRelaciones);
-      // Si falla la relación, eliminar el usuario creado
+      // Si falla, eliminar el usuario creado
       await supabase.from("usuario").delete().eq("id_usuario", nuevoUsuario.id_usuario);
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
       throw new Error("Error al asignar especialidades");
     }
   }
