@@ -17,8 +17,7 @@ export async function middleware(request: NextRequest) {
     '/favicon.svg',
     '/_next',
     '/public',
-    '/utils/tests/base-de-datos',
-    '/especialista', 
+    '/utils/tests/base-de-datos', 
     '/centro-de-ayuda',
   ];
 
