@@ -1,7 +1,7 @@
 "use client";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import "../globals.css"; 
 import Herramientas from "@/componentes/herramientas/herramientas";
 import BarraCelular from "@/componentes/barra/barra";
 import Image from "next/image";
@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 // Nota: El metadata debe estar en un componente separado o usar generateMetadata
 // porque este ahora es un client component
 
-export default function RootLayout({
+export default function MainLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

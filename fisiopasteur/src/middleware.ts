@@ -13,7 +13,6 @@ export async function middleware(request: NextRequest) {
     '/api/test-connection',
     '/status', 
     '/login',
-    '/autenticacion/login',
     '/not-found',
     '/favicon.svg',
     '/_next',
@@ -33,8 +32,8 @@ export async function middleware(request: NextRequest) {
   }
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_URL!,           // <--- usa las privadas REVISAR
+    process.env.SUPABASE_ANON_KEY!,      // <--- usa las privadas REVISAR
     {
       cookies: {
         get(name: string) {
