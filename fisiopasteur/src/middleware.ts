@@ -20,6 +20,7 @@ export async function middleware(request: NextRequest) {
     '/utils/tests/base-de-datos',
     '/especialista', 
     '/centro-de-ayuda',
+    '/perfil',
   ];
 
   // Verificar si la ruta actual es pública
