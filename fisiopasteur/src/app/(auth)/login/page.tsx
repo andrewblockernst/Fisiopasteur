@@ -1,5 +1,6 @@
 "use client";
 
+import type { Metadata } from "next";
 import Head from "next/head";
 import Image from "next/image";
 import { useState } from "react";
