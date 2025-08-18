@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "../../globals.css";
-import BackgroundPattern from "@/componentes/patron-fondo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,21 +20,10 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AuthLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        suppressHydrationWarning={true}
-      >
-        <BackgroundPattern>
-          <main>{children}</main>
-        </BackgroundPattern>
-      </body>
-    </html>
+    <div className="min-h-screen flex items-center justify-center">
+      {children}
+    </div>
   );
 }
