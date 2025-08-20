@@ -23,9 +23,7 @@ function validatePacienteData(data: Partial<PacienteInsert | PacienteUpdate>): s
     if (data.email && !/\S+@\S+\.\S+/.test(data.email)) {
         errors.push("El email no tiene un formato válido");
     }
-    if (data.dni && !/^\d{8}[A-Z]$/.test(data.dni)) {
-        errors.push("El DNI no tiene un formato válido");
-    }
+
 
     // Validar fecha de nacimiento (no puede ser futura)
     if (data.fecha_nacimiento) {
@@ -175,7 +173,7 @@ export async function createPaciente(formData: FormData) {
     apellido: formData.get("apellido") as string,
     email: formData.get("email") as string || null,
     dni: formData.get("dni") as string,
-    telefono: formData.get("telefono") as string,
+    telefono: formData.get("telefono") as string || null,
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
   };

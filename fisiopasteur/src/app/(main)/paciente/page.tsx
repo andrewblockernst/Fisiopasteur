@@ -6,6 +6,7 @@ import { getPacientes } from "@/lib/actions/paciente.action";
 import type { Tables } from "@/types/database.types";
 import Button from "@/componentes/boton";
 import SkeletonLoader from "@/componentes/skeleton-loader";
+import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
 
 
 type Paciente = Tables<"paciente">;
@@ -57,7 +58,7 @@ export default function PacientePage() {
                 <h2 className="text-2xl sm:text-3xl font-bold">Pacientes</h2>
                 <Button 
                     variant="primary"
-                    // onClick={() => setShowDialog(true)}
+                    onClick={() => setShowDialog(true)}
                     className="w-full sm:w-auto"
                 >
                     Nuevo Paciente
@@ -66,6 +67,11 @@ export default function PacientePage() {
 
                 <PacientesTable pacientes={pacientes} />
             </div>
+
+            <NuevoPacienteDialog
+                isOpen={showDialog}
+                onClose={handleDialogClose}
+            />
         </div>
     );
 }
