@@ -20,28 +20,47 @@ export default function FiltrosTurnos({ especialistas, boxes, initial }: any) {
     router.push(`/turnos?${usp.toString()}`);
   };
 
-  return (
-    <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-      <input type="date" value={f.fecha_desde || ""} onChange={(e)=>setF({...f,fecha_desde:e.target.value})} className="border rounded px-3 py-2"/>
-      <input type="date" value={f.fecha_hasta || ""} onChange={(e)=>setF({...f,fecha_hasta:e.target.value})} className="border rounded px-3 py-2"/>
-      <select value={f.especialista_id || ""} onChange={(e)=>setF({...f,especialista_id:e.target.value || undefined})} className="border rounded px-3 py-2">
+return (
+  <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+    <div className="flex flex-col">
+      <label className="text-sm text-gray-600 mb-1">Fecha desde</label>
+      <input type="date" value={f.fecha_desde || ""} onChange={(e)=>setF({...f,fecha_desde:e.target.value})} className="border rounded px-3 py-2 w-full"/>
+    </div>
+    <div className="flex flex-col">
+      <label className="text-sm text-gray-600 mb-1">Fecha hasta</label>
+      <input type="date" value={f.fecha_hasta || ""} onChange={(e)=>setF({...f,fecha_hasta:e.target.value})} className="border rounded px-3 py-2 w-full"/>
+    </div>
+    <div className="flex flex-col">
+      <label className="text-sm text-gray-600 mb-1">Especialista</label>
+      <select value={f.especialista_id || ""} onChange={(e)=>setF({...f,especialista_id:e.target.value || undefined})} className="border rounded px-3 py-2 w-full">
         <option value="">Todos los especialistas</option>
         {especialistas?.map((e:any)=>(
           <option key={e.id_usuario} value={e.id_usuario}>{e.apellido}, {e.nombre}</option>
         ))}
       </select>
-      <select value={f.estado || ""} onChange={(e)=>setF({...f,estado:e.target.value || undefined})} className="border rounded px-3 py-2">
+    </div>
+    <div className="flex flex-col">
+      <label className="text-sm text-gray-600 mb-1">Estado</label>
+      <select value={f.estado || ""} onChange={(e)=>setF({...f,estado:e.target.value || undefined})} className="border rounded px-3 py-2 w-full">
         <option value="">Todos los estados</option>
         <option value="programado">Programado</option>
         <option value="cancelado">Cancelado</option>
         <option value="atendido">Atendido</option>
+        <option value="eliminado">Eliminado</option>
       </select>
-      <input type="time" value={f.hora_desde || ""} onChange={(e)=>setF({...f,hora_desde:e.target.value})} className="border rounded px-3 py-2"/>
-      <input type="time" value={f.hora_hasta || ""} onChange={(e)=>setF({...f,hora_hasta:e.target.value})} className="border rounded px-3 py-2"/>
-      <div className="sm:col-span-2 lg:col-span-6 flex gap-2">
-        <button onClick={apply} className="bg-[var(--brand)] text-white px-4 py-2 rounded">Aplicar</button>
-        <button onClick={()=>router.push("/turnos")} className="border px-4 py-2 rounded">Limpiar</button>
-      </div>
     </div>
-  );
+    <div className="flex flex-col">
+      <label className="text-sm text-gray-600 mb-1">Hora desde</label>
+      <input type="time" value={f.hora_desde || ""} onChange={(e)=>setF({...f,hora_desde:e.target.value})} className="border rounded px-3 py-2 w-full"/>
+    </div>
+    <div className="flex flex-col">
+      <label className="text-sm text-gray-600 mb-1">Hora hasta</label>
+      <input type="time" value={f.hora_hasta || ""} onChange={(e)=>setF({...f,hora_hasta:e.target.value})} className="border rounded px-3 py-2 w-full"/>
+    </div>
+    <div className="sm:col-span-2 lg:col-span-6 flex gap-2">
+      <button onClick={apply} className="bg-[var(--brand)] text-white px-4 py-2 rounded">Aplicar</button>
+      <button onClick={()=>router.push("/turnos")} className="border px-4 py-2 rounded">Limpiar</button>
+    </div>
+  </div>
+);
 }

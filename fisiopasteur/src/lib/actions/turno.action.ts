@@ -296,6 +296,30 @@ export async function eliminarTurno(id: number) {
   }
 }
 
+// Cancelar (marcar como cancelado, sin borrar)
+export async function cancelarTurno(id: number, motivo?: string) {
+  const supabase = await createClient();
+  try {
+    const { data, error } = await supabase
+      .from("turno")
+      .update({
+        estado: "cancelado",
+        updated_at: new Date().toISOString(),
+        // opcional: podés persistir un motivo en notas si querés
+        // notas: motivo ? `CANCELADO: ${motivo}` : undefined,
+      })
+      .eq("id_turno", id)
+      .select("*")
+      .single();
+
+    if (error) return { success: false, error: error.message };
+    revalidatePath("/turnos");
+    return { success: true, data };
+  } catch {
+    return { success: false, error: "Error inesperado" };
+  }
+}
+
 // =====================================
 // 📅 FUNCIONES DE AGENDA
 // =====================================
