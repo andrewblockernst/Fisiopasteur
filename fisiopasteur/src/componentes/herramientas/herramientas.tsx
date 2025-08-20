@@ -22,7 +22,10 @@ const Herramientas = () => {
       <IconWrapper icon={<Plus size={28} />} />
       <IconWrapper icon={<ClipboardList size={28} />} />
       <IconWrapper icon={<CalendarDays size={28} />} />
-      <IconWrapper icon={<Accessibility size={28} />} />
+      <IconWrapper 
+        icon={<Accessibility size={28} />} 
+        onClick={() => router.push('/paciente')}
+      />
       <IconWrapper 
         icon={<FileBadge size={28} />} 
         onClick={() => router.push('/especialista')}
