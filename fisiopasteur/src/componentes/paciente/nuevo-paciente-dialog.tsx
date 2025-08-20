@@ -70,6 +70,14 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
         const newErrors: Record<string, string> = {};
 
         // Validar campos del formulario y agregar errores a newErrors
+        if (!formData.get("nombre")) newErrors.nombre = "El nombre es obligatorio.";
+        if(!formData.get("apellido")) newErrors.apellido = "El apellido es obligatorio.";
+        if(!formData.get("dni")) newErrors.dni = "El DNI es obligatorio.";
+
+        const email = formData.get("email") as string;
+        if (email && !/\S+@\S+\.\S+/.test(email)) {
+        newErrors.email = "Email inválido";
+        }
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -91,7 +99,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
             }
 
             console.error("Error:", error);
-            alert("Error al crear especialista");
+            alert("Error al crear paciente");
             setIsSubmitting(false);
         }
     };
@@ -151,6 +159,126 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                     {errors.dni && <p className="text-red-500 text-xs mt-1">{errors.dni}</p>}
                 </div>
 
+                {/* Fecha de Nacimiento */}
+                <div>
+                    <label htmlFor="fecha_nacimiento" className="block text-sm font-medium text-gray-700 mb-1">
+                        Fecha de Nacimiento
+                    </label>
+                    <input
+                        type="date"
+                        id="fecha_nacimiento"
+                        name="fecha_nacimiento"
+                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.fecha_nacimiento ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="Ingresa la fecha de nacimiento"
+                    />
+                    {errors.fecha_nacimiento && <p className="text-red-500 text-xs mt-1">{errors.fecha_nacimiento}</p>}
+                </div>
+
+                {/* Telefono */}
+                <div>
+                    <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
+                        Telefono 
+                    </label>
+                    <input
+                        type="text"
+                        id="telefono"
+                        name="telefono"
+                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.telefono ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="Ingresa el telefono"
+                    />
+                    {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
+                </div>
+
+                {/* Email */}
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                        Email 
+                    </label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.email ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="correo@ejemplo.com"
+                    />
+                    {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                </div>
+
+                {/* Direccion */}
+                <div>
+                    <label htmlFor="direccion" className="block text-sm font-medium text-gray-700 mb-1">
+                        Direccion 
+                    </label>
+                    <input
+                        type="text"
+                        id="direccion"
+                        name="direccion"
+                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.direccion ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="Ingresa la direccion"
+                    />
+                    {errors.direccion && <p className="text-red-500 text-xs mt-1">{errors.direccion}</p>}
+                </div>
+
+                {/* Edad */}
+                <div>
+                    <label htmlFor="edad" className="block text-sm font-medium text-gray-700 mb-1">
+                        Edad 
+                    </label>
+                    <input
+                        type="number"
+                        id="edad"
+                        name="edad"
+                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.edad ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="Ingresa la edad"
+                    />
+                    {errors.edad && <p className="text-red-500 text-xs mt-1">{errors.edad}</p>}
+                </div>
+
+                {/* Historia Clinica */}
+                <div>
+                    <label htmlFor="historiaClinica" className="block text-sm font-medium text-gray-700 mb-1">
+                        Historia Clinica 
+                    </label>
+                    <input
+                        type="text"
+                        id="historiaClinica"
+                        name="historiaClinica"
+                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.historiaClinica ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="Ingresa la historia clinica"
+                    />
+                    {errors.historiaClinica && <p className="text-red-500 text-xs mt-1">{errors.historiaClinica}</p>}
+                </div>
+            </div>
+
+            {/* Botones */}
+            <div className="flex justify-end space-x-3 mt-6">
+                <Button
+                type="button"
+                variant="secondary"
+                disabled={isSubmitting}
+                onClick={onSuccess}
+                >
+                Cancelar
+                </Button>
+                <Button
+                type="submit"
+                variant="primary"
+                disabled={isSubmitting}
+                >
+                {isSubmitting ? "Creando..." : "Crear Paciente"}
+                </Button>
             </div>
         </form>
     );
