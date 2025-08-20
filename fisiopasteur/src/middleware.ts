@@ -8,32 +8,44 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  // Rutas públicas que no requieren autenticación
-  const publicPaths = [
-    '/api/test-connection',
-    '/status', 
-    '/login',
-    '/not-found',
+  // ✅ MEJORADO: Rutas que NUNCA deben ser interceptadas
+  const staticPaths = [
+    '/_next/static',
+    '/_next/image', 
+    '/favicon.ico',
     '/favicon.svg',
-    '/_next',
-    '/public',
-    '/utils/tests/base-de-datos',
-    '/especialista', 
-    '/centro-de-ayuda',
+    '/_vercel',
+    '/api',
   ];
 
-  // Verificar si la ruta actual es pública
-  const isPublicPath = publicPaths.some(path => 
+  // ✅ Verificar archivos estáticos PRIMERO
+  const isStaticPath = staticPaths.some(path => 
     request.nextUrl.pathname.startsWith(path)
   );
 
+  if (isStaticPath) {
+    return response; // Dejar pasar sin verificar auth
+  }
+
+  // ✅ Rutas públicas que no requieren autenticación
+  const publicPaths = [
+    '/login',
+    '/not-found',
+    '/centro-de-ayuda'
+  ];
+
+  const isPublicPath = publicPaths.some(path => 
+    request.nextUrl.pathname.startsWith(path) || request.nextUrl.pathname === path
+  );
+
+  // ✅ Si es ruta pública, permitir acceso
   if (isPublicPath) {
     return response;
   }
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!, // ✅ Usar las públicas
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, // ✅ Usar las públicas  
     {
       cookies: {
         get(name: string) {
@@ -81,7 +93,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Si no hay usuario autenticado, redirigir a login
+  // ✅ Si no hay usuario autenticado, redirigir a login
   if (!user && request.nextUrl.pathname !== '/login') {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -92,11 +104,8 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * ✅ MEJORADO: Excluir más específicamente archivos estáticos
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon\\.ico|favicon\\.svg|.*\\.(?:css|js|png|jpg|jpeg|gif|webp|svg|woff|woff2|ttf|eot)$).*)',
   ],
 }
