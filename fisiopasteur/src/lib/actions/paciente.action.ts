@@ -115,6 +115,8 @@ export async function getPacientes(options?: {
     throw new Error("Error al obtener pacientes");
   }
 
+  console.log("Pacientes fetched:", data, "\nCount:", count);
+
   return {
     data: data || [],
     total: count || 0,
@@ -206,7 +208,7 @@ export async function createPaciente(formData: FormData) {
       throw new Error("Error al crear paciente");
     }
 
-    revalidatePath("/pacientes");
+    revalidatePath("/paciente");
     return data;
   } catch (error: any) {
     console.error("Error in createPaciente:", error);
@@ -270,7 +272,7 @@ export async function updatePaciente(id: number, formData: FormData) {
       throw new Error("Error al actualizar paciente");
     }
 
-    revalidatePath("/pacientes");
+    revalidatePath("/pacients");
     return data;
   } catch (error: any) {
     console.error("Error in updatePaciente:", error);
@@ -315,7 +317,7 @@ export async function deletePaciente(id: number) {
       throw new Error("Error al eliminar paciente");
     }
 
-    revalidatePath("/pacientes");
+    revalidatePath("/paciente");
   } catch (error: any) {
     console.error("Error in deletePaciente:", error);
     throw error instanceof Error ? error : new Error("Error al eliminar paciente");
