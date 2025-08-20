@@ -20,7 +20,7 @@ const Herramientas = () => {
     <aside className="hidden lg:flex fixed top-1/2 left-0 -translate-y-1/2 bg-[#9C1838] py-6 px-2 flex-col items-center gap-6 shadow-lg rounded-r-lg z-50">
       <IconWrapper icon={<Home size={28} />} onClick={() => router.push('/inicio')} />
       <IconWrapper icon={<Plus size={28} />} />
-      <IconWrapper icon={<ClipboardList size={28} />} />
+      <IconWrapper icon={<ClipboardList size={28} onClick={() => router.push('/turnos')} />} />
       <IconWrapper icon={<CalendarDays size={28} />} />
       <IconWrapper icon={<Accessibility size={28} />} />
       <IconWrapper 
