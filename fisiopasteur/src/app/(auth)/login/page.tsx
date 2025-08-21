@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client"; // Cambiar este import
 import Head from "next/head";
 import Link from "next/link";
+import Boton from "@/componentes/boton"; // Agregá este import arriba
 
 export default function LoginPage() {
   const router = useRouter();
@@ -79,13 +80,14 @@ export default function LoginPage() {
 
               {error && <p className="text-[var(--brand)] text-sm">{error}</p>}
 
-              <button
+              <Boton
+                variant="primary"
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[var(--brand)] text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                className="w-full"
               >
                 {loading ? "Cargando..." : "Iniciar Sesión"}
-              </button>
+              </Boton>
 
               <div className="text-center">
                 <Link href="/login/recuperarContra" className="text-black hover:underline">
