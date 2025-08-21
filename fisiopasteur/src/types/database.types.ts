@@ -193,6 +193,7 @@ export type Database = {
           fecha: string
           hora: string
           id_box: number | null
+          id_especialidad: number | null
           id_especialista: string | null
           id_paciente: number | null
           id_turno: number
@@ -207,6 +208,7 @@ export type Database = {
           fecha: string
           hora: string
           id_box?: number | null
+          id_especialidad?: number | null
           id_especialista?: string | null
           id_paciente?: number | null
           id_turno?: number
@@ -221,6 +223,7 @@ export type Database = {
           fecha?: string
           hora?: string
           id_box?: number | null
+          id_especialidad?: number | null
           id_especialista?: string | null
           id_paciente?: number | null
           id_turno?: number
@@ -230,6 +233,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_turno_especialidad"
+            columns: ["id_especialidad"]
+            isOneToOne: false
+            referencedRelation: "especialidad"
+            referencedColumns: ["id_especialidad"]
+          },
           {
             foreignKeyName: "turno_id_box_fkey"
             columns: ["id_box"]
