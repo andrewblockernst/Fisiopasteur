@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { cancelarTurno, eliminarTurno, marcarComoAtendido } from "@/lib/actions/turno.action";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
+import BaseDialog from "@/componentes/dialog/base-dialog";
+import Button from "@/componentes/boton";
 
 type Props = {
   turno: {
@@ -11,7 +13,7 @@ type Props = {
     hora: string;
     id_paciente: number;
     id_especialista: string | null;
-    id_especialidad: number | null; // Agregar este campo
+    id_especialidad: number | null;
     id_box: number | null;
     estado: string | null;
     observaciones?: string | null;
@@ -23,42 +25,67 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   const [openEdit, setOpenEdit] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  // Estado para diálogos personalizados
+  const [dialog, setDialog] = useState<{
+    open: boolean;
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+  }>({ open: false, type: 'info', title: '', message: '' });
+
+  // Confirmación personalizada
+  const showConfirm = (type: 'info' | 'error', title: string, message: string, onConfirm: () => void) => {
+    setDialog({ open: true, type, title, message, onConfirm });
+  };
+
+  // Mensaje personalizado
+  const showMessage = (type: 'success' | 'error', title: string, message: string) => {
+    setDialog({ open: true, type, title, message });
+  };
+
   const onCancelar = () => {
-    if (!confirm("¿Cancelar este turno?")) return;
-    startTransition(async () => {
-      const res = await cancelarTurno(turno.id_turno);
-      if (res.success) {
-        alert("Turno cancelado");
-        onDone?.();
-      } else {
-        alert(res.error || "Error");
-      }
+    showConfirm('info', 'Cancelar turno', '¿Cancelar este turno?', () => {
+      setDialog({ ...dialog, open: false });
+      startTransition(async () => {
+        const res = await cancelarTurno(turno.id_turno);
+        if (res.success) {
+          showMessage('success', 'Turno cancelado', 'El turno fue cancelado correctamente.');
+          onDone?.();
+        } else {
+          showMessage('error', 'Error', res.error || "Error");
+        }
+      });
     });
   };
 
   const onEliminar = () => {
-    if (!confirm("Esto elimina definitivamente el turno. ¿Continuar?")) return;
-    startTransition(async () => {
-      const res = await eliminarTurno(turno.id_turno);
-      if (res.success) {
-        alert("Turno eliminado");
-        onDone?.();
-      } else {
-        alert(res.error || "Error");
-      }
+    showConfirm('error', 'Eliminar turno', 'Esto elimina definitivamente el turno. ¿Continuar?', () => {
+      setDialog({ ...dialog, open: false });
+      startTransition(async () => {
+        const res = await eliminarTurno(turno.id_turno);
+        if (res.success) {
+          showMessage('success', 'Turno eliminado', 'El turno fue eliminado correctamente.');
+          onDone?.();
+        } else {
+          showMessage('error', 'Error', res.error || "Error");
+        }
+      });
     });
   };
 
   const onMarcarAtendido = () => {
-    if (!confirm("¿Marcar como atendido?")) return;
-    startTransition(async () => {
-      const res = await marcarComoAtendido(turno.id_turno);
-      if (res.success) {
-        alert("Turno marcado como atendido");
-        onDone?.();
-      } else {
-        alert(res.error || "Error");
-      }
+    showConfirm('info', 'Marcar como atendido', '¿Marcar como atendido?', () => {
+      setDialog({ ...dialog, open: false });
+      startTransition(async () => {
+        const res = await marcarComoAtendido(turno.id_turno);
+        if (res.success) {
+          showMessage('success', 'Turno atendido', 'El turno fue marcado como atendido.');
+          onDone?.();
+        } else {
+          showMessage('error', 'Error', res.error || "Error");
+        }
+      });
     });
   };
 
@@ -74,43 +101,47 @@ export default function AccionesTurno({ turno, onDone }: Props) {
 
   return (
     <div className="flex items-center gap-2">
-      <button
+      <Button
+        variant="primary"
         onClick={() => setOpenEdit(true)}
-        className="px-2 py-1 rounded border text-sm hover:bg-neutral-50"
         disabled={isPending}
+        className="px-2 py-1 rounded border text-sm"
       >
         Editar
-      </button>
-      
+      </Button>
+
       {/* Mostrar "Marcar Atendido" solo para turnos programados que ya pasaron */}
       {esProgramado && esPasado && (
-        <button
+        <Button
+          variant="success"
           onClick={onMarcarAtendido}
-          className="px-2 py-1 rounded border text-sm text-green-700 border-green-300 hover:bg-green-50"
           disabled={isPending}
+          className="px-2 py-1 rounded border text-sm"
         >
           ✅ Atendido
-        </button>
+        </Button>
       )}
-      
+
       {/* Cancelar solo para turnos futuros programados */}
       {esProgramado && !esPasado && (
-        <button
+        <Button
+          variant="warning"
           onClick={onCancelar}
-          className="px-2 py-1 rounded border text-sm text-amber-700 border-amber-300 hover:bg-amber-50"
           disabled={isPending}
+          className="px-2 py-1 rounded border text-sm"
         >
           Cancelar
-        </button>
+        </Button>
       )}
-      
-      <button
+
+      <Button
+        variant="danger"
         onClick={onEliminar}
-        className="px-2 py-1 rounded border text-sm text-red-700 border-red-300 hover:bg-red-50"
         disabled={isPending}
+        className="px-2 py-1 rounded border text-sm"
       >
         Eliminar
-      </button>
+      </Button>
 
       {openEdit && (
         <EditarTurnoDialog
@@ -123,6 +154,38 @@ export default function AccionesTurno({ turno, onDone }: Props) {
           }}
         />
       )}
+
+      {/* Diálogo personalizado para confirmaciones y mensajes */}
+      <BaseDialog
+        type={dialog.type}
+        size="sm"
+        title={dialog.title}
+        message={dialog.message}
+        isOpen={dialog.open}
+        onClose={() => setDialog({ ...dialog, open: false })}
+        showCloseButton
+        primaryButton={
+          dialog.onConfirm
+            ? {
+                text: "Confirmar",
+                onClick: () => {
+                  dialog.onConfirm?.();
+                },
+              }
+            : {
+                text: "Aceptar",
+                onClick: () => setDialog({ ...dialog, open: false }),
+              }
+        }
+        secondaryButton={
+          dialog.onConfirm
+            ? {
+                text: "Cancelar",
+                onClick: () => setDialog({ ...dialog, open: false }),
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }
