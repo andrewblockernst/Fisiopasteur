@@ -65,7 +65,11 @@ export default function PacientePage() {
                 </Button>
                 </div>
 
-                <PacientesTable pacientes={pacientes} />
+                <PacientesTable 
+                    pacientes={pacientes} 
+                    onPacienteDeleted={handleDialogClose}
+                    onPacienteUpdated={handleDialogClose}
+                />
             </div>
 
             <NuevoPacienteDialog

@@ -1,13 +1,28 @@
 import { Tables } from "@/types/database.types";
+import Button from "../boton";
+import { useState } from "react";
+import { DeletePacienteButton } from "./eliminar-boton";
+import { EditarPacienteDialog } from "./editar-paciente-dialog";
 
 
 type Paciente = Tables<'paciente'>;
 
 interface PacientesTableProps {
-    pacientes: Paciente[];  
+    pacientes: Paciente[];
+    onPacienteUpdated?: () => void;
+    onPacienteDeleted?: () => void;
 }
 
-export function PacientesTable({pacientes}: PacientesTableProps) {
+export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}: PacientesTableProps) {
+    const[editingPaciente, setEditingPaciente] = useState<Paciente | null>(null);
+
+    const handleEditClose = () => {
+        setEditingPaciente(null);
+        if(onPacienteUpdated) {
+            onPacienteUpdated()
+        }
+    }
+
     return (
         <>
         {/* Vista de tabla para desktop */}
@@ -36,6 +51,9 @@ export function PacientesTable({pacientes}: PacientesTableProps) {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Estado
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                </th>
                 </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -62,6 +80,20 @@ export function PacientesTable({pacientes}: PacientesTableProps) {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {paciente.estado}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <Button 
+                            variant="secondary" 
+                            className="text-xs"
+                            onClick={() => setEditingPaciente(paciente)}
+                        >
+                            Editar
+                        </Button>
+                        <DeletePacienteButton 
+                            id={paciente.id_paciente}
+                            nombre={`${paciente.nombre} ${paciente.apellido}`}
+                            onDeleted={onPacienteDeleted}
+                        />
+                    </td>
                 </tr>
                 ))}
             </tbody>
@@ -79,6 +111,14 @@ export function PacientesTable({pacientes}: PacientesTableProps) {
             </div>
             ))}
         </div>
+
+        {editingPaciente && (
+            <EditarPacienteDialog
+                isOpen={true}
+                onClose={handleEditClose}
+                paciente={editingPaciente}
+            />
+        )}
         </>
     );
 }
