@@ -51,7 +51,7 @@ export async function updateSession(request: NextRequest) {
 
   // Si hay usuario y se intenta acceder a /login, redirige a /home.
   if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname === '/')) {
-    return NextResponse.redirect(new URL('/home', request.url));
+    return NextResponse.redirect(new URL('/inicio', request.url));
   }
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
   // If you're creating a new response object with NextResponse.next() make sure to:
