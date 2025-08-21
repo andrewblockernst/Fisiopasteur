@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
+import { cancelarTurno, eliminarTurno, marcarComoAtendido } from "@/lib/actions/turno.action";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
 
 type Props = {
@@ -11,11 +11,12 @@ type Props = {
     hora: string;
     id_paciente: number;
     id_especialista: string | null;
+    id_especialidad: number | null; // Agregar este campo
     id_box: number | null;
     estado: string | null;
-    // agregá lo que ya traés en tu tabla si necesitás
+    observaciones?: string | null;
   };
-  onDone?: () => void; // opcional para refrescar si querés
+  onDone?: () => void;
 };
 
 export default function AccionesTurno({ turno, onDone }: Props) {
@@ -27,7 +28,6 @@ export default function AccionesTurno({ turno, onDone }: Props) {
     startTransition(async () => {
       const res = await cancelarTurno(turno.id_turno);
       if (res.success) {
-        // podés reemplazar por tu sistema de toasts
         alert("Turno cancelado");
         onDone?.();
       } else {
@@ -49,6 +49,29 @@ export default function AccionesTurno({ turno, onDone }: Props) {
     });
   };
 
+  const onMarcarAtendido = () => {
+    if (!confirm("¿Marcar como atendido?")) return;
+    startTransition(async () => {
+      const res = await marcarComoAtendido(turno.id_turno);
+      if (res.success) {
+        alert("Turno marcado como atendido");
+        onDone?.();
+      } else {
+        alert(res.error || "Error");
+      }
+    });
+  };
+
+  // Verificar si el turno ya pasó
+  const turnoYaPaso = () => {
+    const ahora = new Date();
+    const fechaTurno = new Date(`${turno.fecha}T${turno.hora}`);
+    return fechaTurno < ahora;
+  };
+
+  const esPasado = turnoYaPaso();
+  const esProgramado = turno.estado === 'programado';
+
   return (
     <div className="flex items-center gap-2">
       <button
@@ -58,13 +81,29 @@ export default function AccionesTurno({ turno, onDone }: Props) {
       >
         Editar
       </button>
-      <button
-        onClick={onCancelar}
-        className="px-2 py-1 rounded border text-sm text-amber-700 border-amber-300 hover:bg-amber-50"
-        disabled={isPending}
-      >
-        Cancelar
-      </button>
+      
+      {/* Mostrar "Marcar Atendido" solo para turnos programados que ya pasaron */}
+      {esProgramado && esPasado && (
+        <button
+          onClick={onMarcarAtendido}
+          className="px-2 py-1 rounded border text-sm text-green-700 border-green-300 hover:bg-green-50"
+          disabled={isPending}
+        >
+          ✅ Atendido
+        </button>
+      )}
+      
+      {/* Cancelar solo para turnos futuros programados */}
+      {esProgramado && !esPasado && (
+        <button
+          onClick={onCancelar}
+          className="px-2 py-1 rounded border text-sm text-amber-700 border-amber-300 hover:bg-amber-50"
+          disabled={isPending}
+        >
+          Cancelar
+        </button>
+      )}
+      
       <button
         onClick={onEliminar}
         className="px-2 py-1 rounded border text-sm text-red-700 border-red-300 hover:bg-red-50"

@@ -3,9 +3,11 @@ import FiltrosTurnos from "@/componentes/turnos/filtros-turnos";
 import TablaTurnos from "@/componentes/turnos/listado-turnos";
 
 export default async function TurnosPage({ searchParams }: { searchParams: any }) {
+    // Si no hay filtros, mostrar por defecto los del dia
+  const hoy = new Date().toISOString().split('T')[0];
   const filtros = {
-    fecha_desde: searchParams?.desde ?? undefined,
-    fecha_hasta: searchParams?.hasta ?? undefined,
+    fecha_desde: searchParams?.desde ?? hoy,
+    fecha_hasta: searchParams?.hasta ?? hoy,
     especialista_id: searchParams?.especialista ?? undefined,
     hora_desde: searchParams?.hdesde ?? undefined,
     hora_hasta: searchParams?.hhasta ?? undefined,

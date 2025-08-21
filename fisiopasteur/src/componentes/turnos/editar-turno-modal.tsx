@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { actualizarTurno, obtenerPacientes, obtenerEspecialistas, obtenerBoxes } from "@/lib/actions/turno.action";
+import { useState, useTransition, useEffect } from "react";
+import { actualizarTurno, obtenerPacientes, obtenerEspecialistas, obtenerEspecialidades, obtenerBoxes } from "@/lib/actions/turno.action";
 
 type Props = {
   turno: {
     id_turno: number;
     id_paciente: number;
     id_especialista: string | null;
+    id_especialidad: number | null;
     id_box: number | null;
     fecha: string;
     hora: string;
-    notas?: string | null;
+    observaciones?: string | null;
   };
   open: boolean;
   onClose: () => void;
@@ -19,37 +20,51 @@ type Props = {
 };
 
 export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Props) {
-  const [pacienteId, setPacienteId] = useState<number>(turno.id_paciente);
+  const [pacienteId, setPacienteId] = useState<number | "">(turno.id_paciente);
   const [especialistaId, setEspecialistaId] = useState<string>(turno.id_especialista || "");
+  const [especialidadId, setEspecialidadId] = useState<number | "">(turno.id_especialidad || "");
   const [boxId, setBoxId] = useState<number | "">(turno.id_box ?? "");
   const [fecha, setFecha] = useState(turno.fecha);
   const [hora, setHora] = useState(turno.hora);
-  const [notas, setNotas] = useState(turno.notas || "");
+  const [observaciones, setObservaciones] = useState(turno.observaciones || "");
   const [isPending, startTransition] = useTransition();
 
   const [pacientes, setPacientes] = useState<any[]>([]);
   const [especialistas, setEspecialistas] = useState<any[]>([]);
+  const [especialidades, setEspecialidades] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
 
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const [p, e, b] = await Promise.all([obtenerPacientes(), obtenerEspecialistas(), obtenerBoxes()]);
+      const [p, e, esp, b] = await Promise.all([
+        obtenerPacientes(),
+        obtenerEspecialistas(),
+        obtenerEspecialidades(),
+        obtenerBoxes()
+      ]);
       if (p.success) setPacientes(p.data || []);
       if (e.success) setEspecialistas(e.data || []);
+      if (esp.success) setEspecialidades(esp.data || []);
       if (b.success) setBoxes(b.data || []);
     })();
   }, [open]);
 
   const onSubmit = () => {
+    if (!pacienteId || !especialistaId || !especialidadId || !fecha || !hora) {
+      alert("Completá paciente, especialista, especialidad, fecha y hora.");
+      return;
+    }
+
     startTransition(async () => {
       const res = await actualizarTurno(turno.id_turno, {
         id_paciente: Number(pacienteId),
-        id_especialista: especialistaId || null,
+        id_especialista: String(especialistaId),
+        id_especialidad: Number(especialidadId),
         id_box: typeof boxId === "number" ? boxId : null,
         fecha,
         hora,
-        notas,
+        observaciones,
       } as any);
 
       if (res.success) {
@@ -57,7 +72,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
         onSaved?.();
         onClose();
       } else {
-        alert(res.error || "Error");
+        alert(res.error || "Error al actualizar turno");
       }
     });
   };
@@ -73,12 +88,15 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
         </div>
 
         <div className="grid gap-3">
-          {/* mismos campos que en NuevoTurnoDialog, con valores iniciales */}
           {/* Paciente */}
           <div className="flex flex-col">
             <label className="text-xs mb-1">Paciente</label>
-            <select className="border rounded px-3 py-2" value={pacienteId}
-                    onChange={e=>setPacienteId(Number(e.target.value))}>
+            <select
+              className="border rounded px-3 py-2"
+              value={pacienteId}
+              onChange={e => setPacienteId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">Seleccionar…</option>
               {pacientes.map(p => (
                 <option key={p.id_paciente} value={p.id_paciente}>
                   {p.apellido}, {p.nombre} — DNI {p.dni}
@@ -90,9 +108,12 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
           {/* Especialista */}
           <div className="flex flex-col">
             <label className="text-xs mb-1">Especialista</label>
-            <select className="border rounded px-3 py-2" value={especialistaId}
-                    onChange={e=>setEspecialistaId(e.target.value)}>
-              <option value="">Sin cambio</option>
+            <select
+              className="border rounded px-3 py-2"
+              value={especialistaId}
+              onChange={e => setEspecialistaId(e.target.value)}
+            >
+              <option value="">Seleccionar…</option>
               {especialistas.map(e => (
                 <option key={e.id_usuario} value={e.id_usuario}>
                   {e.apellido}, {e.nombre}
@@ -101,19 +122,44 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
             </select>
           </div>
 
-          {/* Box */}
+          {/* Especialidad */}
           <div className="flex flex-col">
-            <label className="text-xs mb-1">Box</label>
-            <select className="border rounded px-3 py-2" value={String(boxId)}
-                    onChange={e=>setBoxId(e.target.value===""? "" : Number(e.target.value))}>
-              <option value="">Sin asignar</option>
-              {boxes.map(b => (
-                <option key={b.id_box} value={b.id_box}>Box {b.numero}</option>
+            <label className="text-xs mb-1">Especialidad</label>
+            <select
+              className="border rounded px-3 py-2"
+              value={especialidadId}
+              onChange={e => setEspecialidadId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">Seleccionar…</option>
+              {especialidades.map(esp => (
+                <option key={esp.id_especialidad} value={esp.id_especialidad}>
+                  {esp.nombre}
+                </option>
               ))}
             </select>
           </div>
 
-          {/* Fecha / Hora / Notas */}
+          {/* Box (opcional) */}
+          <div className="flex flex-col">
+            <label className="text-xs mb-1">Box (opcional)</label>
+            <select
+              className="border rounded px-3 py-2"
+              value={String(boxId)}
+              onChange={e => {
+                const v = e.target.value;
+                setBoxId(v === "" ? "" : Number(v));
+              }}
+            >
+              <option value="">Sin asignar</option>
+              {boxes.map(b => (
+                <option key={b.id_box} value={b.id_box}>
+                  Box {b.numero}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Fecha y hora */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col">
               <label className="text-xs mb-1">Fecha</label>
@@ -125,9 +171,10 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
             </div>
           </div>
 
+          {/* Observaciones */}
           <div className="flex flex-col">
-            <label className="text-xs mb-1">Notas</label>
-            <textarea className="border rounded px-3 py-2" rows={3} value={notas} onChange={e=>setNotas(e.target.value)} />
+            <label className="text-xs mb-1">Observaciones (opcional)</label>
+            <textarea className="border rounded px-3 py-2" rows={3} value={observaciones} onChange={e=>setObservaciones(e.target.value)} />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
