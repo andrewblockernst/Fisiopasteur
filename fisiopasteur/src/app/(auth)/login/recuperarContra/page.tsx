@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { resetPassword } from "@/lib/actions/auth.action";
+import Boton from "@/componentes/boton"; 
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -27,20 +28,17 @@ export default function ForgotPasswordPage() {
         onSubmit={handleSubmit}
         className="p-6 bg-white rounded-lg shadow-md space-y-4 w-full max-w-sm"
       >
-        <h1 className="text-xl font-semibold">Recuperar contraseña</h1>
+        <h1 className="text-xl font-semibold">Coloque su email</h1>
         <input
           type="email"
-          placeholder="Tu correo"
+          placeholder="Tucorreo@gmail.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full px-3 py-2 border rounded"
         />
-        <button
-          type="submit"
-          className="w-full bg-[var(--brand)] text-white py-2 rounded-lg"
-        >
+        <Boton variant="primary" type="submit" className="w-full">
           Enviar link
-        </button>
+        </Boton>
         {message && <p className="text-green-600 text-sm">{message}</p>}
         {error && <p className="text-red-600 text-sm">{error}</p>}
       </form>

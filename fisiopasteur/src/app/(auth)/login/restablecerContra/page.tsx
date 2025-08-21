@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updatePassword } from "@/lib/actions/auth.action";
+import Boton from "@/componentes/boton"; 
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -35,12 +36,9 @@ export default function ResetPasswordPage() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full px-3 py-2 border rounded"
         />
-        <button
-          type="submit"
-          className="w-full bg-[var(--brand)] text-white py-2 rounded-lg"
-        >
+        <Boton variant="primary" type="submit" className="w-full">
           Guardar
-        </button>
+        </Boton>
         {message && <p className="text-green-600 text-sm">{message}</p>}
         {error && <p className="text-red-600 text-sm">{error}</p>}
       </form>
