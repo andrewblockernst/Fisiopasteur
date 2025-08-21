@@ -4,6 +4,7 @@ import { deleteEspecialista } from "@/lib/actions/especialista.action";
 import Button from "@/componentes/boton";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { useState } from "react";
+import { useToastStore } from '@/stores/toast-store';
 
 interface DeleteEspecialistaButtonProps {
   id: string;
@@ -14,19 +15,26 @@ interface DeleteEspecialistaButtonProps {
 export function DeleteEspecialistaButton({ id, nombre, onDeleted }: DeleteEspecialistaButtonProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
+  const { showServerActionResponse } = useToastStore();
 
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
-      await deleteEspecialista(id);
-      setShowDialog(false);
-      // Llamar al callback para refrescar la lista
-      if (onDeleted) {
-        onDeleted();
+      const result = await deleteEspecialista(id);
+      showServerActionResponse(result);
+
+      if (result.success) {
+        setShowDialog(false);
+        onDeleted?.();
       }
     } catch (error) {
-      console.error("Error:", error);
-      alert("Error al eliminar especialista");
+      console.error("Error eliminando especialista:", error);
+      showServerActionResponse({
+        success: false,
+        message: 'Error al eliminar',
+        toastType: 'error',
+        description: 'No se pudo eliminar el especialista'
+      });
     } finally {
       setIsDeleting(false);
     }

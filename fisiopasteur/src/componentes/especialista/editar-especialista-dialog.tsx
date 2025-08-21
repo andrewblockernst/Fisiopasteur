@@ -4,6 +4,7 @@ import { useState } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import Image from "next/image";
 import type { Tables } from "@/types/database.types";
+import { useToastStore } from '@/stores/toast-store';
 
 type Especialidad = Tables<"especialidad">;
 type Usuario = Tables<"usuario"> & { 
@@ -94,6 +95,7 @@ function EspecialistaEditFormForDialog({
     especialista.especialidades?.map(e => e.id_especialidad) || []
   );
   const [selectedColor, setSelectedColor] = useState(especialista.color || "#3B82F6");
+  const { showServerActionResponse } = useToastStore();
 
   const validateForm = (formData: FormData): boolean => {
     const newErrors: Record<string, string> = {};
@@ -123,8 +125,14 @@ function EspecialistaEditFormForDialog({
 
     try {
       setIsSubmitting(true);
-      await updateEspecialista(especialista.id_usuario, formData);
-      onSuccess(); // Cerrar el dialog después del éxito
+      const result = await updateEspecialista(especialista.id_usuario, formData);
+      showServerActionResponse(result);
+      
+      if (result.success) {
+        onSuccess(); // Cerrar el dialog después del éxito
+      } else {
+        setIsSubmitting(false);
+      }
     } catch (error: any) {
       if (error?.digest?.includes('NEXT_REDIRECT')) {
         onSuccess(); // También cerrar en caso de redirect exitoso
@@ -132,7 +140,11 @@ function EspecialistaEditFormForDialog({
       }
       
       console.error("Error:", error);
-      alert("Error al actualizar especialista");
+      showServerActionResponse({
+        success: false,
+        message: "Error al actualizar especialista",
+        toastType: "error"
+      });
       setIsSubmitting(false);
     }
   };

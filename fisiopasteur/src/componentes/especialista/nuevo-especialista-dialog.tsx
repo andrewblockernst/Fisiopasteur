@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import Image from "next/image";
 import type { Tables } from "@/types/database.types";
+import { createEspecialista } from "@/lib/actions/especialista.action";
+import Button from "@/componentes/boton";
+import ColorPicker from "@/componentes/color-selector";
+import { useToastStore } from '@/stores/toast-store';
 
 type Especialidad = Tables<"especialidad">;
 
@@ -18,33 +22,52 @@ export function NuevoEspecialistaDialog({
   onClose, 
   especialidades 
 }: NuevoEspecialistaDialogProps) {
+  const [isPending, startTransition] = useTransition();
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    
+    startTransition(async () => {
+      const result = await createEspecialista(formData);
+      
+      if (result.success) {
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      }
+    });
+  };
+
   return (
-    <BaseDialog
-      type="custom"
-      size="lg"
-      title="Nuevo Especialista"
-      customIcon={
-        <Image
-          src="/favicon.svg"
-          alt="Logo Fisiopasteur"
-          width={120}
-          height={40}
-          className="object-contain"
-        />
-      }
-      message={
-        <div className="text-left">
-          <div className="text-gray-600 mb-6 text-center">Completa la información para crear un nuevo especialista.</div>
-          <EspecialistaFormWrapper 
-            especialidades={especialidades}
-            onSuccess={onClose}
+    <>
+      <BaseDialog
+        type="custom"
+        size="lg"
+        title="Nuevo Especialista"
+        customIcon={
+          <Image
+            src="/favicon.svg"
+            alt="Logo Fisiopasteur"
+            width={120}
+            height={40}
+            className="object-contain"
           />
-        </div>
-      }
-      isOpen={isOpen}
-      onClose={onClose}
-      showCloseButton={true}
-    />
+        }
+        message={
+          <div className="text-left">
+            <div className="text-gray-600 mb-6 text-center">Completa la información para crear un nuevo especialista.</div>
+            <EspecialistaFormWrapper 
+              especialidades={especialidades}
+              onSuccess={onClose}
+            />
+          </div>
+        }
+        isOpen={isOpen}
+        onClose={onClose}
+        showCloseButton={true}
+      />
+    </>
   );
 }
 
@@ -66,10 +89,6 @@ function EspecialistaFormWrapper({ especialidades, onSuccess }: EspecialistaForm
 }
 
 // Versión modificada del formulario para el dialog
-import { createEspecialista } from "@/lib/actions/especialista.action";
-import Button from "@/componentes/boton";
-import ColorPicker from "@/componentes/color-selector";
-
 interface EspecialistaFormForDialogProps {
   especialidades: Especialidad[];
   mode: "create" | "edit";
@@ -85,6 +104,7 @@ function EspecialistaFormForDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedEspecialidades, setSelectedEspecialidades] = useState<number[]>([]);
   const [selectedColor, setSelectedColor] = useState("#3B82F6");
+  const { showServerActionResponse } = useToastStore();
 
   const validateForm = (formData: FormData): boolean => {
     const newErrors: Record<string, string> = {};
@@ -104,7 +124,10 @@ function EspecialistaFormForDialog({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (formData: FormData) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    
     if (!validateForm(formData)) return;
 
     selectedEspecialidades.forEach((especialidadId, index) => {
@@ -115,8 +138,16 @@ function EspecialistaFormForDialog({
 
     try {
       setIsSubmitting(true);
-      await createEspecialista(formData);
-      onSuccess(); // Cerrar el dialog después del éxito
+      const result = await createEspecialista(formData);
+      showServerActionResponse(result);
+      
+      if (result.success) {
+        setTimeout(() => {
+          onSuccess(); // Cerrar el dialog después del éxito
+        }, 1500);
+      } else {
+        setIsSubmitting(false);
+      }
     } catch (error: any) {
       if (error?.digest?.includes('NEXT_REDIRECT')) {
         onSuccess(); // También cerrar en caso de redirect exitoso
@@ -124,7 +155,11 @@ function EspecialistaFormForDialog({
       }
       
       console.error("Error:", error);
-      alert("Error al crear especialista");
+      showServerActionResponse({
+        success: false,
+        message: "Error al crear especialista",
+        toastType: "error"
+      });
       setIsSubmitting(false);
     }
   };
@@ -144,7 +179,7 @@ function EspecialistaFormForDialog({
   };
 
   return (
-    <form action={handleSubmit}>
+    <form onSubmit={handleSubmit}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Nombre */}
         <div>
