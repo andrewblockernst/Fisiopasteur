@@ -28,6 +28,7 @@ export async function obtenerTurnos(filtros?: {
         *,
         paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email),
         especialista:id_especialista(id_usuario, nombre, apellido, color),
+        especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero)
       `)
       .order("fecha", { ascending: true })
@@ -61,7 +62,6 @@ export async function obtenerTurnos(filtros?: {
   }
 }
 
-// Obtener turnos con filtros avanzados (para la página principal)
 export async function obtenerTurnosConFiltros(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
@@ -84,11 +84,9 @@ export async function obtenerTurnosConFiltros(filtros?: {
           nombre, 
           apellido, 
           color,
-          especialidad:id_especialidad(id_especialidad, nombre),
-          usuario_especialidad(
-            especialidad:id_especialidad(id_especialidad, nombre)
-          )
+          especialidad:id_especialidad(id_especialidad, nombre)
         ),
+        especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero)
       `)
       .order("fecha", { ascending: true })
@@ -105,6 +103,11 @@ export async function obtenerTurnosConFiltros(filtros?: {
     // Filtro por especialista específico
     if (filtros?.especialista_id) {
       query = query.eq("id_especialista", filtros.especialista_id);
+    }
+    
+    // Filtro por especialidad del turno
+    if (filtros?.especialidad_id) {
+      query = query.eq("id_especialidad", filtros.especialidad_id);
     }
     
     // Filtros de horario
@@ -127,23 +130,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
       return { success: false, error: error.message };
     }
 
-    // Si hay filtro por especialidad, filtrar en el lado cliente
-    // (porque la especialidad está en la tabla usuario, no directamente en turno)
-    let turnosFiltrados = data;
-    if (filtros?.especialidad_id) {
-      turnosFiltrados = data?.filter((turno: any) => {
-        // Verificar especialidad principal
-        if (turno.especialista?.especialidad?.id_especialidad === filtros.especialidad_id) {
-          return true;
-        }
-        // Verificar especialidades adicionales
-        return turno.especialista?.usuario_especialidad?.some(
-          (ue: any) => ue.especialidad?.id_especialidad === filtros.especialidad_id
-        );
-      });
-    }
-
-    return { success: true, data: turnosFiltrados };
+    return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };
@@ -183,6 +170,7 @@ export async function crearTurno(datos: TurnoInsert) {
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
         especialista:id_especialista(nombre, apellido, color),
+        especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(numero)
       `)
       .single();
@@ -230,7 +218,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
           const disponibilidad = await verificarDisponibilidadParaActualizacion(
             nuevaFecha,
             nuevaHora,
-            nuevoEspecialista, // Ahora TypeScript sabe que no es null
+            nuevoEspecialista,
             nuevoBox,
             id // excluir el turno actual de la verificación
           );
@@ -256,6 +244,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
         especialista:id_especialista(nombre, apellido, color),
+        especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(numero)
       `)
       .single();
@@ -305,8 +294,6 @@ export async function cancelarTurno(id: number, motivo?: string) {
       .update({
         estado: "cancelado",
         updated_at: new Date().toISOString(),
-        // opcional: podés persistir un motivo en notas si querés
-        // notas: motivo ? `CANCELADO: ${motivo}` : undefined,
       })
       .eq("id_turno", id)
       .select("*")
@@ -317,6 +304,31 @@ export async function cancelarTurno(id: number, motivo?: string) {
     return { success: true, data };
   } catch {
     return { success: false, error: "Error inesperado" };
+  }
+}
+
+export async function marcarComoAtendido(id_turno: number) {
+  const supabase = await createClient();
+  
+  try {
+    const { error } = await supabase
+      .from('turno')
+      .update({ 
+        estado: 'atendido',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id_turno', id_turno);
+
+    if (error) throw error;
+
+    revalidatePath('/turnos');
+    return { success: true };
+  } catch (error) {
+    console.error('Error al marcar turno como atendido:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
   }
 }
 
@@ -337,6 +349,7 @@ export async function obtenerAgendaEspecialista(
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, dni, telefono, email),
+        especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(numero)
       `)
       .eq("id_especialista", especialista_id)

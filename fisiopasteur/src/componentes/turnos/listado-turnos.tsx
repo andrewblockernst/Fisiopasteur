@@ -2,20 +2,32 @@
 import { useState } from "react";
 import NuevoTurnoDialog from "@/componentes/turnos/nuevo-turno-modal";
 import AccionesTurno from "@/componentes/turnos/acciones-turno";
+import Button from "../boton";
 
 export default function TurnosTable({ turnos }: { turnos: any[] }) {
+  console.log(turnos); // <-- agregá esto temporalmente
   const [openNew, setOpenNew] = useState(false);
+
+  // Función para determinar el color de fondo de la fila
+  const getRowClassName = (turno: any) => {
+    let baseClass = "border-t";
+    // Solo agregar color de fondo para turnos atendidos
+    if (turno.estado === 'atendido') {
+      baseClass += " bg-green-50";
+    }
+    return baseClass;
+  };
 
   return (
     <div className="space-y-3">
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-semibold">Turnos</h1>
-        <button
+        <Button
+          variant="primary"
           onClick={() => setOpenNew(true)}
-          className="px-3 py-2 rounded bg-rose-700 text-white hover:bg-rose-800"
         >
           Nuevo turno
-        </button>
+        </Button>
       </div>
 
       <div className="overflow-auto border rounded">
@@ -26,14 +38,16 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
               <th className="text-left p-2">Hora</th>
               <th className="text-left p-2">Paciente</th>
               <th className="text-left p-2">Especialista</th>
+              <th className="text-left p-2">Especialidad</th>
               <th className="text-left p-2">Box</th>
               <th className="text-left p-2">Estado</th>
+              <th className="text-left p-2">Observaciones</th>
               <th className="text-left p-2">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {turnos?.map((t) => (
-              <tr key={t.id_turno} className="border-t">
+              <tr key={t.id_turno} className={getRowClassName(t)}>
                 <td className="p-2">{t.fecha}</td>
                 <td className="p-2">{t.hora}</td>
                 <td className="p-2">
@@ -51,15 +65,24 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
                     {t.especialista?.apellido}, {t.especialista?.nombre}
                   </span>
                 </td>
+                <td className="p-2 font-medium text-blue-700">
+                  {/* Muestra la especialidad del turno, o la del especialista, o "-" */}
+                  {t.especialidad?.nombre ||
+                   t.especialista?.especialidad?.nombre ||
+                   "-"}
+                </td>
                 <td className="p-2">{t.box?.numero ?? "-"}</td>
                 <td className="p-2 capitalize">{t.estado}</td>
+                <td className="p-2 text-gray-600 max-w-xs truncate" title={t.observaciones || ''}>
+                  {t.observaciones || "-"}
+                </td>
                 <td className="p-2">
-                  <AccionesTurno turno={t} />
+                  <AccionesTurno turno={t} onDone={() => window.location.reload()} />
                 </td>
               </tr>
             ))}
             {(!turnos || turnos.length === 0) && (
-              <tr><td className="p-3 text-center text-neutral-500" colSpan={7}>Sin turnos</td></tr>
+              <tr><td className="p-3 text-center text-neutral-500" colSpan={9}>Sin turnos para hoy</td></tr>
             )}
           </tbody>
         </table>
