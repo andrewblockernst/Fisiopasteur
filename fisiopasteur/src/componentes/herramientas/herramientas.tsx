@@ -24,7 +24,6 @@ const Herramientas = () => {
       <IconWrapper icon={<CalendarDays size={28} onClick={() => router.push('/calendario')} />} />
       <IconWrapper 
         icon={<Accessibility size={28} onClick={() => router.push('/pacientes')} />} 
-        onClick={() => router.push('/paciente')}
       />
       <IconWrapper icon={<FileBadge size={28} />} onClick={() => router.push('/especialistas')} />
       <IconWrapper icon={<User size={28} />} onClick={() => router.push('/perfil')} />
