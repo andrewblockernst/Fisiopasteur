@@ -31,7 +31,9 @@ export async function middleware(request: NextRequest) {
   const publicPaths = [
     '/login',
     '/not-found',
-    '/centro-de-ayuda'
+    '/centro-de-ayuda',
+    '/recuperarContra',
+    '/restablecerContra'
   ];
 
   const isPublicPath = publicPaths.some(path => 
