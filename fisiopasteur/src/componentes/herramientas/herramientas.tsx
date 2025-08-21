@@ -21,16 +21,12 @@ const Herramientas = () => {
       <IconWrapper icon={<Home size={28} />} onClick={() => router.push('/inicio')} />
       <IconWrapper icon={<Plus size={28} />} />
       <IconWrapper icon={<ClipboardList size={28} onClick={() => router.push('/turnos')} />} />
-      <IconWrapper icon={<CalendarDays size={28} />} />
-      <IconWrapper icon={<Accessibility size={28} />} />
-      <IconWrapper 
-        icon={<FileBadge size={28} />} 
-        onClick={() => router.push('/especialista')}
-      />
+      <IconWrapper icon={<CalendarDays size={28} onClick={() => router.push('/calendario')} />} />
+      <IconWrapper icon={<Accessibility size={28} onClick={() => router.push('/pacientes')} />} />
+      <IconWrapper icon={<FileBadge size={28} />} onClick={() => router.push('/especialistas')} />
       <IconWrapper icon={<User size={28} />} onClick={() => router.push('/perfil')} />
-      <IconWrapper icon={<HelpCircle size={28}
-      onClick={() => router.push('/centro-de-ayuda')} />} />
-      <IconWrapper icon={<Settings size={28} />} />
+      <IconWrapper icon={<HelpCircle size={28} onClick={() => router.push('/centro-de-ayuda')} />} />
+      <IconWrapper icon={<Settings size={28} onClick={() => router.push('/ajustes')} />} />
     </aside>
   );
 };
