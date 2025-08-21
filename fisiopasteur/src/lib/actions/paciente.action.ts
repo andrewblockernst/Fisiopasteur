@@ -30,7 +30,10 @@ function validatePacienteData(data: Partial<PacienteInsert | PacienteUpdate>): s
         const fechaNac = new Date(data.fecha_nacimiento);
         const hoy = new Date();
         if (fechaNac > hoy) {
-        errors.push("La fecha de nacimiento no puede ser futura");
+          console.log("Fecha de nacimiento no puede ser futura:", fechaNac, hoy);
+          errors.push("La fecha de nacimiento no puede ser futura");
+        } else {
+          console.log("Fecha de nacimiento válida:", fechaNac);
         }
     }
 
@@ -238,7 +241,7 @@ export async function updatePaciente(id: number, formData: FormData) {
     telefono: formData.get("telefono") as string,
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
-    //estado: "activo", // Si tienes un campo de estado
+    estado: formData.get("estado") as string || "activo",
   };
 
   // Validaciones
@@ -267,7 +270,7 @@ export async function updatePaciente(id: number, formData: FormData) {
 
     if (error) {
       console.error("Error updating paciente:", error);
-      throw new Error("Error al actualizar paciente");
+      throw new Error(error.message || "Error al actualizar paciente");
     }
 
     revalidatePath("/pacients");

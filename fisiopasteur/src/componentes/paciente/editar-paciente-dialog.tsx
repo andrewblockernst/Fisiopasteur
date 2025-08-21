@@ -1,19 +1,27 @@
-'use client'
+'use client';
 
+import { Tables } from "@/types/database.types";
 import BaseDialog from "../dialog/base-dialog";
 import Image from "next/image";
+import { useState } from "react";
+import { updatePaciente } from "@/lib/actions/paciente.action";
+import Button from "../boton";
 
-interface NuevoPacienteDialogProps {
+type Paciente = Tables<'paciente'>;
+
+interface EditarPacienteDialogProps {
     isOpen: boolean;
     onClose: () => void;
+    paciente: Paciente;
+    // onPacienteUpdated: () => void;
 }
 
-export function NuevoPacienteDialog({ isOpen, onClose }: NuevoPacienteDialogProps) {
+export function EditarPacienteDialog({ isOpen, onClose, paciente }: EditarPacienteDialogProps) {
     return (
         <BaseDialog
             type="custom"
             size="lg"
-            title="Nuevo Paciente"
+            title="Editar Paciente"
             customIcon={
                 <Image
                     src="/favicon.svg"
@@ -25,8 +33,9 @@ export function NuevoPacienteDialog({ isOpen, onClose }: NuevoPacienteDialogProp
             }
             message={
                 <div className="text-left">
-                    <div className="text-gray-600 mb-6 text-center">Completa la información para crear un nuevo paciente.</div>
-                    <PacienteFormWrapper
+                    <div className="text-gray-600 mb-6 text-center">Modifica la información del paciente.</div>
+                    <PacienteEditFormWrapper
+                        paciente={paciente}
                         onSuccess={onClose}
                     />
                 </div>
@@ -38,33 +47,30 @@ export function NuevoPacienteDialog({ isOpen, onClose }: NuevoPacienteDialogProp
     )
 }
 
-interface PacienteFormWrapperProps {
+interface PacienteEditFormWrapperProps {
+    paciente: Paciente;
     onSuccess: () => void;
 }
 
-function PacienteFormWrapper({ onSuccess }: PacienteFormWrapperProps) {
+function PacienteEditFormWrapper({paciente, onSuccess} : PacienteEditFormWrapperProps) {
     return (
         <div className="max-w-4xl">
-            <PacienteFormForDialog
-                mode="create"
+            <PacienteEditFormForDialog
+                paciente={paciente}
                 onSuccess={onSuccess}
             />
         </div>
-    );
+    )
 }
 
-import { createPaciente } from "@/lib/actions/paciente.action";
-import Button from "../boton";
-import { useState } from "react";
-
-interface PacienteFormForDialogProps {
-    mode: "create" | "edit";
+interface PacienteEditFormForDialogProps {
+    paciente: Paciente;
     onSuccess: () => void;
 }
 
-function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) {
-    const [isSubmitting, setIsSubmitting] = useState(false);
+function PacienteEditFormForDialog({paciente, onSuccess}: PacienteEditFormForDialogProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const validateForm = (formData: FormData): boolean => {
         const newErrors: Record<string, string> = {};
@@ -81,16 +87,16 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    }
+    };
 
     const handleSubmit = async (formData: FormData) => {
         if (!validateForm(formData)) {
             return;
         }
-
+    
         try {
             setIsSubmitting(true);
-            await createPaciente(formData);
+            await updatePaciente(paciente.id_paciente, formData);
             onSuccess();
         } catch (error: any) {
             if (error?.digest?.includes('NEXT_REDIRECT')) {
@@ -99,7 +105,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
             }
 
             console.error("Error:", error);
-            alert("Error al crear paciente");
+            alert(error.message);
             setIsSubmitting(false);
         }
     };
@@ -117,6 +123,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                         type="text"
                         id="nombre"
                         name="nombre"
+                        defaultValue={paciente.nombre}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.nombre ? "border-red-500" : "border-gray-300"
                         }`}
@@ -134,6 +141,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                         type="text"
                         id="apellido"
                         name="apellido"
+                        defaultValue={paciente.apellido}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.apellido ? "border-red-500" : "border-gray-300"
                         }`}
@@ -151,6 +159,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                         type="text"
                         id="dni"
                         name="dni"
+                        defaultValue={paciente.dni}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.dni ? "border-red-500" : "border-gray-300"
                         }`}
@@ -168,6 +177,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                         type="date"
                         id="fecha_nacimiento"
                         name="fecha_nacimiento"
+                        defaultValue={paciente.fecha_nacimiento || ''}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.fecha_nacimiento ? "border-red-500" : "border-gray-300"
                         }`}
@@ -185,6 +195,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                         type="text"
                         id="telefono"
                         name="telefono"
+                        defaultValue={paciente.telefono || ''}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.telefono ? "border-red-500" : "border-gray-300"
                         }`}
@@ -202,6 +213,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                         type="email"
                         id="email"
                         name="email"
+                        defaultValue={paciente.email || ''}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.email ? "border-red-500" : "border-gray-300"
                         }`}
@@ -219,12 +231,37 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                         type="text"
                         id="direccion"
                         name="direccion"
+                        defaultValue={paciente.direccion || ''}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.direccion ? "border-red-500" : "border-gray-300"
                         }`}
                         placeholder="Ingresa la direccion"
                     />
                     {errors.direccion && <p className="text-red-500 text-xs mt-1">{errors.direccion}</p>}
+                </div>
+
+                {/* Estado */}
+                <div>
+                    <label htmlFor="estado" className="block text-sm font-medium text-gray-700 mb-1">
+                        Estado
+                    </label>
+                    <select
+                        id="estado"
+                        name="estado"
+                        defaultValue={paciente.estado || ''}
+                        className={`w-full px-3 py-3 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.estado ? "border-red-500" : "border-gray-300"
+                        }`}
+                    >
+                        <option value="">Selecciona un estado</option>
+                        <option value="Activo">Activo</option>
+                        <option value="En tratamiento">En tratamiento</option>
+                        <option value="Alta médica">Alta médica</option>
+                        <option value="Pausa temporal">Pausa temporal</option>
+                        <option value="Derivado">Derivado</option>
+                        <option value="Inactivo">Inactivo</option>
+                    </select>
+                    {errors.estado && <p className="text-red-500 text-xs mt-1">{errors.estado}</p>}
                 </div>
             </div>
 
@@ -243,7 +280,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                 variant="primary"
                 disabled={isSubmitting}
                 >
-                {isSubmitting ? "Creando..." : "Crear Paciente"}
+                {isSubmitting ? "Actualizando..." : "Actualizar Paciente"}
                 </Button>
             </div>
         </form>
