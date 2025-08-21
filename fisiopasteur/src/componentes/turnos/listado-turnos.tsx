@@ -5,17 +5,16 @@ import AccionesTurno from "@/componentes/turnos/acciones-turno";
 import Button from "../boton";
 
 export default function TurnosTable({ turnos }: { turnos: any[] }) {
+  console.log(turnos); // <-- agregá esto temporalmente
   const [openNew, setOpenNew] = useState(false);
 
   // Función para determinar el color de fondo de la fila
   const getRowClassName = (turno: any) => {
     let baseClass = "border-t";
-    
     // Solo agregar color de fondo para turnos atendidos
     if (turno.estado === 'atendido') {
       baseClass += " bg-green-50";
     }
-    
     return baseClass;
   };
 
@@ -67,7 +66,10 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
                   </span>
                 </td>
                 <td className="p-2 font-medium text-blue-700">
-                  {t.especialidad?.nombre || "-"}
+                  {/* Muestra la especialidad del turno, o la del especialista, o "-" */}
+                  {t.especialidad?.nombre ||
+                   t.especialista?.especialidad?.nombre ||
+                   "-"}
                 </td>
                 <td className="p-2">{t.box?.numero ?? "-"}</td>
                 <td className="p-2 capitalize">{t.estado}</td>

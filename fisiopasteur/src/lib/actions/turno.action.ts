@@ -62,7 +62,6 @@ export async function obtenerTurnos(filtros?: {
   }
 }
 
-// Obtener turnos con filtros avanzados (para la página principal)
 export async function obtenerTurnosConFiltros(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
@@ -87,11 +86,11 @@ export async function obtenerTurnosConFiltros(filtros?: {
           color,
           especialidad:id_especialidad(id_especialidad, nombre)
         ),
+        especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero)
       `)
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
-
 
     // Aplicar filtros de rango de fechas
     if (filtros?.fecha_desde) {
