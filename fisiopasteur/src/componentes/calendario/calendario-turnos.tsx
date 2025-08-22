@@ -124,25 +124,56 @@ export function CalendarioTurnos({
             return (
               <div key={index} className="bg-white h-24 md:h-32 p-1 relative group">
                 <div
-                  className={`
-                    w-full h-full rounded cursor-pointer transition-colors relative
-                    ${esHoy ? 'bg-[#9C1838] text-white' : 'hover:bg-gray-50'}
-                  `}
+                  className="w-full h-full rounded cursor-pointer transition-colors relative hover:bg-gray-50"
                   onClick={() => onDayClick(fecha, turnosDelDia)}
                 >
-                  <div className="p-2">
-                    <span className={`text-sm font-medium ${esHoy ? 'text-white' : 'text-gray-900'}`}>
-                      {fecha.getDate()}
-                    </span>
+                  <div className="p-2 h-full flex flex-col">
+                    {/* Número del día */}
+                    <div className="flex justify-between items-start mb-1">
+                      <span className={`text-sm font-medium ${
+                        esHoy 
+                          ? 'bg-[#9C1838] text-white w-6 h-6 rounded-2xl flex items-center justify-center' 
+                          : 'text-gray-900'
+                      }`}>
+                        {fecha.getDate()}
+                      </span>
+                    </div>
                     
-                    {/* Indicador de turnos */}
-                    {turnosDelDia.length > 0 && (
-                      <div className="mt-1">
-                        <div className={`text-xs ${esHoy ? 'text-white' : 'text-[#9C1838]'}`}>
-                          {turnosDelDia.length} turno{turnosDelDia.length !== 1 ? 's' : ''}
+                    {/* Lista de turnos */}
+                    <div className="flex-1 overflow-hidden">
+                      {turnosDelDia.length > 0 ? (
+                        <div className="space-y-1">
+                          {turnosDelDia.slice(0, 3).map((turno) => (
+                            <div
+                              key={turno.id_turno}
+                              className="flex items-center gap-1 text-xs"
+                            >
+                              {/* Indicador de color del especialista */}
+                              <div 
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ 
+                                  backgroundColor: turno.especialista?.color || '#9C1838' 
+                                }}
+                              />
+                              {/* Horario y nombre del paciente en una línea */}
+                              <div className="flex items-center gap-1 min-w-0 flex-1">
+                                <span className="text-gray-600 font-mono text-xs flex-shrink-0">
+                                    {turno.hora.substring(0, 5)}
+                                </span>
+                                <span className="text-gray-900 font-medium truncate">
+                                  {turno.paciente?.nombre}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          {turnosDelDia.length > 3 && (
+                            <div className="text-xs text-gray-500">
+                              +{turnosDelDia.length - 3} más
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      ) : null}
+                    </div>
                   </div>
                   
                   {/* Botón crear turno (visible en hover) */}
@@ -176,13 +207,13 @@ export function CalendarioTurnos({
     }
 
     return (
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+      <div className="bg-white rounded border overflow-hidden">
         {/* Header días de la semana */}
-        <div className="grid grid-cols-7 bg-gray-50 border-b">
+        <div className="grid grid-cols-7 border-b">
           {diasSemana.map((fecha, index) => {
             const esHoy = esDiaActual(fecha);
             return (
-              <div key={index} className={`p-4 text-center border-r last:border-r-0 ${esHoy ? 'bg-[#9C1838] text-white' : ''}`}>
+              <div key={index} className={`p-2 text-center border-r last:border-r-0 ${esHoy ? 'bg-[#9C1838] text-white' : ''}`}>
                 <div className="text-sm font-medium">
                   {DIAS_SEMANA_COMPLETOS[index]}
                 </div>
@@ -228,7 +259,7 @@ export function CalendarioTurnos({
                 {/* Botón crear turno */}
                 <button
                   onClick={() => onCreateTurno(fecha)}
-                  className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-1 rounded"
+                  className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-1 rounded-4xl"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
