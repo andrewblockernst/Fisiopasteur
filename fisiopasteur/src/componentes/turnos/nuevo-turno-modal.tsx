@@ -8,10 +8,25 @@ import {
   obtenerEspecialistas,
   obtenerEspecialidades,
   obtenerBoxes,
+  obtenerAgendaEspecialista,
 } from "@/lib/actions/turno.action";
 import BaseDialog from "../dialog/base-dialog";
 
 type Props = { open: boolean; onClose: () => void; onCreated?: () => void };
+
+const horasPosibles = [
+  "06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00",
+  "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00",
+  "20:00", "21:00", "22:00"
+];
+
+// Saber si el turno es en el pasado
+function esTurnoEnPasado(fecha: string, hora: string) {
+  if (!fecha || !hora) return false;
+  const ahora = new Date();
+  const fechaHoraTurno = new Date(`${fecha}T${hora}`);
+  return fechaHoraTurno < ahora;
+}
 
 export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
   const [pacienteId, setPacienteId] = useState<number | "">("");
@@ -20,6 +35,7 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
   const [boxId, setBoxId] = useState<number | "">("");
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
+  const [horasDisponibles, setHorasDisponibles] = useState<string[]>(horasPosibles);
   const [observaciones, setObservaciones] = useState("");
   const [disponible, setDisponible] = useState<null | boolean>(null);
   const [isPending, startTransition] = useTransition();
@@ -27,10 +43,29 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
   const [pacientes, setPacientes] = useState<any[]>([]);
   const [especialistas, setEspecialistas] = useState<any[]>([]);
   const [especialidades, setEspecialidades] = useState<any[]>([]);
+  const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
+  
 
-  // Estado para mostrar mensajes personalizados en el modal
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ open: false, type: 'success', message: '' });
+
+  // Función para limpiar los campos del modal
+  function limpiarCampos() {
+    setPacienteId("");
+    setEspecialistaId("");
+    setEspecialidadId("");
+    setBoxId("");
+    setFecha("");
+    setHora("");
+    setObservaciones("");
+    setDisponible(null);
+    setEspecialidadesDisponibles([]);
+  }
+
+  // Limpiar al cerrar el modal
+  useEffect(() => {
+    if (!open) limpiarCampos();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -48,6 +83,78 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
     })();
   }, [open]);
 
+  // Filtrar especialidades cuando cambia el especialista seleccionado
+  useEffect(() => {
+    if (!especialistaId || !especialistas.length) {
+      setEspecialidadesDisponibles(especialidades); // Mostrar todas si no hay especialista
+      return;
+    }
+    
+    // Buscar el especialista seleccionado
+    const especialistaSeleccionado = especialistas.find(e => e.id_usuario === especialistaId);
+    
+    if (especialistaSeleccionado) {
+      // Obtener las especialidades del especialista
+      let especialidadesDelEspecialista = [];
+      
+      // Si tiene especialidad principal
+      if (especialistaSeleccionado.especialidad) {
+        especialidadesDelEspecialista.push(especialistaSeleccionado.especialidad);
+      }
+      
+      // Si tiene especialidades adicionales en usuario_especialidad
+      if (especialistaSeleccionado.usuario_especialidad) {
+        especialistaSeleccionado.usuario_especialidad.forEach((ue: any) => {
+          if (ue.especialidad) {
+            especialidadesDelEspecialista.push(ue.especialidad);
+          }
+        });
+      }
+      
+      // Eliminar duplicados por id_especialidad
+      const especialidadesUnicas = especialidadesDelEspecialista.filter((esp, index, arr) => 
+        index === arr.findIndex(e => e.id_especialidad === esp.id_especialidad)
+      );
+      
+      setEspecialidadesDisponibles(especialidadesUnicas);
+      
+      // Si la especialidad seleccionada no está en las disponibles, limpiarla
+      if (especialidadId && !especialidadesUnicas.some(e => e.id_especialidad === especialidadId)) {
+        setEspecialidadId("");
+      }
+    } else {
+      setEspecialidadesDisponibles([]);
+    }
+  }, [especialistaId, especialistas, especialidades, especialidadId]);
+
+  // Filtrar horas ocupadas y pasadas
+  useEffect(() => {
+    if (!especialistaId || !fecha) {
+      setHorasDisponibles(horasPosibles);
+      return;
+    }
+    obtenerAgendaEspecialista(String(especialistaId), fecha).then(res => {
+      let libres = horasPosibles;
+      if (res.success && res.data) {
+        // Filtra solo las horas que NO están ocupadas por ese especialista
+        const horasOcupadas = res.data.map((t: any) => t.hora.slice(0,5)); // "15:00:00" => "15:00"
+        libres = horasPosibles.filter(h => !horasOcupadas.includes(h));
+      }
+      // Filtrar horas pasadas si la fecha es hoy
+      const hoy = new Date().toISOString().split("T")[0];
+      if (fecha === hoy) {
+        const ahora = new Date();
+        libres = libres.filter(h => {
+          const [hh, mm] = h.split(":");
+          const horaTurno = new Date(`${fecha}T${hh}:${mm}`);
+          return horaTurno > ahora;
+        });
+      }
+      setHorasDisponibles(libres);
+      if (hora && !libres.includes(hora)) setHora("");
+    });
+  }, [especialistaId, fecha, hora]);
+
   // Check disponibilidad cada vez que cambian fecha/hora/especialista/box
   useEffect(() => {
     (async () => {
@@ -58,7 +165,7 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
       const res = await verificarDisponibilidad(
         fecha,
         hora,
-        especialistaId || undefined,
+        String(especialistaId),
         typeof boxId === "number" ? boxId : undefined
       );
       setDisponible(res.success ? (res.disponible ?? null) : null);
@@ -66,9 +173,12 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
   }, [fecha, hora, especialistaId, boxId]);
 
   const onSubmit = () => {
-    // Validaciones y mensajes personalizados
     if (!pacienteId || !especialistaId || !especialidadId || !fecha || !hora) {
       setDialog({ open: true, type: 'error', message: "Completá paciente, especialista, especialidad, fecha y hora." });
+      return;
+    }
+    if (esTurnoEnPasado(fecha, hora)) {
+      setDialog({ open: true, type: 'error', message: "No se puede agendar un turno en el pasado." });
       return;
     }
     if (disponible === false) {
@@ -90,6 +200,7 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
 
       if (res.success) {
         setDialog({ open: true, type: 'success', message: "Turno creado" });
+        limpiarCampos(); // limpiar después de crear
         onCreated?.();
         onClose();
       } else {
@@ -102,7 +213,6 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
 
   return (
     <>
-      {/* Modal principal para crear turno */}
       <BaseDialog
         type="info"
         size="lg"
@@ -164,12 +274,17 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
                 required
               >
                 <option value="">Seleccionar…</option>
-                {especialidades.map(esp => (
+                {especialidadesDisponibles.map(esp => (
                   <option key={esp.id_especialidad} value={esp.id_especialidad}>
                     {esp.nombre}
                   </option>
                 ))}
               </select>
+              {especialistaId && especialidadesDisponibles.length === 0 && (
+                <span className="text-xs text-red-500 mt-1">
+                  Este especialista no tiene especialidades asignadas
+                </span>
+              )}
             </div>
 
             {/* Box (opcional) */}
@@ -200,7 +315,17 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
               </div>
               <div className="flex flex-col">
                 <label className="text-xs mb-1">Hora</label>
-                <input type="time" className="border rounded px-3 py-2" value={hora} onChange={e=>setHora(e.target.value)} required />
+                <select
+                  className="border rounded px-3 py-2"
+                  value={hora}
+                  onChange={e => setHora(e.target.value)}
+                  required
+                >
+                  <option value="">Seleccionar…</option>
+                  {horasDisponibles.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -221,6 +346,7 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
         primaryButton={{
           text: isPending ? "Guardando…" : "Crear turno",
           onClick: onSubmit,
+          disabled: esTurnoEnPasado(fecha, hora) || isPending, // deshabilita si es en el pasado o guardando
         }}
         secondaryButton={{
           text: "Cancelar",
@@ -242,6 +368,6 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
           onClick: () => setDialog({ ...dialog, open: false }),
         }}
       />
-      </>
+    </>
   );
 }
