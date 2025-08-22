@@ -62,6 +62,11 @@ export function CalendarioTurnos({
     setFechaActual(nuevaFecha);
   };
 
+  // Función para ir al día actual
+  const irAHoy = () => {
+    setFechaActual(new Date());
+  };
+
   const obtenerTituloVista = () => {
     if (vista === 'mes') {
       return `${MESES[fechaActual.getMonth()]} ${fechaActual.getFullYear()}`;
@@ -280,13 +285,13 @@ export function CalendarioTurnos({
                         onCreateTurno(fechaConHora);
                       }}
                     >
-                      <div className="h-full overflow-hidden">
+                      <div className="h-full overflow-hidden flex flex-col">
                         {turnosEnHora.length > 0 && (
                           <>
                             {/* Si hay 1-3 turnos, usar grid dinámico según la cantidad */}
                             {turnosEnHora.length <= 3 ? (
                               <div 
-                                className={`grid gap-0.5 h-full ${
+                                className={`grid gap-0.5 flex-1 ${
                                   turnosEnHora.length === 1 ? 'grid-cols-1' :
                                   turnosEnHora.length === 2 ? 'grid-cols-2' :
                                   'grid-cols-3'
@@ -318,47 +323,45 @@ export function CalendarioTurnos({
                                 ))}
                               </div>
                             ) : (
-                              /* Si hay más de 3 turnos, mostrar los primeros 2 en grid-cols-2 y un indicador */
-                              <div className="grid grid-cols-3 gap-0.5 h-full">
-                                {turnosEnHora.slice(0, 2).map((turno, i) => (
-                                  <div
-                                    key={turno.id_turno}
-                                    className="text-xs rounded cursor-pointer shadow-sm border overflow-hidden"
-                                    style={{
-                                      backgroundColor: (turno.especialista?.color || '#9C1838') + '20',
-                                      borderColor: turno.especialista?.color || '#9C1838',
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      // Pasar TODOS los turnos del día, no solo este turno
-                                      onDayClick(fecha, turnosDelDiaCompleto);
-                                    }}
-                                  >
-                                    <div className="p-1 h-full flex flex-col justify-center">
-                                      <div className="font-medium truncate text-xs text-black leading-tight">
-                                        {turno.paciente?.nombre}
-                                      </div>
-                                      <div className="text-xs opacity-75 truncate text-black leading-tight">
-                                        {turno.hora.substring(0, 5)}
+                              /* Si hay más de 3 turnos, mostrar los primeros 3 */
+                              <>
+                                <div className="grid grid-cols-3 gap-0.5 flex-1">
+                                  {turnosEnHora.slice(0, 3).map((turno, i) => (
+                                    <div
+                                      key={turno.id_turno}
+                                      className="text-xs rounded cursor-pointer shadow-sm border overflow-hidden"
+                                      style={{
+                                        backgroundColor: (turno.especialista?.color || '#9C1838') + '20',
+                                        borderColor: turno.especialista?.color || '#9C1838',
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Pasar TODOS los turnos del día, no solo este turno
+                                        onDayClick(fecha, turnosDelDiaCompleto);
+                                      }}
+                                    >
+                                      <div className="p-1 h-full flex flex-col justify-center">
+                                        <div className="font-medium truncate text-xs text-black leading-tight">
+                                          {turno.paciente?.nombre}
+                                        </div>
+                                        <div className="text-xs opacity-75 truncate text-black leading-tight">
+                                          {turno.hora.substring(0, 5)}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ))}
-                                {/* Indicador de turnos adicionales */}
+                                  ))}
+                                </div>
+                                {/* Texto indicador debajo */}
                                 <div 
-                                  className="text-xs rounded cursor-pointer shadow-sm border bg-gray-100 border-gray-300 flex items-center justify-center"
+                                  className="text-center text-xs text-gray-600 mt-1 cursor-pointer hover:text-[#9C1838] transition-colors"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    // Pasar TODOS los turnos del día
                                     onDayClick(fecha, turnosDelDiaCompleto);
                                   }}
                                 >
-                                  <div className="text-center text-black">
-                                    <div className="text-xs font-medium">+{turnosEnHora.length - 2}</div>
-                                    <div className="text-xs opacity-75">más</div>
-                                  </div>
+                                  +{turnosEnHora.length - 3} más
                                 </div>
-                              </div>
+                              </>
                             )}
                           </>
                         )}
@@ -445,68 +448,79 @@ export function CalendarioTurnos({
   return (
     <div className="space-y-4">
       {/* Header con controles */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navegarFecha('anterior')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className=" hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
           
-          <h2 className="text-xl font-bold text-gray-900 min-w-0">
+        <h2 className="text-xl font-bold text-gray-900 min-w-0 whitespace-nowrap">
             {obtenerTituloVista()}
-          </h2>
+        </h2>
           
           <button
             onClick={() => navegarFecha('siguiente')}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className=" hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ChevronRight className="w-5 h-5 text-gray-600" />
           </button>
         </div>
 
-        {/* Selector de vista */}
-        <div className="flex bg-gray-100 rounded-lg p-1">
-          {isMobile ? (
-            <>
-              <button
-                onClick={() => setVista('mes')}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
-                  vista === 'mes' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                }`}
-              >
-                Mes
-              </button>
-              <button
-                onClick={() => setVista('dia')}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
-                  vista === 'dia' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                }`}
-              >
-                Día
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setVista('mes')}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
-                  vista === 'mes' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                }`}
-              >
-                Mes
-              </button>
-              <button
-                onClick={() => setVista('semana')}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
-                  vista === 'semana' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                }`}
-              >
-                Semana
-              </button>
-            </>
-          )}
+        {/* Selector de vista y botón Hoy */}
+        <div className="flex items-center gap-2">
+          {/* Botón Hoy */}
+          <button
+            onClick={irAHoy}
+            className="px-4 py-1 text-sm bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand)]/80 transition-colors font-medium"
+          >
+            Hoy
+          </button>
+
+          {/* Selector de vista */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            {isMobile ? (
+              <>
+                <button
+                  onClick={() => setVista('mes')}
+                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                    vista === 'mes' ? 'bg-white text-[var(--brand)] shadow-sm' : 'text-gray-600'
+                  }`}
+                >
+                  Mes
+                </button>
+                <button
+                  onClick={() => setVista('dia')}
+                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                    vista === 'dia' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
+                  }`}
+                >
+                  Día
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setVista('mes')}
+                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                    vista === 'mes' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
+                  }`}
+                >
+                  Mes
+                </button>
+                <button
+                  onClick={() => setVista('semana')}
+                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                    vista === 'semana' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
+                  }`}
+                >
+                  Semana
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
