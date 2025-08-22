@@ -78,7 +78,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                     {paciente.fecha_nacimiento}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {paciente.estado}
+                    {paciente.activo ? "Activo" : "Inactivo"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <Button 
