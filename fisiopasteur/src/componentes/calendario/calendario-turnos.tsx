@@ -199,73 +199,188 @@ export function CalendarioTurnos({
     const inicioSemana = new Date(fechaActual);
     inicioSemana.setDate(fechaActual.getDate() - fechaActual.getDay());
     
-    const diasSemana = [];
+    const diasSemana: Date[] = [];
     for (let i = 0; i < 7; i++) {
       const dia = new Date(inicioSemana);
       dia.setDate(inicioSemana.getDate() + i);
       diasSemana.push(dia);
     }
 
+    // 6:00 a 23:00
+    const horas = Array.from({ length: 18 }, (_, i) => i + 6);
+
+    const getTurnoEnHora = (fecha: Date, hora: number) => {
+      const turnosDelDia = getTurnosParaDia(fecha);
+      const horaStr = hora.toString().padStart(2, '0');
+      return turnosDelDia.filter(
+        (t) => t.hora.startsWith(horaStr) || t.hora.startsWith(`${horaStr}:`)
+      );
+    };
+
     return (
-      <div className="bg-white rounded border overflow-hidden">
-        {/* Header días de la semana */}
-        <div className="grid grid-cols-7 border-b">
-          {diasSemana.map((fecha, index) => {
-            const esHoy = esDiaActual(fecha);
-            return (
-              <div key={index} className={`p-2 text-center border-r last:border-r-0 ${esHoy ? 'bg-[#9C1838] text-white' : ''}`}>
-                <div className="text-sm font-medium">
-                  {DIAS_SEMANA_COMPLETOS[index]}
-                </div>
-                <div className={`text-lg font-bold ${esHoy ? 'text-white' : 'text-gray-900'}`}>
-                  {fecha.getDate()}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        
-        {/* Contenido de los días */}
-        <div className="grid grid-cols-7 min-h-96">
-          {diasSemana.map((fecha, index) => {
-            const turnosDelDia = getTurnosParaDia(fecha);
-            const esHoy = esDiaActual(fecha);
-            
-            return (
-              <div key={index} className="border-r last:border-r-0 p-2 relative group">
-                <div
-                  className="cursor-pointer h-full"
-                  onClick={() => onDayClick(fecha, turnosDelDia)}
-                >
-                  {/* Turnos del día */}
-                  <div className="space-y-1">
-                    {turnosDelDia.slice(0, 4).map((turno) => (
-                      <div
-                        key={turno.id_turno}
-                        className="bg-blue-100 text-blue-800 text-xs p-1 rounded truncate"
-                        style={{ backgroundColor: turno.especialista?.color + '20', color: turno.especialista?.color || '#9C1838' }}
-                      >
-                        {turno.hora} - {turno.paciente?.nombre}
-                      </div>
-                    ))}
-                    {turnosDelDia.length > 4 && (
-                      <div className="text-xs text-gray-500">
-                        +{turnosDelDia.length - 4} más
-                      </div>
-                    )}
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        {/* CONTENEDOR ÚNICO CON SCROLL */}
+        <div className="max-h-[calc(100vh-100px)] overflow-auto">
+          {/* min-w evita que se encoja y rompa la grilla */}
+          <div className="min-w-[820px]">
+            {/* HEADER sticky dentro del MISMO contenedor */}
+            <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b sticky top-0 z-20 bg-gray-50">
+              {/* Columna fija de horas (vacía en header) */}
+              <div className="p-3 border-r bg-gray-50" />
+
+              {diasSemana.map((fecha, index) => {
+                const esHoy = esDiaActual(fecha);
+                return (
+                  <div
+                    key={index}
+                    className={`p-3 text-center border-r last:border-r-0 ${
+                      esHoy ? 'bg-[#9C1838] text-white' : 'bg-gray-50'
+                    }`}
+                  >
+                    <div className="text-sm font-medium">
+                      {DIAS_SEMANA_COMPLETOS[index].substring(0, 3)}
+                    </div>
+                    <div className={`text-lg font-bold ${esHoy ? 'text-white' : 'text-gray-900'}`}>
+                      {fecha.getDate()}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+
+            {/* FILAS DE HORAS (misma plantilla de columnas) */}
+            {horas.map((hora) => (
+              <div
+                key={hora}
+                className="grid grid-cols-[80px_repeat(7,1fr)] border-b hover:bg-gray-50 transition-colors"
+              >
+                {/* Columna de hora - sticky a la izquierda */}
+                <div className="p-3 text-sm text-gray-600 border-r bg-gray-50 font-mono sticky left-0 z-10">
+                  {hora.toString().padStart(2, '0')}:00
                 </div>
-                
-                {/* Botón crear turno */}
-                <button
-                  onClick={() => onCreateTurno(fecha)}
-                  className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-1 rounded-4xl"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+
+                {/* Celdas por día */}
+                {diasSemana.map((fecha, diaIndex) => {
+                  const turnosEnHora = getTurnoEnHora(fecha, hora);
+                  const esHoy = esDiaActual(fecha);
+                  
+                  // Obtener TODOS los turnos del día, no solo de esa hora
+                  const turnosDelDiaCompleto = getTurnosParaDia(fecha);
+
+                  return (
+                    <div
+                      key={diaIndex}
+                      className={`p-2 border-r last:border-r-0 h-16 relative group cursor-pointer transition-colors ${
+                        esHoy ? 'bg-red-50/30' : 'hover:bg-blue-50/30'
+                      }`}
+                      onClick={() => {
+                        // Cuando se clickea la celda vacía, abrir modal para crear turno
+                        const fechaConHora = new Date(fecha);
+                        fechaConHora.setHours(hora, 0, 0, 0);
+                        onCreateTurno(fechaConHora);
+                      }}
+                    >
+                      <div className="h-full overflow-hidden">
+                        {turnosEnHora.length > 0 && (
+                          <>
+                            {/* Si hay 1-3 turnos, usar grid dinámico según la cantidad */}
+                            {turnosEnHora.length <= 3 ? (
+                              <div 
+                                className={`grid gap-0.5 h-full ${
+                                  turnosEnHora.length === 1 ? 'grid-cols-1' :
+                                  turnosEnHora.length === 2 ? 'grid-cols-2' :
+                                  'grid-cols-3'
+                                }`}
+                              >
+                                {turnosEnHora.map((turno, i) => (
+                                  <div
+                                    key={turno.id_turno}
+                                    className="text-xs rounded cursor-pointer shadow-sm border overflow-hidden"
+                                    style={{
+                                      backgroundColor: (turno.especialista?.color || '#9C1838') + '20',
+                                      borderColor: turno.especialista?.color || '#9C1838',
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Pasar TODOS los turnos del día, no solo este turno
+                                      onDayClick(fecha, turnosDelDiaCompleto);
+                                    }}
+                                  >
+                                    <div className="p-1 h-full flex flex-col justify-center">
+                                      <div className="font-medium truncate text-xs text-black leading-tight">
+                                        {turno.paciente?.nombre}
+                                      </div>
+                                      <div className="text-xs opacity-75 truncate text-black leading-tight">
+                                        {turno.hora.substring(0, 5)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              /* Si hay más de 3 turnos, mostrar los primeros 2 en grid-cols-2 y un indicador */
+                              <div className="grid grid-cols-3 gap-0.5 h-full">
+                                {turnosEnHora.slice(0, 2).map((turno, i) => (
+                                  <div
+                                    key={turno.id_turno}
+                                    className="text-xs rounded cursor-pointer shadow-sm border overflow-hidden"
+                                    style={{
+                                      backgroundColor: (turno.especialista?.color || '#9C1838') + '20',
+                                      borderColor: turno.especialista?.color || '#9C1838',
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Pasar TODOS los turnos del día, no solo este turno
+                                      onDayClick(fecha, turnosDelDiaCompleto);
+                                    }}
+                                  >
+                                    <div className="p-1 h-full flex flex-col justify-center">
+                                      <div className="font-medium truncate text-xs text-black leading-tight">
+                                        {turno.paciente?.nombre}
+                                      </div>
+                                      <div className="text-xs opacity-75 truncate text-black leading-tight">
+                                        {turno.hora.substring(0, 5)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                {/* Indicador de turnos adicionales */}
+                                <div 
+                                  className="text-xs rounded cursor-pointer shadow-sm border bg-gray-100 border-gray-300 flex items-center justify-center"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Pasar TODOS los turnos del día
+                                    onDayClick(fecha, turnosDelDiaCompleto);
+                                  }}
+                                >
+                                  <div className="text-center text-black">
+                                    <div className="text-xs font-medium">+{turnosEnHora.length - 2}</div>
+                                    <div className="text-xs opacity-75">más</div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const fechaConHora = new Date(fecha);
+                          fechaConHora.setHours(hora, 0, 0, 0);
+                          onCreateTurno(fechaConHora);
+                        }}
+                        className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-0.5 rounded-full"
+                      >
+                        <Plus className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -291,8 +406,7 @@ export function CalendarioTurnos({
               onClick={() => onCreateTurno(fechaActual)}
               className="bg-[#9C1838] text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1"
             >
-              <Plus className="w-4 h-4" />
-              Nuevo Turno
+              <Plus className="w-4 h-4" /> Nuevo Turno
             </button>
           </div>
         </div>
