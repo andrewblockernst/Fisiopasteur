@@ -239,30 +239,6 @@ function PacienteEditFormForDialog({paciente, onSuccess}: PacienteEditFormForDia
                     />
                     {errors.direccion && <p className="text-red-500 text-xs mt-1">{errors.direccion}</p>}
                 </div>
-
-                {/* Estado */}
-                <div>
-                    <label htmlFor="estado" className="block text-sm font-medium text-gray-700 mb-1">
-                        Estado
-                    </label>
-                    <select
-                        id="estado"
-                        name="estado"
-                        defaultValue={paciente.estado || ''}
-                        className={`w-full px-3 py-3 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.estado ? "border-red-500" : "border-gray-300"
-                        }`}
-                    >
-                        <option value="">Selecciona un estado</option>
-                        <option value="Activo">Activo</option>
-                        <option value="En tratamiento">En tratamiento</option>
-                        <option value="Alta médica">Alta médica</option>
-                        <option value="Pausa temporal">Pausa temporal</option>
-                        <option value="Derivado">Derivado</option>
-                        <option value="Inactivo">Inactivo</option>
-                    </select>
-                    {errors.estado && <p className="text-red-500 text-xs mt-1">{errors.estado}</p>}
-                </div>
             </div>
 
             {/* Botones */}
