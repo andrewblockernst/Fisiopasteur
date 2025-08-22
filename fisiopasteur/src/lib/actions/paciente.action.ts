@@ -326,3 +326,132 @@ export async function deletePaciente(id: number) {
     throw error instanceof Error ? error : new Error("Error al eliminar paciente");
   }
 }
+
+// Obtener historia clínica de un paciente
+export async function getHistorialClinico(idPaciente: number) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("historial_clinico")
+    .select(`
+      *,
+      observaciones:observacion_historial(*)
+    `)
+    .eq("id_paciente", idPaciente)
+    .single();
+
+  if (error) {
+    console.error("Error fetching historial clinico:", error);
+    return null;
+  }
+  return data;
+}
+
+// Agregar observación a la historia clínica
+export async function agregarObservacion(idPaciente: number, observaciones: string) {
+  const supabase = await createClient();
+
+  // 1. Buscar el último turno del paciente
+  const { data: turnos, error: errorTurnos } = await supabase
+    .from("turno")
+    .select("id_turno")
+    .eq("id_paciente", idPaciente)
+    .order("fecha", { ascending: false })
+    .limit(1);
+
+  if (errorTurnos || !turnos || turnos.length === 0) {
+    throw new Error("No existe turno para este paciente");
+  }
+
+  const idTurno = turnos[0].id_turno;
+
+  // 2. Crear la evolución clínica vinculada al turno
+  const { data, error } = await supabase
+    .from("evolucion_clinica")
+    .insert({
+      id_turno: idTurno,
+      observaciones,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error agregando observación:", error);
+    throw new Error("No se pudo agregar la observación");
+  }
+  return data;
+}
+
+// Editar observación (solo si está dentro de los 5 minutos)
+export async function editarObservacion(idEvolucion: number, texto: string) {
+  const supabase = await createClient();
+
+  // Buscar la evolución clínica en la tabla correcta
+  const { data: evo } = await supabase
+    .from("evolucion_clinica")
+    .select("created_at")
+    .eq("id_evolucion", idEvolucion)
+    .single();
+
+  if (!evo) throw new Error("Observación no encontrada");
+
+  // Usar created_at para controlar el tiempo de edición
+  const minutos = (Date.now() - new Date(evo.created_at).getTime()) / 60000;
+  if (minutos > 5) throw new Error("Solo se puede editar la observación durante los primeros 5 minutos");
+
+  const { data, error } = await supabase
+    .from("evolucion_clinica")
+    .update({ observaciones: texto })
+    .eq("id_evolucion", idEvolucion)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error editando observación:", error);
+    throw new Error("No se pudo editar la observación");
+  }
+  return data;
+}
+
+// Obtener evoluciones clínicas de un paciente
+export async function getEvolucionesClinicas(idPaciente: number) {
+  const supabase = await createClient();
+  // 1. Buscar todos los turnos del paciente
+  const { data: turnos, error: errorTurnos } = await supabase
+    .from("turno")
+    .select("id_turno")
+    .eq("id_paciente", idPaciente);
+
+  if (errorTurnos || !turnos) return [];
+
+  const turnosIds = turnos.map(t => t.id_turno);
+
+  // 2. Buscar todas las evoluciones clínicas de esos turnos
+  const { data: evoluciones, error: errorEvo } = await supabase
+    .from("evolucion_clinica")
+    .select("*")
+    .in("id_turno", turnosIds);
+
+  if (errorEvo || !evoluciones) return [];
+
+  return evoluciones;
+}
+
+// Agregar evolución clínica
+export async function agregarEvolucionClinica(idTurno: number, observaciones: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("evolucion_clinica")
+    .insert({
+      id_turno: idTurno,
+      observaciones,
+      fecha: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error agregando evolución clínica:", error);
+    throw new Error("No se pudo agregar la evolución clínica");
+  }
+  return data;
+}
