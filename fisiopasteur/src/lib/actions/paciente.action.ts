@@ -241,7 +241,7 @@ export async function updatePaciente(id: number, formData: FormData) {
     telefono: formData.get("telefono") as string,
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
-    estado: formData.get("estado") as string || "activo",
+    // estado: formData.get("estado") as string || "activo",
   };
 
   // Validaciones
@@ -308,9 +308,11 @@ export async function deletePaciente(id: number) {
       throw new Error("No se puede eliminar el paciente porque tiene turnos asociados");
     }
 
+
+
     const { error } = await supabase
       .from("paciente")
-      .delete()
+      .update({ activo: false })
       .eq("id_paciente", id);
 
     if (error) {
