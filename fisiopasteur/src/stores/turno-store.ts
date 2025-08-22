@@ -27,7 +27,7 @@ interface TurnoStore {
   addTurno: (turno: TurnoConDetalles) => void;
   updateTurno: (id: number, turno: Partial<TurnoConDetalles>) => void;
   deleteTurno: (id: number) => void;
-  getTurnosByDate: (year: number, month: number, day: number) => TurnoConDetalles[];
+  getTurnosByDate: (turnos: TurnoConDetalles[], date: Date) => TurnoConDetalles[];
   getTurnosByEspecialista: (especialistaId: string) => TurnoConDetalles[];
   getTurnosHoy: () => TurnoConDetalles[];
   getTurnosProximos: () => TurnoConDetalles[];
@@ -54,11 +54,8 @@ export const useTurnoStore = create<TurnoStore>((set, get) => ({
     turnos: state.turnos.filter(turno => turno.id_turno !== id)
   })),
   
-  getTurnosByDate: (year, month, day) => {
-    const { turnos } = get();
-    const targetDate = new Date(year, month, day);
-    const dateString = targetDate.toISOString().split('T')[0];
-    
+  getTurnosByDate: (turnos, date) => {
+    const dateString = date.toISOString().split('T')[0];
     return turnos.filter(turno => turno.fecha === dateString);
   },
   
@@ -69,7 +66,8 @@ export const useTurnoStore = create<TurnoStore>((set, get) => ({
   
   getTurnosHoy: () => {
     const today = new Date();
-    return get().getTurnosByDate(today.getFullYear(), today.getMonth(), today.getDate());
+    const { turnos } = get();
+    return get().getTurnosByDate(turnos, today);
   },
   
   getTurnosProximos: () => {
