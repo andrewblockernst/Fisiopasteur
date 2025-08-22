@@ -9,14 +9,16 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
   const [openNew, setOpenNew] = useState(false);
 
   // Función para determinar el color de fondo de la fila
-  const getRowClassName = (turno: any) => {
-    let baseClass = "border-t";
-    // Solo agregar color de fondo para turnos atendidos
-    if (turno.estado === 'atendido') {
-      baseClass += " bg-green-50";
-    }
-    return baseClass;
-  };
+const getRowClassName = (turno: any) => {
+  let baseClass = "border-t";
+  if (turno.estado === 'atendido') {
+    baseClass += " bg-green-400";
+  }
+  if (turno.estado === 'cancelado') {
+    baseClass += " bg-red-400";
+  }
+  return baseClass;
+};
 
   return (
     <div className="space-y-3">
@@ -88,7 +90,8 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
         </table>
       </div>
 
-      <NuevoTurnoDialog open={openNew} onClose={() => setOpenNew(false)} onCreated={() => { /* opcional */ }} />
+      <NuevoTurnoDialog open={openNew} onClose={() => setOpenNew(false)}
+      onCreated={() => window.location.reload()} />
     </div>
   );
 }
