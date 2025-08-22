@@ -3,6 +3,8 @@ import Button from "../boton";
 import { useState } from "react";
 import { DeletePacienteButton } from "./eliminar-boton";
 import { EditarPacienteDialog } from "./editar-paciente-dialog";
+import Boton from "@/componentes/boton";
+import { useRouter } from "next/navigation";
 
 
 type Paciente = Tables<'paciente'>;
@@ -16,6 +18,7 @@ interface PacientesTableProps {
 export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}: PacientesTableProps) {
     const[editingPaciente, setEditingPaciente] = useState<Paciente | null>(null);
     const[viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
+    const router = useRouter();
 
     const handleEditClose = () => {
         setEditingPaciente(null);
@@ -142,6 +145,13 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                             nombre={`${paciente.nombre} ${paciente.apellido}`}
                             onDeleted={onPacienteDeleted}
                         />
+                        <Boton
+                            variant="secondary"
+                            className="ml-1"
+                            onClick={() => router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`)}
+                        >
+                            Historial clínico
+                        </Boton>
                     </td>
                 </tr>
                 ))}
