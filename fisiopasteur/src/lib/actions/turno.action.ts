@@ -38,13 +38,13 @@ export async function obtenerTurnos(filtros?: {
     if (filtros?.fecha) {
       query = query.eq("fecha", filtros.fecha);
     }
-    if (filtros?.especialista_id) {
+    if (typeof filtros?.especialista_id === "string" && filtros.especialista_id !== undefined) {
       query = query.eq("id_especialista", filtros.especialista_id);
     }
-    if (filtros?.paciente_id) {
+    if (typeof filtros?.paciente_id === "number") {
       query = query.eq("id_paciente", filtros.paciente_id);
     }
-    if (filtros?.estado) {
+    if (typeof filtros?.estado === "string") {
       query = query.eq("estado", filtros.estado);
     }
 
@@ -62,6 +62,7 @@ export async function obtenerTurnos(filtros?: {
   }
 }
 
+// Obtener turnos con filtros avanzados (para la página principal)
 export async function obtenerTurnosConFiltros(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
@@ -101,7 +102,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
     }
     
     // Filtro por especialista específico
-    if (filtros?.especialista_id) {
+    if (typeof filtros?.especialista_id === "string") {
       query = query.eq("id_especialista", filtros.especialista_id);
     }
     
@@ -352,7 +353,7 @@ export async function obtenerAgendaEspecialista(
         especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(numero)
       `)
-      .eq("id_especialista", especialista_id)
+      .eq("id_especialista", especialista_id!)
       .eq("fecha", fecha)
       .neq("estado", "cancelado")
       .order("hora", { ascending: true });
@@ -381,24 +382,20 @@ export async function verificarDisponibilidad(
   box_id?: number
 ) {
   const supabase = await createClient();
-  
   try {
     let query = supabase
       .from("turno")
-      .select("id_turno, estado")
+      .select("id_turno, estado, hora")
       .eq("fecha", fecha)
-      .eq("hora", hora)
+      .eq("id_especialista", especialista_id!)
+      .eq("hora", hora) // <-- SOLO la hora exacta
       .neq("estado", "cancelado");
 
-    if (especialista_id) {
-      query = query.eq("id_especialista", especialista_id);
-    }
     if (box_id) {
       query = query.eq("id_box", box_id);
     }
 
     const { data, error } = await query;
-
     if (error) {
       console.error("Error al verificar disponibilidad:", error);
       return { success: false, error: error.message };
@@ -426,14 +423,18 @@ export async function verificarDisponibilidadParaActualizacion(
   const supabase = await createClient();
   
   try {
+    // Calcular hora final (hora + 1)
+    const [h, m] = hora.split(":");
+    const horaFin = `${String(Number(h) + 1).padStart(2, "0")}:${m}`;
     let query = supabase
       .from("turno")
       .select("id_turno")
       .eq("fecha", fecha)
-      .eq("hora", hora)
       .eq("id_especialista", especialista_id)
       .neq("estado", "cancelado")
-      .neq("id_turno", turno_excluir); // Excluir el turno que se está actualizando
+      .neq("id_turno", turno_excluir)
+      .gte("hora", hora)
+      .lt("hora", horaFin);
 
     if (box_id !== null && box_id !== undefined) {
       query = query.eq("id_box", box_id);

@@ -144,7 +144,7 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
       telefono: formData.get("telefono") as string || null,
       email,
       usuario: formData.get("usuario") as string,
-      contraseña,
+      contraseña: contraseña,
       color: formData.get("color") as string || null,
       id_rol: 2,
     };
@@ -276,7 +276,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
     // Solo actualizar contraseña si se proporciona
     const contraseña = formData.get("contraseña") as string;
     if (contraseña && contraseña.trim() !== "") {
-      updateData.contraseña = contraseña;
+      updateData.contraseña = contraseña;
     }
 
     // Actualizar el usuario
