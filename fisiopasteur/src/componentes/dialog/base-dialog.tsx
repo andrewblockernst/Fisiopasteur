@@ -16,10 +16,12 @@ interface BaseDialogProps {
   primaryButton?: {
     text: string;
     onClick: () => void;
+    disabled?: boolean;
   };
   secondaryButton?: {
     text: string;
     onClick: () => void;
+    disabled?: boolean;
   };
   onClose?: () => void;
   showCloseButton?: boolean;
@@ -160,6 +162,7 @@ return (
                       secondaryButton.onClick();
                     }, 300);
                   }}
+                  disabled={secondaryButton.disabled}
                 >
                   {secondaryButton.text}
                 </Button>
@@ -168,6 +171,7 @@ return (
                 <Button
                   variant="primary"
                   onClick={primaryButton.onClick}
+                  disabled={primaryButton.disabled} 
                 >
                   {primaryButton.text}
                 </Button>
