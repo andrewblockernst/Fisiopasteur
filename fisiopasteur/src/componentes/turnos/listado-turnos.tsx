@@ -20,6 +20,19 @@ const getRowClassName = (turno: any) => {
   return baseClass;
 };
 
+  // Ordenar turnos: primero los no atendidos, luego los atendidos al final
+  const turnosOrdenados = turnos?.sort((a, b) => {
+    // Si uno es atendido y el otro no, el atendido va al final
+    if (a.estado === 'atendido' && b.estado !== 'atendido') return 1;
+    if (b.estado === 'atendido' && a.estado !== 'atendido') return -1;
+    
+    // Si ambos tienen el mismo estado, ordenar por fecha y hora
+    const fechaA = new Date(`${a.fecha}T${a.hora}`);
+    const fechaB = new Date(`${b.fecha}T${b.hora}`);
+    return fechaA.getTime() - fechaB.getTime();
+  }) || [];
+
+
   return (
     <div className="space-y-3">
       <div className="flex justify-between items-center">
@@ -48,7 +61,7 @@ const getRowClassName = (turno: any) => {
             </tr>
           </thead>
           <tbody>
-            {turnos?.map((t) => (
+            {turnosOrdenados.map((t) => (
               <tr key={t.id_turno} className={getRowClassName(t)}>
                 <td className="p-2">{t.fecha}</td>
                 <td className="p-2">{t.hora}</td>
@@ -83,7 +96,7 @@ const getRowClassName = (turno: any) => {
                 </td>
               </tr>
             ))}
-            {(!turnos || turnos.length === 0) && (
+              {(!turnosOrdenados || turnosOrdenados.length === 0) && (
               <tr><td className="p-3 text-center text-neutral-500" colSpan={9}>Sin turnos para hoy</td></tr>
             )}
           </tbody>
