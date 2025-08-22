@@ -53,15 +53,61 @@ export default function PacientePage() {
 
     return (
         <div className="min-h-screen">
+            
+            {/* Header Mobile */}
+            <div className="sm:hidden bg-white border-b border-gray-200">
+                <div className="flex items-center px-4 py-3">
+                    {/* Botón de regreso */}
+                    <button className="mr-3 p-1">
+                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                    
+                    {/* Título */}
+                    <h1 className="text-lg font-medium text-gray-900 flex-1 text-center mr-9">
+                        Pacientes
+                    </h1>
+                </div>
+                
+                {/* Campo de búsqueda mobile */}
+                <div className="px-4 pb-3">
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                placeholder="Buscar"
+                                className="w-full px-4 py-2 bg-gray-100 border-0 rounded-lg focus:outline-none focus:ring-0 focus:bg-white focus:shadow-sm transition-all duration-200"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                <Search className="h-4 w-4 text-gray-400" />
+                            </div>
+                        </div>
+                        
+                        {/* Dropdown de filtro */}
+                        <select
+                            value={filter}
+                            onChange={(e) => setFilter(e.target.value as Filter)}
+                            className="bg-[#9C1838] text-white px-3 py-2 rounded-lg text-sm font-medium border-0 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:ring-opacity-50"
+                        >
+                            <option value="activos" className="bg-white text-gray-900">Activos</option>
+                            <option value="inactivos" className="bg-white text-gray-900">Inactivos</option>
+                            <option value="todos" className="bg-white text-gray-900">Todos</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
 
             {/* Contenido Principal */}
-            <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
+            <div className="sm:container sm:mx-auto sm:p-4 sm:p-6 lg:pr-6 lg:pt-8">
                 {/* Desktop Header */}
                 <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
                     <h2 className="text-2xl sm:text-3xl font-bold">Pacientes</h2>
                 </div>
-                {/* Filtros y Búsqueda */}
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+                {/* Filtros y Búsqueda - Solo Desktop */}
+                <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                         
                         {/* Lado izquierdo: Búsqueda y Filtro */}
