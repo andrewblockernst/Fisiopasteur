@@ -145,7 +145,6 @@ export function CalendarioClient({
       {/* Mobile Filter (solo visible en mobile) */}
       <div className="sm:hidden px-4 py-3 bg-gray-50 border-b border-gray-200">
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-500" />
           <select
             value={especialistaFiltro}
             onChange={(e) => setEspecialistaFiltro(e.target.value)}
