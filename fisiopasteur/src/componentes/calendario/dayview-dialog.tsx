@@ -1,0 +1,209 @@
+"use client";
+
+import { useState } from "react";
+import { X, Clock, User, FileText, Phone, Edit, Trash2 } from "lucide-react";
+import type { TurnoConDetalles } from "@/stores/turno-store";
+import { useToastStore } from "@/stores/toast-store";
+
+interface DayViewModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  fecha: Date | null;
+  turnos: TurnoConDetalles[];
+  onEditTurno?: (turno: TurnoConDetalles) => void;
+  onDeleteTurno?: (turno: TurnoConDetalles) => void;
+}
+
+export function DayViewModal({
+  isOpen,
+  onClose,
+  fecha,
+  turnos,
+  onEditTurno,
+  onDeleteTurno
+}: DayViewModalProps) {
+  const { addToast } = useToastStore();
+
+  if (!isOpen || !fecha) return null;
+
+  const formatearFecha = (fecha: Date) => {
+    return fecha.toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const formatearHora = (hora: string) => {
+    return new Date(`2000-01-01T${hora}`).toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getEstadoColor = (estado: string) => {
+    switch (estado.toLowerCase()) {
+      case 'confirmado':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'pendiente':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'cancelado':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'completado':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const handleEdit = (turno: TurnoConDetalles) => {
+    if (onEditTurno) {
+      onEditTurno(turno);
+    } else {
+      addToast({
+        variant: 'info',
+        message: 'Funcionalidad de edición próximamente'
+      });
+    }
+  };
+
+  const handleDelete = (turno: TurnoConDetalles) => {
+    if (onDeleteTurno) {
+      onDeleteTurno(turno);
+    } else {
+      addToast({
+        variant: 'info',
+        message: 'Funcionalidad de eliminación próximamente'
+      });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="bg-[#9C1838] text-white p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Turnos del día</h2>
+            <p className="text-red-100 mt-1 capitalize">
+              {formatearFecha(fecha)}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-red-700 rounded-lg transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+          {turnos.length === 0 ? (
+            <div className="text-center py-12">
+              <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                No hay turnos programados
+              </h3>
+              <p className="text-gray-500">
+                No se encontraron turnos para esta fecha.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {turnos.length} turno{turnos.length !== 1 ? 's' : ''} programado{turnos.length !== 1 ? 's' : ''}
+                </h3>
+              </div>
+
+              {turnos
+                .sort((a, b) => a.hora.localeCompare(b.hora))
+                .map((turno) => (
+                  <div
+                    key={turno.id_turno}
+                    className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-4 h-4 rounded-full"
+                          style={{ backgroundColor: turno.especialista?.color || '#9C1838' }}
+                        />
+                        <div>
+                          <h4 className="font-semibold text-gray-900">
+                            {turno.paciente?.nombre} {turno.paciente?.apellido}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            Dr. {turno.especialista?.nombre} {turno.especialista?.apellido}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className={`
+                          px-3 py-1 rounded-full text-xs font-medium border
+                          ${getEstadoColor(turno.estado || 'pendiente')}
+                        `}>
+                          {turno.estado || 'pendiente'}
+                        </span>
+                        
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleEdit(turno)}
+                            className="p-2 text-gray-600 hover:text-[#9C1838] hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(turno)}
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Clock className="w-4 h-4" />
+                        <span>
+                          {formatearHora(turno.hora)}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Phone className="w-4 h-4" />
+                        <span>{turno.paciente?.telefono || 'Sin teléfono'}</span>
+                      </div>
+                      
+                      {turno.observaciones && (
+                        <div className="md:col-span-2 flex items-start gap-2 text-gray-600">
+                          <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm">{turno.observaciones}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="bg-gray-50 px-6 py-4 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default DayViewModal;
