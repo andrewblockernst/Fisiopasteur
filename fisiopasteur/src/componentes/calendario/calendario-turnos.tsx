@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock } from "lucide-react";
 import { useTurnoStore } from "@/stores/turno-store";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 
@@ -391,138 +391,287 @@ export function CalendarioTurnos({
 
   const renderVistaDia = () => {
     const turnosDelDia = getTurnosParaDia(fechaActual);
-    const horas = Array.from({ length: 12 }, (_, i) => i + 8); // 8 AM a 7 PM
+    const horas = Array.from({ length: 18 }, (_, i) => i + 6); // 6 AM a 11 PM
+
+    const getTurnosEnHora = (hora: number) => {
+      const horaStr = hora.toString().padStart(2, '0');
+      return turnosDelDia.filter(turno => 
+        turno.hora.startsWith(horaStr) || 
+        turno.hora.startsWith(`${horaStr}:`)
+      );
+    };
 
     return (
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="p-4 border-b bg-gray-50">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {fechaActual.toLocaleDateString('es-ES', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}
-            </h3>
-            <button
-              onClick={() => onCreateTurno(fechaActual)}
-              className="bg-[#9C1838] text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1"
-            >
-              <Plus className="w-4 h-4" /> Nuevo Turno
-            </button>
-          </div>
-        </div>
-        
-        <div className="max-h-96 overflow-y-auto">
-          {horas.map((hora) => {
-            const horaStr = `${hora.toString().padStart(2, '0')}:00`;
-            const turnosHora = turnosDelDia.filter(t => t.hora.startsWith(hora.toString().padStart(2, '0')));
-            
-            return (
-              <div key={hora} className="border-b flex">
-                <div className="w-16 p-3 text-sm text-gray-500 border-r">
-                  {horaStr}
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            {/* MOBILE LAYOUT */}
+            <div className="block sm:hidden">
+                {/* Mes actual centrado con navegación */}
+                <div className="flex items-center justify-center py-4 px-4 border-b">
+                    <h2 className="text-lg font-semibold text-gray-900">
+                        {MESES[fechaActual.getMonth()]} {fechaActual.getFullYear()}
+                    </h2>
                 </div>
-                <div className="flex-1 p-3 min-h-16">
-                  {turnosHora.map((turno) => (
-                    <div
-                      key={turno.id_turno}
-                      className="bg-blue-100 text-blue-800 p-2 rounded mb-1 cursor-pointer"
-                      style={{ backgroundColor: turno.especialista?.color + '20', color: turno.especialista?.color || '#9C1838' }}
-                      onClick={() => onDayClick(fechaActual, [turno])}
+                
+                {/* Botón Hoy y Toggle en la misma línea */}
+                <div className="flex items-center justify-center gap-4 py-3 bg-gray-50 border-b">
+                    <button
+                    onClick={irAHoy}
+                    className="px-4 py-1 text-sm bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand)]/80 transition-colors font-medium"
                     >
-                      <div className="font-medium">{turno.paciente?.nombre} {turno.paciente?.apellido}</div>
-                      <div className="text-xs">Dr. {turno.especialista?.nombre}</div>
+                    Hoy
+                    </button>
+                    
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                        <button
+                            onClick={() => setVista('mes')}
+                            className={`px-3 py-1 rounded text-sm transition-colors ${
+                                vista === 'mes' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
+                            }`}
+                        >
+                            Mes
+                        </button>
+                        <button
+                            onClick={() => setVista('dia')}
+                            className={`px-3 py-1 rounded text-sm transition-colors ${
+                                vista === 'dia' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
+                            }`}
+                        >
+                            Día
+                        </button>
                     </div>
-                  ))}
                 </div>
-              </div>
-            );
-          })}
+
+                {/* Fecha detallada con navegación adicional */}
+                <div className="flex items-center justify-between p-4 bg-white border-b">
+                    <button
+                        onClick={() => navegarFecha('anterior')}
+                        className="p-1 hover:bg-gray-100 rounded transition-colors"
+                    >
+                        <ChevronLeft className="w-4 h-4 text-gray-800" />
+                    </button>
+                    
+                    <h3 className="text-xl font-bold text-gray-900 text-center flex-1">
+                        {fechaActual.toLocaleDateString('es-ES', {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric'
+                        })}
+                    </h3>
+                    
+                    <button
+                        onClick={() => navegarFecha('siguiente')}
+                        className="p-1 hover:bg-gray-100 rounded transition-colors"
+                    >
+                        <ChevronRight className="w-4 h-4 text-gray-800" />
+                    </button>
+                </div>
+
+                {/* Celdas de horas */}
+                <div className="max-h-[60vh] overflow-y-auto">
+                    {horas.map((hora) => {
+                        const turnosHora = getTurnosEnHora(hora);
+                        const horaStr = `${hora.toString().padStart(2, '0')}:00`;
+                        
+                        return (
+                            <div key={hora} className="border-b border-gray-200 min-h-[60px]">
+                                <div className="flex">
+                                    {/* Columna de hora */}
+                                    <div className="w-16 p-3 text-sm text-gray-500 border-r bg-gray-50 font-mono flex items-center justify-center">
+                                        {horaStr}
+                                    </div>
+                                    
+                                    {/* Contenido de turnos */}
+                                    <div className="flex-1 p-3">
+                                        {turnosHora.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {turnosHora.map((turno) => (
+                                                    <div
+                                                        key={turno.id_turno}
+                                                        className="border rounded-lg p-3 cursor-pointer active:scale-95 transition-transform"
+                                                        style={{ 
+                                                            borderColor: turno.especialista?.color || '#9C1838',
+                                                            backgroundColor: (turno.especialista?.color || '#9C1838') + '15'
+                                                        }}
+                                                        onClick={() => onDayClick(fechaActual, [turno])}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">                                                  
+                                                                <span className="font-semibold text-black">
+                                                                    {turno.paciente?.nombre} {turno.paciente?.apellido}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                                {turno.estado || 'pendiente'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <div className="font-medium text-sm text-black">
+                                                                {turno.especialista?.nombre} {turno.especialista?.apellido} 
+                                                            </div>
+                                                            <div className="text-sm text-black opacity-75">
+                                                                {turno.hora.substring(0, 5)}
+                                                            </div>
+                                                            {turno.observaciones && (
+                                                                <div className="text-xs text-gray-600 mt-1 bg-gray-50 p-2 rounded">
+                                                                    {turno.observaciones}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div 
+                                                className="text-gray-400 text-sm cursor-pointer hover:text-[#9C1838] transition-colors py-2"
+                                                onClick={() => {
+                                                    const fechaConHora = new Date(fechaActual);
+                                                    fechaConHora.setHours(hora, 0, 0, 0);
+                                                    onCreateTurno(fechaConHora);
+                                                }}
+                                            >
+                                                Sin turnos - Toca para agregar
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* DESKTOP: Layout original sin cambios */}
+            <div className="hidden sm:block">
+                <div className="p-4 border-b bg-gray-50">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                            {fechaActual.toLocaleDateString('es-ES', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                            })}
+                        </h3>
+                        <button
+                            onClick={() => onCreateTurno(fechaActual)}
+                            className="bg-[#9C1838] text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1"
+                        >
+                            <Plus className="w-4 h-4" /> Nuevo Turno
+                        </button>
+                    </div>
+                </div>
+                
+                <div className="max-h-96 overflow-y-auto">
+                    {Array.from({ length: 12 }, (_, i) => i + 8).map((hora) => {
+                        const horaStr = `${hora.toString().padStart(2, '0')}:00`;
+                        const turnosHora = turnosDelDia.filter(t => t.hora.startsWith(hora.toString().padStart(2, '0')));
+                        
+                        return (
+                            <div key={hora} className="border-b flex">
+                                <div className="w-16 p-3 text-sm text-gray-500 border-r">
+                                    {horaStr}
+                                </div>
+                                <div className="flex-1 p-3 min-h-16">
+                                    {turnosHora.map((turno) => (
+                                        <div
+                                            key={turno.id_turno}
+                                            className="bg-blue-100 text-blue-800 p-2 rounded mb-1 cursor-pointer"
+                                            style={{ backgroundColor: turno.especialista?.color + '20', color: turno.especialista?.color || '#9C1838' }}
+                                            onClick={() => onDayClick(fechaActual, [turno])}
+                                        >
+                                            <div className="font-medium text-black">{turno.paciente?.nombre} {turno.paciente?.apellido}</div>
+                                            <div className="text-xs text-black opacity-75">Dr. {turno.especialista?.nombre}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
-      </div>
     );
   };
 
   return (
     <div className="space-y-4">
-      {/* Header con controles */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navegarFecha('anterior')}
-            className=" hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
-          </button>
-          
-        <h2 className="text-xl font-bold text-gray-900 min-w-0 whitespace-nowrap">
-            {obtenerTituloVista()}
-        </h2>
-          
-          <button
-            onClick={() => navegarFecha('siguiente')}
-            className=" hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ChevronRight className="w-5 h-5 text-gray-600" />
-          </button>
-        </div>
+      {/* Header con controles - Solo mostrar si NO es vista día en mobile */}
+      {!(vista === 'dia' && typeof window !== 'undefined' && window.innerWidth < 768) && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navegarFecha('anterior')}
+              className="hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-gray-600" />
+            </button>
+            
+            <h2 className="text-xl font-bold text-gray-900 min-w-0 whitespace-nowrap">
+              {obtenerTituloVista()}
+            </h2>
+            
+            <button
+              onClick={() => navegarFecha('siguiente')}
+              className="hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
 
-        {/* Selector de vista y botón Hoy */}
-        <div className="flex items-center gap-2">
-          {/* Botón Hoy */}
-          <button
-            onClick={irAHoy}
-            className="px-4 py-1 text-sm bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand)]/80 transition-colors font-medium"
-          >
-            Hoy
-          </button>
+          {/* Selector de vista y botón Hoy */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={irAHoy}
+              className="px-4 py-1 text-sm bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand)]/80 transition-colors font-medium"
+            >
+              Hoy
+            </button>
 
-          {/* Selector de vista */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            {isMobile ? (
-              <>
-                <button
-                  onClick={() => setVista('mes')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    vista === 'mes' ? 'bg-white text-[var(--brand)] shadow-sm' : 'text-gray-600'
-                  }`}
-                >
-                  Mes
-                </button>
-                <button
-                  onClick={() => setVista('dia')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    vista === 'dia' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                  }`}
-                >
-                  Día
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => setVista('mes')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    vista === 'mes' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                  }`}
-                >
-                  Mes
-                </button>
-                <button
-                  onClick={() => setVista('semana')}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    vista === 'semana' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                  }`}
-                >
-                  Semana
-                </button>
-              </>
-            )}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              {isMobile ? (
+                <>
+                  <button
+                    onClick={() => setVista('mes')}
+                    className={`px-3 py-1 rounded text-sm transition-colors ${
+                      vista === 'mes' ? 'bg-white text-[var(--brand)] shadow-sm' : 'text-gray-600'
+                    }`}
+                  >
+                    Mes
+                  </button>
+                  <button
+                    onClick={() => setVista('dia')}
+                    className={`px-3 py-1 rounded text-sm transition-colors ${
+                      vista === 'dia' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
+                    }`}
+                  >
+                    Día
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setVista('mes')}
+                    className={`px-3 py-1 rounded text-sm transition-colors ${
+                      vista === 'mes' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
+                    }`}
+                  >
+                    Mes
+                  </button>
+        <button
+          onClick={() => setVista('semana')}
+          className={`px-3 py-1 rounded text-sm transition-colors ${
+            vista === 'semana' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
+          }`}
+        >
+          Semana
+        </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Renderizar vista actual */}
       {vista === 'mes' && renderVistaMes()}
