@@ -43,7 +43,9 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
   const [pacientes, setPacientes] = useState<any[]>([]);
   const [especialistas, setEspecialistas] = useState<any[]>([]);
   const [especialidades, setEspecialidades] = useState<any[]>([]);
+  const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
+  
 
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ open: false, type: 'success', message: '' });
 
@@ -57,6 +59,7 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
     setHora("");
     setObservaciones("");
     setDisponible(null);
+    setEspecialidadesDisponibles([]);
   }
 
   // Limpiar al cerrar el modal
@@ -79,6 +82,50 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
       if (b.success) setBoxes(b.data || []);
     })();
   }, [open]);
+
+  // Filtrar especialidades cuando cambia el especialista seleccionado
+  useEffect(() => {
+    if (!especialistaId || !especialistas.length) {
+      setEspecialidadesDisponibles(especialidades); // Mostrar todas si no hay especialista
+      return;
+    }
+    
+    // Buscar el especialista seleccionado
+    const especialistaSeleccionado = especialistas.find(e => e.id_usuario === especialistaId);
+    
+    if (especialistaSeleccionado) {
+      // Obtener las especialidades del especialista
+      let especialidadesDelEspecialista = [];
+      
+      // Si tiene especialidad principal
+      if (especialistaSeleccionado.especialidad) {
+        especialidadesDelEspecialista.push(especialistaSeleccionado.especialidad);
+      }
+      
+      // Si tiene especialidades adicionales en usuario_especialidad
+      if (especialistaSeleccionado.usuario_especialidad) {
+        especialistaSeleccionado.usuario_especialidad.forEach((ue: any) => {
+          if (ue.especialidad) {
+            especialidadesDelEspecialista.push(ue.especialidad);
+          }
+        });
+      }
+      
+      // Eliminar duplicados por id_especialidad
+      const especialidadesUnicas = especialidadesDelEspecialista.filter((esp, index, arr) => 
+        index === arr.findIndex(e => e.id_especialidad === esp.id_especialidad)
+      );
+      
+      setEspecialidadesDisponibles(especialidadesUnicas);
+      
+      // Si la especialidad seleccionada no está en las disponibles, limpiarla
+      if (especialidadId && !especialidadesUnicas.some(e => e.id_especialidad === especialidadId)) {
+        setEspecialidadId("");
+      }
+    } else {
+      setEspecialidadesDisponibles([]);
+    }
+  }, [especialistaId, especialistas, especialidades, especialidadId]);
 
   // Filtrar horas ocupadas y pasadas
   useEffect(() => {
@@ -227,12 +274,17 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
                 required
               >
                 <option value="">Seleccionar…</option>
-                {especialidades.map(esp => (
+                {especialidadesDisponibles.map(esp => (
                   <option key={esp.id_especialidad} value={esp.id_especialidad}>
                     {esp.nombre}
                   </option>
                 ))}
               </select>
+              {especialistaId && especialidadesDisponibles.length === 0 && (
+                <span className="text-xs text-red-500 mt-1">
+                  Este especialista no tiene especialidades asignadas
+                </span>
+              )}
             </div>
 
             {/* Box (opcional) */}
