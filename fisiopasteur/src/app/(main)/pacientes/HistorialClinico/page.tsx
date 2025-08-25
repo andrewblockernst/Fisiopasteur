@@ -6,23 +6,11 @@ import { getPaciente, agregarObservacion, editarObservacion, getEvolucionesClini
 import Boton from "@/componentes/boton";
 import DatosPaciente from "@/componentes/paciente/datos-paciente";
 import { useToastStore } from "@/stores/toast-store";
+import { Tables } from "@/types/database.types";
+import { createClient } from "@/lib/supabase/client"; // Importa tu cliente
 
-type Observacion = {
-  id_evolucion: number;
-  observaciones: string;
-  id_turno: number;
-  created_at?: string;
-};
-
-type Paciente = {
-  id_paciente: number;
-  nombre: string;
-  apellido: string;
-  fecha_nacimiento: string;
-  email: string;
-  direccion: string;
-  historia_clinica: string;
-};
+type Paciente = Tables<"paciente">;
+type Observacion = Tables<"evolucion_clinica">;
 
 export default function HistorialClinicoPage() {
   const params = useSearchParams();
@@ -49,7 +37,14 @@ export default function HistorialClinicoPage() {
   // Handler para agregar observación
   const handleAgregarObservacion = async () => {
     if (!nuevaObservacion.trim()) return;
-    const nueva = await agregarObservacion(idPaciente, nuevaObservacion);
+
+    // Obtener el usuario logueado
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const nombreUsuario = user?.user_metadata?.nombre || user?.email || "Desconocido";
+    const textoFinal = `[${nombreUsuario}] ${nuevaObservacion}`;
+    // Guardar la observación con el nombre incluido
+    const nueva = await agregarObservacion(idPaciente, textoFinal);
     setObservaciones([...observaciones, nueva]);
     setNuevaObservacion("");
   };
@@ -58,9 +53,16 @@ export default function HistorialClinicoPage() {
   const handleEditarObservacion = async (idObs: number) => {
     if (!editText.trim()) return;
     try {
-      await editarObservacion(idObs, editText);
+      // Extraer el nombre original de la observación
+      const obsOriginal = observaciones.find(o => o.id_evolucion === idObs);
+      let textoFinal = editText;
+      if (obsOriginal?.observaciones?.startsWith("[")) {
+        const nombre = obsOriginal.observaciones.split("]")[0] + "]";
+        textoFinal = `${nombre} ${editText}`;
+      }
+      await editarObservacion(idObs, textoFinal);
       setObservaciones(obs =>
-        obs.map(o => o.id_evolucion === idObs ? { ...o, observaciones: editText } : o)
+        obs.map(o => o.id_evolucion === idObs ? { ...o, observaciones: textoFinal } : o)
       );
       setEditandoId(null);
       setEditText("");
@@ -120,7 +122,12 @@ export default function HistorialClinicoPage() {
                     variant="secondary"
                     onClick={() => {
                       setEditandoId(obs.id_evolucion);
-                      setEditText(obs.observaciones);
+                      // Mostrar solo el texto sin el nombre
+                      if (obs.observaciones?.startsWith("[")) {
+                        setEditText(obs.observaciones.split("]")[1]?.trim() ?? "");
+                      } else {
+                        setEditText(obs.observaciones ?? "");
+                      }
                     }}
                   >
                     Editar
@@ -151,7 +158,18 @@ export default function HistorialClinicoPage() {
                     </Boton>
                   </div>
                 ) : (
-                  <div className="mt-2">{obs.observaciones}</div>
+                  <div className="mt-2">
+                    {obs.observaciones?.startsWith("[") ? (
+                      <>
+                        <span className="text-xs font-semibold">
+                          {obs.observaciones?.split("]")[0].replace("[", "")}
+                        </span>
+                        <span>: {obs.observaciones?.split("]")[1]}</span>
+                      </>
+                    ) : (
+                      <span>{obs.observaciones}</span>
+                    )}
+                  </div>
                 )}
               </div>
             );

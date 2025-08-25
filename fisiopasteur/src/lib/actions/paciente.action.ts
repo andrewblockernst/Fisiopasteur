@@ -331,19 +331,16 @@ export async function deletePaciente(id: number) {
 export async function getHistorialClinico(idPaciente: number) {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("historial_clinico")
-    .select(`
-      *,
-      observaciones:observacion_historial(*)
-    `)
+    .from("paciente")
+    .select("historia_clinica")
     .eq("id_paciente", idPaciente)
     .single();
 
   if (error) {
-    console.error("Error fetching historial clinico:", error);
+    console.error("Error fetching historia clínica:", error);
     return null;
   }
-  return data;
+  return data?.historia_clinica || "";
 }
 
 // Agregar observación a la historia clínica
@@ -395,7 +392,7 @@ export async function editarObservacion(idEvolucion: number, texto: string) {
   if (!evo) throw new Error("Observación no encontrada");
 
   // Usar created_at para controlar el tiempo de edición
-  const minutos = (Date.now() - new Date(evo.created_at).getTime()) / 60000;
+  const minutos = (Date.now() - new Date(evo.created_at ?? "").getTime()) / 60000;
   if (minutos > 5) throw new Error("Solo se puede editar la observación durante los primeros 5 minutos");
 
   const { data, error } = await supabase
