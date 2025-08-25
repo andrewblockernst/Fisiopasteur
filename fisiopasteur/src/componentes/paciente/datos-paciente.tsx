@@ -1,14 +1,6 @@
 import { Tables } from "@/types/database.types";
 
-type Paciente = {
-  id_paciente: number;
-  nombre: string;
-  apellido: string;
-  email: string;
-  direccion: string;
-  fecha_nacimiento: Date;
-  historia_clinica: string;
-};
+type Paciente = Tables<"paciente">;
 
 export default function DatosPaciente({ paciente }: { paciente: Paciente }) {
   return (
@@ -23,7 +15,11 @@ export default function DatosPaciente({ paciente }: { paciente: Paciente }) {
         <span className="font-semibold">Dirección:</span> {paciente.direccion}
       </div>
       <div>
-        <span className="font-semibold">Fecha de nacimiento:</span> {paciente.fecha_nacimiento}
+        <span className="font-semibold">Fecha de nacimiento:</span> {
+          paciente.fecha_nacimiento
+            ? new Date(paciente.fecha_nacimiento).toLocaleDateString("es-AR")
+            : ""
+        }
       </div>
       <div className="col-span-2">
         <span className="font-semibold"></span> {paciente.historia_clinica}
