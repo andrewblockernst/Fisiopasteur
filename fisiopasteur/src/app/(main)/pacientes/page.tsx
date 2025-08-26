@@ -8,6 +8,7 @@ import Button from "@/componentes/boton";
 import SkeletonLoader from "@/componentes/skeleton-loader";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
 import { Search, Filter } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type Filter = 'activos' | 'inactivos' | 'todos';
 type Paciente = Tables<"paciente">;
@@ -19,6 +20,7 @@ export default function PacientePage() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<Filter>('activos');
     const [searchTerm, setSearchTerm] = useState("");
+    const router = useRouter();
 
     useEffect(() => {
         const loadData = async () => {
@@ -47,6 +49,10 @@ export default function PacientePage() {
         }
     };
 
+    const handleReturnMobile = () => {
+        router.push('/inicio');
+    }
+
     if (loading) {
         return <SkeletonLoader />;
     }
@@ -58,7 +64,10 @@ export default function PacientePage() {
             <div className="sm:hidden bg-white border-b border-gray-200">
                 <div className="flex items-center px-4 py-3">
                     {/* Botón de regreso */}
-                    <button className="mr-3 p-1">
+                    <button 
+                        className="mr-3 p-1"
+                        onClick={() => {handleReturnMobile()}}
+                    >
                         <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                         </svg>
