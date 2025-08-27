@@ -7,7 +7,7 @@ import Boton from "@/componentes/boton";
 import DatosPaciente from "@/componentes/paciente/datos-paciente";
 import { useToastStore } from "@/stores/toast-store";
 import { Tables } from "@/types/database.types";
-import { createClient } from "@/lib/supabase/client"; // Importa tu cliente
+import { createClient } from "@/lib/supabase/client"; 
 
 type Paciente = Tables<"paciente">;
 type Observacion = Tables<"evolucion_clinica">;
@@ -88,16 +88,16 @@ export default function HistorialClinicoPage() {
     <div className="max-w-3xl mx-auto py-8 space-y-8">
       {/* Parte 1: Datos del paciente */}
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        <h2 className="text-xl font-bold mb-2">Datos del paciente</h2>
+        <h2 className="text-xl font-bold mb-2 text-black">Datos del paciente</h2>
         {paciente && <DatosPaciente paciente={paciente} />}
       </div>
 
       {/* Parte 2: Historia clínica (observaciones/evoluciones) */}
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        <h3 className="text-lg font-bold mb-2">Historia clínica</h3>
+        <h3 className="text-lg font-bold mb-2 text-black">Historia clínica</h3>
         <div className="space-y-3">
           {observaciones.length === 0 && (
-            <div className="text-gray-500">No hay observaciones registradas.</div>
+            <div className="text-black">No hay observaciones registradas.</div>
           )}
           {observaciones.map(obs => {
             const puedeEditar = editandoId === obs.id_evolucion;
@@ -105,9 +105,9 @@ export default function HistorialClinicoPage() {
               <div key={obs.id_evolucion} className="border-b pb-2 mb-2">
                 <div className="flex justify-between items-center">
                   <div>
-                    <span className="font-semibold">Observación:</span>
+                    <span className="font-semibold  text-black">Observación:</span>
                     {obs.created_at && (
-                      <span className="ml-2 text-xs text-gray-500">
+                      <span className="ml-2 text-xs text-black">
                         {new Date(obs.created_at).toLocaleString("es-AR", {
                           day: "2-digit",
                           month: "2-digit",
@@ -119,6 +119,7 @@ export default function HistorialClinicoPage() {
                     )}
                   </div>
                   <Boton
+                    className="text-black"
                     variant="secondary"
                     onClick={() => {
                       setEditandoId(obs.id_evolucion);
@@ -142,12 +143,14 @@ export default function HistorialClinicoPage() {
                       className="border px-2 py-1 rounded w-full"
                     />
                     <Boton
+                      className="text-black"
                       variant="primary"
                       onClick={() => handleEditarObservacion(obs.id_evolucion)}
                     >
                       Guardar
                     </Boton>
                     <Boton
+                      className="text-black"
                       variant="secondary"
                       onClick={() => {
                         setEditandoId(null);
@@ -158,10 +161,10 @@ export default function HistorialClinicoPage() {
                     </Boton>
                   </div>
                 ) : (
-                  <div className="mt-2">
+                  <div className="mt-2 text-black">
                     {obs.observaciones?.startsWith("[") ? (
                       <>
-                        <span className="text-xs font-semibold">
+                        <span className="text-xs font-semibold text-black">
                           {obs.observaciones?.split("]")[0].replace("[", "")}
                         </span>
                         <span>: {obs.observaciones?.split("]")[1]}</span>
@@ -175,7 +178,7 @@ export default function HistorialClinicoPage() {
             );
           })}
         </div>
-        <div className="flex gap-2 mt-4">
+        <div className="flex gap-2 mt-4 text-black">
           <input
             type="text"
             value={nuevaObservacion}
@@ -184,12 +187,24 @@ export default function HistorialClinicoPage() {
             className="border px-2 py-1 rounded w-full"
           />
           <Boton
+            className="text-black"
             variant="primary"
             onClick={handleAgregarObservacion}
           >
             Agregar
           </Boton>
         </div>
+      </div>
+
+      {/* Botón para volver a la lista de pacientes */}
+      <div className="w-full flex justify-center mt-8">
+        <Boton
+          className="text-black"
+          variant="secondary"
+          onClick={() => window.location.href = "/pacientes"}
+        >
+          Volver a listado de pacientes
+        </Boton>
       </div>
     </div>
   );
