@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { X, Clock, User, FileText, Phone, Edit, Trash2 } from "lucide-react";
+import { Clock, FileText, Phone, Edit, Trash2 } from "lucide-react";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
+import BaseDialog from "@/componentes/dialog/base-dialog";
 
 interface DayViewModalProps {
   isOpen: boolean;
@@ -80,26 +80,18 @@ export function DayViewModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="bg-[#9C1838] text-white p-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Turnos del día</h2>
-            <p className="text-red-100 mt-1 capitalize">
-              {formatearFecha(fecha)}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-red-700 rounded-lg transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+    <BaseDialog
+      type="info"
+      size="lg"
+      title="Turnos del día"
+      isOpen={isOpen}
+      onClose={onClose}
+      showCloseButton
+      message={
+        <div className="text-left">
+          <p className="text-red-700 font-semibold mb-4 capitalize">
+            {formatearFecha(fecha)}
+          </p>
           {turnos.length === 0 ? (
             <div className="text-center py-12">
               <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -191,18 +183,12 @@ export function DayViewModal({
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            Cerrar
-          </button>
-        </div>
-      </div>
-    </div>
+      }
+      secondaryButton={{
+        text: "Cerrar",
+        onClick: onClose,
+      }}
+    />
   );
 }
 

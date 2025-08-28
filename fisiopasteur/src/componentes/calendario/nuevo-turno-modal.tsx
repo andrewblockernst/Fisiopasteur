@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Calendar, Clock, User, FileText } from "lucide-react";
+import BaseDialog from "@/componentes/dialog/base-dialog";
 import { useToastStore } from "@/stores/toast-store";
 import { useTurnoStore } from "@/stores/turno-store";
 
@@ -42,9 +42,7 @@ export function NuevoTurnoModal({
     }
   }, [fechaSeleccionada, isOpen]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_paciente) {
       addToast({
         variant: 'error',
@@ -105,32 +103,20 @@ export function NuevoTurnoModal({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="bg-[#9C1838] text-white p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-700 rounded-lg">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">Nuevo Turno</h2>
-              <p className="text-red-100 text-sm">Agendar nueva cita</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-red-700 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <BaseDialog
+      type="custom"
+      size="md"
+      title="Nuevo Turno"
+      isOpen={isOpen}
+      onClose={onClose}
+      showCloseButton
+      customColor="#9C1838"
+      message={
+        <form
+          onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
+          className="space-y-4 text-left"
+        >
           {/* Fecha */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -227,25 +213,17 @@ export function NuevoTurnoModal({
             />
           </div>
 
-          {/* Botones */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Crear Turno
-            </button>
-          </div>
         </form>
-      </div>
-    </div>
+      }
+      primaryButton={{
+        text: "Crear Turno",
+        onClick: handleSubmit,
+      }}
+      secondaryButton={{
+        text: "Cancelar",
+        onClick: onClose,
+      }}
+    />
   );
 }
 
