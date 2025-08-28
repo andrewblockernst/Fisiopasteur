@@ -30,7 +30,7 @@ export default function ForgotPasswordPage() {
         onSubmit={handleSubmit}
         className="p-6 bg-white rounded-lg shadow-md space-y-4 w-full max-w-sm"
       >
-        <h1 className="text-xl font-semibold">Coloque su email</h1>
+        <h1 className="text-xl font-semibold text-black">Coloque su email</h1>
         <input
           type="email"
           placeholder="Tucorreo@gmail.com"
@@ -39,13 +39,13 @@ export default function ForgotPasswordPage() {
           className="w-full px-3 py-2 border rounded"
         />
         <div className="flex gap-2">
-          <Boton variant="primary" type="submit" className="w-full">
+          <Boton variant="primary" type="submit" className="w-full text-black">
             Enviar link
           </Boton>
           <Boton
             variant="secondary"
             type="button"
-            className="w-full"
+            className="w-full text-black"
             onClick={() => router.push("/login")}
           >
             Cancelar

@@ -44,7 +44,6 @@ export async function sincronizarUsuarioAuth() {
           throw new Error(`Error vinculando usuario: ${updateError.message}`);
         }
 
-        console.log('✅ Usuario vinculado:', usuarioActualizado);
         return { success: true, message: 'Usuario vinculado correctamente' };
       } else {
         // Crear usuario nuevo
@@ -55,7 +54,7 @@ export async function sincronizarUsuarioAuth() {
             apellido: user.user_metadata?.apellido || 'Nuevo',
             email: user.email || '',
             usuario: user.email?.split('@')[0] || 'usuario',
-            contraseña: '',
+            contraseña: '',
             id_rol: 1,
             created_at: new Date().toISOString()
           })
@@ -66,7 +65,6 @@ export async function sincronizarUsuarioAuth() {
           throw new Error(`Error creando usuario: ${createError.message}`);
         }
 
-        console.log('✅ Usuario sincronizado:', nuevoUsuario);
         return { success: true, message: 'Usuario sincronizado correctamente' };
       }
     }

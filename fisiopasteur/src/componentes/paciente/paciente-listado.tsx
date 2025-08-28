@@ -129,7 +129,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                         year: 'numeric'
                     }) : '...'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                     {paciente.activo ? "Activo" : "Inactivo"}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
@@ -147,7 +147,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                         />
                         <Boton
                             variant="secondary"
-                            className="ml-1"
+                            className="text-xs px-3 py-2 ml-1"
                             onClick={() => router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`)}
                         >
                             Historial clínico
