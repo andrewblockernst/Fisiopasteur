@@ -135,7 +135,7 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
   const colors = getColors();
 
 return (
-    <StyledWrapper colors={colors} size={size} $isAnimating={isAnimating}>
+    <StyledWrapper $colors={colors} size={size} $isAnimating={isAnimating}>
       <div className="dialog-overlay">
         <div className="dialog-container">
           <div className="dialog-content">
@@ -184,7 +184,7 @@ return (
   );
 };
 
-const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: boolean }>`
+const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating: boolean }>`
   .dialog-overlay {
     position: fixed;
     inset: 0;
@@ -200,7 +200,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
     width: ${props => props.size === 'sm' ? '320px' : props.size === 'lg' ? '800px' : '400px'};
     max-width: 95vw;
     max-height: 90vh;
-    background-color: ${props => props.colors.light};
+    background-color: ${props => props.$colors.light};
     border-radius: 12px;
     padding: 1.5rem;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
@@ -223,7 +223,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
     right: 1rem;
     background: none;
     border: none;
-    color: ${props => props.colors.dark};
+    color: ${props => props.$colors.dark};
     cursor: pointer;
     padding: 0.25rem;
     border-radius: 0.375rem;
@@ -231,7 +231,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
   }
 
   .dialog-close-button:hover {
-    background-color: ${props => props.colors.medium}20;
+    background-color: ${props => props.$colors.medium}20;
   }
 
   .dialog-icon-wrapper {
@@ -239,7 +239,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: ${props => props.colors.medium}30;
+    background-color: ${props => props.$colors.medium}30;
     border-radius: 50%;
     width: 3.5rem;
     height: 3.5rem;
@@ -248,7 +248,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
   }
 
   .dialog-icon {
-    color: ${props => props.colors.primary};
+    color: ${props => props.$colors.primary};
     width: 1.8rem;
     height: 1.8rem;
   }
@@ -256,7 +256,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
   .dialog-title {
     font-size: 1.25rem;
     font-weight: 700;
-    color: ${props => props.colors.dark};
+    color: ${props => props.$colors.dark};
     margin-bottom: 0.5rem;
     word-break: break-word;
     white-space: pre-wrap;
@@ -264,7 +264,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
 
   .dialog-message {
     font-size: 0.95rem;
-    color: ${props => props.colors.dark}CC;
+    color: ${props => props.$colors.dark}CC;
     margin-bottom: 1.5rem;
     line-height: 1.6;
     word-break: break-word;

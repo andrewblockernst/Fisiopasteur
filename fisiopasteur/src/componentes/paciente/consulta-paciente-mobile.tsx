@@ -1,5 +1,6 @@
 import { Tables } from "@/types/database.types";
-import { DeletePacienteButton } from "./eliminar-boton";
+import { DeletePacienteDialog } from "./eliminar-dialog";
+import Button from "../boton";
 
 type Paciente = Tables<'paciente'>;
 
@@ -7,9 +8,10 @@ interface ConsultaPacienteMobileProps {
     viewingPaciente: Paciente ;
     onClose: () => void;
     onEdit?: () => void;
+    onDelete?: () => void; 
 }
 
-export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit }: ConsultaPacienteMobileProps) {
+export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit, onDelete }: ConsultaPacienteMobileProps) {
 
     const formatDate = (dateString: string | null): string => {
         if (!dateString) return 'No especificada';
@@ -169,20 +171,20 @@ export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit }: Con
                             {/* Botones de acción */}
                             <div className="border-t bg-white p-4">
                                 <div className="flex justify-between space-x-2">
-                                    <button
+                                    <Button
+                                        variant="secondary"
                                         onClick={onEdit}
-                                        className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                                        className="flex-1 text-white py-3 px-4 rounded-lg font-medium"
                                     >
                                         Editar
-                                    </button>
-                                        <DeletePacienteButton 
-                                            id={viewingPaciente.id_paciente}
-                                            nombre={`${viewingPaciente.nombre} ${viewingPaciente.apellido}`}
-                                            onDeleted={() => {
-                                                onClose();
-                                                    // if (onPacienteDeleted) onPacienteDeleted();
-                                                }}
-                                            />
+                                    </Button>
+                                    <Button
+                                    variant="danger"
+                                    onClick={onDelete}
+                                    className="flex-1 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                                    >
+                                        Eliminar
+                                    </Button>
                                 </div>
                             </div>
                         </div>

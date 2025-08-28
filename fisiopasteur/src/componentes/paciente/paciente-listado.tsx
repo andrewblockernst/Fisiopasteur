@@ -1,7 +1,7 @@
 import { Tables } from "@/types/database.types";
 import Button from "../boton";
 import { useState, useEffect } from "react";
-import { DeletePacienteButton } from "./eliminar-boton";
+import { DeletePacienteDialog } from "./eliminar-dialog";
 import { EditarPacienteDialog } from "./editar-paciente-dialog";
 import { ConsultaPacienteMobile } from "./consulta-paciente-mobile";
 import Boton from "@/componentes/boton";
@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { NuevoPacienteDialog } from "./nuevo-paciente-dialog";
 import { getPacientes } from "@/lib/actions/paciente.action";
 import { deletePaciente } from "@/lib/actions/paciente.action";
-import { EllipsisVertical } from "lucide-react";
+import { ChevronUp, EllipsisVertical } from "lucide-react";
 
 
 type Paciente = Tables<'paciente'>;
@@ -22,9 +22,9 @@ interface PacientesTableProps {
 
 export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}: PacientesTableProps) {
     const[editingPaciente, setEditingPaciente] = useState<Paciente | null>(null);
+    const[deletingPaciente, setDeletingPaciente] = useState<Paciente | null>(null);
     const[viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
     const[showDialog, setShowDialog] = useState(false);
-    const[pacientesList, setPacientes] = useState(pacientes);
     const[dropdownOpen, setDropdownOpen] = useState<number | null>(null);
     const router = useRouter();
 
@@ -44,20 +44,25 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
         }
     }
 
+    const handleDeleteClose = () => {
+        setDeletingPaciente(null);
+        if(onPacienteDeleted) {
+            onPacienteDeleted();
+        }
+    }
+
     const handleDialogClose = async () => {
             setShowDialog(false);
             // Recargar la lista de pacientes después de crear uno nuevo
             try {
                 const updatedPacientes = await getPacientes();
-                setPacientes(updatedPacientes.data);
+                pacientes = updatedPacientes.data;
             } catch (error) {
                 console.error("Error reloading patients:", error);
             }
         };
 
-    const handleViewClose = () => {
-        setViewingPaciente(null);
-    }
+
 
     const handleEditFromView = () => {
         if (viewingPaciente) {
@@ -66,32 +71,19 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
         }
     }
 
-    const handleDeletePaciente = async (id: number) => {
-        try {
-            await deletePaciente(id);
-            setDropdownOpen(null);
-            if (onPacienteDeleted) {
-                onPacienteDeleted();
-            }
-        } catch (error) {
-            console.error(error);
-            alert("Error al eliminar paciente");
-        }
-    };
+    // const handleDeletePaciente = async (id: number) => {
+    //     try {
+    //         await deletePaciente(id);
+    //         setDropdownOpen(null);
+    //         if (onPacienteDeleted) {
+    //             onPacienteDeleted();
+    //         }
+    //     } catch (error) {
+    //         console.error(error);
+    //         alert("Error al eliminar paciente");
+    //     }
+    // };
 
-    const formatDate = (dateString: string | null): string => {
-        if (!dateString) return 'No especificada';
-        
-        try {
-            return new Date(dateString).toLocaleDateString('es-ES', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-            });
-        } catch (error) {
-            return 'Fecha inválida';
-        }
-    };
 
     const calculateAge = (birthDate: string | null): number | null => {
         if (!birthDate) return null;
@@ -117,7 +109,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
         {/* NIVEL 1: Vista Mobile (xs - sm) - Solo nombres */}
         <div className="block sm:hidden bg-white relative">
             <div className="divide-y divide-gray-200">
-                {pacientesList.map((paciente) => (
+                {pacientes.map((paciente) => (
                     <div 
                         key={paciente.id_paciente} 
                         className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
@@ -166,14 +158,14 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
         {/* NIVEL 2: Vista Tablet (sm - lg) - Tarjetas compactas */}
         <div className="hidden sm:block lg:hidden">
             <div className="grid gap-4">
-                {pacientesList.map((paciente) => (
+                {pacientes.map((paciente) => (
                     <div key={paciente.id_paciente} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start mb-3">
                             <div className="flex-1">
                                 <h3 className="font-semibold text-gray-900 text-lg">
                                     {paciente.nombre} {paciente.apellido}
                                 </h3>
-                                <p className="text-sm text-gray-600">DNI: {paciente.dni || 'No especificado'}</p>
+                                <p className="text-sm text-gray-600">DNI: {paciente.dni || '...'}</p>
                             </div>
                             <span className={`px-3 py-1 text-xs font-medium rounded-full ${
                                 paciente.activo 
@@ -187,19 +179,19 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                         <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                             <div>
                                 <span className="text-gray-500 font-medium">Email:</span>
-                                <p className="text-gray-900 truncate" title={paciente.email || 'No especificado'}>
-                                    {paciente.email || 'No especificado'}
+                                <p className="text-gray-900 truncate" title={paciente.email || '...'}>
+                                    {paciente.email || '...'}
                                 </p>
                             </div>
                             <div>
                                 <span className="text-gray-500 font-medium">Teléfono:</span>
-                                <p className="text-gray-900">{paciente.telefono}</p>
+                                <p className="text-gray-900">{paciente.telefono || '...'}</p>
                             </div>
                             <div>
                                 <span className="text-gray-500 font-medium">F. Nacimiento:</span>
                                 <p className="text-gray-900">
                                     {paciente.fecha_nacimiento ? 
-                                        paciente.fecha_nacimiento.split('-').reverse().join('/') : 'No especificada'
+                                        paciente.fecha_nacimiento.split('-').reverse().join('/') : '...'
                                     }
                                 </p>
                             </div>
@@ -207,7 +199,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                                 <span className="text-gray-500 font-medium">Edad:</span>
                                 <p className="text-gray-900">
                                     {calculateAge(paciente.fecha_nacimiento) ? 
-                                        `${calculateAge(paciente.fecha_nacimiento)} años` : 'No especificada'
+                                        `${calculateAge(paciente.fecha_nacimiento)} años` : '...'
                                     }
                                 </p>
                             </div>
@@ -221,11 +213,13 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                             >
                                 Editar
                             </Button>
-                            <DeletePacienteButton 
-                                id={paciente.id_paciente}
-                                nombre={`${paciente.nombre} ${paciente.apellido}`}
-                                onDeleted={onPacienteDeleted}
-                            />
+                            <Button
+                                variant="danger"
+                                className="text-xs px-3 py-2 h-8 flex items-center justify-center"
+                                onClick={() => setDeletingPaciente(paciente)}
+                            >
+                                Eliminar
+                            </Button>
                             <Button
                                 variant="secondary"
                                 className="text-xs px-3 py-2 h-8 flex items-center justify-center"
@@ -268,33 +262,34 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {pacientesList.map((paciente) => (
+                    
+                        <tbody className="bg-white divide-y divide-gray-200">
+                        {pacientes.map((paciente) => (
                             <tr key={paciente.id_paciente} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex flex-col">
                                         <div className="text-sm font-medium text-gray-900">
                                             {paciente.nombre} {paciente.apellido}
                                         </div>
-                                        <div className="text-sm text-gray-500 truncate max-w-48" title={paciente.email || 'Sin email'}>
+                                        <div className="text-sm text-gray-500 truncate max-w-48" title={paciente.email || '...'}>
                                             {paciente.email || ''}
                                         </div>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {paciente.dni || 'No especificado'}
+                                    {paciente.dni || '...'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {paciente.telefono}
+                                    {paciente.telefono || '...'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {paciente.fecha_nacimiento ? 
-                                        paciente.fecha_nacimiento.split('-').reverse().join('/') : 'No especificada'
+                                        paciente.fecha_nacimiento.split('-').reverse().join('/') : '...'
                                     }
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {calculateAge(paciente.fecha_nacimiento) ? 
-                                        `${calculateAge(paciente.fecha_nacimiento)} años` : 'No calculada'
+                                        `${calculateAge(paciente.fecha_nacimiento)} años` : '...'
                                     }
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -309,6 +304,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     {/* Botones individuales para pantallas grandes (xl+) */}
                                     <div className="hidden xl:flex gap-2">
+
                                         <Button 
                                             variant="secondary" 
                                             className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
@@ -316,13 +312,22 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                                         >
                                             Editar
                                         </Button>
+
                                         {paciente.activo && (
-                                            <DeletePacienteButton 
-                                                id={paciente.id_paciente}
-                                                nombre={`${paciente.nombre} ${paciente.apellido}`}
-                                                onDeleted={onPacienteDeleted}
-                                            />
+                                            // <DeletePacienteButton 
+                                            //     id={paciente.id_paciente}
+                                            //     nombre={`${paciente.nombre} ${paciente.apellido}`}
+                                            //     onDeleted={onPacienteDeleted}
+                                            // />
+                                            <Button
+                                                variant="danger"
+                                                className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
+                                                onClick={() => setDeletingPaciente(paciente)}
+                                            >
+                                                Eliminar
+                                            </Button>
                                         )}
+
                                         <Button
                                             variant="secondary"
                                             className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
@@ -330,6 +335,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                                         >
                                             Historial
                                         </Button>
+
                                     </div>
 
                                     {/* Dropdown para pantallas medianas (lg - xl) */}
@@ -339,15 +345,26 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                                                 e.stopPropagation();
                                                 setDropdownOpen(dropdownOpen === paciente.id_paciente ? null : paciente.id_paciente);
                                             }}
-                                            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center hover:bg-slate-50 transition-colors rounded"
-                                        >
-                                            {/* Acciones
-                                            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg> */}
-                                            <EllipsisVertical/>
+                                            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                        >   
+                                            <div className="relative w-5 h-5">
+                                                <ChevronUp 
+                                                    className={`absolute w-5 h-5 transition-all duration-300 ease-in-out ${
+                                                        dropdownOpen === paciente.id_paciente 
+                                                            ? 'opacity-100 rotate-0' 
+                                                            : 'opacity-0 rotate-180'
+                                                    }`}
+                                                />
+                                                <EllipsisVertical 
+                                                    className={`absolute w-5 h-5 transition-all duration-300 ease-in-out ${
+                                                        dropdownOpen === paciente.id_paciente 
+                                                            ? 'opacity-0 rotate-180' 
+                                                            : 'opacity-100 rotate-0'
+                                                    }`}
+                                                />
+                                            </div>
                                         </button>
-                                        
+
                                         {dropdownOpen === paciente.id_paciente && (
                                             <div 
                                                 className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-50"
@@ -364,12 +381,12 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                                                         Editar
                                                     </button>
                                                     {paciente.activo && (
-                                                        <button
-                                                            onClick={() => handleDeletePaciente(paciente.id_paciente)}
-                                                            className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                                        >
-                                                            Eliminar
-                                                        </button>
+                                                    <button
+                                                        onClick={() => setDeletingPaciente(paciente)}
+                                                        className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                                    >
+                                                        Eliminar
+                                                    </button>
                                                     )}
                                                     <button
                                                         onClick={() => {
@@ -386,91 +403,13 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                                     </div>
                                 </td>
                             </tr>
-                        ))}
-                    </tbody>
+                            ))}
+                        </tbody>
                 </table>
+                
             </div>
         </div>
-            {/* <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-                <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nombre
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Apellido
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    DNI
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Teléfono
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fecha de Nacimiento
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Acciones
-                </th>
-                </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-                {pacientes.map((paciente) => (
-                <tr key={paciente.id_paciente}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {paciente.nombre}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {paciente.apellido}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {paciente.dni}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {paciente.email ? paciente.email : '...'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {paciente.telefono ? paciente.telefono : '...'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {paciente.fecha_nacimiento ? 
-                            paciente.fecha_nacimiento.split('-').reverse().join('/') : '...'
-                        }
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {paciente.activo ? "Activo" : "Inactivo"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                        <Button 
-                            variant="secondary" 
-                            className="text-xs"
-                            onClick={() => setEditingPaciente(paciente)}
-                        >
-                            Editar
-                        </Button>
-                        <DeletePacienteButton 
-                            id={paciente.id_paciente}
-                            nombre={`${paciente.nombre} ${paciente.apellido}`}
-                            onDeleted={onPacienteDeleted}
-                        />
-                        <Boton
-                            variant="secondary"
-                            className="ml-1"
-                            onClick={() => router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`)}
-                        >
-                            Historial clínico
-                        </Boton>
-                    </td>
-                </tr>
-                ))}
-            </tbody>
-            </table> */}
+            
         
         {/* Modal de consulta - Solo Mobile */}
         {viewingPaciente && (
@@ -478,6 +417,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                 viewingPaciente={viewingPaciente}
                 onClose={() => setViewingPaciente(null)}
                 onEdit={handleEditFromView}
+                onDelete={() => setDeletingPaciente(viewingPaciente)}
             />
         )}
 
@@ -487,6 +427,15 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                 isOpen={true}
                 onClose={handleEditClose}
                 paciente={editingPaciente}
+            />
+        )}
+
+        {/* Modal de eliminación */}
+        {deletingPaciente && (
+            <DeletePacienteDialog
+                isOpen={true}
+                paciente={deletingPaciente}
+                onClose={handleDeleteClose}
             />
         )}
         </>

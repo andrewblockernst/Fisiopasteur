@@ -13,7 +13,6 @@ interface EditarPacienteDialogProps {
     isOpen: boolean;
     onClose: () => void;
     paciente: Paciente;
-    // onPacienteUpdated: () => void;
 }
 
 export function EditarPacienteDialog({ isOpen, onClose, paciente }: EditarPacienteDialogProps) {
@@ -159,7 +158,7 @@ function PacienteEditFormForDialog({paciente, onSuccess}: PacienteEditFormForDia
                         type="text"
                         id="telefono"
                         name="telefono"
-                        defaultValue={paciente.telefono || ''}
+                        defaultValue={paciente.telefono}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.telefono ? "border-red-500" : "border-gray-300"
                         }`}
@@ -195,7 +194,7 @@ function PacienteEditFormForDialog({paciente, onSuccess}: PacienteEditFormForDia
                         type="text"
                         id="dni"
                         name="dni"
-                        defaultValue={paciente.dni}
+                        defaultValue={paciente.dni || ''}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.dni ? "border-red-500" : "border-gray-300"
                         }`}
@@ -219,6 +218,7 @@ function PacienteEditFormForDialog({paciente, onSuccess}: PacienteEditFormForDia
                         }`}
                         placeholder="Ingresa la fecha de nacimiento"
                     />
+                    
                     {errors.fecha_nacimiento && <p className="text-red-500 text-xs mt-1">{errors.fecha_nacimiento}</p>}
                 </div>
 
