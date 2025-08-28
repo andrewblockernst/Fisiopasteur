@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -122,13 +122,13 @@ export type Database = {
       }
       paciente: {
         Row: {
+          activo: boolean
           apellido: string
           created_at: string | null
           direccion: string | null
           dni: string
           edad: number | null
           email: string | null
-          estado: string | null
           fecha_nacimiento: string | null
           historia_clinica: string | null
           id_paciente: number
@@ -137,13 +137,13 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          activo?: boolean
           apellido: string
           created_at?: string | null
           direccion?: string | null
           dni: string
           edad?: number | null
           email?: string | null
-          estado?: string | null
           fecha_nacimiento?: string | null
           historia_clinica?: string | null
           id_paciente?: number
@@ -152,13 +152,13 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          activo?: boolean
           apellido?: string
           created_at?: string | null
           direccion?: string | null
           dni?: string
           edad?: number | null
           email?: string | null
-          estado?: string | null
           fecha_nacimiento?: string | null
           historia_clinica?: string | null
           id_paciente?: number
@@ -193,10 +193,14 @@ export type Database = {
           fecha: string
           hora: string
           id_box: number | null
+          id_especialidad: number | null
           id_especialista: string | null
           id_paciente: number | null
           id_turno: number
+          notas: string | null
+          observaciones: string | null
           precio: number | null
+          tipo_plan: string | null
           updated_at: string | null
         }
         Insert: {
@@ -205,10 +209,14 @@ export type Database = {
           fecha: string
           hora: string
           id_box?: number | null
+          id_especialidad?: number | null
           id_especialista?: string | null
           id_paciente?: number | null
           id_turno?: number
+          notas?: string | null
+          observaciones?: string | null
           precio?: number | null
+          tipo_plan?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -217,13 +225,24 @@ export type Database = {
           fecha?: string
           hora?: string
           id_box?: number | null
+          id_especialidad?: number | null
           id_especialista?: string | null
           id_paciente?: number | null
           id_turno?: number
+          notas?: string | null
+          observaciones?: string | null
           precio?: number | null
+          tipo_plan?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_turno_especialidad"
+            columns: ["id_especialidad"]
+            isOneToOne: false
+            referencedRelation: "especialidad"
+            referencedColumns: ["id_especialidad"]
+          },
           {
             foreignKeyName: "turno_id_box_fkey"
             columns: ["id_box"]
@@ -249,9 +268,10 @@ export type Database = {
       }
       usuario: {
         Row: {
+          activo: boolean | null
           apellido: string
           color: string | null
-          contraseña: string
+          contraseña: string
           created_at: string | null
           email: string
           id_especialidad: number | null
@@ -263,9 +283,10 @@ export type Database = {
           usuario: string
         }
         Insert: {
+          activo?: boolean | null
           apellido: string
           color?: string | null
-          contraseña: string
+          contraseña: string
           created_at?: string | null
           email: string
           id_especialidad?: number | null
@@ -277,9 +298,10 @@ export type Database = {
           usuario: string
         }
         Update: {
+          activo?: boolean | null
           apellido?: string
           color?: string | null
-          contraseña?: string
+          contraseña?: string
           created_at?: string | null
           email?: string
           id_especialidad?: number | null
@@ -313,18 +335,30 @@ export type Database = {
           id_especialidad: number
           id_usuario: string
           id_usuario_especialidad: number
+          precio_particular: number | null
+          precio_obra_social: number | null
+          activo: boolean | null
+          updated_at: string | null
         }
         Insert: {
           fecha_asignacion?: string | null
           id_especialidad: number
           id_usuario: string
           id_usuario_especialidad?: number
+          precio_particular?: number | null
+          precio_obra_social?: number | null
+          activo?: boolean | null
+          updated_at?: string | null
         }
         Update: {
           fecha_asignacion?: string | null
           id_especialidad?: number
           id_usuario?: string
           id_usuario_especialidad?: number
+          precio_particular?: number | null
+          precio_obra_social?: number | null
+          activo?: boolean | null
+          updated_at?: string | null
         }
         Relationships: [
           {
