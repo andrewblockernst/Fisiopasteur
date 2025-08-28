@@ -85,14 +85,21 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
 
   return (
     <>
-      <div className="fixed inset-0 z-50 grid place-items-center bg-black/30">
-        <div className="w-full max-w-lg bg-white rounded-2xl shadow p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Editar turno</h2>
-            <button onClick={onClose} className="text-sm">Cerrar</button>
-          </div>
-
-          <div className="grid gap-3">
+      <BaseDialog
+        type="info"
+        size="lg"
+        title="Editar turno"
+        isOpen={open}
+        onClose={onClose}
+        showCloseButton
+        message={
+          <form
+            className="grid gap-3 text-left"
+            onSubmit={e => {
+              e.preventDefault();
+              onSubmit();
+            }}
+          >
             {/* Paciente */}
             <div className="flex flex-col">
               <label className="text-xs mb-1">Paciente</label>
@@ -100,6 +107,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
                 className="border rounded px-3 py-2"
                 value={pacienteId}
                 onChange={e => setPacienteId(e.target.value ? Number(e.target.value) : "")}
+                required
               >
                 <option value="">Seleccionar…</option>
                 {pacientes.map(p => (
@@ -117,6 +125,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
                 className="border rounded px-3 py-2"
                 value={especialistaId}
                 onChange={e => setEspecialistaId(e.target.value)}
+                required
               >
                 <option value="">Seleccionar…</option>
                 {especialistas.map(e => (
@@ -134,6 +143,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
                 className="border rounded px-3 py-2"
                 value={especialidadId}
                 onChange={e => setEspecialidadId(e.target.value ? Number(e.target.value) : "")}
+                required
               >
                 <option value="">Seleccionar…</option>
                 {especialidades.map(esp => (
@@ -168,11 +178,11 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col">
                 <label className="text-xs mb-1">Fecha</label>
-                <input type="date" className="border rounded px-3 py-2" value={fecha} onChange={e=>setFecha(e.target.value)} />
+                <input type="date" className="border rounded px-3 py-2" value={fecha} onChange={e=>setFecha(e.target.value)} required />
               </div>
               <div className="flex flex-col">
                 <label className="text-xs mb-1">Hora</label>
-                <input type="time" className="border rounded px-3 py-2" value={hora} onChange={e=>setHora(e.target.value)} />
+                <input type="time" className="border rounded px-3 py-2" value={hora} onChange={e=>setHora(e.target.value)} required />
               </div>
             </div>
 
@@ -181,20 +191,18 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
               <label className="text-xs mb-1">Observaciones (opcional)</label>
               <textarea className="border rounded px-3 py-2" rows={3} value={observaciones} onChange={e=>setObservaciones(e.target.value)} />
             </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={onClose} className="px-3 py-2 rounded border">Cancelar</button>
-              <button
-                onClick={onSubmit}
-                disabled={isPending}
-                className="px-3 py-2 rounded bg-rose-700 text-white hover:bg-rose-800"
-              >
-                {isPending ? "Guardando…" : "Guardar cambios"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+          </form>
+        }
+        primaryButton={{
+          text: isPending ? "Guardando…" : "Guardar cambios",
+          onClick: onSubmit,
+          disabled: isPending,
+        }}
+        secondaryButton={{
+          text: "Cancelar",
+          onClick: onClose,
+        }}
+      />
 
       {/* Diálogo para mostrar mensajes personalizados */}
       <BaseDialog
