@@ -5,7 +5,7 @@ import AccionesTurno from "@/componentes/turnos/acciones-turno";
 import Button from "../boton";
 
 export default function TurnosTable({ turnos }: { turnos: any[] }) {
-  console.log('Turnos recibidos:', turnos);
+
   const [openNew, setOpenNew] = useState(false);
 
   // Función para formatear fecha como DD/MM/YYYY
