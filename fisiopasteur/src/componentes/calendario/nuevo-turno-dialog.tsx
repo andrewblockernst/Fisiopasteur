@@ -427,7 +427,7 @@ export function NuevoTurnoModal({
                 <option value="">Seleccionar especialista</option>
                 {especialistas.map((especialista) => (
                   <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                    Dr. {especialista.nombre} {especialista.apellido}
+                    . {especialista.nombre} {especialista.apellido}
                   </option>
                 ))}
               </select>
