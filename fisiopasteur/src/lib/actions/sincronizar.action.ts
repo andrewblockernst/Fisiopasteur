@@ -51,7 +51,6 @@ export async function sincronizarUsuarioAuth() {
         const { data: nuevoUsuario, error: createError } = await supabase
           .from('usuario')
           .insert({
-            id_usuario: user.id,
             nombre: user.user_metadata?.nombre || 'Usuario',
             apellido: user.user_metadata?.apellido || 'Nuevo',
             email: user.email || '',
