@@ -132,23 +132,11 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       redirect('/login');
     }
 
-    console.log('🔍 Usuario autenticado:', {
-      id: user.id,
-      email: user.email,
-      created_at: user.created_at
-    });
-
     // 1.5. Verificar si el usuario existe por ID
     const { data: existeUsuarioPorId, error: checkIdError } = await supabase
       .from('usuario')
       .select('id_usuario, nombre, apellido, email')
       .eq('id_usuario', user.id);
-
-    console.log('🔍 Búsqueda por ID:', {
-      usuario_auth_id: user.id,
-      registros_encontrados: existeUsuarioPorId?.length || 0,
-      datos: existeUsuarioPorId
-    });
 
     // 1.6. Si no existe por ID, buscar por email
     if (!existeUsuarioPorId || existeUsuarioPorId.length === 0) {
@@ -157,16 +145,9 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
         .select('id_usuario, nombre, apellido, email')
         .eq('email', user.email || '');
 
-      console.log('🔍 Búsqueda por email:', {
-        email: user.email,
-        registros_encontrados: existeUsuarioPorEmail?.length || 0,
-        datos: existeUsuarioPorEmail
-      });
-
       if (existeUsuarioPorEmail && existeUsuarioPorEmail.length > 0) {
         // El usuario existe con el mismo email pero diferente id_usuario
         // Actualizar el id_usuario para vincularlo con Auth
-        console.log('🔄 Actualizando id_usuario para vincular con Auth...');
         
         const { data: usuarioActualizado, error: updateError } = await supabase
           .from('usuario')
@@ -183,10 +164,8 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
           throw new Error(`Error vinculando usuario: ${updateError.message}`);
         }
 
-        console.log('✅ Usuario vinculado con Auth:', usuarioActualizado);
       } else {
         // No existe el usuario, crear uno nuevo
-        console.log('👤 Usuario no existe, creando...');
         
         const { data: nuevoUsuario, error: createError } = await supabase
           .from('usuario')
@@ -209,7 +188,6 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
           throw new Error(`Error creando usuario: ${createError.message}`);
         }
 
-        console.log('✅ Usuario creado:', nuevoUsuario);
       }
     }
 
@@ -237,7 +215,6 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       .eq('id_usuario', user.id)
       .single();
 
-    console.log('📊 Consulta final usuario:', userData);
 
     if (userError) {
       console.error('Error consultando usuario:', userError);
@@ -290,7 +267,6 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       especialidades_adicionales: especialidadesAdicionales
     };
 
-    console.log('✅ Perfil completo construido:', perfil);
     return perfil;
 
   } catch (error) {
