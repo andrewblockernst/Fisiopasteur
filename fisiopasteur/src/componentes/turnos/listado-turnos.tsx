@@ -5,7 +5,6 @@ import AccionesTurno from "@/componentes/turnos/acciones-turno";
 import Button from "../boton";
 
 export default function TurnosTable({ turnos }: { turnos: any[] }) {
-  console.log(turnos); // <-- agregá esto temporalmente
   const [openNew, setOpenNew] = useState(false);
 
   // Función para determinar el color de fondo de la fila
