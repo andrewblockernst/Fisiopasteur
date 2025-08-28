@@ -4,25 +4,25 @@ type Paciente = Tables<"paciente">;
 
 export default function DatosPaciente({ paciente }: { paciente: Paciente }) {
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 gap-4 text-black">
       <div>
-        <span className="font-semibold">Nombre:</span> {paciente.nombre + " " + paciente.apellido}
+        <span className="font-semibold text-black">Nombre:</span> {paciente.nombre + " " + paciente.apellido}
       </div>
       <div>
-        <span className="font-semibold">Email:</span> {paciente.email}
+        <span className="font-semibold text-black">Número:</span> {paciente.telefono}
       </div>
       <div>
-        <span className="font-semibold">Dirección:</span> {paciente.direccion}
+        <span className="font-semibold text-black">Dirección:</span> {paciente.direccion}
       </div>
       <div>
-        <span className="font-semibold">Fecha de nacimiento:</span> {
+        <span className="font-semibold text-black">Fecha de nacimiento:</span> {
           paciente.fecha_nacimiento
             ? new Date(paciente.fecha_nacimiento).toLocaleDateString("es-AR")
             : ""
         }
       </div>
-      <div className="col-span-2">
-        <span className="font-semibold"></span> {paciente.historia_clinica}
+      <div className="col-span-2 ">
+        <span className="font-semibold text-black"></span> {paciente.historia_clinica}
       </div>
     </div>
   );
