@@ -11,11 +11,17 @@ import {
   HelpCircle,
   Settings,
   Bed,
+  LogOut,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { handleCerrarSesion } from '@/lib/actions/logOut.action';
 
 const Herramientas = () => {
   const router = useRouter();
+
+  const onCerrarSesion = () => {
+    handleCerrarSesion(router);
+  };
 
   return (
     <aside className="hidden lg:flex fixed top-1/2 left-0 -translate-y-1/2 bg-[#9C1838] py-6 px-2 flex-col items-center gap-6 shadow-lg rounded-r-lg z-50">
@@ -27,6 +33,7 @@ const Herramientas = () => {
       <IconWrapper label="Especialistas" icon={<FileBadge size={28} />} onClick={() => router.push('/especialistas')} />
       <IconWrapper label="Perfil" icon={<User size={28} />} onClick={() => router.push('/perfil')} />
       <IconWrapper label="Ayuda" icon={<HelpCircle size={28} />} onClick={() => router.push('/centro-de-ayuda')} />
+      <IconWrapper label="Cerrar Sesión" icon={<LogOut size={28} />} onClick={onCerrarSesion} />
     </aside>
   );
 };
