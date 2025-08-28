@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { useToastStore } from "@/stores/toast-store";
 import { useTurnoStore } from "@/stores/turno-store";
-import { obtenerEspecialidades, obtenerBoxes } from "@/lib/actions/turno.action";
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -26,15 +25,12 @@ export function NuevoTurnoModal({
     hora: '',
     id_especialista: '',
     id_especialidad: '',
-    id_box: '',
+    tipo_plan: 'particular' as 'particular' | 'obra_social',
     id_paciente: '',
     observaciones: '',
     precio: ''
   });
-
-  const [especialidades, setEspecialidades] = useState<any[]>([]);
   const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<any[]>([]);
-  const [boxes, setBoxes] = useState<any[]>([]);
 
   const { addTurno } = useTurnoStore();
   const { addToast } = useToastStore();
@@ -49,49 +45,52 @@ export function NuevoTurnoModal({
     }
   }, [fechaSeleccionada, isOpen]);
 
-  // Cargar especialidades y boxes al abrir
-  useEffect(() => {
-    if (!isOpen) return;
-    (async () => {
-      const [esp, b] = await Promise.all([
-        obtenerEspecialidades(),
-        obtenerBoxes(),
-      ]);
-      if (esp.success) {
-        setEspecialidades(esp.data || []);
-        setEspecialidadesDisponibles(esp.data || []);
-      }
-      if (b.success) setBoxes(b.data || []);
-    })();
-  }, [isOpen]);
-
-  // Filtrar especialidades según especialista seleccionado
+  // Construir lista de especialidades del especialista seleccionado
   useEffect(() => {
     if (!formData.id_especialista) {
-      setEspecialidadesDisponibles(especialidades);
+      setEspecialidadesDisponibles([]);
+      setFormData(prev => ({ ...prev, id_especialidad: '' }));
       return;
     }
-    const especialistaSeleccionado = especialistas.find(e => e.id_usuario === formData.id_especialista);
-    if (especialistaSeleccionado) {
-      const lista: any[] = [];
-      if (especialistaSeleccionado.especialidad) lista.push(especialistaSeleccionado.especialidad);
-      if (especialistaSeleccionado.usuario_especialidad) {
-        especialistaSeleccionado.usuario_especialidad.forEach((ue: any) => {
-          if (ue.especialidad) lista.push(ue.especialidad);
-        });
-      }
-      const unicas = lista.filter((esp, i, arr) => i === arr.findIndex((e: any) => e.id_especialidad === esp.id_especialidad));
-      setEspecialidadesDisponibles(unicas);
-      if (formData.id_especialidad && !unicas.some(e => String(e.id_especialidad) === String(formData.id_especialidad))) {
-        setFormData(prev => ({ ...prev, id_especialidad: '' }));
-      }
-    } else {
+    const especialista = especialistas.find(e => String(e.id_usuario) === String(formData.id_especialista));
+    if (!especialista) {
       setEspecialidadesDisponibles([]);
+      setFormData(prev => ({ ...prev, id_especialidad: '' }));
+      return;
     }
-  }, [formData.id_especialista, especialistas, especialidades, formData.id_especialidad]);
+    const lista: any[] = [];
+    if (especialista.especialidad) lista.push(especialista.especialidad);
+    if (Array.isArray(especialista.usuario_especialidad)) {
+      especialista.usuario_especialidad.forEach((ue: any) => {
+        if (ue.especialidad) lista.push(ue.especialidad);
+      });
+    }
+    const unicas = lista.filter((esp, i, arr) => i === arr.findIndex((e: any) => e.id_especialidad === esp.id_especialidad));
+    setEspecialidadesDisponibles(unicas);
+    // Si la seleccionada ya no existe, limpiar
+    if (formData.id_especialidad && !unicas.some((e: any) => String(e.id_especialidad) === String(formData.id_especialidad))) {
+      setFormData(prev => ({ ...prev, id_especialidad: '' }));
+    }
+  }, [formData.id_especialista, especialistas, formData.id_especialidad]);
+
+  // Autocompletar precio segun especialista + especialidad + plan
+  useEffect(() => {
+    (async () => {
+      if (!formData.id_especialista || !formData.id_especialidad || !formData.tipo_plan) return;
+      try {
+        const { obtenerPrecioEspecialidad } = await import('@/lib/actions/turno.action');
+        const res = await obtenerPrecioEspecialidad(
+          String(formData.id_especialista),
+          Number(formData.id_especialidad),
+          formData.tipo_plan
+        );
+        if (res.success) setFormData(prev => ({ ...prev, precio: res.precio != null ? String(res.precio) : '' }));
+      } catch {}
+    })();
+  }, [formData.id_especialista, formData.id_especialidad, formData.tipo_plan]);
 
   const handleSubmit = async () => {
-    if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_paciente || !formData.id_especialidad) {
+    if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
       addToast({
         variant: 'error',
         message: 'Por favor completa fecha, hora, especialista, especialidad y paciente'
@@ -108,9 +107,9 @@ export function NuevoTurnoModal({
         id_especialista: formData.id_especialista,
         id_paciente: parseInt(formData.id_paciente),
         id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
-        id_box: formData.id_box ? parseInt(formData.id_box) : null,
         observaciones: formData.observaciones || null,
         estado: "pendiente" as const,
+        tipo_plan: formData.tipo_plan,
       };
 
       // Llamar a la Server Action para crear el turno
@@ -132,7 +131,7 @@ export function NuevoTurnoModal({
           hora: '',
           id_especialista: '',
           id_especialidad: '',
-          id_box: '',
+          tipo_plan: 'particular',
           id_paciente: '',
           observaciones: '',
           precio: ''
@@ -226,6 +225,7 @@ export function NuevoTurnoModal({
               onChange={(e) => setFormData(prev => ({ ...prev, id_especialidad: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
               required
+              disabled={!formData.id_especialista}
             >
               <option value="">Seleccionar especialidad</option>
               {especialidadesDisponibles.map((esp: any) => (
@@ -233,6 +233,21 @@ export function NuevoTurnoModal({
                   {esp.nombre}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Plan */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Plan
+            </label>
+            <select
+              value={formData.tipo_plan}
+              onChange={(e) => setFormData(prev => ({ ...prev, tipo_plan: e.target.value as 'particular' | 'obra_social' }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            >
+              <option value="particular">Particular</option>
+              <option value="obra_social">Obra Social</option>
             </select>
           </div>
 
@@ -257,18 +272,32 @@ export function NuevoTurnoModal({
           </div>
 
           {/* Precio */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Precio (ARS)
-            </label>
-            <input
-              type="number"
-              value={formData.precio}
-              onChange={(e) => setFormData(prev => ({ ...prev, precio: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-              placeholder="15000"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Precio (ARS)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-lg select-none">$</span>
+                <input
+                  type="text"
+                  value={
+                    formData.precio
+                      ? Number(formData.precio).toLocaleString('es-AR')
+                      : ''
+                  }
+                  onChange={(e) => {
+                    // Remover todo excepto números
+                    const raw = e.target.value.replace(/[^\d]/g, '');
+                    setFormData(prev => ({ ...prev, precio: raw }));
+                  }}
+                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  placeholder="..."
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                />
+              </div>
+            </div>
+            
 
           {/* Observaciones */}
           <div>
@@ -282,25 +311,6 @@ export function NuevoTurnoModal({
               rows={3}
               placeholder="Información adicional sobre el turno..."
             />
-          </div>
-
-          {/* Box (opcional) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Box (opcional)
-            </label>
-            <select
-              value={formData.id_box}
-              onChange={(e) => setFormData(prev => ({ ...prev, id_box: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-            >
-              <option value="">Sin asignar</option>
-              {boxes.map((b: any) => (
-                <option key={b.id_box} value={b.id_box}>
-                  Box {b.numero}
-                </option>
-              ))}
-            </select>
           </div>
 
         </form>
