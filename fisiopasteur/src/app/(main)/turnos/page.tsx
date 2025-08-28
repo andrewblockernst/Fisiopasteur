@@ -1,17 +1,16 @@
-import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEspecialidades } from "@/lib/actions/turno.action"; // ajusta paths si separaste actions
+import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEspecialidades } from "@/lib/actions/turno.action";
 import FiltrosTurnos from "@/componentes/turnos/filtros-turnos";
 import TablaTurnos from "@/componentes/turnos/listado-turnos";
 
 export default async function TurnosPage({ searchParams }: { searchParams: any }) {
-    // Si no hay filtros, mostrar por defecto los del dia
+  // Si no hay filtros, mostrar por defecto los del día
   const hoy = new Date().toISOString().split('T')[0];
   const filtros = {
     fecha_desde: searchParams?.desde ?? hoy,
     fecha_hasta: searchParams?.hasta ?? hoy,
     especialista_id: searchParams?.especialista ?? undefined,
     especialidad_id: searchParams?.especialidad ?? undefined,
-    hora_desde: searchParams?.hdesde ?? undefined,
-    hora_hasta: searchParams?.hhasta ?? undefined,
+    // Eliminamos hora_desde y hora_hasta
     estado: searchParams?.estado ?? undefined,
   };
 
@@ -27,14 +26,14 @@ export default async function TurnosPage({ searchParams }: { searchParams: any }
   }
 
   return (
-    <div className="p-4 sm:p-6">
+    <div className="p-4 sm:p-6 text-black">
       <h1 className="text-2xl font-bold mb-4">Turnos</h1>
-    <FiltrosTurnos
-      especialistas={resEspecialistas.success ? resEspecialistas.data : []}
-      especialidades={resEspecialidades.success ? resEspecialidades.data : []} // <-- agregá esto
-      boxes={resBoxes.success ? resBoxes.data : []}
-      initial={filtros}
-    />
+      <FiltrosTurnos
+        especialistas={resEspecialistas.success ? resEspecialistas.data : []}
+        especialidades={resEspecialidades.success ? resEspecialidades.data : []}
+        boxes={resBoxes.success ? resBoxes.data : []}
+        initial={filtros}
+      />
       <TablaTurnos turnos={resTurnos.data ?? []} />
     </div>
   );
