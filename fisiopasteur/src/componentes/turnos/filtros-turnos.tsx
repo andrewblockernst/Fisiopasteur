@@ -1,110 +1,253 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
+import { Search, Filter, X } from "lucide-react";
 import Button from "@/componentes/boton";
 
 export default function FiltrosTurnos({ especialistas, especialidades, boxes, initial }: any) {
   const router = useRouter();
   const params = useSearchParams();
   const [f, setF] = useState(initial);
+  const [tipoFiltro, setTipoFiltro] = useState<string>("");
+  const [valorFiltro, setValorFiltro] = useState<string>("");
 
-  useEffect(() => setF(initial), [params]); // sync si cambian params
+  useEffect(() => setF(initial), [params]);
 
-  const apply = () => {
+  // Función para formatear fecha como DD/MM/YYYY
+  const formatearFecha = (fechaStr: string) => {
+    if (!fechaStr) return '';
+    const fecha = new Date(fechaStr + 'T00:00:00');
+    return fecha.toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  const tiposFiltro = [
+    { value: "", label: "Seleccionar filtro..." },
+    { value: "fecha_desde", label: "Fecha desde" },
+    { value: "fecha_hasta", label: "Fecha hasta" },
+    { value: "especialista", label: "Especialista" },
+    { value: "especialidad", label: "Especialidad" },
+    { value: "estado", label: "Estado" },
+  ];
+
+  const estadosPosibles = [
+    { value: "", label: "Todos los estados" },
+    { value: "programado", label: "Programado" },
+    { value: "atendido", label: "Atendido" },
+    { value: "cancelado", label: "Cancelado" },
+  ];
+
+  const aplicarFiltro = () => {
+    if (!tipoFiltro || !valorFiltro) return;
+
+    const nuevosFiltros = { ...f };
+
+    switch (tipoFiltro) {
+      case "fecha_desde":
+        nuevosFiltros.fecha_desde = valorFiltro;
+        break;
+      case "fecha_hasta":
+        nuevosFiltros.fecha_hasta = valorFiltro;
+        break;
+      case "especialista":
+        nuevosFiltros.especialista_id = valorFiltro;
+        break;
+      case "especialidad":
+        nuevosFiltros.especialidad_id = valorFiltro;
+        break;
+      case "estado":
+        nuevosFiltros.estado = valorFiltro;
+        break;
+    }
+
+    setF(nuevosFiltros);
+    aplicarFiltros(nuevosFiltros);
+    setTipoFiltro("");
+    setValorFiltro("");
+  };
+
+  const aplicarFiltros = (filtros: any) => {
     const usp = new URLSearchParams();
-    if (f.fecha_desde) usp.set("desde", f.fecha_desde);
-    if (f.fecha_hasta) usp.set("hasta", f.fecha_hasta);
-    if (f.especialista_id) usp.set("especialista", f.especialista_id);
-    if (f.especialidad_id) usp.set("especialidad", f.especialidad_id);
-    if (f.hora_desde) usp.set("hdesde", f.hora_desde);
-    if (f.hora_hasta) usp.set("hhasta", f.hora_hasta);
-    if (f.estado) usp.set("estado", f.estado);
+    if (filtros.fecha_desde) usp.set("desde", filtros.fecha_desde);
+    if (filtros.fecha_hasta) usp.set("hasta", filtros.fecha_hasta);
+    if (filtros.especialista_id) usp.set("especialista", filtros.especialista_id);
+    if (filtros.especialidad_id) usp.set("especialidad", filtros.especialidad_id);
+    if (filtros.estado) usp.set("estado", filtros.estado);
     router.push(`/turnos?${usp.toString()}`);
   };
 
+  const limpiarFiltros = () => {
+    setF({});
+    setTipoFiltro("");
+    setValorFiltro("");
+    router.push("/turnos");
+  };
+
+  const renderCampoValor = () => {
+    if (!tipoFiltro) return null;
+
+    switch (tipoFiltro) {
+      case "fecha_desde":
+      case "fecha_hasta":
+        return (
+          <input
+            type="date"
+            value={valorFiltro}
+            onChange={(e) => setValorFiltro(e.target.value)}
+            className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        );
+
+      case "especialista":
+        return (
+          <select
+            value={valorFiltro}
+            onChange={(e) => setValorFiltro(e.target.value)}
+            className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">Seleccionar especialista...</option>
+            {especialistas.map((esp: any) => (
+              <option key={esp.id_usuario} value={esp.id_usuario}>
+                {esp.apellido}, {esp.nombre}
+              </option>
+            ))}
+          </select>
+        );
+
+      case "especialidad":
+        return (
+          <select
+            value={valorFiltro}
+            onChange={(e) => setValorFiltro(e.target.value)}
+            className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="">Seleccionar especialidad...</option>
+            {especialidades.map((esp: any) => (
+              <option key={esp.id_especialidad} value={esp.id_especialidad}>
+                {esp.nombre}
+              </option>
+            ))}
+          </select>
+        );
+
+      case "estado":
+        return (
+          <select
+            value={valorFiltro}
+            onChange={(e) => setValorFiltro(e.target.value)}
+            className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            {estadosPosibles.map((estado) => (
+              <option key={estado.value} value={estado.value}>
+                {estado.label}
+              </option>
+            ))}
+          </select>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Funciones para obtener los nombres de los filtros
+  const getNombreEspecialista = (id: string) => {
+    const esp = especialistas?.find((e: any) => e.id_usuario === id);
+    return esp ? `${esp.apellido}, ${esp.nombre}` : 'Especialista filtrado';
+  };
+
+  const getNombreEspecialidad = (id: string) => {
+    const esp = especialidades?.find((e: any) => e.id_especialidad === parseInt(id));
+    return esp ? esp.nombre : 'Especialidad filtrada';
+  };
+
+  const filtrosActivos = Object.keys(f).filter(key => f[key as keyof typeof f]).length;
+
   return (
-    <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-      {/* Fecha desde */}
-      <div>
-        <label className="text-xs mb-1">Fecha desde</label>
-        <input
-          type="date"
-          className="border rounded px-3 py-2 w-full"
-          value={f.fecha_desde || ""}
-          onChange={e => setF({ ...f, fecha_desde: e.target.value })}
-        />
-      </div>
-      {/* Fecha hasta */}
-      <div>
-        <label className="text-xs mb-1">Fecha hasta</label>
-        <input
-          type="date"
-          className="border rounded px-3 py-2 w-full"
-          value={f.fecha_hasta || ""}
-          onChange={e => setF({ ...f, fecha_hasta: e.target.value })}
-        />
-      </div>
-      {/* Especialista */}
-      <div>
-        <label className="text-xs mb-1">Especialista</label>
-        <select
-          className="border rounded px-3 py-2 w-full"
-          value={f.especialista_id || ""}
-          onChange={e => setF({ ...f, especialista_id: e.target.value })}
-        >
-          <option value="">Todos</option>
-          {especialistas.map((esp: any) => (
-            <option key={esp.id_usuario} value={esp.id_usuario}>
-              {esp.apellido}, {esp.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-      {/* Especialidad */}
-      <div>
-        <label className="text-xs mb-1">Especialidad</label>
-        <select
-          className="border rounded px-3 py-2 w-full"
-          value={f.especialidad_id || ""}
-          onChange={e => setF({ ...f, especialidad_id: e.target.value })}
-        >
-          <option value="">Todas</option>
-          {especialidades.map((esp: any) => (
-            <option key={esp.id_especialidad} value={esp.id_especialidad}>
-              {esp.nombre}
-            </option>
-          ))}
-        </select>
-      </div>
-      {/* Hora desde */}
-      <div>
-        <label className="text-xs mb-1">Hora desde</label>
-        <input
-          type="time"
-          className="border rounded px-3 py-2 w-full"
-          value={f.hora_desde || ""}
-          onChange={e => setF({ ...f, hora_desde: e.target.value })}
-        />
-      </div>
-      {/* Hora hasta */}
-      <div>
-        <label className="text-xs mb-1">Hora hasta</label>
-        <input
-          type="time"
-          className="border rounded px-3 py-2 w-full"
-          value={f.hora_hasta || ""}
-          onChange={e => setF({ ...f, hora_hasta: e.target.value })}
-        />
-      </div>
-      {/* Botones */}
-      <div className="sm:col-span-2 lg:col-span-6 flex gap-2">
-        <Button variant="primary" onClick={apply}>
-          Aplicar
-        </Button>
-        <Button variant="secondary" onClick={() => router.push("/turnos")}>
-          Limpiar
+    <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Selector de tipo de filtro */}
+        <div className="flex items-center gap-2">
+          <Filter size={18} className="text-gray-600" />
+          <select
+            value={tipoFiltro}
+            onChange={(e) => {
+              setTipoFiltro(e.target.value);
+              setValorFiltro("");
+            }}
+            className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[180px]"
+          >
+            {tiposFiltro.map((tipo) => (
+              <option key={tipo.value} value={tipo.value}>
+                {tipo.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Campo de valor */}
+        {renderCampoValor()}
+
+        {/* Botones */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            onClick={aplicarFiltro}
+            disabled={!tipoFiltro || !valorFiltro}
+            className="flex items-center gap-2"
+          >
+            <Search size={16} />
+            Filtrar
           </Button>
+
+          {filtrosActivos > 0 && (
+            <Button
+              variant="secondary"
+              onClick={limpiarFiltros}
+              className="flex items-center gap-2"
+            >
+              <X size={16} />
+              Limpiar ({filtrosActivos})
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Mostrar filtros activos */}
+      {filtrosActivos > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <div className="flex flex-wrap gap-2">
+            {f.fecha_desde && (
+              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                Desde: {formatearFecha(f.fecha_desde)}
+              </span>
+            )}
+            {f.fecha_hasta && (
+              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                Hasta: {formatearFecha(f.fecha_hasta)}
+              </span>
+            )}
+            {f.especialista_id && (
+              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
+                Especialista: {getNombreEspecialista(f.especialista_id)}
+              </span>
+            )}
+            {f.especialidad_id && (
+              <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
+                Especialidad: {getNombreEspecialidad(f.especialidad_id)}
+              </span>
+            )}
+            {f.estado && (
+              <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">
+                Estado: {f.estado}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
