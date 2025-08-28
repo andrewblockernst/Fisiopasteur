@@ -41,6 +41,85 @@ export interface AuthState {
   } | null;
 }
 
+// Obtener precios por especialidad del usuario autenticado
+export async function obtenerPreciosUsuarioEspecialidades() {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: 'No autenticado' };
+    }
+
+    const { data, error } = await supabase
+      .from('usuario_especialidad')
+      .select(`
+        id_especialidad,
+        precio_particular,
+        precio_obra_social,
+        activo,
+        updated_at,
+        especialidad:id_especialidad(id_especialidad, nombre)
+      `)
+      .eq('id_usuario', user.id)
+      .order('id_especialidad');
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (e) {
+    return { success: false, error: 'Error inesperado' };
+  }
+}
+
+// Crear/actualizar precios de una especialidad del usuario autenticado
+export async function guardarPrecioUsuarioEspecialidad(
+  id_especialidad: number,
+  valores: { precio_particular?: number | null; precio_obra_social?: number | null; activo?: boolean | null }
+) {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: 'No autenticado' };
+    }
+
+    // Verificar si existe la fila
+    const { data: existente } = await supabase
+      .from('usuario_especialidad')
+      .select('id_usuario, id_especialidad')
+      .eq('id_usuario', user.id)
+      .eq('id_especialidad', id_especialidad)
+      .maybeSingle();
+
+    const payload = {
+      id_usuario: user.id,
+      id_especialidad,
+      ...valores,
+      updated_at: new Date().toISOString(),
+    } as any;
+
+    if (existente) {
+      const { error } = await supabase
+        .from('usuario_especialidad')
+        .update(payload)
+        .eq('id_usuario', user.id)
+        .eq('id_especialidad', id_especialidad);
+      if (error) return { success: false, error: error.message };
+    } else {
+      const { error } = await supabase
+        .from('usuario_especialidad')
+        .insert(payload);
+      if (error) return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: 'Error inesperado' };
+  }
+}
+
 export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
   try {
     const supabase = await createClient();

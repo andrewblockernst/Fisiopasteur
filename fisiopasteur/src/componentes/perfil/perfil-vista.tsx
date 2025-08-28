@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { PerfilCompleto, actualizarPerfil } from '@/lib/actions/perfil.action';
+import { useEffect, useState, useTransition } from 'react';
+import { PerfilCompleto, actualizarPerfil, obtenerPreciosUsuarioEspecialidades, guardarPrecioUsuarioEspecialidad } from '@/lib/actions/perfil.action';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Pencil, X, Phone, CalendarDays, Mail, User
@@ -28,15 +28,36 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const router = useRouter();
 
-  // Simulación de precios por especialidad (hasta tener tabla real)
-  const preciosSimulados = [
-    { id: 1, titulo: perfil.especialidad_principal?.nombre || 'Consulta General', monto: 15000 },
-    ...perfil.especialidades_adicionales.map((esp, index) => ({
-      id: index + 2,
-      titulo: esp.nombre,
-      monto: 20000 + (index * 2500)
-    }))
+  // Estado de precios reales por especialidad
+  const [precios, setPrecios] = useState<Record<number, { precio_particular: number; precio_obra_social: number; activo: boolean }>>({});
+  const [cargandoPrecios, setCargandoPrecios] = useState(true);
+  const [savingId, setSavingId] = useState<number | null>(null);
+
+  const todasEspecialidades = [
+    ...(perfil.especialidad_principal ? [perfil.especialidad_principal] : []),
+    ...perfil.especialidades_adicionales
   ];
+
+  useEffect(() => {
+    (async () => {
+      const res = await obtenerPreciosUsuarioEspecialidades();
+      if (res.success && Array.isArray(res.data)) {
+        const dict: Record<number, { precio_particular: number; precio_obra_social: number; activo: boolean }> = {};
+        for (const r of res.data as any[]) {
+          const id = r.especialidad?.id_especialidad ?? r.id_especialidad;
+          if (id != null) {
+            dict[id] = {
+              precio_particular: Number(r.precio_particular || 0),
+              precio_obra_social: Number(r.precio_obra_social || 0),
+              activo: r.activo ?? true,
+            };
+          }
+        }
+        setPrecios(dict);
+      }
+      setCargandoPrecios(false);
+    })();
+  }, []);
 
   const handleSubmit = async (formData: FormData) => {
     startTransition(async () => {
@@ -303,29 +324,81 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
                 <h3 className="text-base font-semibold text-neutral-800">Precios</h3>
               </div>
 
-              <div className="px-3 pb-5 space-y-3">
-                {preciosSimulados.map((precio) => (
-                  <article
-                    key={precio.id}
-                    className="flex items-center justify-between rounded-2xl bg-white border border-neutral-200 px-4 py-4 shadow-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[15px] font-medium text-neutral-900">{precio.titulo}</p>
-                      <p className="text-[15px] font-semibold" style={{ color: BRAND }}>
-                        {formatARS(precio.monto)}
-                      </p>
-                    </div>
+              <div className="px-4 pb-5 space-y-4">
+                {cargandoPrecios && (
+                  <p className="text-sm text-neutral-500">Cargando precios…</p>
+                )}
 
-                    <button
-                      onClick={() => handleEditPrecio(precio)}
-                      className="p-2 rounded-xl border border-neutral-200 hover:bg-neutral-50 active:scale-95 transition"
-                      aria-label={`Editar precio ${precio.titulo}`}
-                      title="Editar"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  </article>
-                ))}
+                {!cargandoPrecios && todasEspecialidades.length === 0 && (
+                  <p className="text-sm text-neutral-500">No tenés especialidades asignadas.</p>
+                )}
+
+                {!cargandoPrecios && todasEspecialidades.map((esp) => {
+                  const valores = precios[esp.id_especialidad] || { precio_particular: 0, precio_obra_social: 0, activo: true };
+                  return (
+                    <article key={esp.id_especialidad} className="rounded-2xl bg-white border border-neutral-200 px-4 py-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[15px] font-medium text-neutral-900">
+                          {esp.nombre}
+                          {perfil.especialidad_principal && esp.id_especialidad === perfil.especialidad_principal.id_especialidad && (
+                            <span className="ml-2 text-xs text-neutral-500">(Principal)</span>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="flex flex-col">
+                          <label className="text-xs mb-1">Precio Particular</label>
+                          <input
+                            type="number"
+                            className="border rounded px-3 py-2"
+                            value={valores.precio_particular}
+                            onChange={(e) => setPrecios(prev => ({
+                              ...prev,
+                              [esp.id_especialidad]: {
+                                ...valores,
+                                precio_particular: Number(e.target.value || 0)
+                              }
+                            }))}
+                          />
+                        </div>
+
+                        <div className="flex flex-col">
+                          <label className="text-xs mb-1">Precio Obra Social</label>
+                          <input
+                            type="number"
+                            className="border rounded px-3 py-2"
+                            value={valores.precio_obra_social}
+                            onChange={(e) => setPrecios(prev => ({
+                              ...prev,
+                              [esp.id_especialidad]: {
+                                ...valores,
+                                precio_obra_social: Number(e.target.value || 0)
+                              }
+                            }))}
+                          />
+                        </div>
+
+                        <div className="flex items-end">
+                          <button
+                            className="w-full sm:w-auto px-4 py-2 border border-neutral-300 rounded-xl font-medium text-neutral-700 hover:bg-neutral-50 active:scale-95 transition disabled:opacity-60"
+                            disabled={savingId === esp.id_especialidad}
+                            onClick={async () => {
+                              setSavingId(esp.id_especialidad);
+                              const payload = precios[esp.id_especialidad] || { precio_particular: 0, precio_obra_social: 0, activo: true };
+                              const res = await guardarPrecioUsuarioEspecialidad(esp.id_especialidad, payload);
+                              setSavingId(null);
+                              setMessage({ type: res.success ? 'success' : 'error', text: res.success ? 'Precios guardados' : (res.error || 'Error al guardar') });
+                              setTimeout(() => setMessage(null), 2200);
+                            }}
+                          >
+                            {savingId === esp.id_especialidad ? 'Guardando…' : 'Guardar'}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
           </div>
