@@ -5,28 +5,18 @@ import {
   MessageSquare, 
   BookOpen, 
   Users, 
-  User,
   Plus, 
   Edit, 
   Trash2,
   Search,
   Calendar,
-  CalendarDays,
-  CircleDollarSign,
   ChevronDown,
   ChevronUp
 } from "lucide-react";
 import React from "react";
 
 type TabType = 'manual' | 'contact';
-type AccordionItem =
-  | 'gestion-especialistas'
-  | 'gestion-pacientes'
-  | 'turnos-calendario'
-  | 'perfil-precios'
-  | 'navegacion'
-  | 'proximas-funciones'
-  | null;
+type AccordionItem = 'gestion-especialistas' | 'navegacion' | 'proximas-funciones' | null;
 
 export default function HelpPage() {
   const [activeTab, setActiveTab] = useState<TabType>('manual');
@@ -185,7 +175,7 @@ export default function HelpPage() {
                       </ol>
                       <div className="bg-green-50 p-3 rounded mt-3">
                         <p className="text-green-700 text-sm">
-                          <strong>Consejo:</strong> El color elegido ayudará a identificar rápidamente al especialista en futuras funciones como el calendario.
+                          ✅ <strong>Consejo:</strong> El color elegido ayudará a identificar rápidamente al especialista en futuras funciones como el calendario.
                         </p>
                       </div>
                     </div>
@@ -205,7 +195,7 @@ export default function HelpPage() {
                       </ol>
                       <div className="bg-blue-50 p-3 rounded mt-3">
                         <p className="text-blue-700 text-sm">
-                          <strong>Nota:</strong> Los cambios se aplicarán inmediatamente y la lista se actualizará automáticamente.
+                          ℹ️ <strong>Nota:</strong> Los cambios se aplicarán inmediatamente y la lista se actualizará automáticamente.
                         </p>
                       </div>
                     </div>
@@ -226,219 +216,6 @@ export default function HelpPage() {
                       <div className="bg-red-50 p-3 rounded mt-3">
                         <p className="text-red-700 text-sm">
                           ⚠️ <strong>¡CUIDADO!</strong> Esta acción no se puede deshacer. Se eliminará toda la información asociada al especialista, incluyendo historial futuro de citas y tratamientos.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Gestión de Pacientes */}
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-              <button
-                onClick={() => toggleAccordion('gestion-pacientes')}
-                className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <User className="text-[#9C1838]" size={24} />
-                  <h3 className="text-xl font-bold">Gestión de Pacientes</h3>
-                </div>
-                {openAccordion === 'gestion-pacientes' ? (
-                  <ChevronUp className="text-gray-500" size={20} />
-                ) : (
-                  <ChevronDown className="text-gray-500" size={20} />
-                )}
-              </button>
-
-              {openAccordion === 'gestion-pacientes' && (
-                <div className="px-6 pb-6 border-t border-gray-100">
-                  <div className="space-y-6">
-                    {/* Agregar Paciente */}
-                    <div className="border-l-4 border-green-400 pl-4">
-                      <h4 className="font-semibold flex items-center gap-2 mb-3">
-                        <Plus size={16} className="text-green-600" />
-                        Agregar Nuevo Paciente
-                      </h4>
-                      <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                        <li>Ve a la sección <strong>"Pacientes"</strong> desde el menú</li>
-                        <li>Haz clic en <strong>"Nuevo Paciente"</strong></li>
-                        <li>Completa los campos requeridos:
-                          <ul className="list-disc list-inside ml-6 mt-2 space-y-1">
-                            <li><strong>Nombre</strong> y <strong>Apellido</strong> (requeridos)</li>
-                            <li><strong>DNI</strong> (requerido y único)</li>
-                            <li><strong>Email</strong>, <strong>Teléfono</strong>, <strong>Fecha de nacimiento</strong> y <strong>Dirección</strong> (opcionales)</li>
-                          </ul>
-                        </li>
-                        <li>Presiona <strong>"Crear"</strong> para guardar</li>
-                      </ol>
-                      <div className="bg-green-50 p-3 rounded mt-3">
-                        <p className="text-green-700 text-sm">
-                          El sistema valida formato de email, fecha de nacimiento y unicidad de DNI/Email.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Editar Paciente */}
-                    <div className="border-l-4 border-blue-400 pl-4">
-                      <h4 className="font-semibold flex items-center gap-2 mb-3">
-                        <Edit size={16} className="text-blue-600" />
-                        Editar Paciente
-                      </h4>
-                      <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                        <li>En el listado de pacientes, localiza la fila o tarjeta</li>
-                        <li>Haz clic en <strong>"Editar"</strong></li>
-                        <li>Modifica los datos necesarios y confirma con <strong>"Guardar"</strong></li>
-                      </ol>
-                      <div className="bg-blue-50 p-3 rounded mt-3">
-                        <p className="text-blue-700 text-sm">
-                          Se verifica nuevamente la unicidad de DNI/Email si fueron cambiados.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Desactivar/Eliminar Paciente */}
-                    <div className="border-l-4 border-red-400 pl-4">
-                      <h4 className="font-semibold flex items-center gap-2 mb-3">
-                        <Trash2 size={16} className="text-red-600" />
-                        Desactivar o Eliminar Paciente
-                      </h4>
-                      <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                        <li>En la tarjeta/fila del paciente, clic en <strong>"Eliminar"</strong></li>
-                        <li>Confirma la acción en el diálogo</li>
-                      </ol>
-                      <div className="bg-red-50 p-3 rounded mt-3">
-                        <p className="text-red-700 text-sm">
-                         Si el paciente tiene turnos asociados no se puede eliminar. En ese caso se desactiva (estado inactivo).
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Turnos y Calendario */}
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-              <button
-                onClick={() => toggleAccordion('turnos-calendario')}
-                className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <CalendarDays className="text-[#9C1838]" size={24} />
-                  <h3 className="text-xl font-bold">Turnos y Calendario</h3>
-                </div>
-                {openAccordion === 'turnos-calendario' ? (
-                  <ChevronUp className="text-gray-500" size={20} />
-                ) : (
-                  <ChevronDown className="text-gray-500" size={20} />
-                )}
-              </button>
-
-              {openAccordion === 'turnos-calendario' && (
-                <div className="px-6 pb-6 border-t border-gray-100">
-                  <div className="space-y-6">
-                    {/* Crear Turno */}
-                    <div className="border-l-4 border-green-400 pl-4">
-                      <h4 className="font-semibold flex items-center gap-2 mb-3">
-                        <Plus size={16} className="text-green-600" />
-                        Crear un Nuevo Turno
-                      </h4>
-                      <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                        <li>Ir a <strong>"Turnos"</strong> o abrir el <strong>Calendario</strong></li>
-                        <li>Elegir <strong>Paciente</strong>, <strong>Especialista</strong> y <strong>Especialidad</strong></li>
-                        <li>Seleccionar <strong>Fecha</strong> y <strong>Hora</strong>; opcional <strong>Box</strong> y <strong>Observaciones</strong></li>
-                        <li>Confirmar con <strong>"Crear"</strong></li>
-                      </ol>
-                      <div className="bg-green-50 p-3 rounded mt-3">
-                        <p className="text-green-700 text-sm">
-                          El sistema verifica disponibilidad del especialista y box. Si hay conflicto, mostrará un error y no permitirá crear el turno.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Editar Turno */}
-                    <div className="border-l-4 border-blue-400 pl-4">
-                      <h4 className="font-semibold flex items-center gap-2 mb-3">
-                        <Edit size={16} className="text-blue-600" />
-                        Editar un Turno
-                      </h4>
-                      <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                        <li>Desde el listado o calendario, abrir el turno</li>
-                        <li>Clic en <strong>"Editar"</strong>, modificar datos necesarios</li>
-                        <li>Al cambiar fecha/hora/especialista/box se vuelve a <strong>verificar disponibilidad</strong></li>
-                        <li>Guardar para aplicar los cambios</li>
-                      </ol>
-                      <div className="bg-blue-50 p-3 rounded mt-3">
-                        <p className="text-blue-700 text-sm">
-                          Los cambios actualizan la agenda y se reflejan en la vista del día y listados.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Cancelar / Atendido */}
-                    <div className="border-l-4 border-yellow-400 pl-4">
-                      <h4 className="font-semibold mb-3">Cancelar y Marcar como Atendido</h4>
-                      <ul className="list-disc list-inside ml-2 space-y-2 text-gray-600">
-                        <li><strong>Cancelar:</strong> disponible para turnos <em>programados</em> y <em>futuros</em>.</li>
-                        <li><strong>Atendido:</strong> aparece para turnos <em>programados</em> que ya pasaron.</li>
-                        <li><strong>Eliminar:</strong> elimina definitivamente el turno (acción irreversible).</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Perfil y Precios */}
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
-              <button
-                onClick={() => toggleAccordion('perfil-precios')}
-                className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <CircleDollarSign className="text-[#9C1838]" size={24} />
-                  <h3 className="text-xl font-bold">Perfil y Precios</h3>
-                </div>
-                {openAccordion === 'perfil-precios' ? (
-                  <ChevronUp className="text-gray-500" size={20} />
-                ) : (
-                  <ChevronDown className="text-gray-500" size={20} />
-                )}
-              </button>
-
-              {openAccordion === 'perfil-precios' && (
-                <div className="px-6 pb-6 border-t border-gray-100">
-                  <div className="space-y-6">
-                    {/* Editar Perfil */}
-                    <div className="border-l-4 border-blue-400 pl-4">
-                      <h4 className="font-semibold flex items-center gap-2 mb-3">
-                        <Edit size={16} className="text-blue-600" />
-                        Editar Datos del Perfil
-                      </h4>
-                      <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                        <li>Ir a <strong>"Perfil"</strong></li>
-                        <li>Clic en <strong>"Editar Perfil"</strong></li>
-                        <li>Actualizar <strong>Nombre</strong>, <strong>Apellido</strong>, <strong>Teléfono</strong> y <strong>Color</strong></li>
-                        <li>Guardar cambios</li>
-                      </ol>
-                    </div>
-
-                    {/* Precios por Especialidad */}
-                    <div className="border-l-4 border-green-400 pl-4">
-                      <h4 className="font-semibold flex items-center gap-2 mb-3">
-                        <CircleDollarSign size={16} className="text-green-600" />
-                        Configurar Precios por Consulta
-                      </h4>
-                      <ol className="list-decimal list-inside space-y-2 text-gray-600">
-                        <li>En la sección <strong>"Precios"</strong>, expandir una especialidad</li>
-                        <li>Elegir <strong>Plan</strong>: <em>Particular</em> u <em>Obra Social</em></li>
-                        <li>Ingresar el <strong>monto</strong> correspondiente</li>
-                        <li>Presionar <strong>"Guardar"</strong></li>
-                      </ol>
-                      <div className="bg-green-50 p-3 rounded mt-3">
-                        <p className="text-green-700 text-sm">
-                          Los precios se guardan por especialidad y plan, y se utilizan al gestionar turnos y presupuestos.
                         </p>
                       </div>
                     </div>
@@ -500,7 +277,7 @@ export default function HelpPage() {
                         <div className="flex items-start gap-3">
                           <div className="w-3 h-3 bg-[#9C1838] rounded-full mt-1"></div>
                           <div>
-                            <p className="font-medium">Barra de herramientas inferior</p>
+                            <p className="font-medium">Navbar Inferior</p>
                             <p className="text-gray-600 text-sm">Barra de navegación en la parte inferior con iconos y etiquetas</p>
                           </div>
                         </div>
@@ -514,11 +291,23 @@ export default function HelpPage() {
                         <div className="flex items-start gap-3">
                           <div className="w-3 h-3 bg-[#9C1838] rounded-full mt-1"></div>
                           <div>
-                            <p className="font-medium">Pop-Ups Táctiles</p>
+                            <p className="font-medium">Diálogos Táctiles</p>
                             <p className="text-gray-600 text-sm">Formularios optimizados para pantalla táctil</p>
                           </div>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 bg-gray-50 p-4 rounded-lg">
+                    <h5 className="font-semibold mb-2">Iconos del Menú Principal:</h5>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-gray-600">
+                      <div>Inicio</div>
+                      <div>Listados</div>
+                      <div>Agregar</div>
+                      <div>Calendario</div>
+                      <div>Perfil</div>
+                      <div>Especialistas</div>
                     </div>
                   </div>
                 </div>
@@ -546,10 +335,20 @@ export default function HelpPage() {
                 <div className="px-6 pb-6 border-t border-gray-100">
                   <div className="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
                     <p className="text-yellow-800 mb-4 font-medium">
-                      <strong>En desarrollo activo:</strong> Estas funciones estarán disponibles próximamente:
+                      <strong>En desarrollo activo:</strong> Estas funciones se están desarrollando y estarán disponibles próximamente:
                     </p>
                     
                     <div className="space-y-4">
+                      <div className="border border-yellow-200 rounded p-3 bg-white">
+                        <h5 className="font-semibold text-yellow-800 mb-2">Gestión de Pacientes</h5>
+                        <p className="text-yellow-700 text-sm">Sistema completo para registrar y gestionar información de pacientes, historiales médicos y datos de contacto.</p>
+                      </div>
+                      
+                      <div className="border border-yellow-200 rounded p-3 bg-white">
+                        <h5 className="font-semibold text-yellow-800 mb-2">Sistema de Turnos y Calendario</h5>
+                        <p className="text-yellow-700 text-sm">Calendario interactivo para agendar, modificar y cancelar citas con los especialistas.</p>
+                      </div>
+                      
                       <div className="border border-yellow-200 rounded p-3 bg-white">
                         <h5 className="font-semibold text-yellow-800 mb-2">Historiales Médicos</h5>
                         <p className="text-yellow-700 text-sm">Registro detallado de tratamientos, evolución de pacientes y notas médicas.</p>
@@ -574,6 +373,122 @@ export default function HelpPage() {
         </div>
       )}
 
+      {/* Formulario de Contacto
+      {activeTab === 'contact' && (
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+            <h2 className="text-2xl font-bold mb-4 text-[#9C1838]">
+              Contactar Soporte Técnico
+            </h2>
+            
+            <div className="bg-blue-50 p-4 rounded-lg mb-6 border-l-4 border-blue-400">
+              <p className="text-blue-800">
+                ¿Encontraste un problema o tienes una sugerencia? Completa el formulario 
+                y nuestro equipo te ayudará lo antes posible.
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre completo *
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    placeholder="Tu nombre completo"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                    Correo electrónico *
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="tu@email.com"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
+                  Asunto *
+                </label>
+                <select
+                  id="subject"
+                  name="subject"
+                  value={formData.subject}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors"
+                  required
+                >
+                  <option value="">Selecciona un tipo de consulta</option>
+                  <option value="bug">Reportar un error/bug</option>
+                  <option value="feature">Solicitar nueva función</option>
+                  <option value="help">Ayuda con el uso del sistema</option>
+                  <option value="account">Problemas de cuenta</option>
+                  <option value="other">Otro</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
+                  Mensaje *
+                </label>
+                <textarea
+                  id="message"
+                  name="message"
+                  value={formData.message}
+                  onChange={handleInputChange}
+                  placeholder="Describe tu consulta o problema en detalle..."
+                  rows={6}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors"
+                  required
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Incluye toda la información relevante: pasos que seguiste, mensajes de error, etc.
+                </p>
+              </div>
+
+              {submitStatus.message && (
+                <div
+                  className={`p-4 rounded-lg border ${
+                    submitStatus.success
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-red-50 text-red-700 border-red-200"
+                  }`}
+                >
+                  {submitStatus.message}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={isSubmitting}
+                  className="px-8"
+                >
+                  {isSubmitting ? "Enviando..." : "Enviar Mensaje"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div> 
+         )}*/}
     </div>
   );
 }
