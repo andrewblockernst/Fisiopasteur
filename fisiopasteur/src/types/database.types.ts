@@ -200,6 +200,7 @@ export type Database = {
           notas: string | null
           observaciones: string | null
           precio: number | null
+          tipo_plan: string | null
           updated_at: string | null
         }
         Insert: {
@@ -215,6 +216,7 @@ export type Database = {
           notas?: string | null
           observaciones?: string | null
           precio?: number | null
+          tipo_plan?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -230,6 +232,7 @@ export type Database = {
           notas?: string | null
           observaciones?: string | null
           precio?: number | null
+          tipo_plan?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -268,7 +271,7 @@ export type Database = {
           activo: boolean | null
           apellido: string
           color: string | null
-          contraseña: string
+          contraseña: string
           created_at: string | null
           email: string
           id_especialidad: number | null
@@ -332,18 +335,30 @@ export type Database = {
           id_especialidad: number
           id_usuario: string
           id_usuario_especialidad: number
+          precio_particular: number | null
+          precio_obra_social: number | null
+          activo: boolean | null
+          updated_at: string | null
         }
         Insert: {
           fecha_asignacion?: string | null
           id_especialidad: number
           id_usuario: string
           id_usuario_especialidad?: number
+          precio_particular?: number | null
+          precio_obra_social?: number | null
+          activo?: boolean | null
+          updated_at?: string | null
         }
         Update: {
           fecha_asignacion?: string | null
           id_especialidad?: number
           id_usuario?: string
           id_usuario_especialidad?: number
+          precio_particular?: number | null
+          precio_obra_social?: number | null
+          activo?: boolean | null
+          updated_at?: string | null
         }
         Relationships: [
           {
