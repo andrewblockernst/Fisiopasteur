@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad } from "@/lib/actions/turno.action";
+import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista} from "@/lib/actions/turno.action";
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onTurnoCreated?: () => void; // <-- Callback opcional para recargar
-  fechaSeleccionada?: Date | null; // <-- Opcional
-  especialistas?: any[]; // <-- Opcional
-  pacientes?: any[]; // <-- Opcional
+  onTurnoCreated?: () => void;
+  fechaSeleccionada?: Date | null;
+  especialistas?: any[];
+  pacientes?: any[];
 }
 
 export function NuevoTurnoModal({
@@ -40,6 +40,8 @@ export function NuevoTurnoModal({
   const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
+  const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
 
   // Dialog para mensajes (reemplaza los toasts)
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
@@ -145,6 +147,53 @@ export function NuevoTurnoModal({
     })();
   }, [formData.id_especialista, formData.id_especialidad, formData.tipo_plan]);
 
+  // Verificar horarios ocupados cuando cambia especialista o fecha
+  useEffect(() => {
+    const verificarHorariosOcupados = async () => {
+      if (!formData.id_especialista || !formData.fecha) {
+        setHorasOcupadas([]);
+        return;
+      }
+
+      setVerificandoDisponibilidad(true);
+      try {
+        const res = await obtenerAgendaEspecialista(formData.id_especialista, formData.fecha);
+        if (res.success && res.data) {
+          // Generar lista de horas ocupadas considerando duración de turnos (1 hora por defecto)
+          const ocupadas: string[] = [];
+          
+          res.data.forEach((turno: any) => {
+            if (turno.estado !== 'cancelado') {
+              const [horas, minutos] = turno.hora.split(':').map(Number);
+              const inicioTurno = new Date();
+              inicioTurno.setHours(horas, minutos, 0, 0);
+              
+              // Duración del turno (1 hora por defecto, se puede personalizar)
+              const duracionTurno = 60; // minutos
+              const finTurno = new Date(inicioTurno.getTime() + (duracionTurno * 60000));
+              
+              // Marcar todos los slots de tiempo ocupados en intervalos de 15 minutos
+              const inicioSlot = new Date(inicioTurno);
+              while (inicioSlot < finTurno) {
+                const horaStr = inicioSlot.toTimeString().slice(0, 5); // "HH:MM"
+                ocupadas.push(horaStr);
+                inicioSlot.setMinutes(inicioSlot.getMinutes() + 15); // Intervalos de 15 min
+              }
+            }
+          });
+          
+          setHorasOcupadas(ocupadas);
+        }
+      } catch (error) {
+        console.error('Error verificando horarios:', error);
+      } finally {
+        setVerificandoDisponibilidad(false);
+      }
+    };
+
+    verificarHorariosOcupados();
+  }, [formData.id_especialista, formData.fecha]);
+
   // Limpiar campos al cerrar
   useEffect(() => {
     if (!isOpen) {
@@ -161,6 +210,63 @@ export function NuevoTurnoModal({
       setEspecialidadesDisponibles([]);
     }
   }, [isOpen]);
+
+  // Función para verificar si una hora específica está disponible
+  const esHoraDisponible = (hora: string): boolean => {
+    if (!hora || horasOcupadas.length === 0) return true;
+    
+    // Verificar si la hora exacta está ocupada
+    if (horasOcupadas.includes(hora)) return false;
+    
+    // Verificar si hay conflicto con turnos existentes (duración de 1 hora)
+    const [horas, minutos] = hora.split(':').map(Number);
+    const inicioNuevoTurno = new Date();
+    inicioNuevoTurno.setHours(horas, minutos, 0, 0);
+    
+    // Verificar conflictos con slots ocupados
+    for (let i = 0; i < 4; i++) { // 4 slots de 15 min = 1 hora
+      const slotTiempo = new Date(inicioNuevoTurno.getTime() + (i * 15 * 60000));
+      const slotStr = slotTiempo.toTimeString().slice(0, 5);
+      if (horasOcupadas.includes(slotStr)) {
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
+  // Generar opciones de hora disponibles
+  const generarOpcionesHora = (): { value: string; label: string; disponible: boolean }[] => {
+    const opciones = [];
+    
+    // Horarios de 6:00 a 22:00 en intervalos de 15 minutos
+    for (let h = 6; h <= 22; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        const hora = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        const disponible = esHoraDisponible(hora);
+        
+        // Si es hora pasada (solo para fecha de hoy), no mostrar
+        if (formData.fecha === new Date().toISOString().split('T')[0]) {
+          const ahora = new Date();
+          const [horaNum, minNum] = hora.split(':').map(Number);
+          const horaTurno = new Date();
+          horaTurno.setHours(horaNum, minNum, 0, 0);
+          
+          if (horaTurno <= ahora) {
+            continue; // Saltar horas pasadas
+          }
+        }
+        
+        opciones.push({
+          value: hora,
+          label: hora,
+          disponible
+        });
+      }
+    }
+    
+    return opciones;
+  };
 
   const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
@@ -262,24 +368,49 @@ export function NuevoTurnoModal({
               <input
                 type="date"
                 value={formData.fecha}
-                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
+                min={new Date().toISOString().split('T')[0]}
               />
             </div>
 
             {/* Hora */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hora *
+                Hora * {verificandoDisponibilidad && <span className="text-xs text-gray-500">(Verificando disponibilidad...)</span>}
               </label>
-              <input
-                type="time"
+              <select
                 value={formData.hora}
                 onChange={(e) => setFormData(prev => ({ ...prev, hora: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
-              />
+                disabled={!formData.id_especialista || !formData.fecha || verificandoDisponibilidad}
+              >
+                <option value="">
+                  {!formData.id_especialista ? "Primero selecciona un especialista" : 
+                   !formData.fecha ? "Primero selecciona una fecha" : 
+                   "Seleccionar hora"}
+                </option>
+                {generarOpcionesHora().map(({ value, label, disponible }) => (
+                  <option 
+                    key={value} 
+                    value={value}
+                    disabled={!disponible}
+                    style={{ 
+                      color: disponible ? 'black' : '#ccc',
+                      backgroundColor: disponible ? 'white' : '#f5f5f5'
+                    }}
+                  >
+                    {label} {!disponible && '(Ocupado)'}
+                  </option>
+                ))}
+              </select>
+              {formData.id_especialista && formData.fecha && horasOcupadas.length > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {generarOpcionesHora().filter(h => h.disponible).length} horarios disponibles
+                </p>
+              )}
             </div>
 
             {/* Especialista */}
@@ -289,7 +420,7 @@ export function NuevoTurnoModal({
               </label>
               <select
                 value={formData.id_especialista}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
               >
@@ -408,7 +539,7 @@ export function NuevoTurnoModal({
         primaryButton={{
           text: isSubmitting ? "Creando..." : "Crear Turno",
           onClick: handleSubmit,
-          disabled: isSubmitting,
+          disabled: isSubmitting || !esHoraDisponible(formData.hora),
         }}
         secondaryButton={{
           text: "Cancelar",
