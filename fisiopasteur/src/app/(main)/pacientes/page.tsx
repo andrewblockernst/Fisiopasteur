@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { PacientesTable } from "@/componentes/paciente/paciente-listado";
 import { getPacientes } from "@/lib/actions/paciente.action";
 import type { Tables } from "@/types/database.types";

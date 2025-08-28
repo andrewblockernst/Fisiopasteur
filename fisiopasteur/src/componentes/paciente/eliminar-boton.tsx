@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Button from "../boton";
-import { deleteEspecialista } from "@/lib/actions/especialista.action";
 import BaseDialog from "../dialog/base-dialog";
 import { deletePaciente } from "@/lib/actions/paciente.action";
 
@@ -36,7 +35,7 @@ export function DeletePacienteButton({id, nombre, onDeleted}: DeletePacienteButt
         <>
             <Button
                 variant="danger"
-                className="text-xs flex-1 sm:flex-none"
+                className="text-xs px-3 py-2 h-8 flex-1 min-w-20 sm:flex-none sm:min-w-16 lg:px-8 lg:py-2 flex items-center justify-center"
                 onClick={() => setShowDialog(true)}
                 disabled={isDeleting}
             >
@@ -51,7 +50,7 @@ export function DeletePacienteButton({id, nombre, onDeleted}: DeletePacienteButt
                         ¿Estás seguro de que deseas eliminar al paciente "<b>{nombre}</b>"?
                         <br />
                         <i style={{ marginTop: 12, display: "block", fontSize: 12, fontWeight: "bold" }}>
-                        Esta acción no se puede deshacer y se perderán todos los datos asociados a este especialista.
+                        Esta acción no se puede deshacer.
                         </i>
                     </>
                 }

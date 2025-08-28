@@ -83,7 +83,9 @@ export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit }: Con
                                 <div className="space-y-4">
                                     <div>
                                         <label className="text-sm font-medium text-gray-500">Fecha de nacimiento</label>
-                                        <p className="text-gray-900">{formatDate(viewingPaciente.fecha_nacimiento)}</p>
+                                        <p className="text-gray-900">{viewingPaciente.fecha_nacimiento ? 
+                                            viewingPaciente.fecha_nacimiento.split('-').reverse().join('/') : '...'
+                                        }</p>
                                     </div>
                                     
                                     <div className="grid grid-cols-2 gap-4">
@@ -173,15 +175,14 @@ export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit }: Con
                                     >
                                         Editar
                                     </button>
-                                    <DeletePacienteButton 
-                                        id={viewingPaciente.id_paciente}
-                                        nombre={`${viewingPaciente.nombre} ${viewingPaciente.apellido}`}
-                                        onDeleted={() => {
-                                            onClose();
-                                                // if (onPacienteDeleted) onPacienteDeleted();
-                                            }}
-                                        />
-                                    
+                                        <DeletePacienteButton 
+                                            id={viewingPaciente.id_paciente}
+                                            nombre={`${viewingPaciente.nombre} ${viewingPaciente.apellido}`}
+                                            onDeleted={() => {
+                                                onClose();
+                                                    // if (onPacienteDeleted) onPacienteDeleted();
+                                                }}
+                                            />
                                 </div>
                             </div>
                         </div>
