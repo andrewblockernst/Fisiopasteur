@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { resetPassword } from "@/lib/actions/auth.action";
 import Boton from "@/componentes/boton"; 
+import { useRouter } from "next/navigation";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -36,9 +38,19 @@ export default function ForgotPasswordPage() {
           onChange={(e) => setEmail(e.target.value)}
           className="w-full px-3 py-2 border rounded"
         />
-        <Boton variant="primary" type="submit" className="w-full">
-          Enviar link
-        </Boton>
+        <div className="flex gap-2">
+          <Boton variant="primary" type="submit" className="w-full">
+            Enviar link
+          </Boton>
+          <Boton
+            variant="secondary"
+            type="button"
+            className="w-full"
+            onClick={() => router.push("/login")}
+          >
+            Cancelar
+          </Boton>
+        </div>
         {message && <p className="text-green-600 text-sm">{message}</p>}
         {error && <p className="text-red-600 text-sm">{error}</p>}
       </form>
