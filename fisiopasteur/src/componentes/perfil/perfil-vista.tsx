@@ -5,9 +5,10 @@ import { PerfilCompleto, actualizarPerfil, obtenerPreciosUsuarioEspecialidades, 
 import { useToastStore } from '@/stores/toast-store';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Pencil, X, Phone, CalendarDays, Mail, User, CircleDollarSign, ChevronDown
+  ArrowLeft, Pencil, X, Phone, CalendarDays, Mail, User, CircleDollarSign, ChevronDown, LogOut
 } from 'lucide-react';
 import Button from '../boton';
+import { handleCerrarSesion } from '@/lib/actions/logOut.action';
 
 interface PerfilClienteProps {
   perfil: PerfilCompleto;
@@ -80,10 +81,13 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
   };
 
   const handleEditPrecio = (precio: { id: number; titulo: string; monto: number }) => {
-    console.log('Editar precio', precio);
   };
 
   const handleBack = () => router.push('/inicio');
+
+  const onCerrarSesion = () => {
+    handleCerrarSesion(router);
+  };
 
   /* ============ VISTA DE EDICIÓN ============ */
   if (isEditing) {
@@ -232,15 +236,25 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
             <ArrowLeft className="w-6 h-6" />
           </button>
           <h1 className="text-lg font-semibold">Perfil</h1>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white"
-            style={{ backgroundColor: BRAND }}
-            aria-label="Editar perfil"
-            title="Editar perfil"
-          >
-            <Pencil className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onCerrarSesion}
+              className="p-2 rounded-md active:scale-95 transition hover:bg-red-50 text-red-600"
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white"
+              style={{ backgroundColor: BRAND }}
+              aria-label="Editar perfil"
+              title="Editar perfil"
+            >
+              <Pencil className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </header>
 
