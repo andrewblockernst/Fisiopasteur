@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { CalendarioTurnos } from "@/componentes/calendario/calendario-turnos";
-import { DayViewModal } from "@/componentes/calendario/dayview-dialog";
-import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-modal";
+import { DayViewModal } from "@/componentes/calendario/dia-vista-dialog";
+import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import { useTurnoStore, type TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
 import { Calendar, Users, Clock, Filter, ArrowLeft, Plus } from "lucide-react";
