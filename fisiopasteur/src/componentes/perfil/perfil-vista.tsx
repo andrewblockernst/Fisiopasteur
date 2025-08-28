@@ -80,7 +80,6 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
   };
 
   const handleEditPrecio = (precio: { id: number; titulo: string; monto: number }) => {
-    console.log('Editar precio', precio);
   };
 
   const handleBack = () => router.push('/inicio');
