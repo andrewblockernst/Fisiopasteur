@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import NuevoTurnoDialog from "@/componentes/turnos/nuevo-turno-modal";
+import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import AccionesTurno from "@/componentes/turnos/acciones-turno";
 import Button from "../boton";
 
@@ -103,8 +103,12 @@ const getRowClassName = (turno: any) => {
         </table>
       </div>
 
-      <NuevoTurnoDialog open={openNew} onClose={() => setOpenNew(false)}
-      onCreated={() => window.location.reload()} />
+      <NuevoTurnoModal 
+        isOpen={openNew} 
+        onClose={() => setOpenNew(false)}
+        onTurnoCreated={() => window.location.reload()}
+        // fechaSeleccionada opcional - si no se pasa, el modal permite elegir cualquier fecha
+      />
     </div>
   );
 }
