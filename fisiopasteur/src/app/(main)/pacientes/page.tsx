@@ -68,7 +68,7 @@ export default function PacientePage() {
                         className="mr-3 p-1"
                         onClick={() => {handleReturnMobile()}}
                     >
-                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                         </svg>
                     </button>
@@ -84,6 +84,7 @@ export default function PacientePage() {
                     <div className="flex gap-2">
                         <div className="relative flex-1">
                             <input
+                                name="search"
                                 type="text"
                                 placeholder="Buscar"
                                 className="w-full px-4 py-2 bg-gray-100 border-0 rounded-lg focus:outline-none focus:ring-0 focus:bg-white focus:shadow-sm transition-all duration-200"
@@ -97,6 +98,7 @@ export default function PacientePage() {
                         
                         {/* Dropdown de filtro */}
                         <select
+                            name="filter"
                             value={filter}
                             onChange={(e) => setFilter(e.target.value as Filter)}
                             className="bg-[#9C1838] text-white px-3 py-2 rounded-lg text-sm font-medium border-0 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:ring-opacity-50"
@@ -128,6 +130,7 @@ export default function PacientePage() {
                                     <Search className="h-4 w-4 text-gray-400" />
                                 </div>
                                 <input
+                                    name="search"
                                     type="text"
                                     placeholder="Buscar por nombre o apellido..."
                                     className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors duration-200"
@@ -151,13 +154,14 @@ export default function PacientePage() {
                                     <span className="text-sm font-medium">Estado:</span>
                                 </div>
                                 <select
+                                    name="filter"
                                     value={filter}
                                     onChange={(e) => setFilter(e.target.value as Filter)}
                                     className="px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors duration-200 cursor-pointer"
                                 >
-                                    <option value="activos">Activos</option>
-                                    <option value="inactivos">Inactivos</option>
-                                    <option value="todos">Todos</option>
+                                    <option id="filter-activos" value="activos">Activos</option>
+                                    <option id="filter-inactivos" value="inactivos">Inactivos</option>
+                                    <option id="filter-todos" value="todos">Todos</option>
                                 </select>
                             </div>
                         </div>
