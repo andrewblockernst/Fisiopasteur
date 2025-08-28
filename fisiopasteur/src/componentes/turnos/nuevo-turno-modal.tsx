@@ -32,6 +32,8 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
   const [pacienteId, setPacienteId] = useState<number | "">("");
   const [especialistaId, setEspecialistaId] = useState<string | "">("");
   const [especialidadId, setEspecialidadId] = useState<number | "">("");
+  const [tipoPlan, setTipoPlan] = useState<'particular' | 'obra_social'>('particular');
+  const [precio, setPrecio] = useState<string>("");
   const [boxId, setBoxId] = useState<number | "">("");
   const [fecha, setFecha] = useState("");
   const [hora, setHora] = useState("");
@@ -54,6 +56,8 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
     setPacienteId("");
     setEspecialistaId("");
     setEspecialidadId("");
+    setTipoPlan('particular');
+    setPrecio("");
     setBoxId("");
     setFecha("");
     setHora("");
@@ -127,6 +131,18 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
     }
   }, [especialistaId, especialistas, especialidades, especialidadId]);
 
+  // Autocompletar precio según especialista + especialidad + plan
+  useEffect(() => {
+    (async () => {
+      if (!especialistaId || !especialidadId || !tipoPlan) return;
+      try {
+        const { obtenerPrecioEspecialidad } = await import('@/lib/actions/turno.action');
+        const res = await obtenerPrecioEspecialidad(String(especialistaId), Number(especialidadId), tipoPlan);
+        if (res.success) setPrecio(res.precio != null ? String(res.precio) : "");
+      } catch {}
+    })();
+  }, [especialistaId, especialidadId, tipoPlan]);
+
   // Filtrar horas ocupadas y pasadas
   useEffect(() => {
     if (!especialistaId || !fecha) {
@@ -194,6 +210,8 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
         id_box: typeof boxId === "number" ? boxId : null,
         fecha,
         hora,
+        precio: precio ? Number(precio) : null,
+        tipo_plan: tipoPlan,
         estado: "programado",
         observaciones,
       } as any);
@@ -287,6 +305,19 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
               )}
             </div>
 
+            {/* Plan */}
+            <div className="flex flex-col">
+              <label className="text-xs mb-1">Plan</label>
+              <select
+                className="border rounded px-3 py-2"
+                value={tipoPlan}
+                onChange={e => setTipoPlan(e.target.value as 'particular' | 'obra_social')}
+              >
+                <option value="particular">Particular</option>
+                <option value="obra_social">Obra Social</option>
+              </select>
+            </div>
+
             {/* Box (opcional) */}
             <div className="flex flex-col">
               <label className="text-xs mb-1">Box (opcional)</label>
@@ -327,6 +358,18 @@ export default function NuevoTurnoDialog({ open, onClose, onCreated }: Props) {
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Precio */}
+            <div className="flex flex-col">
+              <label className="text-xs mb-1">Precio (ARS)</label>
+              <input
+                type="number"
+                className="border rounded px-3 py-2"
+                value={precio}
+                onChange={e => setPrecio(e.target.value)}
+                placeholder="0"
+              />
             </div>
 
             {/* Observaciones */}
