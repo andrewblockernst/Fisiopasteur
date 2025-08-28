@@ -55,7 +55,7 @@ export async function sincronizarUsuarioAuth() {
             apellido: user.user_metadata?.apellido || 'Nuevo',
             email: user.email || '',
             usuario: user.email?.split('@')[0] || 'usuario',
-            contraseña: '',
+            contraseña: '',
             id_rol: 1,
             created_at: new Date().toISOString()
           })

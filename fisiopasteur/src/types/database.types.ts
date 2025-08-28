@@ -271,7 +271,7 @@ export type Database = {
           activo: boolean | null
           apellido: string
           color: string | null
-          contraseña: string
+          contraseña: string
           created_at: string | null
           email: string
           id_especialidad: number | null

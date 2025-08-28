@@ -144,7 +144,8 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
       telefono: formData.get("telefono") as string || null,
       email,
       usuario: formData.get("usuario") as string,
-      contraseña: contraseña,
+      // Usar la columna real 'contraseña' (U+00F1) en la DB
+      contraseña: contraseña,
       color: formData.get("color") as string || null,
       id_rol: 2,
     };
@@ -275,14 +276,13 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
 
     // Solo actualizar contraseña si se proporciona
     const contraseña = formData.get("contraseña") as string;
-    if (contraseña && contraseña.trim() !== "") {
-      updateData.contraseña = contraseña;
-    }
+    // Si viene una nueva contraseña, combinarla en el payload usando la clave correcta
+    const passwordPatch = contraseña && contraseña.trim() !== "" ? { contraseña } : {};
 
     // Actualizar el usuario
     const { error: errorUsuario } = await supabase
       .from("usuario")
-      .update(updateData)
+      .update({ ...updateData, ...passwordPatch })
       .eq("id_usuario", id)
       .eq("id_rol", 2);
 
