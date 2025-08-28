@@ -33,6 +33,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
   const [pacientes, setPacientes] = useState<any[]>([]);
   const [especialistas, setEspecialistas] = useState<any[]>([]);
   const [especialidades, setEspecialidades] = useState<any[]>([]);
+  const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
 
   // Estado para mostrar mensajes personalizados en el modal
@@ -49,10 +50,38 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
       ]);
       if (p.success) setPacientes(p.data || []);
       if (e.success) setEspecialistas(e.data || []);
-      if (esp.success) setEspecialidades(esp.data || []);
+      if (esp.success) {
+        setEspecialidades(esp.data || []);
+        setEspecialidadesDisponibles(esp.data || []);
+      }
       if (b.success) setBoxes(b.data || []);
     })();
   }, [open]);
+
+  // Filtrar especialidades según especialista seleccionado
+  useEffect(() => {
+    if (!especialistaId || !especialistas.length) {
+      setEspecialidadesDisponibles(especialidades);
+      return;
+    }
+    const especialistaSeleccionado = especialistas.find(e => e.id_usuario === especialistaId);
+    if (especialistaSeleccionado) {
+      const lista: any[] = [];
+      if (especialistaSeleccionado.especialidad) lista.push(especialistaSeleccionado.especialidad);
+      if (especialistaSeleccionado.usuario_especialidad) {
+        especialistaSeleccionado.usuario_especialidad.forEach((ue: any) => {
+          if (ue.especialidad) lista.push(ue.especialidad);
+        });
+      }
+      const unicas = lista.filter((esp, i, arr) => i === arr.findIndex((e: any) => e.id_especialidad === esp.id_especialidad));
+      setEspecialidadesDisponibles(unicas);
+      if (especialidadId && !unicas.some((e: any) => e.id_especialidad === especialidadId)) {
+        setEspecialidadId("");
+      }
+    } else {
+      setEspecialidadesDisponibles([]);
+    }
+  }, [especialistaId, especialistas, especialidades, especialidadId]);
 
   const onSubmit = () => {
     if (!pacienteId || !especialistaId || !especialidadId || !fecha || !hora) {
@@ -154,7 +183,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
                 required
               >
                 <option value="">Seleccionar…</option>
-                {especialidades.map(esp => (
+                {especialidadesDisponibles.map((esp: any) => (
                   <option key={esp.id_especialidad} value={esp.id_especialidad}>
                     {esp.nombre}
                   </option>

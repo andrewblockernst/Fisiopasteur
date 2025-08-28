@@ -194,7 +194,7 @@ export function DayViewModal({
         <EditarTurnoDialog
           turno={{
             id_turno: turnoEditando.id_turno,
-            id_paciente: turnoEditando.id_paciente,
+            id_paciente: turnoEditando.id_paciente ?? 0,
             id_especialista: turnoEditando.id_especialista || null,
             id_especialidad: turnoEditando.id_especialidad || null,
             id_box: (turnoEditando as any).id_box ?? null,
