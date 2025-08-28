@@ -16,10 +16,12 @@ interface BaseDialogProps {
   primaryButton?: {
     text: string;
     onClick: () => void;
+    disabled?: boolean;
   };
   secondaryButton?: {
     text: string;
     onClick: () => void;
+    disabled?: boolean;
   };
   onClose?: () => void;
   showCloseButton?: boolean;
@@ -160,6 +162,7 @@ return (
                       secondaryButton.onClick();
                     }, 300);
                   }}
+                  disabled={secondaryButton.disabled}
                 >
                   {secondaryButton.text}
                 </Button>
@@ -168,6 +171,7 @@ return (
                 <Button
                   variant="primary"
                   onClick={primaryButton.onClick}
+                  disabled={primaryButton.disabled} 
                 >
                   {primaryButton.text}
                 </Button>
@@ -189,6 +193,7 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    padding: 1rem; /* margen interno en mobile para no tocar bordes */
     animation: ${props => props.$isAnimating ? 'fadeOut 0.3s ease-out forwards' : 'fadeIn 0.3s ease-out'};
   }
 
@@ -209,6 +214,17 @@ const StyledWrapper = styled.div<{ colors: any; size: DialogSize; $isAnimating: 
   @media (min-width: 640px) {
     .dialog-container {
       padding: 2rem;
+    }
+  }
+
+  /* Ajustes mobile: ocupar ancho disponible con márgenes del overlay */
+  @media (max-width: 639px) {
+    .dialog-container {
+      width: 100%;
+      max-width: 100%;
+      border-radius: 12px;
+      padding: 1rem;
+      max-height: calc(100dvh - 2rem);
     }
   }
 

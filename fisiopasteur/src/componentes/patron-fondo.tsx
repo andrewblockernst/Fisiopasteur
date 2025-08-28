@@ -1,9 +1,9 @@
-interface BackgroundPatternProps {
+interface PatronFondoProps {
   children: React.ReactNode;
   className?: string;
 }
 
-export default function BackgroundPattern({ children, className = "" }: BackgroundPatternProps) {
+export default function PatronFondo({ children, className = "" }: PatronFondoProps) {
   return (
     <div className={`min-h-screen w-full bg-white relative ${className}`}>
       {/* Noise Texture (Darker Dots) Background */}
