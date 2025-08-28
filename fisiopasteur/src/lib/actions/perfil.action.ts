@@ -196,7 +196,8 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
             apellido: user.user_metadata?.apellido || 'Nuevo',
             email: user.email || '',
             usuario: user.email?.split('@')[0] || 'usuario',
-            contraseña: '', // Campo requerido según tu esquema
+            // Usar la columna real 'contraseña' (U+00F1) en la DB
+            contraseña: '',
             id_rol: 1, // Rol por defecto
             created_at: new Date().toISOString()
           })
