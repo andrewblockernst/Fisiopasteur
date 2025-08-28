@@ -5,36 +5,74 @@ import AccionesTurno from "@/componentes/turnos/acciones-turno";
 import Button from "../boton";
 
 export default function TurnosTable({ turnos }: { turnos: any[] }) {
-  console.log(turnos); // <-- agregá esto temporalmente
+  console.log('Turnos recibidos:', turnos);
   const [openNew, setOpenNew] = useState(false);
 
-  // Función para determinar el color de fondo de la fila
-const getRowClassName = (turno: any) => {
-  let baseClass = "border-t";
-  if (turno.estado === 'atendido') {
-    baseClass += " bg-green-400";
-  }
-  if (turno.estado === 'cancelado') {
-    baseClass += " bg-red-400";
-  }
-  return baseClass;
-};
+  // Función para formatear fecha como DD/MM/YYYY
+  const formatearFecha = (fechaStr: string) => {
+    if (!fechaStr) return '-';
+    const fecha = new Date(fechaStr + 'T00:00:00'); // Evitar problemas de zona horaria
+    return fecha.toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit', 
+      year: 'numeric'
+    });
+  };
 
-  // Ordenar turnos: primero los no atendidos, luego los atendidos al final
+  // Función para formatear hora como HH:MM
+  const formatearHora = (horaStr: string) => {
+    if (!horaStr) return '-';
+    return horaStr.slice(0, 5); // Solo toma HH:MM
+  };
+
+  // Función para determinar el color de fondo de la fila
+  const getRowClassName = (turno: any) => {
+    let baseClass = "border-t hover:bg-gray-50 transition-colors";
+    if (turno.estado === 'atendido') {
+      baseClass += " bg-green-100";
+    }
+    if (turno.estado === 'cancelado') {
+      baseClass += " bg-red-100";
+    }
+    return baseClass;
+  };
+
+  // Función para el estilo del texto según estado
+  const getTextStyle = (turno: any) => {
+    if (turno.estado === 'cancelado') {
+      return "text-gray-500"; // Solo color más suave, sin tachado
+    }
+    return "text-gray-900";
+  };
+
+  // Ordenar turnos: programados primero, luego atendidos, cancelados al final
   const turnosOrdenados = turnos?.sort((a, b) => {
-    // Si uno es atendido y el otro no, el atendido va al final
-    if (a.estado === 'atendido' && b.estado !== 'atendido') return 1;
-    if (b.estado === 'atendido' && a.estado !== 'atendido') return -1;
-    
-    // Si ambos tienen el mismo estado, ordenar por fecha y hora
+    // Prioridad por estado: programado (0), atendido (1), cancelado (2)
+    const prioridadEstado = (estado: string) => {
+      switch (estado) {
+        case 'programado': return 0;
+        case 'atendido': return 1;
+        case 'cancelado': return 2;
+        default: return 3;
+      }
+    };
+
+    const prioridadA = prioridadEstado(a.estado);
+    const prioridadB = prioridadEstado(b.estado);
+
+    // Si tienen diferente estado, ordenar por prioridad
+    if (prioridadA !== prioridadB) {
+      return prioridadA - prioridadB;
+    }
+
+    // Si tienen el mismo estado, ordenar por fecha y hora
     const fechaA = new Date(`${a.fecha}T${a.hora}`);
     const fechaB = new Date(`${b.fecha}T${b.hora}`);
     return fechaA.getTime() - fechaB.getTime();
   }) || [];
 
-
   return (
-    <div className="space-y-3">
+    <div className="bg-white space-y-3">
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-semibold">Turnos</h1>
         <Button
@@ -45,59 +83,71 @@ const getRowClassName = (turno: any) => {
         </Button>
       </div>
 
-      <div className="overflow-auto border rounded">
+      <div className="overflow-auto border rounded-lg">
         <table className="w-full text-sm">
-          <thead className="bg-neutral-50">
+          <thead className="bg-gray-50">
             <tr>
-              <th className="text-left p-2">Fecha</th>
-              <th className="text-left p-2">Hora</th>
-              <th className="text-left p-2">Paciente</th>
-              <th className="text-left p-2">Especialista</th>
-              <th className="text-left p-2">Especialidad</th>
-              <th className="text-left p-2">Box</th>
-              <th className="text-left p-2">Estado</th>
-              <th className="text-left p-2">Observaciones</th>
-              <th className="text-left p-2">Acciones</th>
+              <th className="text-left p-3 font-medium text-gray-600">Fecha</th>
+              <th className="text-left p-3 font-medium text-gray-600">Hora</th>
+              <th className="text-left p-3 font-medium text-gray-600">Paciente</th>
+              <th className="text-left p-3 font-medium text-gray-600">Especialista</th>
+              <th className="text-left p-3 font-medium text-gray-600">Especialidad</th>
+              <th className="text-left p-3 font-medium text-gray-600">Box</th>
+              <th className="text-left p-3 font-medium text-gray-600">Estado</th>
+              <th className="text-left p-3 font-medium text-gray-600">Observaciones</th>
+              <th className="text-left p-3 font-medium text-gray-600 w-16">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {turnosOrdenados.map((t) => (
               <tr key={t.id_turno} className={getRowClassName(t)}>
-                <td className="p-2">{t.fecha}</td>
-                <td className="p-2">{t.hora}</td>
-                <td className="p-2">
-                  {t.paciente?.apellido}, {t.paciente?.nombre}
+                <td className={`p-3 ${getTextStyle(t)}`}>
+                  {formatearFecha(t.fecha)}
                 </td>
-                <td className="p-2">
-                  <span
-                    className="inline-flex items-center gap-2"
-                    style={{ ['--dot' as any]: t.especialista?.color || '#999' }}
-                  >
-                    <span
-                      className="inline-block w-2.5 h-2.5 rounded-full"
-                      style={{ background: t.especialista?.color || '#999' }}
-                    />
-                    {t.especialista?.apellido}, {t.especialista?.nombre}
-                  </span>
+                <td className={`p-3 font-mono ${getTextStyle(t)}`}>
+                  {formatearHora(t.hora)}
                 </td>
-                <td className="p-2 font-medium text-blue-700">
-                  {/* Muestra la especialidad del turno, o la del especialista, o "-" */}
-                  {t.especialidad?.nombre ||
-                   t.especialista?.especialidad?.nombre ||
-                   "-"}
+                <td className={`p-3 ${getTextStyle(t)}`}>
+                  {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : "Sin asignar"}
                 </td>
-                <td className="p-2">{t.box?.numero ?? "-"}</td>
-                <td className="p-2 capitalize">{t.estado}</td>
-                <td className="p-2 text-gray-600 max-w-xs truncate" title={t.observaciones || ''}>
+                <td className={`p-3 ${getTextStyle(t)}`}>
+                  {t.especialista ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span 
+                        className="inline-block w-2.5 h-2.5 rounded-full"
+                        style={{ background: t.especialista.color || '#9C1838' }}
+                      />
+                      {`${t.especialista.apellido}, ${t.especialista.nombre}`}
+                    </span>
+                  ) : "Sin asignar"}
+                </td>
+                <td className={`p-3 ${getTextStyle(t)}`}>
+                  {t.especialidad ? t.especialidad.nombre : "Sin asignar"}
+                </td>
+                <td className={`p-3 text-center ${getTextStyle(t)}`}>
+                  {t.box ? t.box.numero : "-"}
+                </td>
+                <td className={`p-3 capitalize ${getTextStyle(t)}`}>
+                  {t.estado || "Sin estado"}
+                </td>
+                <td className={`p-3 text-gray-600 max-w-xs truncate ${t.estado === 'cancelado' ? 'text-gray-400' : ''}`} 
+                    title={t.observaciones || ''}>
                   {t.observaciones || "-"}
                 </td>
-                <td className="p-2">
+                <td className="p-3">
                   <AccionesTurno turno={t} onDone={() => window.location.reload()} />
                 </td>
               </tr>
             ))}
-              {(!turnosOrdenados || turnosOrdenados.length === 0) && (
-              <tr><td className="p-3 text-center text-neutral-500" colSpan={9}>Sin turnos para hoy</td></tr>
+            {(!turnosOrdenados || turnosOrdenados.length === 0) && (
+              <tr>
+                <td className="p-8 text-center text-gray-500" colSpan={9}>
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="text-2xl"></span>
+                    <span>No hay turnos para mostrar</span>
+                  </div>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
@@ -107,7 +157,6 @@ const getRowClassName = (turno: any) => {
         isOpen={openNew} 
         onClose={() => setOpenNew(false)}
         onTurnoCreated={() => window.location.reload()}
-        // fechaSeleccionada opcional - si no se pasa, el modal permite elegir cualquier fecha
       />
     </div>
   );
