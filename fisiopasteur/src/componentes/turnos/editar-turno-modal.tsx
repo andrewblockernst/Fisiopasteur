@@ -17,7 +17,7 @@ type Props = {
   };
   open: boolean;
   onClose: () => void;
-  onSaved?: () => void;
+  onSaved?: (updated?: any) => void;
 };
 
 export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Props) {
@@ -73,7 +73,15 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Pro
 
       if (res.success) {
         setDialog({ open: true, type: 'success', message: "Turno actualizado" });
-        onSaved?.();
+        onSaved?.({
+          id_paciente: Number(pacienteId),
+          id_especialista: String(especialistaId),
+          id_especialidad: Number(especialidadId),
+          id_box: typeof boxId === "number" ? boxId : null,
+          fecha,
+          hora,
+          observaciones,
+        });
         onClose();
       } else {
         setDialog({ open: true, type: 'error', message: res.error || "Error al actualizar turno" });
