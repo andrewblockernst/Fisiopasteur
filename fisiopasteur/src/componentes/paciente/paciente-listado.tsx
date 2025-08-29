@@ -18,9 +18,11 @@ interface PacientesTableProps {
     pacientes: Paciente[];
     onPacienteUpdated?: () => void;
     onPacienteDeleted?: () => void;
+    onRowClick?: (id: number) => void; 
+    pacientesSeleccionados?: number[]; 
 }
 
-export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}: PacientesTableProps) {
+export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted, onRowClick, pacientesSeleccionados}: PacientesTableProps) {
     const[editingPaciente, setEditingPaciente] = useState<Paciente | null>(null);
     const[deletingPaciente, setDeletingPaciente] = useState<Paciente | null>(null);
     const[viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
@@ -114,16 +116,20 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                 {pacientes.map((paciente) => (
                     <div 
                         key={paciente.id_paciente} 
-                        className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => setViewingPaciente(paciente)}
+                        className={`px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors ${
+                          pacientesSeleccionados?.includes(paciente.id_paciente) ? "bg-blue-50" : ""
+                        }`}
+                        onClick={() => onRowClick?.(paciente.id_paciente)}
                     >
                         <div className="flex items-center justify-between">
                             <p className="text-gray-900 font-medium">
                                 {paciente.nombre} {paciente.apellido}
                             </p>
-                            <div className={`w-2 h-2 rounded-full ${
-                                paciente.activo ? 'bg-green-500' : 'bg-gray-400'
-                            }`}></div>
+                            <input
+                              type="checkbox"
+                              checked={pacientesSeleccionados?.includes(paciente.id_paciente) || false}
+                              readOnly
+                            />
                         </div>
                     </div>
                 ))}
