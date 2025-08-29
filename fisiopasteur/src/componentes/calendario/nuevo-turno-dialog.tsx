@@ -1,104 +1,89 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
-import { actualizarTurno, obtenerPacientes, obtenerEspecialistas, obtenerEspecialidades, obtenerBoxes, obtenerAgendaEspecialista } from "@/lib/actions/turno.action";
+import { useState, useEffect } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { Database } from "@/types/database.types";
+import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista} from "@/lib/actions/turno.action";
 
-// Tipos basados en tu estructura de BD
-type Turno = Database['public']['Tables']['turno']['Row'];
-type PacienteCompleto = Database['public']['Tables']['paciente']['Row'];
-type Usuario = Database['public']['Tables']['usuario']['Row'];
-type Especialidad = Database['public']['Tables']['especialidad']['Row'];
-type Box = Database['public']['Tables']['box']['Row'];
-
-// Tipos que realmente devuelve tu API (más simples)
-type PacienteAPI = {
-  id_paciente: number;
-  nombre: string;
-  apellido: string;
-  dni: string;
-  telefono: string | null;
-  email: string | null;
-};
-
-type EspecialistaAPI = {
-  id_usuario: string;
-  nombre: string;
-  apellido: string;
-  color?: string;
-  especialidad?: Especialidad;
-  usuario_especialidad?: Array<{ especialidad: Especialidad }>;
-};
-
-// Tipo para el turno con relaciones incluidas (como viene del JOIN)
-type TurnoConRelaciones = Turno & {
-  paciente?: PacienteCompleto;
-  especialista?: Usuario;
-  especialidad?: Especialidad;
-  box?: Box;
-};
-
-interface EditarTurnoModalProps {
-  turno: TurnoConRelaciones;
-  open: boolean;
+interface NuevoTurnoModalProps {
+  isOpen: boolean;
   onClose: () => void;
-  onSaved?: (updated?: TurnoConRelaciones) => void;
+  onTurnoCreated?: () => void;
+  fechaSeleccionada?: Date | null;
+  especialistas?: any[];
+  pacientes?: any[];
 }
 
-export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: EditarTurnoModalProps) {
+export function NuevoTurnoModal({
+  isOpen,
+  onClose,
+  onTurnoCreated,
+  fechaSeleccionada = null,
+  especialistas: especialistasProp = [],
+  pacientes: pacientesProp = []
+}: NuevoTurnoModalProps) {
   const [formData, setFormData] = useState({
-    fecha: turno.fecha,
-    hora: turno.hora.slice(0, 5), // Remover segundos para mostrar solo HH:MM
-    id_especialista: turno.id_especialista || '',
-    id_especialidad: turno.id_especialidad ? String(turno.id_especialidad) : '',
-    tipo_plan: (turno.tipo_plan || 'particular') as 'particular' | 'obra_social',
-    id_paciente: String(turno.id_paciente),
-    observaciones: turno.observaciones || ''
+    fecha: '',
+    hora: '',
+    id_especialista: '',
+    id_especialidad: '',
+    tipo_plan: 'particular' as 'particular' | 'obra_social',
+    id_paciente: '',
+    observaciones: '',
+    precio: ''
   });
 
-  const [isPending, startTransition] = useTransition();
-
-  // Estados con tipos que coinciden con lo que devuelve tu API
-  const [pacientes, setPacientes] = useState<PacienteAPI[]>([]);
-  const [especialistas, setEspecialistas] = useState<EspecialistaAPI[]>([]);
-  const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
-  const [boxes, setBoxes] = useState<Box[]>([]);
-  const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<Especialidad[]>([]);
+  // Estados para datos cargados automáticamente
+  const [especialistas, setEspecialistas] = useState<any[]>(especialistasProp);
+  const [pacientes, setPacientes] = useState<any[]>(pacientesProp);
+  const [especialidades, setEspecialidades] = useState<any[]>([]);
+  const [boxes, setBoxes] = useState<any[]>([]);
+  const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
 
-  // Dialog para mensajes
+  // Dialog para mensajes (reemplaza los toasts)
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
     open: false, 
     type: 'success', 
     message: '' 
   });
 
-  // Cargar datos cuando se abre el modal
+  // Cargar datos si no vienen por props
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     
     const cargarDatos = async () => {
       setLoading(true);
       try {
-        const [p, e, esp, b] = await Promise.all([
-          obtenerPacientes(),
-          obtenerEspecialistas(),
-          obtenerEspecialidades(),
-          obtenerBoxes()
-        ]);
+        const promises = [];
         
-        if (p.success) setPacientes(p.data || []);
-        if (e.success) setEspecialistas(
-          (e.data || []).map((item: any) => ({
-            ...item,
-            color: item.color === null ? undefined : item.color
-          }))
+        // Cargar especialistas si no vienen por props
+        if (especialistasProp.length === 0) {
+          promises.push(obtenerEspecialistas().then(res => {
+            if (res.success) setEspecialistas(res.data || []);
+          }));
+        }
+        
+        // Cargar pacientes si no vienen por props
+        if (pacientesProp.length === 0) {
+          promises.push(obtenerPacientes().then(res => {
+            if (res.success) setPacientes(res.data || []);
+          }));
+        }
+        
+        // Siempre cargar especialidades y boxes
+        promises.push(
+          obtenerEspecialidades().then(res => {
+            if (res.success) setEspecialidades(res.data || []);
+          }),
+          obtenerBoxes().then(res => {
+            if (res.success) setBoxes(res.data || []);
+          })
         );
-        if (esp.success) setEspecialidades(esp.data || []);
-        if (b.success) setBoxes(b.data || []);
+        
+        await Promise.all(promises);
       } catch (error) {
         console.error('Error cargando datos:', error);
       } finally {
@@ -107,41 +92,60 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
     
     cargarDatos();
-  }, [open]);
+  }, [isOpen, especialistasProp.length, pacientesProp.length]);
 
-  // Filtrar especialidades según especialista seleccionado
+  // Establecer fecha seleccionada cuando se abre el modal
+  useEffect(() => {
+    if (fechaSeleccionada && isOpen) {
+      setFormData(prev => ({
+        ...prev,
+        fecha: fechaSeleccionada.toISOString().split('T')[0]
+      }));
+    }
+  }, [fechaSeleccionada, isOpen]);
+
+  // Construir lista de especialidades del especialista seleccionado
   useEffect(() => {
     if (!formData.id_especialista) {
       setEspecialidadesDisponibles([]);
+      setFormData(prev => ({ ...prev, id_especialidad: '' }));
       return;
     }
-    
-    const especialista = especialistas.find(e => e.id_usuario === formData.id_especialista);
+    const especialista = especialistas.find(e => String(e.id_usuario) === String(formData.id_especialista));
     if (!especialista) {
       setEspecialidadesDisponibles([]);
+      setFormData(prev => ({ ...prev, id_especialidad: '' }));
       return;
     }
-    
-    const lista: Especialidad[] = [];
+    const lista: any[] = [];
     if (especialista.especialidad) lista.push(especialista.especialidad);
     if (Array.isArray(especialista.usuario_especialidad)) {
-      especialista.usuario_especialidad.forEach((ue) => {
+      especialista.usuario_especialidad.forEach((ue: any) => {
         if (ue.especialidad) lista.push(ue.especialidad);
       });
     }
-    
-    const unicas = lista.filter((esp, i, arr) => 
-      i === arr.findIndex(e => e.id_especialidad === esp.id_especialidad)
-    );
+    const unicas = lista.filter((esp, i, arr) => i === arr.findIndex((e: any) => e.id_especialidad === esp.id_especialidad));
     setEspecialidadesDisponibles(unicas);
-    
-    // Si la especialidad seleccionada ya no existe, limpiar
-    if (formData.id_especialidad && !unicas.some(e => 
-      String(e.id_especialidad) === String(formData.id_especialidad)
-    )) {
+    // Si la seleccionada ya no existe, limpiar
+    if (formData.id_especialidad && !unicas.some((e: any) => String(e.id_especialidad) === String(formData.id_especialidad))) {
       setFormData(prev => ({ ...prev, id_especialidad: '' }));
     }
   }, [formData.id_especialista, especialistas, formData.id_especialidad]);
+
+  // Autocompletar precio según especialista + especialidad + plan
+  useEffect(() => {
+    (async () => {
+      if (!formData.id_especialista || !formData.id_especialidad || !formData.tipo_plan) return;
+      try {
+        const res = await obtenerPrecioEspecialidad(
+          String(formData.id_especialista),
+          Number(formData.id_especialidad),
+          formData.tipo_plan
+        );
+        if (res.success) setFormData(prev => ({ ...prev, precio: res.precio != null ? String(res.precio) : '' }));
+      } catch {}
+    })();
+  }, [formData.id_especialista, formData.id_especialidad, formData.tipo_plan]);
 
   // Verificar horarios ocupados cuando cambia especialista o fecha
   useEffect(() => {
@@ -155,29 +159,26 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       try {
         const res = await obtenerAgendaEspecialista(formData.id_especialista, formData.fecha);
         if (res.success && res.data) {
-          // Generar lista de horas ocupadas, excluyendo el turno actual
+          // Generar lista de horas ocupadas considerando duración de turnos (1 hora por defecto)
           const ocupadas: string[] = [];
           
-          res.data.forEach((turnoAgenda: Turno) => {
-            // Excluir el turno actual que se está editando
-            if (turnoAgenda.id_turno === turno.id_turno || turnoAgenda.estado === 'cancelado') {
-              return;
-            }
-            
-            const [horas, minutos] = turnoAgenda.hora.split(':').map(Number);
-            const inicioTurno = new Date();
-            inicioTurno.setHours(horas, minutos, 0, 0);
-            
-            // Duración del turno (1 hora por defecto)
-            const duracionTurno = 60; // minutos
-            const finTurno = new Date(inicioTurno.getTime() + (duracionTurno * 60000));
-            
-            // Marcar todos los slots de tiempo ocupados en intervalos de 15 minutos
-            const inicioSlot = new Date(inicioTurno);
-            while (inicioSlot < finTurno) {
-              const horaStr = inicioSlot.toTimeString().slice(0, 5); // "HH:MM"
-              ocupadas.push(horaStr);
-              inicioSlot.setMinutes(inicioSlot.getMinutes() + 15); // Intervalos de 15 min
+          res.data.forEach((turno: any) => {
+            if (turno.estado !== 'cancelado') {
+              const [horas, minutos] = turno.hora.split(':').map(Number);
+              const inicioTurno = new Date();
+              inicioTurno.setHours(horas, minutos, 0, 0);
+              
+              // Duración del turno (1 hora por defecto, se puede personalizar)
+              const duracionTurno = 60; // minutos
+              const finTurno = new Date(inicioTurno.getTime() + (duracionTurno * 60000));
+              
+              // Marcar todos los slots de tiempo ocupados en intervalos de 15 minutos
+              const inicioSlot = new Date(inicioTurno);
+              while (inicioSlot < finTurno) {
+                const horaStr = inicioSlot.toTimeString().slice(0, 5); // "HH:MM"
+                ocupadas.push(horaStr);
+                inicioSlot.setMinutes(inicioSlot.getMinutes() + 15); // Intervalos de 15 min
+              }
             }
           });
           
@@ -191,7 +192,24 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
 
     verificarHorariosOcupados();
-  }, [formData.id_especialista, formData.fecha, turno.id_turno]);
+  }, [formData.id_especialista, formData.fecha]);
+
+  // Limpiar campos al cerrar
+  useEffect(() => {
+    if (!isOpen) {
+      setFormData({
+        fecha: '',
+        hora: '',
+        id_especialista: '',
+        id_especialidad: '',
+        tipo_plan: 'particular',
+        id_paciente: '',
+        observaciones: '',
+        precio: ''
+      });
+      setEspecialidadesDisponibles([]);
+    }
+  }, [isOpen]);
 
   // Función para verificar si una hora específica está disponible
   const esHoraDisponible = (hora: string): boolean => {
@@ -260,46 +278,51 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       return;
     }
 
-    startTransition(async () => {
-      try {
-        // Preparar datos con tipos correctos para la actualización
-        const datosActualizacion: Partial<Database['public']['Tables']['turno']['Update']> = {
-          id_paciente: Number(formData.id_paciente),
-          id_especialista: formData.id_especialista,
-          id_especialidad: Number(formData.id_especialidad),
-          id_box: null, // Puedes agregar lógica para box si es necesario
-          fecha: formData.fecha,
-          hora: formData.hora + ':00', // Agregar segundos
-          observaciones: formData.observaciones || null,
-          tipo_plan: formData.tipo_plan,
-        };
+    setIsSubmitting(true);
+    try {
+      // Preparar datos para el servidor
+      const turnoData = {
+        fecha: formData.fecha,
+        hora: formData.hora + ':00', // Agregar segundos
+        precio: formData.precio ? parseInt(formData.precio) : null,
+        id_especialista: formData.id_especialista,
+        id_paciente: parseInt(formData.id_paciente),
+        id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
+        observaciones: formData.observaciones || null,
+        estado: "programado" as const,
+        tipo_plan: formData.tipo_plan,
+      };
 
-        const res = await actualizarTurno(turno.id_turno, datosActualizacion);
+      const resultado = await crearTurno(turnoData);
 
-        if (res.success) {
-          setDialog({ 
-            open: true, 
-            type: 'success', 
-            message: "Turno actualizado exitosamente" 
-          });
-          onSaved?.(res.data as TurnoConRelaciones);
-          onClose();
-        } else {
-          setDialog({ 
-            open: true, 
-            type: 'error', 
-            message: res.error || "Error al actualizar turno" 
-          });
-        }
-      } catch (error) {
-        console.error('Error al actualizar turno:', error);
-        setDialog({ 
-          open: true, 
-          type: 'error', 
-          message: "Error inesperado al actualizar el turno" 
+      if (resultado.success && resultado.data) {
+        setDialog({
+          open: true,
+          type: 'success',
+          message: 'Turno creado exitosamente'
+        });
+
+        // Llamar callback si existe
+        onTurnoCreated?.();
+
+        onClose();
+      } else {
+        setDialog({
+          open: true,
+          type: 'error',
+          message: resultado.error || 'Error al crear el turno'
         });
       }
-    });
+    } catch (error) {
+      console.error('Error al crear turno:', error);
+      setDialog({
+        open: true,
+        type: 'error',
+        message: 'Error inesperado al crear el turno'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Mostrar loading mientras carga datos
@@ -308,8 +331,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       <BaseDialog
         type="custom"
         size="md"
-        title="Editar Turno"
-        isOpen={open}
+        title="Nuevo Turno"
+        isOpen={isOpen}
         onClose={onClose}
         customColor="#9C1838"
         message={
@@ -327,8 +350,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       <BaseDialog
         type="custom"
         size="md"
-        title="Editar Turno"
-        isOpen={open}
+        title="Nuevo Turno"
+        isOpen={isOpen}
         onClose={onClose}
         showCloseButton
         customColor="#9C1838"
@@ -345,7 +368,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
               <input
                 type="date"
                 value={formData.fecha}
-                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: formData.hora }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
                 min={new Date().toISOString().split('T')[0]}
@@ -373,19 +396,19 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
                   <option 
                     key={value} 
                     value={value}
-                    disabled={!disponible && value !== formData.hora} // Permitir la hora actual aunque esté "ocupada"
+                    disabled={!disponible}
                     style={{ 
-                      color: (disponible || value === formData.hora) ? 'black' : '#ccc',
-                      backgroundColor: (disponible || value === formData.hora) ? 'white' : '#f5f5f5'
+                      color: disponible ? 'black' : '#ccc',
+                      backgroundColor: disponible ? 'white' : '#f5f5f5'
                     }}
                   >
-                    {label} {!disponible && value !== formData.hora && '(Ocupado)'}
+                    {label} {!disponible && '(Ocupado)'}
                   </option>
                 ))}
               </select>
               {formData.id_especialista && formData.fecha && horasOcupadas.length > 0 && (
                 <p className="text-xs text-gray-500 mt-1">
-                  {generarOpcionesHora().filter(h => h.disponible || h.value === formData.hora).length} horarios disponibles
+                  {generarOpcionesHora().filter(h => h.disponible).length} horarios disponibles
                 </p>
               )}
             </div>
@@ -397,14 +420,14 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
               </label>
               <select
                 value={formData.id_especialista}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
               >
                 <option value="">Seleccionar especialista</option>
                 {especialistas.map((especialista) => (
                   <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                    Dr. {especialista.nombre} {especialista.apellido}
+                    . {especialista.nombre} {especialista.apellido}
                   </option>
                 ))}
               </select>
@@ -423,7 +446,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
                 disabled={!formData.id_especialista}
               >
                 <option value="">Seleccionar especialidad</option>
-                {especialidadesDisponibles.map((esp) => (
+                {especialidadesDisponibles.map((esp: any) => (
                   <option key={esp.id_especialidad} value={esp.id_especialidad}>
                     {esp.nombre}
                   </option>
@@ -471,6 +494,33 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
               </select>
             </div>
 
+            {/* Precio */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Precio (ARS)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-lg select-none">$</span>
+                <input
+                  type="text"
+                  value={
+                    formData.precio
+                      ? Number(formData.precio).toLocaleString('es-AR')
+                      : ''
+                  }
+                  onChange={(e) => {
+                    // Remover todo excepto números
+                    const raw = e.target.value.replace(/[^\d]/g, '');
+                    setFormData(prev => ({ ...prev, precio: raw }));
+                  }}
+                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  placeholder="..."
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                />
+              </div>
+            </div>
+
             {/* Observaciones */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -487,9 +537,9 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
           </form>
         }
         primaryButton={{
-          text: isPending ? "Guardando..." : "Guardar Cambios",
+          text: isSubmitting ? "Creando..." : "Crear Turno",
           onClick: handleSubmit,
-          disabled: isPending || (!esHoraDisponible(formData.hora) && formData.hora !== turno.hora.slice(0, 5)),
+          disabled: isSubmitting || !esHoraDisponible(formData.hora),
         }}
         secondaryButton={{
           text: "Cancelar",
@@ -514,3 +564,5 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     </>
   );
 }
+
+export default NuevoTurnoModal;

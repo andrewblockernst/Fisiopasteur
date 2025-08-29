@@ -540,6 +540,41 @@ export async function obtenerBoxes() {
   }
 }
 
+// Obtener precio configurado para un especialista por especialidad y plan
+export async function obtenerPrecioEspecialidad(
+  especialista_id: string,
+  especialidad_id: number,
+  tipo_plan: 'particular' | 'obra_social'
+) {
+  const supabase = await createClient();
+  try {
+    const { data, error } = await supabase
+      .from('usuario_especialidad')
+      .select('precio_particular, precio_obra_social, activo')
+      .eq('id_usuario', especialista_id)
+      .eq('id_especialidad', especialidad_id)
+      .maybeSingle();
+
+    if (error) {
+      const msg = error.message?.toLowerCase() || '';
+      const faltanColumnas = msg.includes('column') && (msg.includes('precio_particular') || msg.includes('precio_obra_social'));
+      if (faltanColumnas) {
+        return {
+          success: false,
+          error: 'Faltan columnas precio_particular/precio_obra_social en usuario_especialidad.'
+        } as const;
+      }
+      return { success: false, error: error.message } as const;
+    }
+
+    if (!data) return { success: true, precio: null } as const;
+    const precio = tipo_plan === 'particular' ? data.precio_particular : data.precio_obra_social;
+    return { success: true, precio: precio ?? null } as const;
+  } catch (e) {
+    return { success: false, error: 'Error inesperado al obtener precio' } as const;
+  }
+}
+
 // Obtener pacientes (para el selector de pacientes)
 export async function obtenerPacientes(busqueda?: string) {
   const supabase = await createClient();

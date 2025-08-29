@@ -106,8 +106,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
 
     return (
         <>
+
         {/* NIVEL 1: Vista Mobile (xs - sm) - Solo nombres */}
         <div className="block sm:hidden bg-white relative">
+
             <div className="divide-y divide-gray-200">
                 {pacientes.map((paciente) => (
                     <div 

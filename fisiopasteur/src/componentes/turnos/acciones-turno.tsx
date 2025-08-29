@@ -5,24 +5,28 @@ import { cancelarTurno, eliminarTurno, marcarComoAtendido } from "@/lib/actions/
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import Button from "@/componentes/boton";
+import { Database } from "@/types/database.types";
+import { MoreVertical, Edit, X, Trash, CheckCircle } from "lucide-react";
+
+// Usar el tipo exacto de la base de datos
+type TurnoFromDB = Database['public']['Tables']['turno']['Row'];
+
+// Crear un tipo específico para turnos que tienen los campos requeridos
+type TurnoCompleto = TurnoFromDB & {
+  id_turno: number;
+  id_paciente: number; // Garantizamos que no sea null
+  fecha: string;
+  hora: string;
+};
 
 type Props = {
-  turno: {
-    id_turno: number;
-    fecha: string;
-    hora: string;
-    id_paciente: number;
-    id_especialista: string | null;
-    id_especialidad: number | null;
-    id_box: number | null;
-    estado: string | null;
-    observaciones?: string | null;
-  };
+  turno: TurnoCompleto; // Usar el tipo más específico
   onDone?: () => void;
 };
 
 export default function AccionesTurno({ turno, onDone }: Props) {
   const [openEdit, setOpenEdit] = useState(false);
+  const [menuAbierto, setMenuAbierto] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Estado para diálogos personalizados
@@ -45,6 +49,7 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const onCancelar = () => {
+    setMenuAbierto(false);
     showConfirm('info', 'Cancelar turno', '¿Cancelar este turno?', () => {
       setDialog({ ...dialog, open: false });
       startTransition(async () => {
@@ -60,6 +65,7 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const onEliminar = () => {
+    setMenuAbierto(false);
     showConfirm('error', 'Eliminar turno', 'Esto elimina definitivamente el turno. ¿Continuar?', () => {
       setDialog({ ...dialog, open: false });
       startTransition(async () => {
@@ -75,6 +81,7 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const onMarcarAtendido = () => {
+    setMenuAbierto(false);
     showConfirm('info', 'Marcar como atendido', '¿Marcar como atendido?', () => {
       setDialog({ ...dialog, open: false });
       startTransition(async () => {
@@ -89,6 +96,16 @@ export default function AccionesTurno({ turno, onDone }: Props) {
     });
   };
 
+  const handleEditar = () => {
+    setMenuAbierto(false);
+    // Verificar que el turno tenga todos los campos requeridos antes de editar
+    if (!turno.id_paciente) {
+      showMessage('error', 'Error', 'No se puede editar un turno sin paciente asignado.');
+      return;
+    }
+    setOpenEdit(true);
+  };
+
   // Verificar si el turno ya pasó
   const turnoYaPaso = () => {
     const ahora = new Date();
@@ -100,50 +117,72 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   const esProgramado = turno.estado === 'programado';
 
   return (
-    <div className="flex items-center gap-2">
-      <Button
-        variant="primary"
-        onClick={() => setOpenEdit(true)}
+    <div className="relative">
+      <button
+        onClick={() => setMenuAbierto(!menuAbierto)}
+        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+        title="Acciones"
         disabled={isPending}
-        className="px-2 py-1 rounded border text-sm"
       >
-        Editar
-      </Button>
+        <MoreVertical size={18} className="text-gray-600" />
+      </button>
 
-      {/* Mostrar "Marcar Atendido" solo para turnos programados que ya pasaron */}
-      {esProgramado && esPasado && (
-        <Button
-          variant="success"
-          onClick={onMarcarAtendido}
-          disabled={isPending}
-          className="px-2 py-1 rounded border text-sm"
-        >
-          ✅ Atendido
-        </Button>
+      {menuAbierto && (
+        <>
+          {/* Overlay para cerrar el menú al hacer clic fuera */}
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setMenuAbierto(false)}
+          />
+          
+          {/* Menú desplegable */}
+          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[140px]">
+            <div className="py-1">
+              <button
+                onClick={handleEditar}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+                disabled={!turno.id_paciente} // Deshabilitar si no hay paciente
+              >
+                <Edit size={14} />
+                Editar
+              </button>
+              
+              {/* Mostrar "Marcar Atendido" solo para turnos programados que ya pasaron */}
+              {esProgramado && esPasado && (
+                <button
+                  onClick={onMarcarAtendido}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-green-600"
+                >
+                  <CheckCircle size={14} />
+                  Marcar Atendido
+                </button>
+              )}
+              
+              {/* Cancelar solo para turnos futuros programados */}
+              {esProgramado && !esPasado && (
+                <button
+                  onClick={onCancelar}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-orange-600"
+                >
+                  <X size={14} />
+                  Cancelar
+                </button>
+              )}
+              
+              <button
+                onClick={onEliminar}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+              >
+                <Trash size={14} />
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Cancelar solo para turnos futuros programados */}
-      {esProgramado && !esPasado && (
-        <Button
-          variant="warning"
-          onClick={onCancelar}
-          disabled={isPending}
-          className="px-2 py-1 rounded border text-sm"
-        >
-          Cancelar
-        </Button>
-      )}
-
-      <Button
-        variant="danger"
-        onClick={onEliminar}
-        disabled={isPending}
-        className="px-2 py-1 rounded border text-sm"
-      >
-        Eliminar
-      </Button>
-
-      {openEdit && (
+      {/* Solo mostrar el modal de edición si el turno tiene paciente */}
+      {openEdit && turno.id_paciente && (
         <EditarTurnoDialog
           turno={turno}
           open={openEdit}
