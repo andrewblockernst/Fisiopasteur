@@ -86,7 +86,7 @@ export default function HelpPage() {
   };
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
+    <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8 text-black">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold">Centro de Ayuda</h1>
