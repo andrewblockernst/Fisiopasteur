@@ -92,9 +92,9 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
   /* ============ VISTA DE EDICIÓN ============ */
   if (isEditing) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen text-black">
         {/* Mobile Header - Solo móvil */}
-        <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
+        <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden text-black">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setIsEditing(false)}
@@ -109,16 +109,16 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
         </header>
 
         {/* Contenido Principal */}
-        <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
+        <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8 text-black">
           {/* Desktop Header */}
-          <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
+          <div className="text-black hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6 ">
             <h2 className="text-2xl sm:text-3xl font-bold">Editar Perfil</h2>
           </div>
 
           <form action={handleSubmit} className="max-w-2xl mx-auto space-y-6">
             {/* feedback solo via toast */}
 
-            <div className="space-y-6">
+            <div className="space-y-6 text-black">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">Nombre</label>
@@ -224,7 +224,7 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
 
   {/*VISTA PERFIL*/}
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen text-black">
       {/* Mobile Header - Solo móvil */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
         <div className="flex items-center justify-between">

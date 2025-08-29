@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista} from "@/lib/actions/turno.action";
+import Image from "next/image";
+import Loading from "../loading";
+import { useToastStore } from '@/stores/toast-store';
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -42,6 +45,7 @@ export function NuevoTurnoModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
+  const { addToast } = useToastStore();
 
   // Dialog para mensajes (reemplaza los toasts)
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
@@ -270,21 +274,20 @@ export function NuevoTurnoModal({
 
   const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
-      setDialog({
-        open: true,
-        type: 'error',
-        message: 'Por favor completa fecha, hora, especialista, especialidad y paciente'
+      addToast({
+        variant: 'error',
+        message: 'Campos requeridos',
+        description: 'Por favor completa fecha, hora, especialista, especialidad y paciente',
       });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Preparar datos para el servidor
       const turnoData = {
         fecha: formData.fecha,
-        hora: formData.hora + ':00', // Agregar segundos
-        precio: formData.precio ? parseInt(formData.precio) : null,
+        hora: formData.hora + ':00',
+        precio: null,
         id_especialista: formData.id_especialista,
         id_paciente: parseInt(formData.id_paciente),
         id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
@@ -296,29 +299,27 @@ export function NuevoTurnoModal({
       const resultado = await crearTurno(turnoData);
 
       if (resultado.success && resultado.data) {
-        setDialog({
-          open: true,
-          type: 'success',
-          message: 'Turno creado exitosamente'
+        addToast({
+          variant: 'success',
+          message: 'Turno creado',
+          description: 'El turno se creó exitosamente',
         });
 
-        // Llamar callback si existe
         onTurnoCreated?.();
-
         onClose();
       } else {
-        setDialog({
-          open: true,
-          type: 'error',
-          message: resultado.error || 'Error al crear el turno'
+        addToast({
+          variant: 'error',
+          message: 'Error al crear turno',
+          description: resultado.error || 'No se pudo crear el turno',
         });
       }
     } catch (error) {
       console.error('Error al crear turno:', error);
-      setDialog({
-        open: true,
-        type: 'error',
-        message: 'Error inesperado al crear el turno'
+      addToast({
+        variant: 'error',
+        message: 'Error inesperado',
+        description: 'Ocurrió un problema al crear el turno',
       });
     } finally {
       setIsSubmitting(false);
@@ -326,31 +327,45 @@ export function NuevoTurnoModal({
   };
 
   // Mostrar loading mientras carga datos
-  if (loading) {
-    return (
-      <BaseDialog
-        type="custom"
-        size="md"
-        title="Nuevo Turno"
-        isOpen={isOpen}
-        onClose={onClose}
-        customColor="#9C1838"
-        message={
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#9C1838]"></div>
-            <span className="ml-2">Cargando datos...</span>
-          </div>
-        }
-      />
-    );
-  }
+if (loading) {
+  return (
+    <BaseDialog
+      type="custom"
+      size="md"
+      title="Nuevo Turno"
+      customIcon={
+        <Image
+          src="/favicon.svg"
+          alt="Logo Fisiopasteur"
+          width={24}
+          height={24}
+          className="w-6 h-6"
+        />
+      }
+      isOpen={isOpen}
+      onClose={onClose}
+      customColor="#9C1838"
+      message={<Loading size={48} text="Cargando datos..." />}
+    />
+  );
+}
+
 
   return (
     <>
       <BaseDialog
-        type="custom"
-        size="md"
-        title="Nuevo Turno"
+      type="custom"
+      size="lg"
+      title="Nuevo Turno"
+      customIcon={
+        <Image
+          src="/favicon.svg"
+          alt="Logo Fisiopasteur"
+          width={24}
+          height={24}
+          className="w-6 h-6"
+        />
+      }
         isOpen={isOpen}
         onClose={onClose}
         showCloseButton
