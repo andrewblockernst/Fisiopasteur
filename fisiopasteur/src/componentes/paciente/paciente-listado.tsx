@@ -12,6 +12,7 @@ import { deletePaciente } from "@/lib/actions/paciente.action";
 import { ChevronUp, EllipsisVertical } from "lucide-react";
 
 
+
 type Paciente = Tables<'paciente'>;
 
 interface PacientesTableProps {
@@ -113,7 +114,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                     <div 
                         key={paciente.id_paciente} 
                         className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => setViewingPaciente(paciente)}
+                        onClick={() => {
+                            const pacienteData = encodeURIComponent(JSON.stringify(paciente));
+                            router.push(`/pacientes/${paciente.id_paciente}?data=${pacienteData}`);
+                        }}
                     >
                         <div className="flex items-center justify-between">
                             <p className="text-gray-900 font-medium">
