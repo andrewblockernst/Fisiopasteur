@@ -16,8 +16,8 @@ function validatePacienteData(data: Partial<PacienteInsert | PacienteUpdate>): s
     if (!data.nombre?.trim()) errors.push("El nombre es requerido");
     if (!data.apellido?.trim()) errors.push("El apellido es requerido");
     // if (!data.email?.trim()) errors.push("El email es requerido");
-    if (!data.dni?.trim()) errors.push("El DNI es requerido");
-    // if (!data.telefono?.trim()) errors.push("El teléfono es requerido");
+    // if (!data.dni?.trim()) errors.push("El DNI es requerido");
+    if (!data.telefono?.trim()) errors.push("El teléfono es requerido");
 
     // Validaciones de campos con formato
     if (data.email && !/\S+@\S+\.\S+/.test(data.email)) {
@@ -100,7 +100,7 @@ export async function getPacientes(options?: {
   }
 
   // Ordenamiento
-  query = query.order(orderBy, { ascending: orderDirection === "asc" });
+  query = query.order(orderBy as string, { ascending: orderDirection === "asc" });
 
   // Paginación
   const from = (page - 1) * limit;
@@ -172,8 +172,8 @@ export async function createPaciente(formData: FormData) {
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
     email: formData.get("email") as string || null,
-    dni: formData.get("dni") as string,
-    telefono: formData.get("telefono") as string || null,
+    dni: formData.get("dni") as string || null,
+    telefono: formData.get("telefono") as string,
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
   };

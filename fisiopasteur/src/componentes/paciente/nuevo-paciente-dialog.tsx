@@ -72,7 +72,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
         // Validar campos del formulario y agregar errores a newErrors
         if (!formData.get("nombre")) newErrors.nombre = "El nombre es obligatorio.";
         if(!formData.get("apellido")) newErrors.apellido = "El apellido es obligatorio.";
-        if(!formData.get("dni")) newErrors.dni = "El DNI es obligatorio.";
+        if(!formData.get("telefono")) newErrors.telefono = "El telefonoT es obligatorio.";
 
         const email = formData.get("email") as string;
         if (email && !/\S+@\S+\.\S+/.test(email)) {
@@ -142,10 +142,44 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                     {errors.apellido && <p className="text-red-500 text-xs mt-1">{errors.apellido}</p>}
                 </div>
 
+                {/* Telefono */}
+                <div>
+                    <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
+                        Telefono *
+                    </label>
+                    <input
+                        type="text"
+                        id="telefono"
+                        name="telefono"
+                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.telefono ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="Ingresa el telefono"
+                    />
+                    {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
+                </div>
+
+                {/* Email */}
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                    </label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
+                        errors.email ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="correo@ejemplo.com"
+                    />
+                    {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                </div>
+
                 {/* DNI */}
                 <div>
                     <label htmlFor="dni" className="block text-sm font-medium text-gray-700 mb-1">
-                        DNI *
+                        DNI
                     </label>
                     <input
                         type="text"
@@ -174,40 +208,6 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
                         placeholder="Ingresa la fecha de nacimiento"
                     />
                     {errors.fecha_nacimiento && <p className="text-red-500 text-xs mt-1">{errors.fecha_nacimiento}</p>}
-                </div>
-
-                {/* Telefono */}
-                <div>
-                    <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
-                        Telefono 
-                    </label>
-                    <input
-                        type="text"
-                        id="telefono"
-                        name="telefono"
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.telefono ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="Ingresa el telefono"
-                    />
-                    {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
-                </div>
-
-                {/* Email */}
-                <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                        Email 
-                    </label>
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.email ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="correo@ejemplo.com"
-                    />
-                    {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
                 </div>
 
                 {/* Direccion */}
