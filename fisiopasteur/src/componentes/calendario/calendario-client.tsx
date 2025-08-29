@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { CalendarioTurnos } from "@/componentes/calendario/calendario-turnos";
-import { DayViewModal } from "@/componentes/calendario/dayview-dialog";
-import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-modal";
+import { DayViewModal } from "@/componentes/calendario/dia-vista-dialog";
+import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import { useTurnoStore, type TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
 import { Calendar, Users, Clock, Filter, ArrowLeft, Plus } from "lucide-react";
@@ -83,7 +83,7 @@ export function CalendarioClient({
   const turnosProximos = getTurnosProximos();
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen text-black">
       {/* Mobile Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
         <div className="flex items-center justify-between">

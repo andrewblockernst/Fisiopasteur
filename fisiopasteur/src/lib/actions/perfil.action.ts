@@ -41,6 +41,85 @@ export interface AuthState {
   } | null;
 }
 
+// Obtener precios por especialidad del usuario autenticado
+export async function obtenerPreciosUsuarioEspecialidades() {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: 'No autenticado' };
+    }
+
+    const { data, error } = await supabase
+      .from('usuario_especialidad')
+      .select(`
+        id_especialidad,
+        precio_particular,
+        precio_obra_social,
+        activo,
+        updated_at,
+        especialidad:id_especialidad(id_especialidad, nombre)
+      `)
+      .eq('id_usuario', user.id)
+      .order('id_especialidad');
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (e) {
+    return { success: false, error: 'Error inesperado' };
+  }
+}
+
+// Crear/actualizar precios de una especialidad del usuario autenticado
+export async function guardarPrecioUsuarioEspecialidad(
+  id_especialidad: number,
+  valores: { precio_particular?: number | null; precio_obra_social?: number | null; activo?: boolean | null }
+) {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: 'No autenticado' };
+    }
+
+    // Verificar si existe la fila
+    const { data: existente } = await supabase
+      .from('usuario_especialidad')
+      .select('id_usuario, id_especialidad')
+      .eq('id_usuario', user.id)
+      .eq('id_especialidad', id_especialidad)
+      .maybeSingle();
+
+    const payload = {
+      id_usuario: user.id,
+      id_especialidad,
+      ...valores,
+      updated_at: new Date().toISOString(),
+    } as any;
+
+    if (existente) {
+      const { error } = await supabase
+        .from('usuario_especialidad')
+        .update(payload)
+        .eq('id_usuario', user.id)
+        .eq('id_especialidad', id_especialidad);
+      if (error) return { success: false, error: error.message };
+    } else {
+      const { error } = await supabase
+        .from('usuario_especialidad')
+        .insert(payload);
+      if (error) return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: 'Error inesperado' };
+  }
+}
+
 export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
   try {
     const supabase = await createClient();
@@ -53,23 +132,11 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       redirect('/login');
     }
 
-    console.log('🔍 Usuario autenticado:', {
-      id: user.id,
-      email: user.email,
-      created_at: user.created_at
-    });
-
     // 1.5. Verificar si el usuario existe por ID
     const { data: existeUsuarioPorId, error: checkIdError } = await supabase
       .from('usuario')
       .select('id_usuario, nombre, apellido, email')
       .eq('id_usuario', user.id);
-
-    console.log('🔍 Búsqueda por ID:', {
-      usuario_auth_id: user.id,
-      registros_encontrados: existeUsuarioPorId?.length || 0,
-      datos: existeUsuarioPorId
-    });
 
     // 1.6. Si no existe por ID, buscar por email
     if (!existeUsuarioPorId || existeUsuarioPorId.length === 0) {
@@ -78,16 +145,9 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
         .select('id_usuario, nombre, apellido, email')
         .eq('email', user.email || '');
 
-      console.log('🔍 Búsqueda por email:', {
-        email: user.email,
-        registros_encontrados: existeUsuarioPorEmail?.length || 0,
-        datos: existeUsuarioPorEmail
-      });
-
       if (existeUsuarioPorEmail && existeUsuarioPorEmail.length > 0) {
         // El usuario existe con el mismo email pero diferente id_usuario
         // Actualizar el id_usuario para vincularlo con Auth
-        console.log('🔄 Actualizando id_usuario para vincular con Auth...');
         
         const { data: usuarioActualizado, error: updateError } = await supabase
           .from('usuario')
@@ -104,10 +164,8 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
           throw new Error(`Error vinculando usuario: ${updateError.message}`);
         }
 
-        console.log('✅ Usuario vinculado con Auth:', usuarioActualizado);
       } else {
         // No existe el usuario, crear uno nuevo
-        console.log('👤 Usuario no existe, creando...');
         
         const { data: nuevoUsuario, error: createError } = await supabase
           .from('usuario')
@@ -117,7 +175,8 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
             apellido: user.user_metadata?.apellido || 'Nuevo',
             email: user.email || '',
             usuario: user.email?.split('@')[0] || 'usuario',
-            contraseña: '', // Campo requerido según tu esquema
+            // Usar la columna real 'contraseña' (U+00F1) en la DB
+            contraseña: '',
             id_rol: 1, // Rol por defecto
             created_at: new Date().toISOString()
           })
@@ -129,7 +188,6 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
           throw new Error(`Error creando usuario: ${createError.message}`);
         }
 
-        console.log('✅ Usuario creado:', nuevoUsuario);
       }
     }
 
@@ -157,7 +215,6 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       .eq('id_usuario', user.id)
       .single();
 
-    console.log('📊 Consulta final usuario:', userData);
 
     if (userError) {
       console.error('Error consultando usuario:', userError);
@@ -210,7 +267,6 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       especialidades_adicionales: especialidadesAdicionales
     };
 
-    console.log('✅ Perfil completo construido:', perfil);
     return perfil;
 
   } catch (error) {

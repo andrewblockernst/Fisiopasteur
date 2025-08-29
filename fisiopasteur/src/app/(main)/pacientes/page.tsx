@@ -58,7 +58,7 @@ export default function PacientePage() {
     }
 
     return (
-        <div className="min-h-screen">
+        <div className="min-h-screen text-black">
             
             {/* Header Mobile */}
             <div className="sm:hidden bg-white border-b border-gray-200">
