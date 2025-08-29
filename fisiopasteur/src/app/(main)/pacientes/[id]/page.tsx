@@ -1,6 +1,9 @@
+'use client'
 import { Tables } from "@/types/database.types";
-import { DeletePacienteDialog } from "./eliminar-dialog";
-import Button from "../boton";
+import { useRouter, useParams } from "next/navigation";
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { getPaciente } from "@/lib/actions/paciente.action";
 
 type Paciente = Tables<'paciente'>;
 
@@ -11,8 +14,62 @@ interface ConsultaPacienteMobileProps {
     onDelete?: () => void; 
 }
 
+export default function ConsultaPacienteMobile() {
+    const router = useRouter();
+    const params = useParams();
+    const searchParams = useSearchParams();
+    const [isEditing, setIsEditing] = useState(false);
+    const [viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
+    const [loading, setLoading] = useState(true);
 
-export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit, onDelete }: ConsultaPacienteMobileProps) {
+    useEffect(() => {
+        const loadPaciente = async () => {
+            try {
+                setLoading(true);
+                
+                // Opción 1: Intentar obtener los datos del query parameter 'data'
+                const pacienteDataParam = searchParams.get('data');
+                if (pacienteDataParam) {
+                    try {
+                        const pacienteFromParams = JSON.parse(decodeURIComponent(pacienteDataParam));
+                        setViewingPaciente(pacienteFromParams);
+                        setLoading(false);
+                        return;
+                    } catch (parseError) {
+                        console.warn('Error parsing paciente data from URL:', parseError);
+                        // Si hay error parseando, continúa con la consulta a DB
+                    }
+                }
+                
+                // Opción 2: Si no hay query parameter o falló el parsing, cargar desde DB
+                const pacienteId = params.id as string;
+                if (pacienteId) {
+                    const paciente = await getPaciente(parseInt(pacienteId));
+                    setViewingPaciente(paciente);
+                }
+            } catch (error) {
+                console.error('Error loading paciente:', error);
+                // Opcional: manejar error o redirigir
+                router.push('/pacientes');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadPaciente();
+    }, [params.id, searchParams, router]);
+
+    if (!viewingPaciente) {
+        return <div>Loading...</div>;
+    }
+
+    const onEdit = () => {
+        // Handle edit logic
+    };
+
+    const onDelete = () => {
+        // Handle delete logic
+    };
 
     const calculateAge = (birthDate: string | null): number | null => {
         if (!birthDate) return null;
@@ -39,7 +96,7 @@ export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit, onDel
             <div className="bg-white border-b border-gray-100 px-4 py-4">
                 <div className="flex items-center justify-between">
                     <button 
-                        onClick={onClose}
+                        onClick={() => {router.push('/pacientes')}}
                         className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors"
                     >
                         <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,7 +109,7 @@ export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit, onDel
                     </h1>
                     
                     <button 
-                        onClick={onEdit}
+                        onClick={() => setIsEditing(true)}
                         className="p-2 -mr-2 bg-[#9C1838] rounded-full hover:bg-[#7D1329] transition-colors"
                     >
                         <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
