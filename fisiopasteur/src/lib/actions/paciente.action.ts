@@ -30,10 +30,8 @@ function validatePacienteData(data: Partial<PacienteInsert | PacienteUpdate>): s
         const fechaNac = new Date(data.fecha_nacimiento);
         const hoy = new Date();
         if (fechaNac > hoy) {
-          console.log("Fecha de nacimiento no puede ser futura:", fechaNac, hoy);
           errors.push("La fecha de nacimiento no puede ser futura");
         } else {
-          console.log("Fecha de nacimiento válida:", fechaNac);
         }
     }
 
@@ -116,7 +114,6 @@ export async function getPacientes(options?: {
     throw new Error("Error al obtener pacientes");
   }
 
-  console.log("Pacientes fetched:", data, "\nCount:", count);
 
   return {
     data: data || [],
