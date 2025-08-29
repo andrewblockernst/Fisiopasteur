@@ -26,9 +26,6 @@ const DIAS_SEMANA_COMPLETOS = ["Domingo", "Lunes", "Martes", "Miércoles", "Juev
 
 export function CalendarioTurnos({
   turnos,
-  especialistas,
-  especialistaSeleccionado,
-  onEspecialistaChange,
   onDayClick,
   onCreateTurno
 }: CalendarioTurnosProps) {
@@ -132,9 +129,9 @@ export function CalendarioTurnos({
                   className="w-full h-full rounded cursor-pointer transition-colors relative hover:bg-gray-50"
                   onClick={() => onDayClick(fecha, turnosDelDia)}
                 >
-                  <div className="p-2 h-full flex flex-col">
+                  <div className="h-full flex flex-col">
                     {/* Número del día */}
-                    <div className="flex justify-between items-start mb-1">
+                    <div className="flex justify-between items-start p-1">
                       <span className={`text-sm font-medium ${
                         esHoy 
                           ? 'bg-[#9C1838] text-white w-6 h-6 rounded-2xl flex items-center justify-center' 
@@ -162,11 +159,8 @@ export function CalendarioTurnos({
                               />
                               {/* Horario y nombre del paciente en una línea */}
                               <div className="flex items-center gap-1 min-w-0 flex-1">
-                                <span className="text-gray-600 font-mono text-xs flex-shrink-0">
-                                    {turno.hora.substring(0, 5)}
-                                </span>
                                 <span className="text-gray-900 font-medium truncate">
-                                  {turno.paciente?.nombre}
+                                  {turno.paciente?.nombre || 'Paciente'} {turno.paciente?.apellido || ''}
                                 </span>
                               </div>
                             </div>
@@ -599,7 +593,7 @@ export function CalendarioTurnos({
       {/* Header con controles - Solo mostrar si NO es vista día en mobile */}
       {!(vista === 'dia' && typeof window !== 'undefined' && window.innerWidth < 768) && (
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => navegarFecha('anterior')}
               className="hover:bg-gray-100 rounded-lg transition-colors"

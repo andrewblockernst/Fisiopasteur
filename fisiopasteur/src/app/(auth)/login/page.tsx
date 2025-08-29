@@ -3,11 +3,10 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client"; // Cambiar este import
+import { createClient } from "@/lib/supabase/client"; 
 import Head from "next/head";
 import Link from "next/link";
-import Boton from "@/componentes/boton"; // Agregá este import arriba
-
+import Boton from "@/componentes/boton"; 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -46,12 +45,12 @@ export default function LoginPage() {
       <div className="h-screen flex">
         <div className="w-full md:w-1/2 flex items-center justify-center p-4">
           <div className="w-full max-w-sm">
-            <h2 className="text-lg font-medium text-gray-700">Bienvenido/a a</h2>
+            <h2 className="text-lg font-medium text-black">Bienvenido/a a</h2>
             <h1 className="text-3xl font-bold text-[var(--brand)] mb-8">Fisiopasteur</h1>
 
             <form onSubmit={handleLogin} className="space-y-6">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-600">
+                <label htmlFor="email" className="block text-sm font-medium text-black">
                   Correo electrónico
                 </label>
                 <input
@@ -65,7 +64,7 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-600">
+                <label htmlFor="password" className="block text-sm font-medium text-black">
                   Contraseña
                 </label>
                 <input
