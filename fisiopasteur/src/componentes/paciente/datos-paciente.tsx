@@ -17,7 +17,7 @@ export default function DatosPaciente({ paciente }: { paciente: Paciente }) {
       <div>
         <span className="font-semibold text-black">Fecha de nacimiento:</span> {
           paciente.fecha_nacimiento
-            ? new Date(paciente.fecha_nacimiento).toLocaleDateString("es-AR")
+            ? paciente.fecha_nacimiento.split('-').reverse().join('/')
             : ""
         }
       </div>

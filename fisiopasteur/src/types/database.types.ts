@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -126,14 +126,14 @@ export type Database = {
           apellido: string
           created_at: string | null
           direccion: string | null
-          dni: string
+          dni: string | null
           edad: number | null
           email: string | null
           fecha_nacimiento: string | null
           historia_clinica: string | null
           id_paciente: number
           nombre: string
-          telefono: string | null
+          telefono: string
           updated_at: string | null
         }
         Insert: {
@@ -141,14 +141,14 @@ export type Database = {
           apellido: string
           created_at?: string | null
           direccion?: string | null
-          dni: string
+          dni?: string | null
           edad?: number | null
           email?: string | null
           fecha_nacimiento?: string | null
           historia_clinica?: string | null
           id_paciente?: number
           nombre: string
-          telefono?: string | null
+          telefono: string
           updated_at?: string | null
         }
         Update: {
@@ -156,14 +156,14 @@ export type Database = {
           apellido?: string
           created_at?: string | null
           direccion?: string | null
-          dni?: string
+          dni?: string | null
           edad?: number | null
           email?: string | null
           fecha_nacimiento?: string | null
           historia_clinica?: string | null
           id_paciente?: number
           nombre?: string
-          telefono?: string | null
+          telefono?: string
           updated_at?: string | null
         }
         Relationships: []
@@ -286,7 +286,7 @@ export type Database = {
           activo?: boolean | null
           apellido: string
           color?: string | null
-          contraseña: string
+          contraseña: string
           created_at?: string | null
           email: string
           id_especialidad?: number | null
@@ -301,7 +301,7 @@ export type Database = {
           activo?: boolean | null
           apellido?: string
           color?: string | null
-          contraseña?: string
+          contraseña?: string
           created_at?: string | null
           email?: string
           id_especialidad?: number | null
