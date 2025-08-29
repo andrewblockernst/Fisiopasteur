@@ -4,6 +4,9 @@ import { useState, useTransition, useEffect } from "react";
 import { actualizarTurno, obtenerPacientes, obtenerEspecialistas, obtenerEspecialidades, obtenerBoxes, obtenerAgendaEspecialista } from "@/lib/actions/turno.action";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { Database } from "@/types/database.types";
+import Image from "next/image";
+import Loading from "../loading";
+import { useToastStore } from '@/stores/toast-store';
 
 // Tipos basados en tu estructura de BD
 type Turno = Database['public']['Tables']['turno']['Row'];
@@ -68,6 +71,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
   const [loading, setLoading] = useState(false);
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
+  const { addToast } = useToastStore();
 
   // Dialog para mensajes
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
@@ -257,24 +261,23 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
   const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
-      setDialog({
-        open: true,
-        type: 'error',
-        message: 'Por favor completa fecha, hora, especialista, especialidad y paciente'
+      addToast({
+        variant: 'error',
+        message: 'Campos requeridos',
+        description: 'Por favor completa fecha, hora, especialista, especialidad y paciente',
       });
       return;
     }
 
     startTransition(async () => {
       try {
-        // Preparar datos con tipos correctos para la actualización
         const datosActualizacion: Partial<Database['public']['Tables']['turno']['Update']> = {
           id_paciente: Number(formData.id_paciente),
           id_especialista: formData.id_especialista,
           id_especialidad: Number(formData.id_especialidad),
-          id_box: null, // Puedes agregar lógica para box si es necesario
+          id_box: null,
           fecha: formData.fecha,
-          hora: formData.hora + ':00', // Agregar segundos
+          hora: formData.hora + ':00',
           observaciones: formData.observaciones || null,
           tipo_plan: formData.tipo_plan,
         };
@@ -282,57 +285,71 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
         const res = await actualizarTurno(turno.id_turno, datosActualizacion);
 
         if (res.success) {
-          setDialog({ 
-            open: true, 
-            type: 'success', 
-            message: "Turno actualizado exitosamente" 
+          addToast({
+            variant: 'success',
+            message: 'Turno actualizado',
+            description: 'Los cambios se guardaron correctamente',
           });
+          
           onSaved?.(res.data as TurnoConRelaciones);
           onClose();
         } else {
-          setDialog({ 
-            open: true, 
-            type: 'error', 
-            message: res.error || "Error al actualizar turno" 
+          addToast({
+            variant: 'error',
+            message: 'Error al actualizar',
+            description: res.error || 'No se pudo actualizar el turno',
           });
         }
       } catch (error) {
         console.error('Error al actualizar turno:', error);
-        setDialog({ 
-          open: true, 
-          type: 'error', 
-          message: "Error inesperado al actualizar el turno" 
+        addToast({
+          variant: 'error',
+          message: 'Error inesperado',
+          description: 'Ocurrió un problema al actualizar el turno',
         });
       }
     });
   };
 
   // Mostrar loading mientras carga datos
-  if (loading) {
-    return (
-      <BaseDialog
-        type="custom"
-        size="md"
-        title="Editar Turno"
-        isOpen={open}
-        onClose={onClose}
-        customColor="#9C1838"
-        message={
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#9C1838]"></div>
-            <span className="ml-2">Cargando datos...</span>
-          </div>
-        }
-      />
-    );
-  }
+if (loading) {
+  return (
+    <BaseDialog
+      type="custom"
+      size="md"
+      title="Editar Turno"
+      customIcon={
+        <Image
+          src="/favicon.svg"
+          alt="Logo Fisiopasteur"
+          width={24}
+          height={24}
+          className="w-6 h-6"
+        />
+      }
+      isOpen={open}
+      onClose={onClose}
+      customColor="#9C1838"
+      message={<Loading size={48} text="Cargando datos..." />}
+    />
+  );
+}
 
   return (
     <>
       <BaseDialog
-        type="custom"
-        size="md"
-        title="Editar Turno"
+      type="custom"
+      size="lg"
+      title="Editar Turno"
+      customIcon={
+        <Image
+          src="/favicon.svg"
+          alt="Logo Fisiopasteur"
+          width={24}
+          height={24}
+          className="w-6 h-6"
+        />
+      }
         isOpen={open}
         onClose={onClose}
         showCloseButton
