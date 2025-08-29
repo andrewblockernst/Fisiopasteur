@@ -90,7 +90,12 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
           obtenerBoxes()
         ]);
         
-        if (p.success) setPacientes(p.data || []);
+        if (p.success) setPacientes(
+          (p.data || []).map((pac: any) => ({
+            ...pac,
+            dni: pac.dni ?? ""
+          }))
+        );
         if (e.success) setEspecialistas(
           (e.data || []).map((item: any) => ({
             ...item,
