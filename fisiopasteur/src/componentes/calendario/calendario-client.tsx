@@ -83,7 +83,7 @@ export function CalendarioClient({
   const turnosProximos = getTurnosProximos();
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen text-black">
       {/* Mobile Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
         <div className="flex items-center justify-between">
