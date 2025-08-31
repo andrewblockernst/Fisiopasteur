@@ -8,7 +8,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata = {
   title: "Fisiopasteur",
-  description: "Sistema de gestión para Fisiopasteur",
+  description: "Sistema de gestión interna para Fisiopasteur",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

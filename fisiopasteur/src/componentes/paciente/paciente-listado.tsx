@@ -4,12 +4,11 @@ import { useState, useEffect } from "react";
 import { DeletePacienteDialog } from "./eliminar-dialog";
 import { EditarPacienteDialog } from "./editar-paciente-dialog";
 import { ConsultaPacienteMobile } from "./consulta-paciente-mobile";
-import Boton from "@/componentes/boton";
 import { useRouter } from "next/navigation";
 import { NuevoPacienteDialog } from "./nuevo-paciente-dialog";
 import { getPacientes } from "@/lib/actions/paciente.action";
-import { deletePaciente } from "@/lib/actions/paciente.action";
 import { ChevronUp, EllipsisVertical } from "lucide-react";
+import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 
 
 type Paciente = Tables<'paciente'>;
@@ -187,7 +186,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                             </div>
                             <div>
                                 <span className="text-gray-500 font-medium">Teléfono:</span>
-                                <p className="text-gray-900">{paciente.telefono || '...'}</p>
+                                <p className="text-gray-900">{formatoNumeroTelefono(paciente.telefono || '...')}</p>
                             </div>
                             <div>
                                 <span className="text-gray-500 font-medium">F. Nacimiento:</span>
@@ -279,10 +278,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {paciente.dni || '...'}
+                                    {formatoDNI(paciente.dni || '...')}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {paciente.telefono || '...'}
+                                    {formatoNumeroTelefono(paciente.telefono || '...')}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {paciente.fecha_nacimiento ? 
