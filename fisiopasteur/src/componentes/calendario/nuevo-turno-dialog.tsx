@@ -6,6 +6,7 @@ import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerB
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
+import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -375,10 +376,76 @@ if (loading) {
             onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
             className="space-y-4 text-left"
           >
+            {/* Especialista */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Especialista*
+              </label>
+              <select
+                value={formData.id_especialista}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '' }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                required
+              >
+                <option value="">Seleccionar especialista</option>
+                {especialistas.map((especialista) => (
+                  <option key={especialista.id_usuario} value={especialista.id_usuario}>
+                  {especialista.nombre} {especialista.apellido}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Especialidad */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Especialidad*
+              </label>
+              <select
+                value={formData.id_especialidad}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_especialidad: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                required
+                disabled={!formData.id_especialista}
+              >
+                <option value="">Seleccionar especialidad</option>
+                {especialidadesDisponibles.map((esp: any) => (
+                  <option key={esp.id_especialidad} value={esp.id_especialidad}>
+                    {esp.nombre}
+                  </option>
+                ))}
+              </select>
+              {formData.id_especialista && especialidadesDisponibles.length === 0 && (
+                <p className="text-red-500 text-xs mt-1">
+                  Este especialista no tiene especialidades asignadas
+                </p>
+              )}
+            </div>
+          
+            {/* Paciente */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Paciente*
+              </label>
+              <select
+                value={formData.id_paciente}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_paciente: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                required
+              >
+                <option value="">Seleccionar paciente</option>
+                {pacientes.map((paciente) => (
+                  <option key={paciente.id_paciente} value={paciente.id_paciente}>
+                    {paciente.nombre} {paciente.apellido} ({formatoNumeroTelefono(paciente.telefono || 'No disponible')})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Fecha */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha *
+                Fecha*
               </label>
               <input
                 type="date"
@@ -393,7 +460,7 @@ if (loading) {
             {/* Hora */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hora * {verificandoDisponibilidad && <span className="text-xs text-gray-500">(Verificando disponibilidad...)</span>}
+                Hora* {verificandoDisponibilidad && <span className="text-xs text-gray-500">(Verificando disponibilidad...)</span>}
               </label>
               <select
                 value={formData.hora}
@@ -428,51 +495,9 @@ if (loading) {
               )}
             </div>
 
-            {/* Especialista */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Especialista *
-              </label>
-              <select
-                value={formData.id_especialista}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                required
-              >
-                <option value="">Seleccionar especialista</option>
-                {especialistas.map((especialista) => (
-                  <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                    . {especialista.nombre} {especialista.apellido}
-                  </option>
-                ))}
-              </select>
-            </div>
+            
 
-            {/* Especialidad */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Especialidad *
-              </label>
-              <select
-                value={formData.id_especialidad}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialidad: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                required
-                disabled={!formData.id_especialista}
-              >
-                <option value="">Seleccionar especialidad</option>
-                {especialidadesDisponibles.map((esp: any) => (
-                  <option key={esp.id_especialidad} value={esp.id_especialidad}>
-                    {esp.nombre}
-                  </option>
-                ))}
-              </select>
-              {formData.id_especialista && especialidadesDisponibles.length === 0 && (
-                <p className="text-red-500 text-xs mt-1">
-                  Este especialista no tiene especialidades asignadas
-                </p>
-              )}
-            </div>
+            
 
             {/* Plan */}
             <div>
@@ -489,25 +514,7 @@ if (loading) {
               </select>
             </div>
 
-            {/* Paciente */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Paciente *
-              </label>
-              <select
-                value={formData.id_paciente}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_paciente: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                required
-              >
-                <option value="">Seleccionar paciente</option>
-                {pacientes.map((paciente) => (
-                  <option key={paciente.id_paciente} value={paciente.id_paciente}>
-                    {paciente.nombre} {paciente.apellido} - DNI: {paciente.dni}
-                  </option>
-                ))}
-              </select>
-            </div>
+            
 
             {/* Precio */}
             <div>
