@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock } from "lucide-react";
 import { useTurnoStore } from "@/stores/turno-store";
 import type { TurnoConDetalles } from "@/stores/turno-store";
@@ -31,10 +31,16 @@ export function CalendarioTurnos({
 }: CalendarioTurnosProps) {
   const [fechaActual, setFechaActual] = useState(new Date());
   const [vista, setVista] = useState<VistaCalendario>('mes');
+  const [isMobile, setIsMobile] = useState(false);
   const { getTurnosByDate } = useTurnoStore();
 
-  // Detectar si es móvil
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  useEffect(() => {
+    // Solo se ejecuta en el cliente
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const getTurnosParaDia = (fecha: Date) => {
     return getTurnosByDate(turnos, fecha);

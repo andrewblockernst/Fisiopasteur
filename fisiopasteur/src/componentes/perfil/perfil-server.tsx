@@ -1,6 +1,5 @@
 import { obtenerPerfilUsuario } from '@/lib/actions/perfil.action';
-import PerfilCliente from './perfil-vista';
-import { Suspense } from 'react';
+import PerfilCliente from '@/componentes/perfil/perfil-vista';
 
 export default async function PerfilServidor() {
   const perfil = await obtenerPerfilUsuario();
@@ -19,21 +18,7 @@ export default async function PerfilServidor() {
   }
 
   return (
-    <Suspense fallback={<PerfilSkeleton />}>
       <PerfilCliente perfil={perfil} />
-    </Suspense>
   );
 }
 
-function PerfilSkeleton() {
-  return (
-    <div className="animate-pulse space-y-6">
-      <div className="h-8 bg-gray-200 rounded-md w-1/3"></div>
-      <div className="space-y-4">
-        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-        <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-        <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-      </div>
-    </div>
-  );
-}

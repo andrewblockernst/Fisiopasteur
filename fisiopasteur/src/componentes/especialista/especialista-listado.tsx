@@ -1,10 +1,11 @@
-import Link from "next/link";
 import Button from "@/componentes/boton";
-import { DeleteEspecialistaButton } from "./eliminar-boton";
-import { useState } from "react";
+//import { DeleteEspecialistaButton } from "./eliminar-boton";
+import { useState, useTransition } from "react";
 import { EditarEspecialistaDialog } from "./editar-especialista-dialog";
 import type { Tables } from "@/types/database.types";
 import { formatoNumeroTelefono } from "@/lib/utils";
+import { toggleEspecialistaActivo } from "@/lib/actions/especialista.action";
+import { useToastStore } from "@/stores/toast-store";
 
 type Especialidad = Tables<"especialidad">;
 type Usuario = Tables<"usuario"> & { 
@@ -25,6 +26,8 @@ export function EspecialistasTable({
   especialidades 
 }: EspecialistasTableProps) {
   const [editingEspecialista, setEditingEspecialista] = useState<Usuario | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const { addToast } = useToastStore();
 
   const handleEditClose = () => {
     setEditingEspecialista(null);
@@ -32,46 +35,41 @@ export function EspecialistasTable({
       onEspecialistaUpdated();
     }
   };
+
+  const handleToggleActivo = (especialista: Usuario) => {
+    startTransition(async () => {
+      const res = await toggleEspecialistaActivo(especialista.id_usuario, !especialista.activo);
+      addToast({
+        variant: res.success ? "success" : "error",
+        message: res.message,
+        description: res.description,
+      });
+      if (onEspecialistaUpdated) onEspecialistaUpdated();
+    });
+  };
+
   return (
     <>
-      {/* Vista de tabla para desktop */}
+      {/* Tabla desktop */}
       <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Nombre
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Especialidades
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Color
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Teléfono
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Acciones
-              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Especialidades</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {especialistas.map((especialista) => (
-              <tr key={especialista.id_usuario}>
+              <tr key={especialista.id_usuario} className={!especialista.activo ? "opacity-60" : ""}>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {especialista.nombre} {especialista.apellido}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        @{especialista.usuario}
-                      </div>
-                    </div>
+                  <div className="text-sm font-medium text-gray-900">
+                    {especialista.nombre} {especialista.apellido}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -98,14 +96,16 @@ export function EspecialistasTable({
                     <div
                       className="w-6 h-6 rounded border border-gray-300 mr-2"
                       style={{ backgroundColor: especialista.color || "#6B7280" }}
-                    />
-                    <span className="text-xs font-mono text-gray-600">
-                      {especialista.color || "Sin color"}
-                    </span>
+                    />         
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {formatoNumeroTelefono(especialista.telefono || "No disponible")}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${especialista.activo ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-600"}`}>
+                    {especialista.activo ? "Activo" : "Inactivo"}
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                   <Button 
@@ -115,11 +115,14 @@ export function EspecialistasTable({
                   >
                     Editar
                   </Button>
-                  <DeleteEspecialistaButton 
-                    id={especialista.id_usuario}
-                    nombre={`${especialista.nombre} ${especialista.apellido}`}
-                    onDeleted={onEspecialistaDeleted}
-                  />
+                  <Button
+                    variant={especialista.activo ? "danger" : "success"}
+                    className="text-xs"
+                    disabled={isPending}
+                    onClick={() => handleToggleActivo(especialista)}
+                  >
+                    {especialista.activo ? "Inactivar" : "Activar"}
+                  </Button>
                 </td>
               </tr>
             ))}
@@ -127,34 +130,30 @@ export function EspecialistasTable({
         </table>
       </div>
 
-      {/* Vista de cards para mobile */}
+      {/* Cards mobile */}
       <div className="md:hidden space-y-4">
         {especialistas.map((especialista) => (
-          <div key={especialista.id_usuario} className="bg-white shadow-md rounded-lg p-4 border border-gray-200">
+          <div key={especialista.id_usuario} className={`bg-white shadow-md rounded-lg p-4 border border-gray-200 ${!especialista.activo ? "opacity-60" : ""}`}>
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
                 <h3 className="text-lg font-medium text-gray-900">
                   {especialista.nombre} {especialista.apellido}
                 </h3>
-                <p className="text-sm text-gray-500">@{especialista.usuario}</p>
               </div>
               <div
                 className="w-8 h-8 rounded-full border-2 border-gray-300 flex-shrink-0"
                 style={{ backgroundColor: especialista.color || "#6B7280" }}
               />
             </div>
-            
             <div className="space-y-2 mb-4">
               <div className="flex items-center text-sm">
                 <span className="font-medium text-gray-700 w-20">Email:</span>
                 <span className="text-gray-900 break-all">{especialista.email}</span>
               </div>
-              
               <div className="flex items-center text-sm">
                 <span className="font-medium text-gray-700 w-20">Teléfono:</span>
                 <span className="text-gray-900">{formatoNumeroTelefono(especialista.telefono || "No disponible")}</span>
               </div>
-              
               <div className="text-sm">
                 <span className="font-medium text-gray-700">Especialidades:</span>
                 <div className="mt-1 flex flex-wrap gap-1">
@@ -172,8 +171,12 @@ export function EspecialistasTable({
                   )}
                 </div>
               </div>
+              <div>
+                <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${especialista.activo ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-600"}`}>
+                  {especialista.activo ? "Activo" : "Inactivo"}
+                </span>
+              </div>
             </div>
-            
             <div className="flex space-x-2">
               <Button 
                 variant="secondary" 
@@ -182,11 +185,14 @@ export function EspecialistasTable({
               >
                 Editar
               </Button>
-              <DeleteEspecialistaButton 
-                id={especialista.id_usuario}
-                nombre={`${especialista.nombre} ${especialista.apellido}`}
-                onDeleted={onEspecialistaDeleted}
-              />
+              <Button
+                variant={especialista.activo ? "danger" : "success"}
+                className="flex-1 text-sm"
+                disabled={isPending}
+                onClick={() => handleToggleActivo(especialista)}
+              >
+                {especialista.activo ? "Inactivar" : "Activar"}
+              </Button>
             </div>
           </div>
         ))}
