@@ -1,3 +1,4 @@
+import { formatoNumeroTelefono } from "@/lib/utils";
 import { Tables } from "@/types/database.types";
 
 type Paciente = Tables<"paciente">;
@@ -9,7 +10,7 @@ export default function DatosPaciente({ paciente }: { paciente: Paciente }) {
         <span className="font-semibold text-black">Nombre:</span> {paciente.nombre + " " + paciente.apellido}
       </div>
       <div>
-        <span className="font-semibold text-black">Número:</span> {paciente.telefono}
+        <span className="font-semibold text-black">Contacto:</span> {formatoNumeroTelefono(paciente.telefono)}
       </div>
       <div>
         <span className="font-semibold text-black">Dirección:</span> {paciente.direccion}

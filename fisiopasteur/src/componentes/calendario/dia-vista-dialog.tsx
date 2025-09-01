@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, FileText, Phone, Edit, Trash2 } from "lucide-react";
+import { Clock } from "lucide-react";
 import { useTurnoStore, type TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
 import { eliminarTurno as eliminarTurnoAction } from "@/lib/actions/turno.action";
+import Image from "next/image";
+import TurnoCard from "./turno-card";
 
 interface DayViewModalProps {
   isOpen: boolean;
@@ -88,9 +90,18 @@ export function DayViewModal({
       isOpen={isOpen}
       onClose={onClose}
       showCloseButton
+      customIcon={
+        <Image
+          src="/favicon.svg"
+          alt="Logo Fisiopasteur"
+          width={28}
+          height={28}
+          className="w-7 h-7"
+          />
+      }
       message={
         <div className="text-left">
-          <p className="text-red-700 font-semibold mb-4 capitalize">
+          <p className="text-[#9C1838] font-semibold mb-4 capitalize">
             {formatearFecha(fecha)}
           </p>
           {turnosLocal.length === 0 ? (
@@ -114,81 +125,19 @@ export function DayViewModal({
               {turnosLocal
                 .sort((a, b) => a.hora.localeCompare(b.hora))
                 .map((turno) => (
-                  <div
+                  <TurnoCard
                     key={turno.id_turno}
-                    className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-4 h-4 rounded-full"
-                          style={{ backgroundColor: turno.especialista?.color || '#9C1838' }}
-                        />
-                        <div>
-                          <h4 className="font-semibold text-gray-900">
-                            {turno.paciente?.nombre} {turno.paciente?.apellido}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            Dr. {turno.especialista?.nombre} {turno.especialista?.apellido}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <span className={`
-                          px-3 py-1 rounded-full text-xs font-medium border
-                          ${getEstadoColor(turno.estado || 'pendiente')}
-                        `}>
-                          {turno.estado || 'pendiente'}
-                        </span>
-                        
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleEdit(turno)}
-                            className="p-2 text-gray-600 hover:text-[#9C1838] hover:bg-gray-100 rounded-lg transition-colors"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(turno)}
-                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-gray-100 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Clock className="w-4 h-4" />
-                        <span>
-                          {formatearHora(turno.hora)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Phone className="w-4 h-4" />
-                        <span>{turno.paciente?.telefono || 'Sin teléfono'}</span>
-                      </div>
-                      
-                      {turno.observaciones && (
-                        <div className="md:col-span-2 flex items-start gap-2 text-gray-600">
-                          <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm">{turno.observaciones}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    turno={turno}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    getEstadoColor={getEstadoColor}
+                    formatearHora={formatearHora}
+                  />
                 ))}
             </div>
           )}
         </div>
       }
-      secondaryButton={{
-        text: "Cerrar",
-        onClick: onClose,
-      }}
     />
       {turnoEditando && (
         <EditarTurnoDialog
@@ -206,11 +155,10 @@ export function DayViewModal({
           onClose={() => setTurnoEditando(null)}
           onSaved={(updated?: any) => {
             setTurnoEditando(null);
-          if (updated) {
-            updateTurno(turnoEditando.id_turno, updated);
-            setTurnosLocal(prev => prev.map(t => t.id_turno === turnoEditando.id_turno ? { ...t, ...updated } as any : t));
-            addToast({ variant: 'success', message: 'Turno actualizado' });
-          }
+            if (updated) {
+              updateTurno(turnoEditando.id_turno, updated);
+              setTurnosLocal(prev => prev.map(t => t.id_turno === turnoEditando.id_turno ? { ...t, ...updated } as any : t));
+            }
           }}
         />
       )}
