@@ -4,6 +4,7 @@ import { DeleteEspecialistaButton } from "./eliminar-boton";
 import { useState } from "react";
 import { EditarEspecialistaDialog } from "./editar-especialista-dialog";
 import type { Tables } from "@/types/database.types";
+import { formatoNumeroTelefono } from "@/lib/utils";
 
 type Especialidad = Tables<"especialidad">;
 type Usuario = Tables<"usuario"> & { 
@@ -104,7 +105,7 @@ export function EspecialistasTable({
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {especialista.telefono || "No disponible"}
+                  {formatoNumeroTelefono(especialista.telefono || "No disponible")}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                   <Button 
@@ -151,7 +152,7 @@ export function EspecialistasTable({
               
               <div className="flex items-center text-sm">
                 <span className="font-medium text-gray-700 w-20">Teléfono:</span>
-                <span className="text-gray-900">{especialista.telefono || "No disponible"}</span>
+                <span className="text-gray-900">{formatoNumeroTelefono(especialista.telefono || "No disponible")}</span>
               </div>
               
               <div className="text-sm">
