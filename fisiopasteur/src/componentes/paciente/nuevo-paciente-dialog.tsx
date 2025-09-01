@@ -2,14 +2,30 @@
 
 import BaseDialog from "../dialog/base-dialog";
 import Image from "next/image";
+import { ToastItem } from "@/stores/toast-store";
 
 interface NuevoPacienteDialogProps {
     isOpen: boolean;
     onClose: () => void;
+    handleToast: (toast: Omit<ToastItem, 'id'>) => void;
 }
 
-export function NuevoPacienteDialog({ isOpen, onClose }: NuevoPacienteDialogProps) {
+export function NuevoPacienteDialog({ isOpen, onClose, handleToast }: NuevoPacienteDialogProps) {
+    const onSuccess = () => {
+        handleToast({message: "Paciente creado exitosamente", variant: "success"});
+        onClose();
+    }
+
+    const onError = (error: unknown) => {
+        handleToast({
+            message: error instanceof Error ? error.message : "Error al crear el paciente.",
+            variant: "error"
+        });
+    }
+
     return (
+        
+
         <BaseDialog
             type="custom"
             size="lg"
@@ -27,7 +43,8 @@ export function NuevoPacienteDialog({ isOpen, onClose }: NuevoPacienteDialogProp
                 <div className="text-left">
                     <div className="text-gray-600 mb-6 text-center">Completa la información para crear un nuevo paciente.</div>
                     <PacienteFormWrapper
-                        onSuccess={onClose}
+                        onSuccess={onSuccess}
+                        onError={onError}
                     />
                 </div>
             }
@@ -40,14 +57,16 @@ export function NuevoPacienteDialog({ isOpen, onClose }: NuevoPacienteDialogProp
 
 interface PacienteFormWrapperProps {
     onSuccess: () => void;
+    onError: (error: unknown) => void;
 }
 
-function PacienteFormWrapper({ onSuccess }: PacienteFormWrapperProps) {
+function PacienteFormWrapper({ onSuccess, onError }: PacienteFormWrapperProps) {
     return (
         <div className="max-w-4xl">
             <PacienteFormForDialog
                 mode="create"
                 onSuccess={onSuccess}
+                onError={onError}
             />
         </div>
     );
@@ -56,13 +75,16 @@ function PacienteFormWrapper({ onSuccess }: PacienteFormWrapperProps) {
 import { createPaciente } from "@/lib/actions/paciente.action";
 import Button from "../boton";
 import { useState } from "react";
+import { useToastStore } from "@/stores/toast-store";
+import { error } from "console";
 
 interface PacienteFormForDialogProps {
     mode: "create" | "edit";
     onSuccess: () => void;
+    onError: (error: unknown) => void;
 }
 
-function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) {
+function PacienteFormForDialog({ mode, onSuccess, onError }: PacienteFormForDialogProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -72,7 +94,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
         // Validar campos del formulario y agregar errores a newErrors
         if (!formData.get("nombre")) newErrors.nombre = "El nombre es obligatorio.";
         if(!formData.get("apellido")) newErrors.apellido = "El apellido es obligatorio.";
-        if(!formData.get("telefono")) newErrors.telefono = "El telefonoT es obligatorio.";
+        if(!formData.get("telefono")) newErrors.telefono = "El telefono es obligatorio.";
 
         const email = formData.get("email") as string;
         if (email && !/\S+@\S+\.\S+/.test(email)) {
@@ -99,7 +121,7 @@ function PacienteFormForDialog({ mode, onSuccess }: PacienteFormForDialogProps) 
             }
 
             console.error("Error:", error);
-            alert("Error al crear paciente");
+            onError(error);
             setIsSubmitting(false);
         }
     };
