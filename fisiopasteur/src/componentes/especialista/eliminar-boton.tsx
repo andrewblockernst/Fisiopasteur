@@ -1,80 +1,79 @@
-"use client";
+// "use client";
 
-import { deleteEspecialista } from "@/lib/actions/especialista.action";
-import Button from "@/componentes/boton";
-import BaseDialog from "@/componentes/dialog/base-dialog";
-import { useState } from "react";
-import { useToastStore } from '@/stores/toast-store';
+// import Button from "@/componentes/boton";
+// import BaseDialog from "@/componentes/dialog/base-dialog";
+// import { useState } from "react";
+// import { useToastStore } from '@/stores/toast-store';
 
-interface DeleteEspecialistaButtonProps {
-  id: string;
-  nombre: string;
-  onDeleted?: () => void; // Nuevo callback
-}
+// interface DeleteEspecialistaButtonProps {
+//   id: string;
+//   nombre: string;
+//   onDeleted?: () => void; // Nuevo callback
+// }
 
-export function DeleteEspecialistaButton({ id, nombre, onDeleted }: DeleteEspecialistaButtonProps) {
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showDialog, setShowDialog] = useState(false);
-  const { showServerActionResponse } = useToastStore();
+// export function DeleteEspecialistaButton({ id, nombre, onDeleted }: DeleteEspecialistaButtonProps) {
+//   const [isDeleting, setIsDeleting] = useState(false);
+//   const [showDialog, setShowDialog] = useState(false);
+//   const { showServerActionResponse } = useToastStore();
 
-  const handleDelete = async () => {
-    try {
-      setIsDeleting(true);
-      const result = await deleteEspecialista(id);
-      showServerActionResponse(result);
+//   const handleDelete = async () => {
+//     try {
+//       setIsDeleting(true);
+//       const result = DeleteEspecialistaButton(id);
+//       showServerActionResponse(result);
 
-      if (result.success) {
-        setShowDialog(false);
-        onDeleted?.();
-      }
-    } catch (error) {
-      console.error("Error eliminando especialista:", error);
-      showServerActionResponse({
-        success: false,
-        message: 'Error al eliminar',
-        toastType: 'error',
-        description: 'No se pudo eliminar el especialista'
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+//       if (result.success) {
+//         setShowDialog(false);
+//         onDeleted?.();
+//       }
+//     } catch (error) {
+//       console.error("Error eliminando especialista:", error);
+//       showServerActionResponse({
+//         success: false,
+//         message: 'Error al eliminar',
+//         toastType: 'error',
+//         description: 'No se pudo eliminar el especialista'
+//       });
+//     } finally {
+//       setIsDeleting(false);
+//     }
+//   };
 
-  return (
-    <>
-      <Button
-        variant="danger"
-        className="text-xs flex-1 sm:flex-none"
-        onClick={() => setShowDialog(true)}
-        disabled={isDeleting}
-      >
-        {isDeleting ? "Eliminando..." : "Eliminar"}
-      </Button>
+//   return (
+//     <>
+//       <Button
+//         variant="danger"
+//         className="text-xs flex-1 sm:flex-none"
+//         onClick={() => setShowDialog(true)}
+//         disabled={isDeleting}
+//       >
+//         {isDeleting ? "Eliminando..." : "Eliminar"}
+//       </Button>
 
-      <BaseDialog
-        type="warning"
-        title="Confirmar eliminación de especialista."
-        message={
-          <>
-            ¿Estás seguro de que quieres eliminar a <b>{nombre}</b> como especialista de Fisiopasteur?
-            <br />
-            <i style={{ marginTop: 12, display: "block", fontSize: 12, fontWeight: "bold" }}>
-              Esta acción no se puede deshacer y se perderán todos los datos asociados a este especialista.
-            </i>
-          </>
-        }
-        isOpen={showDialog}
-        primaryButton={{
-          text: isDeleting ? "Eliminando..." : "Eliminar",
-          onClick: handleDelete
-        }}
-        secondaryButton={{
-          text: "Cancelar",
-          onClick: () => setShowDialog(false)
-        }}
-        onClose={() => setShowDialog(false)}
-        showCloseButton={true}
-      />
-    </>
-  );
-}
+//       <BaseDialog
+//         type="warning"
+//         title="Confirmar eliminación de especialista."
+//         message={
+//           <>
+//             ¿Estás seguro de que quieres eliminar a <b>{nombre}</b> como especialista de Fisiopasteur?
+//             <br />
+//             <i style={{ marginTop: 12, display: "block", fontSize: 12, fontWeight: "bold" }}>
+//               Esta acción no se puede deshacer y se perderán todos los datos asociados a este especialista.
+//             </i>
+//           </>
+//         }
+//         isOpen={showDialog}
+//         primaryButton={{
+//           text: isDeleting ? "Eliminando..." : "Eliminar",
+//           onClick: handleDelete
+//         }}
+//         secondaryButton={{
+//           text: "Cancelar",
+//           onClick: () => setShowDialog(false)
+//         }}
+//         onClose={() => setShowDialog(false)}
+//         showCloseButton={true}
+//       />
+//     </>
+//   );
+// }
