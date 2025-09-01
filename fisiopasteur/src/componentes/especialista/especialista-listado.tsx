@@ -68,9 +68,6 @@ export function EspecialistasTable({
                       <div className="text-sm font-medium text-gray-900">
                         {especialista.nombre} {especialista.apellido}
                       </div>
-                      <div className="text-sm text-gray-500">
-                        @{especialista.usuario}
-                      </div>
                     </div>
                   </div>
                 </td>
@@ -96,12 +93,9 @@ export function EspecialistasTable({
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div
-                      className="w-6 h-6 rounded border border-gray-300 mr-2"
+                      className="w-6 h-6 rounded border border-gray-300"
                       style={{ backgroundColor: especialista.color || "#6B7280" }}
                     />
-                    <span className="text-xs font-mono text-gray-600">
-                      {especialista.color || "Sin color"}
-                    </span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -136,7 +130,6 @@ export function EspecialistasTable({
                 <h3 className="text-lg font-medium text-gray-900">
                   {especialista.nombre} {especialista.apellido}
                 </h3>
-                <p className="text-sm text-gray-500">@{especialista.usuario}</p>
               </div>
               <div
                 className="w-8 h-8 rounded-full border-2 border-gray-300 flex-shrink-0"
