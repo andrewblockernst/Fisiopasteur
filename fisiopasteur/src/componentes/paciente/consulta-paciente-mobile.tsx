@@ -1,6 +1,7 @@
 import { Tables } from "@/types/database.types";
 import { DeletePacienteDialog } from "./eliminar-dialog";
 import Button from "../boton";
+import { HistorialClinicoMobile } from "./historial-clinico-mobile";
 
 type Paciente = Tables<'paciente'>;
 
@@ -158,50 +159,8 @@ export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit, onDel
                     </div>
                 </div>
 
-                {/* Sección de Tratamientos */}
-                <div className="bg-white mt-6 mx-4 rounded-lg shadow-sm mb-20">
-                    <div className="px-6 py-4 border-b border-gray-100">
-                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                            <svg className="w-5 h-5 mr-2 text-[#9C1838]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            Tratamientos
-                        </h3>
-                    </div>
-                    
-                    <div className="p-6">
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#9C1838] text-white">
-                                Fisioterapia
-                            </span>
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#9C1838] text-white">
-                                Osteopatía
-                            </span>
-                        </div>
-                        
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div className="flex items-center">
-                                    <div className="w-2 h-2 bg-[#9C1838] rounded-full mr-3"></div>
-                                    <span className="font-medium text-gray-900">Fisioterapia</span>
-                                </div>
-                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                            </div>
-                            
-                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div className="flex items-center">
-                                    <div className="w-2 h-2 bg-[#9C1838] rounded-full mr-3"></div>
-                                    <span className="font-medium text-gray-900">Osteopatía</span>
-                                </div>
-                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {/* Sección de Historial Clínico */}
+                <HistorialClinicoMobile pacienteId={viewingPaciente.id_paciente} />
             </div>
 
             {/* Botones de acción flotantes */}

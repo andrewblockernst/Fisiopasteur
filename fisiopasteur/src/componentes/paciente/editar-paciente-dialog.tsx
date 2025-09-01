@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { updatePaciente } from "@/lib/actions/paciente.action";
 import Button from "../boton";
+import { ToastItem } from "@/stores/toast-store";
 
 type Paciente = Tables<'paciente'>;
 
@@ -13,9 +14,25 @@ interface EditarPacienteDialogProps {
     isOpen: boolean;
     onClose: () => void;
     paciente: Paciente;
+    handleToast: (toast: Omit<ToastItem, 'id'>) => void;
 }
 
-export function EditarPacienteDialog({ isOpen, onClose, paciente }: EditarPacienteDialogProps) {
+export function EditarPacienteDialog({ isOpen, onClose, paciente, handleToast }: EditarPacienteDialogProps) {
+    const onSuccess = () => {
+            handleToast({
+                variant: "success",
+                message: "El paciente se ha actualizado correctamente.",
+            });
+            onClose();
+        };
+
+    const onError = (error: unknown) => {
+        handleToast({
+            variant: "error",
+            message: error instanceof Error ? error.message : "Error al eliminar el paciente.",
+        });
+    };
+
     return (
         <BaseDialog
             type="custom"
@@ -35,7 +52,8 @@ export function EditarPacienteDialog({ isOpen, onClose, paciente }: EditarPacien
                     <div className="text-gray-600 mb-6 text-center">Modifica la información del paciente.</div>
                     <PacienteEditFormWrapper
                         paciente={paciente}
-                        onSuccess={onClose}
+                        onSuccess={onSuccess}
+                        onError={onError}
                     />
                 </div>
             }
@@ -49,14 +67,16 @@ export function EditarPacienteDialog({ isOpen, onClose, paciente }: EditarPacien
 interface PacienteEditFormWrapperProps {
     paciente: Paciente;
     onSuccess: () => void;
+    onError: (error: unknown) => void;
 }
 
-function PacienteEditFormWrapper({paciente, onSuccess} : PacienteEditFormWrapperProps) {
+function PacienteEditFormWrapper({paciente, onSuccess, onError} : PacienteEditFormWrapperProps) {
     return (
         <div className="max-w-4xl">
             <PacienteEditFormForDialog
                 paciente={paciente}
                 onSuccess={onSuccess}
+                onError={onError}
             />
         </div>
     )
@@ -65,9 +85,10 @@ function PacienteEditFormWrapper({paciente, onSuccess} : PacienteEditFormWrapper
 interface PacienteEditFormForDialogProps {
     paciente: Paciente;
     onSuccess: () => void;
+    onError: (error: unknown) => void;
 }
 
-function PacienteEditFormForDialog({paciente, onSuccess}: PacienteEditFormForDialogProps) {
+function PacienteEditFormForDialog({paciente, onSuccess, onError}: PacienteEditFormForDialogProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -104,7 +125,7 @@ function PacienteEditFormForDialog({paciente, onSuccess}: PacienteEditFormForDia
             }
 
             console.error("Error:", error);
-            alert(error.message);
+            onError(error);
             setIsSubmitting(false);
         }
     };
