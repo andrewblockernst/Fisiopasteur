@@ -39,7 +39,7 @@ export default function LoginPage() {
   return (
     <>
       <Head>
-        <title>Login - Fisiopasteur</title>
+        <title>Inicio de sesión | Fisiopasteur</title>
       </Head>
 
       <div className="h-screen flex">

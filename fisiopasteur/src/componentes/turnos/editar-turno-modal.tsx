@@ -7,6 +7,7 @@ import { Database } from "@/types/database.types";
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
+import { formatoNumeroTelefono } from "@/lib/utils";
 
 // Tipos basados en tu estructura de BD
 type Turno = Database['public']['Tables']['turno']['Row'];
@@ -386,7 +387,7 @@ if (loading) {
                 required
                 disabled={!formData.id_especialista || !formData.fecha || verificandoDisponibilidad}
               >
-                <option value="">
+                <option>
                   {!formData.id_especialista ? "Primero selecciona un especialista" : 
                    !formData.fecha ? "Primero selecciona una fecha" : 
                    "Seleccionar hora"}
@@ -426,7 +427,7 @@ if (loading) {
                 <option value="">Seleccionar especialista</option>
                 {especialistas.map((especialista) => (
                   <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                    Dr. {especialista.nombre} {especialista.apellido}
+                  {especialista.nombre} {especialista.apellido}
                   </option>
                 ))}
               </select>
@@ -487,7 +488,7 @@ if (loading) {
                 <option value="">Seleccionar paciente</option>
                 {pacientes.map((paciente) => (
                   <option key={paciente.id_paciente} value={paciente.id_paciente}>
-                    {paciente.nombre} {paciente.apellido} - DNI: {paciente.dni}
+                    {paciente.nombre} {paciente.apellido} ({formatoNumeroTelefono(paciente.telefono || 'No disponible')})
                   </option>
                 ))}
               </select>
