@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista, obtenerTurnos} from "@/lib/actions/turno.action";
 import Image from "next/image";
@@ -50,6 +50,14 @@ export function NuevoTurnoModal({
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
   const [verificandoBoxes, setVerificandoBoxes] = useState(false);
   const { addToast } = useToastStore();
+
+  // Estados para el autocomplete de pacientes
+  const [busquedaPaciente, setBusquedaPaciente] = useState('');
+  const [pacientesFiltrados, setPacientesFiltrados] = useState<any[]>([]);
+  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
+  const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null);
+  const inputPacienteRef = useRef<HTMLInputElement>(null);
+  const listaPacientesRef = useRef<HTMLDivElement>(null);
 
   // Dialog para mensajes (reemplaza los toasts)
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
@@ -101,6 +109,43 @@ export function NuevoTurnoModal({
     
     cargarDatos();
   }, [isOpen, especialistasProp.length, pacientesProp.length]);
+
+  // Filtrar pacientes según búsqueda
+  useEffect(() => {
+    if (!busquedaPaciente.trim()) {
+      setPacientesFiltrados([]);
+      return;
+    }
+
+    const filtrados = pacientes.filter(paciente => {
+      const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
+      const busqueda = busquedaPaciente.toLowerCase();
+      
+      return nombreCompleto.includes(busqueda) ||
+             paciente.nombre.toLowerCase().includes(busqueda) ||
+             paciente.apellido.toLowerCase().includes(busqueda) ||
+             paciente.dni?.toString().includes(busqueda);
+    }).slice(0, 10); // Limitar a 10 resultados
+
+    setPacientesFiltrados(filtrados);
+  }, [busquedaPaciente, pacientes]);
+
+  // Manejar clicks fuera del autocomplete
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        inputPacienteRef.current && 
+        !inputPacienteRef.current.contains(event.target as Node) &&
+        listaPacientesRef.current && 
+        !listaPacientesRef.current.contains(event.target as Node)
+      ) {
+        setMostrarListaPacientes(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Establecer fecha seleccionada cuando se abre el modal
   useEffect(() => {
@@ -273,6 +318,9 @@ export function NuevoTurnoModal({
       });
       setEspecialidadesDisponibles([]);
       setBoxesDisponibles([]);
+      setBusquedaPaciente('');
+      setPacienteSeleccionado(null);
+      setMostrarListaPacientes(false);
     }
   }, [isOpen]);
 
@@ -333,6 +381,33 @@ export function NuevoTurnoModal({
     return opciones;
   };
 
+  // Manejar selección de paciente
+  const seleccionarPaciente = (paciente: any) => {
+    setPacienteSeleccionado(paciente);
+    setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
+    setFormData(prev => ({ ...prev, id_paciente: String(paciente.id_paciente) }));
+    setMostrarListaPacientes(false);
+  };
+
+  // Manejar cambio en input de búsqueda
+  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setBusquedaPaciente(valor);
+    
+    if (!valor.trim()) {
+      setPacienteSeleccionado(null);
+      setFormData(prev => ({ ...prev, id_paciente: '' }));
+      setMostrarListaPacientes(false);
+    } else {
+      setMostrarListaPacientes(true);
+      // Si lo que escribió no coincide con el paciente seleccionado, limpiar selección
+      if (pacienteSeleccionado && !`${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`.toLowerCase().includes(valor.toLowerCase())) {
+        setPacienteSeleccionado(null);
+        setFormData(prev => ({ ...prev, id_paciente: '' }));
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
       addToast({
@@ -389,45 +464,44 @@ export function NuevoTurnoModal({
   };
 
   // Mostrar loading mientras carga datos
-if (loading) {
-  return (
-    <BaseDialog
-      type="custom"
-      size="md"
-      title="Nuevo Turno"
-      customIcon={
-        <Image
-          src="/favicon.svg"
-          alt="Logo Fisiopasteur"
-          width={24}
-          height={24}
-          className="w-6 h-6"
-        />
-      }
-      isOpen={isOpen}
-      onClose={onClose}
-      customColor="#9C1838"
-      message={<Loading size={48} text="Cargando datos..." />}
-    />
-  );
-}
-
+  if (loading) {
+    return (
+      <BaseDialog
+        type="custom"
+        size="md"
+        title="Nuevo Turno"
+        customIcon={
+          <Image
+            src="/favicon.svg"
+            alt="Logo Fisiopasteur"
+            width={24}
+            height={24}
+            className="w-6 h-6"
+          />
+        }
+        isOpen={isOpen}
+        onClose={onClose}
+        customColor="#9C1838"
+        message={<Loading size={48} text="Cargando datos..." />}
+      />
+    );
+  }
 
   return (
     <>
       <BaseDialog
-      type="custom"
-      size="lg"
-      title="Nuevo Turno"
-      customIcon={
-        <Image
-          src="/favicon.svg"
-          alt="Logo Fisiopasteur"
-          width={24}
-          height={24}
-          className="w-6 h-6"
-        />
-      }
+        type="custom"
+        size="lg"
+        title="Nuevo Turno"
+        customIcon={
+          <Image
+            src="/favicon.svg"
+            alt="Logo Fisiopasteur"
+            width={24}
+            height={24}
+            className="w-6 h-6"
+          />
+        }
         isOpen={isOpen}
         onClose={onClose}
         showCloseButton
@@ -451,7 +525,7 @@ if (loading) {
                 <option value="">Seleccionar especialista</option>
                 {especialistas.map((especialista) => (
                   <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                  {especialista.nombre} {especialista.apellido}
+                    {especialista.nombre} {especialista.apellido}
                   </option>
                 ))}
               </select>
@@ -483,24 +557,55 @@ if (loading) {
               )}
             </div>
           
-            {/* Paciente */}
-            <div>
+            {/* Paciente con Autocomplete */}
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Paciente*
               </label>
-              <select
-                value={formData.id_paciente}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_paciente: e.target.value }))}
+              <input
+                ref={inputPacienteRef}
+                type="text"
+                value={busquedaPaciente}
+                onChange={handleBusquedaPacienteChange}
+                onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                placeholder="Buscar paciente por nombre, apellido o DNI..."
                 required
-              >
-                <option value="">Seleccionar paciente</option>
-                {pacientes.map((paciente) => (
-                  <option key={paciente.id_paciente} value={paciente.id_paciente}>
-                    {paciente.nombre} {paciente.apellido} ({formatoNumeroTelefono(paciente.telefono || 'No disponible')})
-                  </option>
-                ))}
-              </select>
+                autoComplete="off"
+              />
+              
+              {/* Lista de resultados */}
+              {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
+                <div 
+                  ref={listaPacientesRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                >
+                  {pacientesFiltrados.map((paciente) => (
+                    <div
+                      key={paciente.id_paciente}
+                      onClick={() => seleccionarPaciente(paciente)}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium">
+                        {paciente.nombre} {paciente.apellido}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Mensaje cuando no hay resultados */}
+              {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
+                <div 
+                  ref={listaPacientesRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
+                >
+                  No se encontraron pacientes, verificar datos ingresados.
+                </div>
+              )}
             </div>
 
             {/* Fecha */}
