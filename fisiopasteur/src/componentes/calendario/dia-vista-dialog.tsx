@@ -155,10 +155,11 @@ export function DayViewModal({
           onClose={() => setTurnoEditando(null)}
           onSaved={(updated?: any) => {
             setTurnoEditando(null);
-            if (updated) {
-              updateTurno(turnoEditando.id_turno, updated);
-              setTurnosLocal(prev => prev.map(t => t.id_turno === turnoEditando.id_turno ? { ...t, ...updated } as any : t));
-            }
+          if (updated) {
+            updateTurno(turnoEditando.id_turno, updated);
+            setTurnosLocal(prev => prev.map(t => t.id_turno === turnoEditando.id_turno ? { ...t, ...updated } as any : t));
+            addToast({ variant: 'success', message: 'Turno actualizado' });
+          }
           }}
         />
       )}

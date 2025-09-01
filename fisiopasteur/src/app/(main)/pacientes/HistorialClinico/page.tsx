@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowLeft, Check, Pen, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getPaciente, agregarObservacion, editarObservacion, getEvolucionesClinicas } from "@/lib/actions/paciente.action";
@@ -84,17 +85,41 @@ export default function HistorialClinicoPage() {
     }
   };
 
+  // Handler para volver atrás
+  const handleBack = () => {
+    window.history.length > 1 ? window.history.back() : window.location.assign("/pacientes");
+  };
+
   return (
-    <div className="max-w-3xl mx-auto py-8 space-y-8">
-      {/* Parte 1: Datos del paciente */}
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        <h2 className="text-xl font-bold mb-2 text-black">Datos del paciente</h2>
+    <div className="container mx-auto px-2 sm:px-6 py-6 space-y-4">
+      {/* Mobile Header - Solo móvil */}
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={handleBack}
+            className="p-2 -ml-2 rounded-md active:scale-95 transition hover:bg-gray-100"
+            aria-label="Volver"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-lg font-semibold text-center flex-1">Historial Clínico</h1>
+          <span className="w-8" />
+        </div>
+      </header>
+
+      {/* HEADER desktop */}
+      <div className="hidden sm:flex items-center gap-4 mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-black">Historial Clínico</h1>
+      </div>
+
+      {/* Detalles del paciente */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow p-4 sm:p-6 space-y-4">
+        <h2 className="text-lg sm:text-xl font-bold mb-2 text-black">Datos del paciente</h2>
         {paciente && <DatosPaciente paciente={paciente} />}
       </div>
 
       {/* Parte 2: Historia clínica (observaciones/evoluciones) */}
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        <h3 className="text-lg font-bold mb-2 text-black">Historia clínica</h3>
+      <div className="bg-white rounded-xl border border-gray-200 shadow p-4 sm:p-6 space-y-4">
         <div className="space-y-3">
           {observaciones.length === 0 && (
             <div className="text-black">No hay observaciones registradas.</div>
@@ -103,9 +128,10 @@ export default function HistorialClinicoPage() {
             const puedeEditar = editandoId === obs.id_evolucion;
             return (
               <div key={obs.id_evolucion} className="border-b pb-2 mb-2">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <span className="font-semibold  text-black">Observación:</span>
+                {/* Grid para header de la observación */}
+                <div className="grid grid-cols-3 items-center gap-2">
+                  <div className="col-span-2">
+                    <span className="font-semibold text-black">Observación:</span>
                     {obs.created_at && (
                       <span className="ml-2 text-xs text-black">
                         {new Date(obs.created_at).toLocaleString("es-AR", {
@@ -118,47 +144,50 @@ export default function HistorialClinicoPage() {
                       </span>
                     )}
                   </div>
-                  <Boton
-                    className="text-black"
-                    variant="secondary"
-                    onClick={() => {
-                      setEditandoId(obs.id_evolucion);
-                      // Mostrar solo el texto sin el nombre
-                      if (obs.observaciones?.startsWith("[")) {
-                        setEditText(obs.observaciones.split("]")[1]?.trim() ?? "");
-                      } else {
-                        setEditText(obs.observaciones ?? "");
-                      }
-                    }}
-                  >
-                    Editar
-                  </Boton>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => {
+                        setEditandoId(obs.id_evolucion);
+                        if (obs.observaciones?.startsWith("[")) {
+                          setEditText(obs.observaciones.split("]")[1]?.trim() ?? "");
+                        } else {
+                          setEditText(obs.observaciones ?? "");
+                        }
+                      }}
+                      className="p-2 bg-[#9C1838] hover:bg-[#5b0f22] rounded-full transition-colors flex-shrink-0"
+                      aria-label="Editar observación"
+                    >
+                      <Pen className="text-white w-4 h-4"/>
+                    </button>
+                  </div>
                 </div>
                 {puedeEditar ? (
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
                       value={editText}
                       onChange={e => setEditText(e.target.value)}
                       className="border px-2 py-1 rounded w-full"
                     />
-                    <Boton
-                      className="text-black"
-                      variant="primary"
-                      onClick={() => handleEditarObservacion(obs.id_evolucion)}
-                    >
-                      Guardar
-                    </Boton>
-                    <Boton
-                      className="text-black"
-                      variant="secondary"
-                      onClick={() => {
-                        setEditandoId(null);
-                        setEditText("");
-                      }}
-                    >
-                      Cancelar
-                    </Boton>
+                    <div className="flex gap-2 justify-end w-full sm:w-auto">
+                      <button
+                        onClick={() => handleEditarObservacion(obs.id_evolucion)}
+                        className="p-2 bg-[#9C1838] hover:bg-[#5b0f22] rounded-full transition-colors flex-shrink-0"
+                        aria-label="Guardar"
+                      >
+                        <Check className="text-white w-4 h-4"/>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditandoId(null);
+                          setEditText("");
+                        }}
+                        className="p-2 bg-gray-500 hover:bg-gray-600 rounded-full transition-colors flex-shrink-0"
+                        aria-label="Cancelar"
+                      >
+                        <X className="text-white w-4 h-4"/>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-2 text-black">
@@ -178,7 +207,7 @@ export default function HistorialClinicoPage() {
             );
           })}
         </div>
-        <div className="flex gap-2 mt-4 text-black">
+        <div className="flex flex-col sm:flex-row gap-2 mt-4 text-black">
           <input
             type="text"
             value={nuevaObservacion}
