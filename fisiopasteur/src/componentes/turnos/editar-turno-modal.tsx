@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { actualizarTurno, obtenerPacientes, obtenerEspecialistas, obtenerEspecialidades, obtenerBoxes, obtenerAgendaEspecialista, obtenerTurnos, obtenerPrecioEspecialidad } from "@/lib/actions/turno.action";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { Database } from "@/types/database.types";
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
-import { formatoNumeroTelefono } from "@/lib/utils";
+import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 
 // Tipos basados en tu estructura de BD
 type Turno = Database['public']['Tables']['turno']['Row'];
@@ -78,6 +78,14 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
   const [verificandoBoxes, setVerificandoBoxes] = useState(false);
   const { addToast } = useToastStore();
 
+  // Estados para el autocomplete de pacientes
+  const [busquedaPaciente, setBusquedaPaciente] = useState('');
+  const [pacientesFiltrados, setPacientesFiltrados] = useState<PacienteAPI[]>([]);
+  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
+  const [pacienteSeleccionado, setPacienteSeleccionado] = useState<PacienteAPI | null>(null);
+  const inputPacienteRef = useRef<HTMLInputElement>(null);
+  const listaPacientesRef = useRef<HTMLDivElement>(null);
+
   // Dialog para mensajes (reemplaza los toasts)
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
     open: false, 
@@ -99,12 +107,23 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
           obtenerBoxes()
         ]);
         
-        if (p.success) setPacientes(
-          (p.data || []).map((pac: any) => ({
+        if (p.success) {
+          const pacientesData = (p.data || []).map((pac: any) => ({
             ...pac,
             dni: pac.dni ?? ""
-          }))
-        );
+          }));
+          setPacientes(pacientesData);
+          
+          // Establecer el paciente actual como seleccionado
+          const pacienteActual = pacientesData.find((pac: PacienteAPI) => 
+            String(pac.id_paciente) === String(turno.id_paciente)
+          );
+          if (pacienteActual) {
+            setPacienteSeleccionado(pacienteActual);
+            setBusquedaPaciente(`${pacienteActual.nombre} ${pacienteActual.apellido}`);
+          }
+        }
+        
         if (e.success) setEspecialistas(
           (e.data || []).map((item: any) => ({
             ...item,
@@ -121,7 +140,44 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
     
     cargarDatos();
-  }, [open]);
+  }, [open, turno.id_paciente]);
+
+  // Filtrar pacientes según búsqueda
+  useEffect(() => {
+    if (!busquedaPaciente.trim()) {
+      setPacientesFiltrados([]);
+      return;
+    }
+
+    const filtrados = pacientes.filter(paciente => {
+      const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
+      const busqueda = busquedaPaciente.toLowerCase();
+      
+      return nombreCompleto.includes(busqueda) ||
+             paciente.nombre.toLowerCase().includes(busqueda) ||
+             paciente.apellido.toLowerCase().includes(busqueda) ||
+             paciente.dni?.toString().includes(busqueda);
+    }).slice(0, 10); // Limitar a 10 resultados
+
+    setPacientesFiltrados(filtrados);
+  }, [busquedaPaciente, pacientes]);
+
+  // Manejar clicks fuera del autocomplete
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        inputPacienteRef.current && 
+        !inputPacienteRef.current.contains(event.target as Node) &&
+        listaPacientesRef.current && 
+        !listaPacientesRef.current.contains(event.target as Node)
+      ) {
+        setMostrarListaPacientes(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Filtrar especialidades según especialista seleccionado
   useEffect(() => {
@@ -349,6 +405,33 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     return opciones;
   };
 
+  // Manejar selección de paciente
+  const seleccionarPaciente = (paciente: PacienteAPI) => {
+    setPacienteSeleccionado(paciente);
+    setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
+    setFormData(prev => ({ ...prev, id_paciente: String(paciente.id_paciente) }));
+    setMostrarListaPacientes(false);
+  };
+
+  // Manejar cambio en input de búsqueda
+  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setBusquedaPaciente(valor);
+    
+    if (!valor.trim()) {
+      setPacienteSeleccionado(null);
+      setFormData(prev => ({ ...prev, id_paciente: '' }));
+      setMostrarListaPacientes(false);
+    } else {
+      setMostrarListaPacientes(true);
+      // Si lo que escribió no coincide con el paciente seleccionado, limpiar selección
+      if (pacienteSeleccionado && !`${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`.toLowerCase().includes(valor.toLowerCase())) {
+        setPacienteSeleccionado(null);
+        setFormData(prev => ({ ...prev, id_paciente: '' }));
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
       addToast({
@@ -496,24 +579,55 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
               )}
             </div>
 
-            {/* Paciente */}
-            <div>
+            {/* Paciente con Autocomplete */}
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Paciente*
               </label>
-              <select
-                value={formData.id_paciente}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_paciente: e.target.value }))}
+              <input
+                ref={inputPacienteRef}
+                type="text"
+                value={busquedaPaciente}
+                onChange={handleBusquedaPacienteChange}
+                onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                placeholder="Buscar paciente por nombre, apellido o DNI..."
                 required
-              >
-                <option value="">Seleccionar paciente</option>
-                {pacientes.map((paciente) => (
-                  <option key={paciente.id_paciente} value={paciente.id_paciente}>
-                    {paciente.nombre} {paciente.apellido} ({formatoNumeroTelefono(paciente.telefono || 'No disponible')})
-                  </option>
-                ))}
-              </select>
+                autoComplete="off"
+              />
+              
+              {/* Lista de resultados */}
+              {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
+                <div 
+                  ref={listaPacientesRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                >
+                  {pacientesFiltrados.map((paciente) => (
+                    <div
+                      key={paciente.id_paciente}
+                      onClick={() => seleccionarPaciente(paciente)}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium">
+                        {paciente.nombre} {paciente.apellido}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Mensaje cuando no hay resultados */}
+              {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
+                <div 
+                  ref={listaPacientesRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
+                >
+                  No se encontraron pacientes, verificar datos ingresados.
+                </div>
+              )}
             </div>
 
             {/* Fecha */}

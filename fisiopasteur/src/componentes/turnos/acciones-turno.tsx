@@ -66,6 +66,13 @@ export default function AccionesTurno({ turno, onDone }: Props) {
 
   const onEliminar = () => {
     setMenuAbierto(false);
+    
+    // Verificar si el turno ya pasó antes de mostrar confirmación
+    if (esPasado) {
+      showMessage('error', 'No se puede eliminar', 'No se pueden eliminar turnos que ya pasaron.');
+      return;
+    }
+
     showConfirm('error', 'Eliminar turno', 'Esto elimina definitivamente el turno. ¿Continuar?', () => {
       setDialog({ ...dialog, open: false });
       startTransition(async () => {
@@ -169,13 +176,32 @@ export default function AccionesTurno({ turno, onDone }: Props) {
                 </button>
               )}
               
-              <button
-                onClick={onEliminar}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
-              >
-                <Trash size={14} />
-                Eliminar
-              </button>
+              {/* Eliminar solo para turnos futuros */}
+              {!esPasado && (
+                <button
+                  onClick={onEliminar}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+                >
+                  <Trash size={14} />
+                  Eliminar
+                </button>
+              )}
+
+              {/* Mostrar opción deshabilitada para turnos pasados con explicación */}
+              {esPasado && (
+                <button
+                  onClick={() => {
+                    setMenuAbierto(false);
+                    showMessage('error', 'No disponible', 'No se pueden eliminar turnos que ya pasaron.');
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 text-gray-400 cursor-not-allowed"
+                  disabled
+                  title="No se pueden eliminar turnos pasados"
+                >
+                  <Trash size={14} />
+                  Eliminar
+                </button>
+              )}
             </div>
           </div>
         </>
