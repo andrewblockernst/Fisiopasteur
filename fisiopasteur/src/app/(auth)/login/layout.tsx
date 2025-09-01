@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Login - Fisiopasteur",
+  title: "Inicio de sesión | Fisiopasteur",
   description: "Iniciar sesión en Fisiopasteur",
   icons: {
     icon: "/favicon.svg",

@@ -13,6 +13,7 @@ interface BaseDialogProps {
   size?: DialogSize;
   title: string;
   message: React.ReactNode;
+  children?: React.ReactNode;
   primaryButton?: {
     text: string;
     onClick: () => void;
