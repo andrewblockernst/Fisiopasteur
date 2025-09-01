@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista} from "@/lib/actions/turno.action";
+import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista, obtenerTurnos} from "@/lib/actions/turno.action";
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
@@ -32,6 +32,7 @@ export function NuevoTurnoModal({
     id_especialidad: '',
     tipo_plan: 'particular' as 'particular' | 'obra_social',
     id_paciente: '',
+    id_box: '',
     observaciones: '',
     precio: ''
   });
@@ -41,11 +42,13 @@ export function NuevoTurnoModal({
   const [pacientes, setPacientes] = useState<any[]>(pacientesProp);
   const [especialidades, setEspecialidades] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
+  const [boxesDisponibles, setBoxesDisponibles] = useState<any[]>([]);
   const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
+  const [verificandoBoxes, setVerificandoBoxes] = useState(false);
   const { addToast } = useToastStore();
 
   // Dialog para mensajes (reemplaza los toasts)
@@ -199,6 +202,61 @@ export function NuevoTurnoModal({
     verificarHorariosOcupados();
   }, [formData.id_especialista, formData.fecha]);
 
+  // Verificar boxes disponibles cuando cambia fecha y hora
+  useEffect(() => {
+    const verificarBoxesDisponibles = async () => {
+      if (!formData.fecha || !formData.hora) {
+        setBoxesDisponibles(boxes);
+        return;
+      }
+
+      setVerificandoBoxes(true);
+      try {
+        // Obtener todos los turnos en esa fecha y hora específica
+        const res = await obtenerTurnos({
+          fecha: formData.fecha
+        });
+        
+        if (res.success && res.data) {
+          // Calcular el rango de tiempo del turno (1 hora)
+          const [horaInicio, minutoInicio] = formData.hora.split(':').map(Number);
+          const inicioTurno = new Date();
+          inicioTurno.setHours(horaInicio, minutoInicio, 0, 0);
+          const finTurno = new Date(inicioTurno.getTime() + (60 * 60000)); // 1 hora después
+
+          // Filtrar turnos que se solapan con nuestro horario
+          const turnosConflicto = res.data.filter((turno: any) => {
+            if (turno.estado === 'cancelado' || !turno.id_box) return false;
+            
+            const [horaTurno, minutoTurno] = turno.hora.split(':').map(Number);
+            const inicioTurnoExistente = new Date();
+            inicioTurnoExistente.setHours(horaTurno, minutoTurno, 0, 0);
+            const finTurnoExistente = new Date(inicioTurnoExistente.getTime() + (60 * 60000));
+
+            // Verificar solapamiento
+            return (inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente);
+          });
+
+          // Obtener IDs de boxes ocupados
+          const boxesOcupados = turnosConflicto.map((turno: any) => turno.id_box);
+
+          // Filtrar boxes disponibles
+          const disponibles = boxes.filter(box => !boxesOcupados.includes(box.id_box));
+          setBoxesDisponibles(disponibles);
+        } else {
+          setBoxesDisponibles(boxes);
+        }
+      } catch (error) {
+        console.error('Error verificando boxes:', error);
+        setBoxesDisponibles(boxes);
+      } finally {
+        setVerificandoBoxes(false);
+      }
+    };
+
+    verificarBoxesDisponibles();
+  }, [formData.fecha, formData.hora, boxes]);
+
   // Limpiar campos al cerrar
   useEffect(() => {
     if (!isOpen) {
@@ -209,10 +267,12 @@ export function NuevoTurnoModal({
         id_especialidad: '',
         tipo_plan: 'particular',
         id_paciente: '',
+        id_box: '',
         observaciones: '',
         precio: ''
       });
       setEspecialidadesDisponibles([]);
+      setBoxesDisponibles([]);
     }
   }, [isOpen]);
 
@@ -288,10 +348,11 @@ export function NuevoTurnoModal({
       const turnoData = {
         fecha: formData.fecha,
         hora: formData.hora + ':00',
-        precio: null,
+        precio: formData.precio ? Number(formData.precio) : null,
         id_especialista: formData.id_especialista,
         id_paciente: parseInt(formData.id_paciente),
         id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
+        id_box: formData.id_box ? parseInt(formData.id_box) : null,
         observaciones: formData.observaciones || null,
         estado: "programado" as const,
         tipo_plan: formData.tipo_plan,
@@ -383,7 +444,7 @@ if (loading) {
               </label>
               <select
                 value={formData.id_especialista}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '' }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
               >
@@ -450,7 +511,7 @@ if (loading) {
               <input
                 type="date"
                 value={formData.fecha}
-                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '' }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '', id_box: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
                 min={new Date().toISOString().split('T')[0]}
@@ -464,7 +525,7 @@ if (loading) {
               </label>
               <select
                 value={formData.hora}
-                onChange={(e) => setFormData(prev => ({ ...prev, hora: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, hora: e.target.value, id_box: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
                 disabled={!formData.id_especialista || !formData.fecha || verificandoDisponibilidad}
@@ -495,9 +556,32 @@ if (loading) {
               )}
             </div>
 
-            
-
-            
+            {/* Box/Consultorio */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Box/Consultorio {verificandoBoxes && <span className="text-xs text-gray-500">(Verificando disponibilidad...)</span>}
+              </label>
+              <select
+                value={formData.id_box}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_box: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                disabled={!formData.fecha || !formData.hora || verificandoBoxes}
+              >
+                <option value="">
+                  {!formData.fecha || !formData.hora ? "Selecciona fecha y hora primero" : "Seleccionar box (opcional)"}
+                </option>
+                {boxesDisponibles.map((box) => (
+                  <option key={box.id_box} value={box.id_box}>
+                    Box {box.numero}
+                  </option>
+                ))}
+              </select>
+              {formData.fecha && formData.hora && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {boxesDisponibles.length} de {boxes.length} boxes disponibles
+                </p>
+              )}
+            </div>
 
             {/* Plan */}
             <div>
@@ -513,8 +597,6 @@ if (loading) {
                 <option value="obra_social">Obra Social</option>
               </select>
             </div>
-
-            
 
             {/* Precio */}
             <div>
