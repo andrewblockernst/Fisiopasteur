@@ -3,7 +3,6 @@
 import { supabaseAdmin } from "@/lib/supabase/service-role";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 
 type Especialista = Tables<"usuario">;
@@ -21,11 +20,10 @@ export interface ServerActionResponse {
 }
 
 // Obtener todos los especialistas con sus especialidades
-export async function getEspecialistas() {
+export async function getEspecialistas({ incluirInactivos = false } = {}) {
   try {
     const supabase = await createClient();
-    
-    const { data, error } = await supabase
+    let query = supabase
       .from("usuario")
       .select(`
         *,
@@ -36,8 +34,15 @@ export async function getEspecialistas() {
           )
         )
       `)
-      .eq("id_rol", 2) // Solo especialistas
-      .order("nombre");
+      .eq("id_rol", 2);
+
+    if (!incluirInactivos) {
+      query = query.eq("activo", true);
+    }
+
+    query = query.order("nombre");
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching especialistas:", error);
@@ -143,8 +148,6 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
       id_especialidad: null, 
       telefono: formData.get("telefono") as string || null,
       email,
-      usuario: formData.get("usuario") as string,
-      // Usar la columna real 'contraseña' (U+00F1) en la DB
       contraseña: contraseña,
       color: formData.get("color") as string || null,
       id_rol: 2,
@@ -269,7 +272,6 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       nombre,
       apellido,
       email,
-      usuario: formData.get("usuario") as string,
       telefono: formData.get("telefono") as string || null,
       color: formData.get("color") as string || null,
     };
@@ -354,86 +356,6 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
   }
 }
 
-// Eliminar especialista
-export async function deleteEspecialista(id: string): Promise<ServerActionResponse> {
-  try {
-    const supabase = await createClient();
-
-    // Verificar que el especialista existe y obtener su información
-    const { data: especialista, error: errorVerificacion } = await supabase
-      .from("usuario")
-      .select("nombre, apellido, email")
-      .eq("id_usuario", id)
-      .eq("id_rol", 2)
-      .single();
-
-    if (errorVerificacion || !especialista) {
-      return {
-        success: false,
-        message: 'Especialista no encontrado',
-        toastType: 'error',
-        description: 'El especialista que intentas eliminar no existe'
-      };
-    }
-
-    const { error } = await supabase
-      .from("usuario")
-      .delete()
-      .eq("id_usuario", id)
-      .eq("id_rol", 2);
-
-    if (error) {
-      console.error("Error deleting especialista:", error);
-      return {
-        success: false,
-        message: 'Error al eliminar especialista',
-        toastType: 'error',
-        description: 'No se pudo eliminar el especialista de la base de datos'
-      };
-    }
-
-    revalidatePath("/especialista");
-    
-    return {
-      success: true,
-      message: 'Especialista eliminado exitosamente',
-      toastType: 'success',
-      description: `${especialista.nombre} ${especialista.apellido} ha sido eliminado del sistema`
-    };
-
-  } catch (error) {
-    console.error('Error en deleteEspecialista:', error);
-    return {
-      success: false,
-      message: 'Error interno del servidor',
-      toastType: 'error',
-      description: 'Ocurrió un error inesperado. Intenta nuevamente.'
-    };
-  }
-}
-
-// Obtener especialidades para el formulario
-export async function getEspecialidades() {
-  try {
-    const supabase = await createClient();
-    
-    const { data, error } = await supabase
-      .from("especialidad")
-      .select("*")
-      .order("nombre");
-
-    if (error) {
-      console.error("Error fetching especialidades:", error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('Error en getEspecialidades:', error);
-    return [];
-  }
-}
-
 // Función auxiliar para toggle activo/inactivo
 export async function toggleEspecialistaActivo(id: string, activo: boolean): Promise<ServerActionResponse> {
   try {
@@ -471,11 +393,11 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
       };
     }
 
-    revalidatePath("/especialista");
+    revalidatePath("/especialistas");
     
     return {
       success: true,
-      message: `Especialista ${activo ? 'activado' : 'desactivado'} exitosamente`,
+      message: `Especialista ${activo ? 'activado' : 'inactivado'} exitosamente`,
       toastType: 'success',
       description: `${especialista.nombre} ${especialista.apellido} ahora está ${activo ? 'activo' : 'inactivo'}`
     };
@@ -488,5 +410,27 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
       toastType: 'error',
       description: 'Ocurrió un error inesperado. Intenta nuevamente.'
     };
+  }
+}
+
+// Obtener especialidades para el formulario
+export async function getEspecialidades() {
+  try {
+    const supabase = await createClient();
+    
+    const { data, error } = await supabase
+      .from("especialidad")
+      .select("*")
+      .order("nombre");
+
+    if (error) {
+      console.error("Error fetching especialidades:", error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error en getEspecialidades:', error);
+    return [];
   }
 }
