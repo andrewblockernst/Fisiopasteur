@@ -4,6 +4,7 @@ import { useState } from "react";
 import BaseDialog from "../dialog/base-dialog";
 import { deletePaciente } from "@/lib/actions/paciente.action";
 import { Tables } from "@/types/database.types";
+import { ToastItem } from "@/stores/toast-store";
 
 type Paciente = Tables<'paciente'>;
 
@@ -11,20 +12,27 @@ interface DeletePacienteDialogProps {
     isOpen: boolean;
     paciente: Paciente;
     onClose: () => void;
+    handleToast: (toast: Omit<ToastItem, 'id'>) => void;
 }
 
-export function DeletePacienteDialog({isOpen, onClose, paciente}: DeletePacienteDialogProps) {
+export function DeletePacienteDialog({isOpen, onClose, paciente, handleToast}: DeletePacienteDialogProps) {
     const [isDeleting, setIsDeleting] = useState(false);
-    // const [showDialog, setShowDialog] = useState(false);
 
     const handleDelete = async () => {
         try {
             setIsDeleting(true);
             await deletePaciente(paciente.id_paciente);
+            handleToast({
+                variant: "success",
+                message: "El paciente se ha eliminado correctamente.",
+            });
             onClose();
         } catch (error) {
             console.error( error);
-            alert(error);
+            handleToast({
+                variant: "error",
+                message: error instanceof Error ? error.message : "Error al eliminar el paciente.",
+            });
         } finally {
             setIsDeleting(false);
         }
@@ -32,15 +40,6 @@ export function DeletePacienteDialog({isOpen, onClose, paciente}: DeletePaciente
 
     return (
         <>
-            {/* <Button
-                variant="danger"
-                className="text-xs px-3 py-2 h-8 flex-1 min-w-20 sm:flex-none sm:min-w-16 lg:px-8 lg:py-2 flex items-center justify-center"
-                onClick={() => setShowDialog(true)}
-                disabled={isDeleting}
-            >
-                {isDeleting ? "Eliminando..." : "Eliminar"}
-            </Button> */}
-
             <BaseDialog
                 type="warning"
                 title="confirmar eliminacion de paciente"

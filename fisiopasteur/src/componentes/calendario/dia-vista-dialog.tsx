@@ -61,7 +61,7 @@ export function DayViewModal({
     switch (estado.toLowerCase()) {
       case 'confirmado':
         return 'bg-green-100 text-green-800 border-green-200';
-      case 'pendiente':
+      case 'programado':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'cancelado':
         return 'bg-red-100 text-red-800 border-red-200';
@@ -143,13 +143,19 @@ export function DayViewModal({
         <EditarTurnoDialog
           turno={{
             id_turno: turnoEditando.id_turno,
-            id_paciente: turnoEditando.id_paciente ?? 0,
-            id_especialista: turnoEditando.id_especialista || null,
-            id_especialidad: turnoEditando.id_especialidad || null,
+            id_paciente: turnoEditando.id_paciente ?? null,
+            id_especialista: turnoEditando.id_especialista ?? null,
+            id_especialidad: turnoEditando.id_especialidad ?? null,
             id_box: (turnoEditando as any).id_box ?? null,
             fecha: turnoEditando.fecha,
             hora: turnoEditando.hora,
-            observaciones: turnoEditando.observaciones || null,
+            observaciones: turnoEditando.observaciones ?? null,
+            created_at: (turnoEditando as any).created_at ?? null,
+            estado: (turnoEditando as any).estado ?? null,
+            notas: (turnoEditando as any).notas ?? null,
+            precio: (turnoEditando as any).precio ?? null,
+            updated_at: (turnoEditando as any).updated_at ?? null,
+            tipo_plan: (turnoEditando as any).tipo_plan ?? null,
           }}
           open={Boolean(turnoEditando)}
           onClose={() => setTurnoEditando(null)}

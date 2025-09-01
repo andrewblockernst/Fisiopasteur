@@ -2,13 +2,14 @@
 
 import { use, useEffect, useState } from "react";
 import { PacientesTable } from "@/componentes/paciente/paciente-listado";
-import { getPacientes } from "@/lib/actions/paciente.action";
+import { activarPaciente, getPacientes } from "@/lib/actions/paciente.action";
 import type { Tables } from "@/types/database.types";
 import Button from "@/componentes/boton";
 import SkeletonLoader from "@/componentes/skeleton-loader";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
 import { Search, Filter } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useToastStore } from "@/stores/toast-store";
 
 type Filter = 'activos' | 'inactivos' | 'todos';
 type Paciente = Tables<"paciente">;
@@ -21,6 +22,7 @@ export default function PacientePage() {
     const [filter, setFilter] = useState<Filter>('activos');
     const [searchTerm, setSearchTerm] = useState("");
     const router = useRouter();
+    const toast = useToastStore();
 
     useEffect(() => {
         const loadData = async () => {
@@ -48,6 +50,24 @@ export default function PacientePage() {
             console.error("Error reloading patients:", error);
         }
     };
+
+    const handleActive = async (paciente: Paciente) => {
+        try {
+            await activarPaciente(paciente.id_paciente);
+            const updatedPacientes = await getPacientes();
+            setPacientes(updatedPacientes.data);
+            toast.addToast({
+                variant: "success",
+                message: "El paciente se ha activado correctamente.",
+            });
+        } catch (error) {
+            console.error("Error activating patient:", error);
+            toast.addToast({
+                variant: "error",
+                message: "Error al activar el paciente.",
+            });
+        }
+    }
 
     const handleReturnMobile = () => {
         router.push('/inicio');
@@ -221,12 +241,15 @@ export default function PacientePage() {
                     } 
                     onPacienteDeleted={handleDialogClose}
                     onPacienteUpdated={handleDialogClose}
+                    onActivatePaciente={handleActive}
+                    handleToast={toast.addToast}
                 />
             </div>
 
             <NuevoPacienteDialog
                 isOpen={showDialog}
                 onClose={handleDialogClose}
+                handleToast={toast.addToast}
             />
         </div>
     );

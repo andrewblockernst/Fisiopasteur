@@ -502,7 +502,7 @@ export function CalendarioTurnos({
                                                                 </span>
                                                             </div>
                                                             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                                                                {turno.estado || 'pendiente'}
+                                                                {turno.estado || 'programado'}
                                                             </span>
                                                         </div>
                                                         <div className="space-y-1">
