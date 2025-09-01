@@ -58,11 +58,11 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
   const turnosOrdenados = turnos
     ?.filter(turno => !esTurnoPilates(turno)) // Filtrar Pilates
     ?.sort((a, b) => {
-      // Prioridad por estado: programado (0), pendiente (1), atendido (2), cancelado (3)
+      // Prioridad por estado: programado (0),  (1), atendido (2), cancelado (3)
       const prioridadEstado = (estado: string) => {
         switch (estado?.toLowerCase()) {
           case 'programado': return 0;
-          case 'pendiente': return 1;
+          case '': return 1;
           case 'atendido': return 2;
           case 'cancelado': return 3;
           default: return 4;
