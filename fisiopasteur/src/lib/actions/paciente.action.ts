@@ -449,3 +449,20 @@ export async function agregarEvolucionClinica(idTurno: number, observaciones: st
   }
   return data;
 }
+
+// Activar paciente
+export async function activarPaciente(idPaciente: number) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("paciente")
+    .update({ activo: true })
+    .eq("id_paciente", idPaciente)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error activando paciente:", error);
+    throw new Error("No se pudo activar el paciente");
+  }
+  return data;
+}
