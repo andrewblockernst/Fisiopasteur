@@ -1,6 +1,7 @@
 import { Tables } from "@/types/database.types";
 import { DeletePacienteDialog } from "./eliminar-dialog";
 import Button from "../boton";
+import { HistorialClinicoMobile } from "./historial-clinico-mobile";
 
 type Paciente = Tables<'paciente'>;
 
@@ -11,21 +12,8 @@ interface ConsultaPacienteMobileProps {
     onDelete?: () => void; 
 }
 
-export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit, onDelete }: ConsultaPacienteMobileProps) {
 
-    const formatDate = (dateString: string | null): string => {
-        if (!dateString) return 'No especificada';
-        
-        try {
-            return new Date(dateString).toLocaleDateString('es-ES', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-            });
-        } catch (error) {
-            return 'Fecha inválida';
-        }
-    };
+export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit, onDelete }: ConsultaPacienteMobileProps) {
 
     const calculateAge = (birthDate: string | null): number | null => {
         if (!birthDate) return null;
@@ -47,148 +35,154 @@ export function ConsultaPacienteMobile({ viewingPaciente, onClose, onEdit, onDel
     };
 
     return (
-        <div>
-            {/* Vista de detalle del paciente - Solo Mobile */}
-                    {viewingPaciente && (
-                        <div className="md:hidden fixed inset-0 bg-white z-50">
-                            {/* Header */}
-                            <div className="bg-white border-b border-gray-200 px-4 py-3">
-                                <div className="flex items-center justify-between">
-                                    <button 
-                                        onClick={onClose}
-                                        className="p-1"
-                                    >
-                                        <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                        </svg>
-                                    </button>
-                                    
-                                    <h1 className="text-lg font-medium text-gray-900">
-                                        {viewingPaciente.nombre} {viewingPaciente.apellido}
-                                    </h1>
-                                    
-                                    <button 
-                                        onClick={onEdit}
-                                        className="p-1"
-                                    >
-                                        <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
-                                    </button>
-                                </div>
+        <div className="md:hidden fixed inset-0 bg-gray-50 z-50">
+            {/* Header */}
+            <div className="bg-white border-b border-gray-100 px-4 py-4">
+                <div className="flex items-center justify-between">
+                    <button 
+                        onClick={onClose}
+                        className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                        <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+                    
+                    <h1 className="text-lg font-semibold text-gray-900">
+                        Perfil
+                    </h1>
+                    
+                    <button 
+                        onClick={onEdit}
+                        className="p-2 -mr-2 bg-[#9C1838] rounded-full hover:bg-[#7D1329] transition-colors"
+                    >
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            {/* Contenido */}
+            <div className="flex-1 overflow-y-auto">
+                {/* Información principal del usuario */}
+                <div className="bg-white px-6 py-8 text-center">
+                    <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
+                        <svg className="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    </div>
+                    
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                        {viewingPaciente.nombre} {viewingPaciente.apellido}
+                    </h2>
+                    
+                    <div className="flex items-center justify-center space-x-4 text-gray-600">
+                        {viewingPaciente.email && (
+                            <div className="flex items-center">
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <span className="text-sm">{viewingPaciente.email}</span>
                             </div>
-            
-                            {/* Contenido */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                                
-                                {/* Información básica */}
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-500">Fecha de nacimiento</label>
-                                        <p className="text-gray-900">{viewingPaciente.fecha_nacimiento ? 
-                                            viewingPaciente.fecha_nacimiento.split('-').reverse().join('/') : '...'
-                                        }</p>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-500">DNI</label>
-                                            <p className="text-gray-900">{viewingPaciente.dni}</p>
-                                        </div>
-                                        {calculateAge(viewingPaciente.fecha_nacimiento) && (
-                                            <div>
-                                                <label className="text-sm font-medium text-gray-500">Edad</label>
-                                                <p className="text-gray-900">{calculateAge(viewingPaciente.fecha_nacimiento)} años</p>
-                                            </div>
-                                        )}
-                                    </div>
-            
-                                    {viewingPaciente.email && (
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-500">Correo electrónico</label>
-                                            <p className="text-blue-600">{viewingPaciente.email}</p>
-                                        </div>
-                                    )}
-            
-                                    {viewingPaciente.telefono && (
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-500">Contacto</label>
-                                            <p className="text-gray-900">{viewingPaciente.telefono}</p>
-                                        </div>
-                                    )}
-            
-                                    {viewingPaciente.direccion && (
-                                        <div>
-                                            <label className="text-sm font-medium text-gray-500">Dirección</label>
-                                            <p className="text-gray-900">{viewingPaciente.direccion}</p>
-                                        </div>
-                                    )}
-                                    
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-500">Estado</label>
-                                        <div className="flex items-center mt-1">
-                                            <div className={`w-2 h-2 rounded-full mr-2 ${
-                                                viewingPaciente.activo ? 'bg-green-500' : 'bg-gray-400'
-                                            }`}></div>
-                                            <p className="text-gray-900">{viewingPaciente.activo ? 'Activo' : 'Inactivo'}</p>
-                                        </div>
-                                    </div>
-                                </div>
-            
-                                {/* Historial (placeholder) */}
-                                <div className="border-t pt-6">
-                                    <h3 className="text-lg font-medium text-gray-900 mb-4">Historial</h3>
-                                    <div className="bg-gray-50 rounded-lg p-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center">
-                                                <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center mr-3">
-                                                    <span className="text-xs font-medium text-gray-600">👤</span>
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-gray-900">Lic. Verna Mayer</p>
-                                                    <p className="text-sm text-gray-500">Fisioterapeuta</p>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="flex items-center text-sm text-gray-500">
-                                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                    </svg>
-                                                    30 Mayo, 2025
-                                                </div>
-                                                <div className="flex items-center text-sm text-gray-500 mt-1">
-                                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                    </svg>
-                                                    10:00
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-            
-                            {/* Botones de acción */}
-                            <div className="border-t bg-white p-4">
-                                <div className="flex justify-between space-x-2">
-                                    <Button
-                                        variant="secondary"
-                                        onClick={onEdit}
-                                        className="flex-1 text-white py-3 px-4 rounded-lg font-medium"
-                                    >
-                                        Editar
-                                    </Button>
-                                    <Button
-                                    variant="danger"
-                                    onClick={onDelete}
-                                    className="flex-1 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                                    >
-                                        Eliminar
-                                    </Button>
-                                </div>
-                            </div>
+                        )}
+                    </div>
+                    
+                    {viewingPaciente.telefono && (
+                        <div className="flex items-center justify-center mt-2 text-gray-600">
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                            <span className="text-sm">{viewingPaciente.telefono}</span>
                         </div>
                     )}
+                </div>
+
+                {/* Información de contacto y detalles */}
+                <div className="bg-white mt-6 mx-4 rounded-lg shadow-sm">
+                    <div className="px-6 py-4 border-b border-gray-100">
+                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                            <svg className="w-5 h-5 mr-2 text-[#9C1838]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            Información Personal
+                        </h3>
+                    </div>
+                    
+                    <div className="p-6 space-y-4">
+                        <div className="flex justify-between items-center py-2">
+                            <span className="text-gray-600">DNI</span>
+                            <span className="font-medium text-gray-900">
+                                {viewingPaciente.dni || 'No especificado'}
+                            </span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center py-2">
+                            <span className="text-gray-600">Fecha de Nacimiento</span>
+                            <span className="font-medium text-gray-900">
+                                {viewingPaciente.fecha_nacimiento ? 
+                                    viewingPaciente.fecha_nacimiento.split('-').reverse().join('/') : 
+                                    'No especificada'
+                                }
+                            </span>
+                        </div>
+                        
+                        {calculateAge(viewingPaciente.fecha_nacimiento) && (
+                            <div className="flex justify-between items-center py-2">
+                                <span className="text-gray-600">Edad</span>
+                                <span className="font-medium text-gray-900">
+                                    {calculateAge(viewingPaciente.fecha_nacimiento)} años
+                                </span>
+                            </div>
+                        )}
+                        
+                        {viewingPaciente.direccion && (
+                            <div className="flex justify-between items-center py-2">
+                                <span className="text-gray-600">Dirección</span>
+                                <span className="font-medium text-gray-900 text-right max-w-48 truncate">
+                                    {viewingPaciente.direccion}
+                                </span>
+                            </div>
+                        )}
+                        
+                        <div className="flex justify-between items-center py-2">
+                            <span className="text-gray-600">Estado</span>
+                            <div className="flex items-center">
+                                <div className={`w-2 h-2 rounded-full mr-2 ${
+                                    viewingPaciente.activo ? 'bg-green-500' : 'bg-gray-400'
+                                }`}></div>
+                                <span className="font-medium text-gray-900">
+                                    {viewingPaciente.activo ? 'Activo' : 'Inactivo'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Sección de Historial Clínico */}
+                <HistorialClinicoMobile pacienteId={viewingPaciente.id_paciente} />
+            </div>
+
+            {/* Botones de acción flotantes */}
+            <div className="absolute bottom-6 right-6 flex flex-col space-y-3">
+                <button
+                    onClick={onEdit}
+                    className="w-12 h-12 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                </button>
+                
+                <button
+                    onClick={onDelete}
+                    className="w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
         </div>
     );
 }
