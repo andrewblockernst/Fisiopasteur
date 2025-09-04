@@ -16,7 +16,6 @@ export interface PerfilCompleto {
   apellido: string;
   email: string;
   telefono: string | null;
-  usuario: string;
   color: string | null;
   rol: {
     id: number;
@@ -200,7 +199,6 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
         apellido,
         email,
         telefono,
-        usuario,
         color,
         rol:id_rol (
           id,
@@ -253,7 +251,6 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       apellido: userData.apellido,
       email: userData.email,
       telefono: userData.telefono,
-      usuario: userData.usuario,
       color: userData.color,
       rol: {
         id: userData.rol?.id || 1,

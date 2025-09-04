@@ -1,15 +1,16 @@
 import { Tables } from "@/types/database.types";
 import Button from "../boton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { DeletePacienteDialog } from "./eliminar-dialog";
 import { EditarPacienteDialog } from "./editar-paciente-dialog";
 import { ConsultaPacienteMobile } from "./consulta-paciente-mobile";
-import Boton from "@/componentes/boton";
 import { useRouter } from "next/navigation";
 import { NuevoPacienteDialog } from "./nuevo-paciente-dialog";
-import { getPacientes } from "@/lib/actions/paciente.action";
-import { deletePaciente } from "@/lib/actions/paciente.action";
+import { activarPaciente, getPacientes } from "@/lib/actions/paciente.action";
 import { ChevronUp, EllipsisVertical } from "lucide-react";
+import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
+import { ToastItem, useToastStore } from "@/stores/toast-store";
+
 
 
 type Paciente = Tables<'paciente'>;
@@ -18,17 +19,18 @@ interface PacientesTableProps {
     pacientes: Paciente[];
     onPacienteUpdated?: () => void;
     onPacienteDeleted?: () => void;
-    onRowClick?: (id: number) => void; 
-    pacientesSeleccionados?: number[]; 
+    onActivatePaciente: (paciente: Paciente) => void;
+    handleToast: (toast: Omit<ToastItem, 'id'>) => void;
 }
 
-export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted, onRowClick, pacientesSeleccionados}: PacientesTableProps) {
+export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted, onActivatePaciente, handleToast}: PacientesTableProps) {
     const[editingPaciente, setEditingPaciente] = useState<Paciente | null>(null);
     const[deletingPaciente, setDeletingPaciente] = useState<Paciente | null>(null);
     const[viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
     const[showDialog, setShowDialog] = useState(false);
     const[dropdownOpen, setDropdownOpen] = useState<number | null>(null);
     const router = useRouter();
+    const toast = useToastStore();
 
     // Cerrar dropdown al hacer click fuera
     useEffect(() => {
@@ -64,28 +66,12 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
             }
         };
 
-
-
     const handleEditFromView = () => {
         if (viewingPaciente) {
             setEditingPaciente(viewingPaciente);
             setViewingPaciente(null);
         }
     }
-
-    // const handleDeletePaciente = async (id: number) => {
-    //     try {
-    //         await deletePaciente(id);
-    //         setDropdownOpen(null);
-    //         if (onPacienteDeleted) {
-    //             onPacienteDeleted();
-    //         }
-    //     } catch (error) {
-    //         console.error(error);
-    //         alert("Error al eliminar paciente");
-    //     }
-    // };
-
 
     const calculateAge = (birthDate: string | null): number | null => {
         if (!birthDate) return null;
@@ -116,10 +102,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                 {pacientes.map((paciente) => (
                     <div 
                         key={paciente.id_paciente} 
-                        className={`px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors ${
-                          pacientesSeleccionados?.includes(paciente.id_paciente) ? "bg-blue-50" : ""
-                        }`}
-                        onClick={() => onRowClick?.(paciente.id_paciente)}
+                        className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => {
+                            router.push(`/pacientes/${paciente.id_paciente}`);
+                        }}
                     >
                         <div className="flex items-center justify-between">
                             <p className="text-gray-900 font-medium">
@@ -161,6 +147,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
         <NuevoPacienteDialog
             isOpen={showDialog}
             onClose={handleDialogClose}
+            handleToast={handleToast}
         />
 
         {/* NIVEL 2: Vista Tablet (sm - lg) - Tarjetas compactas */}
@@ -193,7 +180,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                             </div>
                             <div>
                                 <span className="text-gray-500 font-medium">Teléfono:</span>
-                                <p className="text-gray-900">{paciente.telefono || '...'}</p>
+                                <p className="text-gray-900">{formatoNumeroTelefono(paciente.telefono || '...')}</p>
                             </div>
                             <div>
                                 <span className="text-gray-500 font-medium">F. Nacimiento:</span>
@@ -285,10 +272,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {paciente.dni || '...'}
+                                    {formatoDNI(paciente.dni || '...')}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {paciente.telefono || '...'}
+                                    {formatoNumeroTelefono(paciente.telefono || '...')}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {paciente.fecha_nacimiento ? 
@@ -322,11 +309,6 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                         </Button>
 
                                         {paciente.activo && (
-                                            // <DeletePacienteButton 
-                                            //     id={paciente.id_paciente}
-                                            //     nombre={`${paciente.nombre} ${paciente.apellido}`}
-                                            //     onDeleted={onPacienteDeleted}
-                                            // />
                                             <Button
                                                 variant="danger"
                                                 className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
@@ -336,6 +318,15 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                             </Button>
                                         )}
 
+                                        {!(paciente.activo) && (
+                                            <Button
+                                                variant="success"
+                                                className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
+                                                onClick={() => onActivatePaciente(paciente)}
+                                            >
+                                                Activar
+                                            </Button>
+                                        )}
                                         <Button
                                             variant="secondary"
                                             className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
@@ -396,6 +387,15 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                                         Eliminar
                                                     </button>
                                                     )}
+                                                    {!(paciente.activo) && (
+                                                        <button
+                                                            onClick={() => onActivatePaciente(paciente)}
+                                                            className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-green-600 hover:bg-green-50 transition-colors"
+                                                        >
+                                                            Activar
+                                                        </button>
+                                                    )}
+
                                                     <button
                                                         onClick={() => {
                                                             router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`);
@@ -435,6 +435,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                 isOpen={true}
                 onClose={handleEditClose}
                 paciente={editingPaciente}
+                handleToast={handleToast}
             />
         )}
 
@@ -444,6 +445,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                 isOpen={true}
                 paciente={deletingPaciente}
                 onClose={handleDeleteClose}
+                handleToast={handleToast}
             />
         )}
         </>
