@@ -1,4 +1,5 @@
 'use client'
+
 import { Tables } from "@/types/database.types";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from 'react';

@@ -70,7 +70,8 @@ export default function PacientePage() {
     }
 
     const handleReturnMobile = () => {
-        router.push('/inicio');
+        // router.push('/inicio');
+        router.back();
     }
 
     if (loading) {
