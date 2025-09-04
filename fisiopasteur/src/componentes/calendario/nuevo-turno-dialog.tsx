@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista} from "@/lib/actions/turno.action";
+import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista, obtenerTurnos} from "@/lib/actions/turno.action";
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
+import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export function NuevoTurnoModal({
     id_especialidad: '',
     tipo_plan: 'particular' as 'particular' | 'obra_social',
     id_paciente: '',
+    id_box: '',
     observaciones: '',
     precio: ''
   });
@@ -40,12 +42,22 @@ export function NuevoTurnoModal({
   const [pacientes, setPacientes] = useState<any[]>(pacientesProp);
   const [especialidades, setEspecialidades] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
+  const [boxesDisponibles, setBoxesDisponibles] = useState<any[]>([]);
   const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
+  const [verificandoBoxes, setVerificandoBoxes] = useState(false);
   const { addToast } = useToastStore();
+
+  // Estados para el autocomplete de pacientes
+  const [busquedaPaciente, setBusquedaPaciente] = useState('');
+  const [pacientesFiltrados, setPacientesFiltrados] = useState<any[]>([]);
+  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
+  const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null);
+  const inputPacienteRef = useRef<HTMLInputElement>(null);
+  const listaPacientesRef = useRef<HTMLDivElement>(null);
 
   // Dialog para mensajes (reemplaza los toasts)
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
@@ -97,6 +109,43 @@ export function NuevoTurnoModal({
     
     cargarDatos();
   }, [isOpen, especialistasProp.length, pacientesProp.length]);
+
+  // Filtrar pacientes según búsqueda
+  useEffect(() => {
+    if (!busquedaPaciente.trim()) {
+      setPacientesFiltrados([]);
+      return;
+    }
+
+    const filtrados = pacientes.filter(paciente => {
+      const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
+      const busqueda = busquedaPaciente.toLowerCase();
+      
+      return nombreCompleto.includes(busqueda) ||
+             paciente.nombre.toLowerCase().includes(busqueda) ||
+             paciente.apellido.toLowerCase().includes(busqueda) ||
+             paciente.dni?.toString().includes(busqueda);
+    }).slice(0, 10); // Limitar a 10 resultados
+
+    setPacientesFiltrados(filtrados);
+  }, [busquedaPaciente, pacientes]);
+
+  // Manejar clicks fuera del autocomplete
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        inputPacienteRef.current && 
+        !inputPacienteRef.current.contains(event.target as Node) &&
+        listaPacientesRef.current && 
+        !listaPacientesRef.current.contains(event.target as Node)
+      ) {
+        setMostrarListaPacientes(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Establecer fecha seleccionada cuando se abre el modal
   useEffect(() => {
@@ -198,6 +247,61 @@ export function NuevoTurnoModal({
     verificarHorariosOcupados();
   }, [formData.id_especialista, formData.fecha]);
 
+  // Verificar boxes disponibles cuando cambia fecha y hora
+  useEffect(() => {
+    const verificarBoxesDisponibles = async () => {
+      if (!formData.fecha || !formData.hora) {
+        setBoxesDisponibles(boxes);
+        return;
+      }
+
+      setVerificandoBoxes(true);
+      try {
+        // Obtener todos los turnos en esa fecha y hora específica
+        const res = await obtenerTurnos({
+          fecha: formData.fecha
+        });
+        
+        if (res.success && res.data) {
+          // Calcular el rango de tiempo del turno (1 hora)
+          const [horaInicio, minutoInicio] = formData.hora.split(':').map(Number);
+          const inicioTurno = new Date();
+          inicioTurno.setHours(horaInicio, minutoInicio, 0, 0);
+          const finTurno = new Date(inicioTurno.getTime() + (60 * 60000)); // 1 hora después
+
+          // Filtrar turnos que se solapan con nuestro horario
+          const turnosConflicto = res.data.filter((turno: any) => {
+            if (turno.estado === 'cancelado' || !turno.id_box) return false;
+            
+            const [horaTurno, minutoTurno] = turno.hora.split(':').map(Number);
+            const inicioTurnoExistente = new Date();
+            inicioTurnoExistente.setHours(horaTurno, minutoTurno, 0, 0);
+            const finTurnoExistente = new Date(inicioTurnoExistente.getTime() + (60 * 60000));
+
+            // Verificar solapamiento
+            return (inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente);
+          });
+
+          // Obtener IDs de boxes ocupados
+          const boxesOcupados = turnosConflicto.map((turno: any) => turno.id_box);
+
+          // Filtrar boxes disponibles
+          const disponibles = boxes.filter(box => !boxesOcupados.includes(box.id_box));
+          setBoxesDisponibles(disponibles);
+        } else {
+          setBoxesDisponibles(boxes);
+        }
+      } catch (error) {
+        console.error('Error verificando boxes:', error);
+        setBoxesDisponibles(boxes);
+      } finally {
+        setVerificandoBoxes(false);
+      }
+    };
+
+    verificarBoxesDisponibles();
+  }, [formData.fecha, formData.hora, boxes]);
+
   // Limpiar campos al cerrar
   useEffect(() => {
     if (!isOpen) {
@@ -208,10 +312,15 @@ export function NuevoTurnoModal({
         id_especialidad: '',
         tipo_plan: 'particular',
         id_paciente: '',
+        id_box: '',
         observaciones: '',
         precio: ''
       });
       setEspecialidadesDisponibles([]);
+      setBoxesDisponibles([]);
+      setBusquedaPaciente('');
+      setPacienteSeleccionado(null);
+      setMostrarListaPacientes(false);
     }
   }, [isOpen]);
 
@@ -272,6 +381,33 @@ export function NuevoTurnoModal({
     return opciones;
   };
 
+  // Manejar selección de paciente
+  const seleccionarPaciente = (paciente: any) => {
+    setPacienteSeleccionado(paciente);
+    setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
+    setFormData(prev => ({ ...prev, id_paciente: String(paciente.id_paciente) }));
+    setMostrarListaPacientes(false);
+  };
+
+  // Manejar cambio en input de búsqueda
+  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setBusquedaPaciente(valor);
+    
+    if (!valor.trim()) {
+      setPacienteSeleccionado(null);
+      setFormData(prev => ({ ...prev, id_paciente: '' }));
+      setMostrarListaPacientes(false);
+    } else {
+      setMostrarListaPacientes(true);
+      // Si lo que escribió no coincide con el paciente seleccionado, limpiar selección
+      if (pacienteSeleccionado && !`${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`.toLowerCase().includes(valor.toLowerCase())) {
+        setPacienteSeleccionado(null);
+        setFormData(prev => ({ ...prev, id_paciente: '' }));
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
       addToast({
@@ -287,10 +423,11 @@ export function NuevoTurnoModal({
       const turnoData = {
         fecha: formData.fecha,
         hora: formData.hora + ':00',
-        precio: null,
+        precio: formData.precio ? Number(formData.precio) : null,
         id_especialista: formData.id_especialista,
         id_paciente: parseInt(formData.id_paciente),
         id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
+        id_box: formData.id_box ? parseInt(formData.id_box) : null,
         observaciones: formData.observaciones || null,
         estado: "programado" as const,
         tipo_plan: formData.tipo_plan,
@@ -327,45 +464,44 @@ export function NuevoTurnoModal({
   };
 
   // Mostrar loading mientras carga datos
-if (loading) {
-  return (
-    <BaseDialog
-      type="custom"
-      size="md"
-      title="Nuevo Turno"
-      customIcon={
-        <Image
-          src="/favicon.svg"
-          alt="Logo Fisiopasteur"
-          width={24}
-          height={24}
-          className="w-6 h-6"
-        />
-      }
-      isOpen={isOpen}
-      onClose={onClose}
-      customColor="#9C1838"
-      message={<Loading size={48} text="Cargando datos..." />}
-    />
-  );
-}
-
+  if (loading) {
+    return (
+      <BaseDialog
+        type="custom"
+        size="md"
+        title="Nuevo Turno"
+        customIcon={
+          <Image
+            src="/favicon.svg"
+            alt="Logo Fisiopasteur"
+            width={24}
+            height={24}
+            className="w-6 h-6"
+          />
+        }
+        isOpen={isOpen}
+        onClose={onClose}
+        customColor="#9C1838"
+        message={<Loading size={48} text="Cargando datos..." />}
+      />
+    );
+  }
 
   return (
     <>
       <BaseDialog
-      type="custom"
-      size="lg"
-      title="Nuevo Turno"
-      customIcon={
-        <Image
-          src="/favicon.svg"
-          alt="Logo Fisiopasteur"
-          width={24}
-          height={24}
-          className="w-6 h-6"
-        />
-      }
+        type="custom"
+        size="lg"
+        title="Nuevo Turno"
+        customIcon={
+          <Image
+            src="/favicon.svg"
+            alt="Logo Fisiopasteur"
+            width={24}
+            height={24}
+            className="w-6 h-6"
+          />
+        }
         isOpen={isOpen}
         onClose={onClose}
         showCloseButton
@@ -375,15 +511,112 @@ if (loading) {
             onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
             className="space-y-4 text-left"
           >
+            {/* Especialista */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Especialista*
+              </label>
+              <select
+                value={formData.id_especialista}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                required
+              >
+                <option value="">Seleccionar especialista</option>
+                {especialistas.map((especialista) => (
+                  <option key={especialista.id_usuario} value={especialista.id_usuario}>
+                    {especialista.nombre} {especialista.apellido}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Especialidad */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Especialidad*
+              </label>
+              <select
+                value={formData.id_especialidad}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_especialidad: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                required
+                disabled={!formData.id_especialista}
+              >
+                <option value="">Seleccionar especialidad</option>
+                {especialidadesDisponibles.map((esp: any) => (
+                  <option key={esp.id_especialidad} value={esp.id_especialidad}>
+                    {esp.nombre}
+                  </option>
+                ))}
+              </select>
+              {formData.id_especialista && especialidadesDisponibles.length === 0 && (
+                <p className="text-red-500 text-xs mt-1">
+                  Este especialista no tiene especialidades asignadas
+                </p>
+              )}
+            </div>
+          
+            {/* Paciente con Autocomplete */}
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Paciente*
+              </label>
+              <input
+                ref={inputPacienteRef}
+                type="text"
+                value={busquedaPaciente}
+                onChange={handleBusquedaPacienteChange}
+                onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                placeholder="Buscar paciente por nombre, apellido o DNI..."
+                required
+                autoComplete="off"
+              />
+              
+              {/* Lista de resultados */}
+              {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
+                <div 
+                  ref={listaPacientesRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                >
+                  {pacientesFiltrados.map((paciente) => (
+                    <div
+                      key={paciente.id_paciente}
+                      onClick={() => seleccionarPaciente(paciente)}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium">
+                        {paciente.nombre} {paciente.apellido}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Mensaje cuando no hay resultados */}
+              {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
+                <div 
+                  ref={listaPacientesRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
+                >
+                  No se encontraron pacientes, verificar datos ingresados.
+                </div>
+              )}
+            </div>
+
             {/* Fecha */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha *
+                Fecha*
               </label>
               <input
                 type="date"
                 value={formData.fecha}
-                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '' }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '', id_box: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
                 min={new Date().toISOString().split('T')[0]}
@@ -393,11 +626,11 @@ if (loading) {
             {/* Hora */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hora * {verificandoDisponibilidad && <span className="text-xs text-gray-500">(Verificando disponibilidad...)</span>}
+                Hora* {verificandoDisponibilidad && <span className="text-xs text-gray-500">(Verificando disponibilidad...)</span>}
               </label>
               <select
                 value={formData.hora}
-                onChange={(e) => setFormData(prev => ({ ...prev, hora: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, hora: e.target.value, id_box: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
                 disabled={!formData.id_especialista || !formData.fecha || verificandoDisponibilidad}
@@ -428,48 +661,29 @@ if (loading) {
               )}
             </div>
 
-            {/* Especialista */}
+            {/* Box/Consultorio */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Especialista *
+                Box/Consultorio {verificandoBoxes && <span className="text-xs text-gray-500">(Verificando disponibilidad...)</span>}
               </label>
               <select
-                value={formData.id_especialista}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '' }))}
+                value={formData.id_box}
+                onChange={(e) => setFormData(prev => ({ ...prev, id_box: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                required
+                disabled={!formData.fecha || !formData.hora || verificandoBoxes}
               >
-                <option value="">Seleccionar especialista</option>
-                {especialistas.map((especialista) => (
-                  <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                    . {especialista.nombre} {especialista.apellido}
+                <option value="">
+                  {!formData.fecha || !formData.hora ? "Selecciona fecha y hora primero" : "Seleccionar box (opcional)"}
+                </option>
+                {boxesDisponibles.map((box) => (
+                  <option key={box.id_box} value={box.id_box}>
+                    Box {box.numero}
                   </option>
                 ))}
               </select>
-            </div>
-
-            {/* Especialidad */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Especialidad *
-              </label>
-              <select
-                value={formData.id_especialidad}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialidad: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                required
-                disabled={!formData.id_especialista}
-              >
-                <option value="">Seleccionar especialidad</option>
-                {especialidadesDisponibles.map((esp: any) => (
-                  <option key={esp.id_especialidad} value={esp.id_especialidad}>
-                    {esp.nombre}
-                  </option>
-                ))}
-              </select>
-              {formData.id_especialista && especialidadesDisponibles.length === 0 && (
-                <p className="text-red-500 text-xs mt-1">
-                  Este especialista no tiene especialidades asignadas
+              {formData.fecha && formData.hora && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {boxesDisponibles.length} de {boxes.length} boxes disponibles
                 </p>
               )}
             </div>
@@ -486,26 +700,6 @@ if (loading) {
               >
                 <option value="particular">Particular</option>
                 <option value="obra_social">Obra Social</option>
-              </select>
-            </div>
-
-            {/* Paciente */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Paciente *
-              </label>
-              <select
-                value={formData.id_paciente}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_paciente: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                required
-              >
-                <option value="">Seleccionar paciente</option>
-                {pacientes.map((paciente) => (
-                  <option key={paciente.id_paciente} value={paciente.id_paciente}>
-                    {paciente.nombre} {paciente.apellido} - DNI: {paciente.dni}
-                  </option>
-                ))}
               </select>
             </div>
 

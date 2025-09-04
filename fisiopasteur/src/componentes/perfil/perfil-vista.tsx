@@ -5,10 +5,13 @@ import { PerfilCompleto, actualizarPerfil, obtenerPreciosUsuarioEspecialidades, 
 import { useToastStore } from '@/stores/toast-store';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Pencil, X, Phone, CalendarDays, Mail, User, CircleDollarSign, ChevronDown, LogOut
+  ArrowLeft, Pencil, X, Phone, CalendarDays, Mail, User, CircleDollarSign, ChevronDown, LogOut,
+  Palette
 } from 'lucide-react';
 import Button from '../boton';
 import { handleCerrarSesion } from '@/lib/actions/logOut.action';
+import EditarPerfilDialog from './editarperfil-dialog';
+import { formatoNumeroTelefono, formatARS } from '@/lib/utils';
 
 interface PerfilClienteProps {
   perfil: PerfilCompleto;
@@ -16,19 +19,11 @@ interface PerfilClienteProps {
 
 const BRAND = '#9C1838';
 
-function formatARS(n: number) {
-  try {
-    return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
-  } catch {
-    return `$${n.toFixed(0)}`;
-  }
-}
-
 export default function PerfilCliente({ perfil }: PerfilClienteProps) {
-  const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { addToast } = useToastStore();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Estado de precios reales por especialidad
   const [precios, setPrecios] = useState<Record<number, { precio_particular: number; precio_obra_social: number; activo: boolean }>>({});
@@ -74,7 +69,6 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
         description: result.message,
       });
       if (result.success) {
-        setIsEditing(false);
         router.refresh();
       }
     });
@@ -89,139 +83,6 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
     handleCerrarSesion(router);
   };
 
-  /* ============ VISTA DE EDICIÓN ============ */
-  if (isEditing) {
-    return (
-      <div className="min-h-screen text-black">
-        {/* Mobile Header - Solo móvil */}
-        <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden text-black">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setIsEditing(false)}
-              className="p-2 -ml-2 rounded-md active:scale-95 transition hover:bg-gray-100"
-              aria-label="Cancelar"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <h1 className="text-lg font-semibold">Editar Perfil</h1>
-            <div className="w-10" />
-          </div>
-        </header>
-
-        {/* Contenido Principal */}
-        <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8 text-black">
-          {/* Desktop Header */}
-          <div className="text-black hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6 ">
-            <h2 className="text-2xl sm:text-3xl font-bold">Editar Perfil</h2>
-          </div>
-
-          <form action={handleSubmit} className="max-w-2xl mx-auto space-y-6">
-            {/* feedback solo via toast */}
-
-            <div className="space-y-6 text-black">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Nombre</label>
-                  <input
-                    type="text"
-                    name="nombre"
-                    defaultValue={perfil.nombre}
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-[--brand] focus:border-[--brand] transition"
-                    style={{ ['--brand' as any]: BRAND }}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Apellido</label>
-                  <input
-                    type="text"
-                    name="apellido"
-                    defaultValue={perfil.apellido}
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-[--brand] focus:border-[--brand] transition"
-                    style={{ ['--brand' as any]: BRAND }}
-                    required
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={perfil.email}
-                    readOnly
-                    className="w-full px-4 py-3 border border-neutral-200 bg-neutral-50 rounded-xl text-neutral-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Teléfono</label>
-                  <input
-                    type="tel"
-                    name="telefono"
-                    defaultValue={perfil.telefono || ''}
-                    placeholder="+54911..."
-                    className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-[--brand] focus:border-[--brand] transition"
-                    style={{ ['--brand' as any]: BRAND }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Color</label>
-                  <input
-                    type="color"
-                    name="color"
-                    defaultValue={perfil.color || BRAND}
-                    className="h-12 cursor-pointer "
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3 pt-6 sm:hidden">
-              <Button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                variant="secondary"
-                className="flex-1"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isPending}
-                variant="primary"
-                className="flex-1"
-              >
-                {isPending ? 'Guardando…' : 'Guardar Cambios'}
-              </Button>
-            </div>
-
-            {/* Botón desktop */}
-            <div className="hidden sm:block pt-6">
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  variant="secondary"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isPending}
-                  variant="primary"
-                >
-                  {isPending ? 'Guardando…' : 'Guardar Cambios'}
-                </Button>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
   {/*VISTA PERFIL*/}
   return (
     <div className="min-h-screen text-black">
@@ -235,26 +96,16 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-semibold">Perfil</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onCerrarSesion}
-              className="p-2 rounded-md active:scale-95 transition hover:bg-red-50 text-red-600"
-              aria-label="Cerrar sesión"
-              title="Cerrar sesión"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white"
-              style={{ backgroundColor: BRAND }}
-              aria-label="Editar perfil"
-              title="Editar perfil"
-            >
-              <Pencil className="w-5 h-5" />
-            </button>
-          </div>
+          <h1 className="text-lg font-semibold text-center flex-1">Perfil</h1>
+          <button
+            onClick={() => setEditDialogOpen(true)}
+            className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
+            style={{ backgroundColor: BRAND }}
+            aria-label="Editar perfil"
+            title="Editar perfil"
+          >
+            <Pencil className="w-5 h-5" />
+          </button>
         </div>
       </header>
 
@@ -263,21 +114,20 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
         {/* Desktop Header */}
         <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
           <h2 className="text-2xl sm:text-3xl font-bold">Perfil</h2>
-          <button
-            onClick={() => setIsEditing(true)}
-            className="px-4 py-2 border border-neutral-300 rounded-xl font-medium text-neutral-700 hover:bg-neutral-50 active:scale-95 transition"
+          <Button
+            type="button"
+            onClick={() => setEditDialogOpen(true)}
+            variant="secondary"
           >
             Editar Perfil
-          </button>
+          </Button>
         </div>
-
-        {/* feedback solo via toast */}
 
         {/* Grid: 1 col mobile / 2 cols desktop (izq info + der precios) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* IZQUIERDA */}
           <div className="lg:col-span-7">
-            <div className="text-center">
+            <div className="text-center mt-4">
               <h2 className="text-[28px] leading-tight font-extrabold lg:text-[34px]">
                 {perfil.nombre}<br />{perfil.apellido}
               </h2>
@@ -290,7 +140,13 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
 
                 <p className="flex items-center justify-center gap-2">
                   <Phone className="w-4 h-4" />
-                  <span className="select-all">{perfil.telefono || '—'}</span>
+                  <span className="select-all">{formatoNumeroTelefono(perfil.telefono || '—')}</span>
+                </p>
+
+                <p className='flex items-center justify-center gap-2'>
+                  <Palette className="w-4 h-4" />
+                    <span className="" style={{ backgroundColor: perfil.color ?? '', borderRadius: '50%', display: 'inline-block', width: 18, height: 18, border: '1px solid #ccc' }} title={perfil.color ?? ''}></span>
+                    
                 </p>
               </div>
             </div>
@@ -442,8 +298,26 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
                 })}
               </div>
             </div>
+            {/* Botón cerrar sesión SOLO en mobile */}
+            <div className="sm:hidden mt-8 flex justify-center">
+              <Button
+                type="button"
+                onClick={onCerrarSesion}
+                variant="danger"
+              >
+                <LogOut className="w-5 h-5 mr-2" />
+                Cerrar sesión
+              </Button>
+            </div>
           </div>
         </div>
+
+        {/* Dialog de edición */}
+        <EditarPerfilDialog
+          open={editDialogOpen}
+          onClose={() => setEditDialogOpen(false)}
+          perfil={perfil}
+        />
       </div>
     </div>
   );

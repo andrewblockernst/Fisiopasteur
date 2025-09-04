@@ -89,26 +89,32 @@ export type Database = {
         Row: {
           estado: string | null
           fecha_envio: string | null
+          fecha_programada: string | null
           id_notificacion: number
           id_turno: number | null
           medio: string
           mensaje: string
+          telefono: string | null
         }
         Insert: {
           estado?: string | null
           fecha_envio?: string | null
+          fecha_programada?: string | null
           id_notificacion?: number
           id_turno?: number | null
           medio: string
           mensaje: string
+          telefono?: string | null
         }
         Update: {
           estado?: string | null
           fecha_envio?: string | null
+          fecha_programada?: string | null
           id_notificacion?: number
           id_turno?: number | null
           medio?: string
           mensaje?: string
+          telefono?: string | null
         }
         Relationships: [
           {
@@ -280,7 +286,6 @@ export type Database = {
           nombre: string
           telefono: string | null
           updated_at: string | null
-          usuario: string
         }
         Insert: {
           activo?: boolean | null
@@ -295,7 +300,6 @@ export type Database = {
           nombre: string
           telefono?: string | null
           updated_at?: string | null
-          usuario: string
         }
         Update: {
           activo?: boolean | null
@@ -310,7 +314,6 @@ export type Database = {
           nombre?: string
           telefono?: string | null
           updated_at?: string | null
-          usuario?: string
         }
         Relationships: [
           {
@@ -331,33 +334,33 @@ export type Database = {
       }
       usuario_especialidad: {
         Row: {
+          activo: boolean | null
           fecha_asignacion: string | null
           id_especialidad: number
           id_usuario: string
           id_usuario_especialidad: number
-          precio_particular: number | null
           precio_obra_social: number | null
-          activo: boolean | null
+          precio_particular: number | null
           updated_at: string | null
         }
         Insert: {
+          activo?: boolean | null
           fecha_asignacion?: string | null
           id_especialidad: number
           id_usuario: string
           id_usuario_especialidad?: number
-          precio_particular?: number | null
           precio_obra_social?: number | null
-          activo?: boolean | null
+          precio_particular?: number | null
           updated_at?: string | null
         }
         Update: {
+          activo?: boolean | null
           fecha_asignacion?: string | null
           id_especialidad?: number
           id_usuario?: string
           id_usuario_especialidad?: number
-          precio_particular?: number | null
           precio_obra_social?: number | null
-          activo?: boolean | null
+          precio_particular?: number | null
           updated_at?: string | null
         }
         Relationships: [

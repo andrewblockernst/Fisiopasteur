@@ -123,7 +123,7 @@ export default function PilatesPage() {
     const especialidad_id = 4; // Pilates
     const plan = "particular";
 
-    for (const paciente_id of pacientesSeleccionados) {
+    for (const paciente_id of pacientesSeleccionados) { 
       await crearTurno({
         fecha,
         hora,

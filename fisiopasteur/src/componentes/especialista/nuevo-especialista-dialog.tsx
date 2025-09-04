@@ -112,7 +112,6 @@ function EspecialistaFormForDialog({
     if (!formData.get("nombre")) newErrors.nombre = "El nombre es requerido";
     if (!formData.get("apellido")) newErrors.apellido = "El apellido es requerido";
     if (!formData.get("email")) newErrors.email = "El email es requerido";
-    if (!formData.get("usuario")) newErrors.usuario = "El usuario es requerido";
     if (!formData.get("contraseña")) newErrors.contraseña = "La contraseña es requerida";
 
     const email = formData.get("email") as string;
@@ -184,7 +183,7 @@ function EspecialistaFormForDialog({
         {/* Nombre */}
         <div>
           <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre *
+            Nombre*
           </label>
           <input
             type="text"
@@ -201,7 +200,7 @@ function EspecialistaFormForDialog({
         {/* Apellido */}
         <div>
           <label htmlFor="apellido" className="block text-sm font-medium text-gray-700 mb-1">
-            Apellido *
+            Apellido*
           </label>
           <input
             type="text"
@@ -218,7 +217,7 @@ function EspecialistaFormForDialog({
         {/* Email */}
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Email *
+            Email*
           </label>
           <input
             type="email"
@@ -232,27 +231,10 @@ function EspecialistaFormForDialog({
           {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
         </div>
 
-        {/* Usuario */}
-        <div>
-          <label htmlFor="usuario" className="block text-sm font-medium text-gray-700 mb-1">
-            Usuario *
-          </label>
-          <input
-            type="text"
-            id="usuario"
-            name="usuario"
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.usuario ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="nombre_usuario"
-          />
-          {errors.usuario && <p className="text-red-500 text-xs mt-1">{errors.usuario}</p>}
-        </div>
-
         {/* Contraseña */}
         <div>
           <label htmlFor="contraseña" className="block text-sm font-medium text-gray-700 mb-1">
-            Contraseña *
+            Contraseña*
           </label>
           <input
             type="password"
@@ -266,31 +248,31 @@ function EspecialistaFormForDialog({
           {errors.contraseña && <p className="text-red-500 text-xs mt-1">{errors.contraseña}</p>}
         </div>
 
-        {/* Teléfono */}
+        {/* Teléfono - movido aquí */}
         <div>
           <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
-            Teléfono
+        Contacto*
           </label>
           <input
-            type="tel"
-            id="telefono"
-            name="telefono"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
-            placeholder="+54 9 11 1234-5678"
+        type="tel"
+        id="telefono"
+        name="telefono"
+        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+        placeholder="549..."
           />
         </div>
-      </div>
 
-      {/* Color de identificación */}
-      <div className="mt-4">
-        <label htmlFor="color" className="block text-sm font-medium text-gray-700 mb-1">
-          Color de identificación
-        </label>
-        <ColorPicker
-          value={selectedColor}
-          onChange={setSelectedColor}
-          disabled={isSubmitting}
-        />
+        {/* Color de identificación */}
+        <div>
+          <label htmlFor="color" className="block text-sm font-medium text-gray-700 mb-1">
+        Color de identificación
+          </label>
+          <ColorPicker
+        value={selectedColor}
+        onChange={setSelectedColor}
+        disabled={isSubmitting}
+          />
+        </div>
       </div>
 
       {/* Especialidades */}
