@@ -26,6 +26,12 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     });
   };
 
+  // Filtrar especialidades para excluir Pilates
+  const especialidadesFiltradas = especialidades?.filter((esp: any) => {
+    if (!esp.nombre) return true;
+    return !esp.nombre.toLowerCase().includes('pilates');
+  }) || [];
+
   const tiposFiltro = [
     { value: "", label: "Seleccionar filtro..." },
     { value: "fecha_desde", label: "Fecha desde" },
@@ -155,7 +161,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
             className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Seleccionar especialidad...</option>
-            {especialidades.map((esp: any) => (
+            {especialidadesFiltradas.map((esp: any) => (
               <option key={esp.id_especialidad} value={esp.id_especialidad}>
                 {esp.nombre}
               </option>
@@ -190,7 +196,8 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
   };
 
   const getNombreEspecialidad = (id: string) => {
-    const esp = especialidades?.find((e: any) => e.id_especialidad === parseInt(id));
+    // Buscar en la lista filtrada también
+    const esp = especialidadesFiltradas?.find((e: any) => e.id_especialidad === parseInt(id));
     return esp ? esp.nombre : 'Especialidad filtrada';
   };
 

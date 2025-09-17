@@ -45,31 +45,43 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
     return "text-gray-900";
   };
 
-  // Ordenar turnos: programados primero, luego atendidos, cancelados al final
-  const turnosOrdenados = turnos?.sort((a, b) => {
-    // Prioridad por estado: programado (0), atendido (1), cancelado (2)
-    const prioridadEstado = (estado: string) => {
-      switch (estado) {
-        case 'programado': return 0;
-        case 'atendido': return 1;
-        case 'cancelado': return 2;
-        default: return 3;
-      }
-    };
-
-    const prioridadA = prioridadEstado(a.estado);
-    const prioridadB = prioridadEstado(b.estado);
-
-    // Si tienen diferente estado, ordenar por prioridad
-    if (prioridadA !== prioridadB) {
-      return prioridadA - prioridadB;
+  // Función para verificar si es turno de Pilates
+  const esTurnoPilates = (turno: any) => {
+    // Verificar por nombre de especialidad (case insensitive)
+    if (turno.especialidad && turno.especialidad.nombre) {
+      return turno.especialidad.nombre.toLowerCase().includes('pilates');
     }
+    return false;
+  };
 
-    // Si tienen el mismo estado, ordenar por fecha y hora
-    const fechaA = new Date(`${a.fecha}T${a.hora}`);
-    const fechaB = new Date(`${b.fecha}T${b.hora}`);
-    return fechaA.getTime() - fechaB.getTime();
-  }) || [];
+  // Filtrar turnos: excluir Pilates y luego ordenar
+  const turnosOrdenados = turnos
+    ?.filter(turno => !esTurnoPilates(turno)) // Filtrar Pilates
+    ?.sort((a, b) => {
+      // Prioridad por estado: programado (0),  (1), atendido (2), cancelado (3)
+      const prioridadEstado = (estado: string) => {
+        switch (estado?.toLowerCase()) {
+          case 'programado': return 0;
+          case '': return 1;
+          case 'atendido': return 2;
+          case 'cancelado': return 3;
+          default: return 4;
+        }
+      };
+
+      const prioridadA = prioridadEstado(a.estado || '');
+      const prioridadB = prioridadEstado(b.estado || '');
+
+      // Si tienen diferente estado, ordenar por prioridad
+      if (prioridadA !== prioridadB) {
+        return prioridadA - prioridadB;
+      }
+
+      // Si tienen el mismo estado, ordenar por fecha y hora
+      const fechaA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
+      const fechaB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
+      return fechaA.getTime() - fechaB.getTime();
+    }) || [];
 
   return (
     <div className="block bg-white shadow-md rounded-lg overflow-visible  space-y-4">
@@ -144,7 +156,6 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
               <tr>
                 <td className="p-8 text-center text-gray-500" colSpan={9}>
                   <div className="flex flex-col items-center gap-2">
-                    <span className="text-2xl"></span>
                     <span>No hay turnos para mostrar</span>
                   </div>
                 </td>

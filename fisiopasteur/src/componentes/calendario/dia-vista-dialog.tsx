@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, FileText, Phone, Edit, Trash2 } from "lucide-react";
+import { Clock } from "lucide-react";
 import { useTurnoStore, type TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
 import { eliminarTurno as eliminarTurnoAction } from "@/lib/actions/turno.action";
+import Image from "next/image";
+import TurnoCard from "./turno-card";
 
 interface DayViewModalProps {
   isOpen: boolean;
@@ -59,7 +61,7 @@ export function DayViewModal({
     switch (estado.toLowerCase()) {
       case 'confirmado':
         return 'bg-green-100 text-green-800 border-green-200';
-      case 'pendiente':
+      case 'programado':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'cancelado':
         return 'bg-red-100 text-red-800 border-red-200';
@@ -88,9 +90,18 @@ export function DayViewModal({
       isOpen={isOpen}
       onClose={onClose}
       showCloseButton
+      customIcon={
+        <Image
+          src="/favicon.svg"
+          alt="Logo Fisiopasteur"
+          width={28}
+          height={28}
+          className="w-7 h-7"
+          />
+      }
       message={
         <div className="text-left">
-          <p className="text-red-700 font-semibold mb-4 capitalize">
+          <p className="text-[#9C1838] font-semibold mb-4 capitalize">
             {formatearFecha(fecha)}
           </p>
           {turnosLocal.length === 0 ? (
@@ -114,93 +125,37 @@ export function DayViewModal({
               {turnosLocal
                 .sort((a, b) => a.hora.localeCompare(b.hora))
                 .map((turno) => (
-                  <div
+                  <TurnoCard
                     key={turno.id_turno}
-                    className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-4 h-4 rounded-full"
-                          style={{ backgroundColor: turno.especialista?.color || '#9C1838' }}
-                        />
-                        <div>
-                          <h4 className="font-semibold text-gray-900">
-                            {turno.paciente?.nombre} {turno.paciente?.apellido}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            Dr. {turno.especialista?.nombre} {turno.especialista?.apellido}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <span className={`
-                          px-3 py-1 rounded-full text-xs font-medium border
-                          ${getEstadoColor(turno.estado || 'pendiente')}
-                        `}>
-                          {turno.estado || 'pendiente'}
-                        </span>
-                        
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleEdit(turno)}
-                            className="p-2 text-gray-600 hover:text-[#9C1838] hover:bg-gray-100 rounded-lg transition-colors"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(turno)}
-                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-gray-100 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Clock className="w-4 h-4" />
-                        <span>
-                          {formatearHora(turno.hora)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Phone className="w-4 h-4" />
-                        <span>{turno.paciente?.telefono || 'Sin teléfono'}</span>
-                      </div>
-                      
-                      {turno.observaciones && (
-                        <div className="md:col-span-2 flex items-start gap-2 text-gray-600">
-                          <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm">{turno.observaciones}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    turno={turno}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    getEstadoColor={getEstadoColor}
+                    formatearHora={formatearHora}
+                  />
                 ))}
             </div>
           )}
         </div>
       }
-      secondaryButton={{
-        text: "Cerrar",
-        onClick: onClose,
-      }}
     />
       {turnoEditando && (
         <EditarTurnoDialog
           turno={{
             id_turno: turnoEditando.id_turno,
-            id_paciente: turnoEditando.id_paciente ?? 0,
-            id_especialista: turnoEditando.id_especialista || null,
-            id_especialidad: turnoEditando.id_especialidad || null,
+            id_paciente: turnoEditando.id_paciente ?? null,
+            id_especialista: turnoEditando.id_especialista ?? null,
+            id_especialidad: turnoEditando.id_especialidad ?? null,
             id_box: (turnoEditando as any).id_box ?? null,
             fecha: turnoEditando.fecha,
             hora: turnoEditando.hora,
-            observaciones: turnoEditando.observaciones || null,
+            observaciones: turnoEditando.observaciones ?? null,
+            created_at: (turnoEditando as any).created_at ?? null,
+            estado: (turnoEditando as any).estado ?? null,
+            notas: (turnoEditando as any).notas ?? null,
+            precio: (turnoEditando as any).precio ?? null,
+            updated_at: (turnoEditando as any).updated_at ?? null,
+            tipo_plan: (turnoEditando as any).tipo_plan ?? null,
           }}
           open={Boolean(turnoEditando)}
           onClose={() => setTurnoEditando(null)}
