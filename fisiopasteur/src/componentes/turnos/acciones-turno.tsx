@@ -3,10 +3,10 @@
 import { useState, useTransition } from "react";
 import { cancelarTurno, eliminarTurno, marcarComoAtendido } from "@/lib/actions/turno.action";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
-import BaseDialog from "@/componentes/dialog/base-dialog";
 import Button from "@/componentes/boton";
 import { Database } from "@/types/database.types";
 import { MoreVertical, Edit, X, Trash, CheckCircle } from "lucide-react";
+import { useToastStore } from '@/stores/toast-store';
 
 // Usar el tipo exacto de la base de datos
 type TurnoFromDB = Database['public']['Tables']['turno']['Row'];
@@ -28,39 +28,51 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   const [openEdit, setOpenEdit] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const { addToast } = useToastStore();
 
-  // Estado para diálogos personalizados
-  const [dialog, setDialog] = useState<{
-    open: boolean;
-    type: 'success' | 'error' | 'info';
-    title: string;
-    message: string;
-    onConfirm?: () => void;
-  }>({ open: false, type: 'info', title: '', message: '' });
-
-  // Confirmación personalizada
-  const showConfirm = (type: 'info' | 'error', title: string, message: string, onConfirm: () => void) => {
-    setDialog({ open: true, type, title, message, onConfirm });
-  };
-
-  // Mensaje personalizado
-  const showMessage = (type: 'success' | 'error', title: string, message: string) => {
-    setDialog({ open: true, type, title, message });
-  };
+  // Estados para confirmaciones
+  const [esperandoConfirmacionCancelar, setEsperandoConfirmacionCancelar] = useState(false);
+  const [esperandoConfirmacionEliminar, setEsperandoConfirmacionEliminar] = useState(false);
+  const [esperandoConfirmacionAtendido, setEsperandoConfirmacionAtendido] = useState(false);
 
   const onCancelar = () => {
     setMenuAbierto(false);
-    showConfirm('info', 'Cancelar turno', '¿Cancelar este turno?', () => {
-      setDialog({ ...dialog, open: false });
-      startTransition(async () => {
-        const res = await cancelarTurno(turno.id_turno);
-        if (res.success) {
-          showMessage('success', 'Turno cancelado', 'El turno fue cancelado correctamente.');
-          onDone?.();
-        } else {
-          showMessage('error', 'Error', res.error || "Error");
-        }
+    
+    if (!esperandoConfirmacionCancelar) {
+      // Primera vez - mostrar confirmación
+      setEsperandoConfirmacionCancelar(true);
+      addToast({
+        variant: 'warning',
+        message: 'Cancelar turno',
+        description: 'Haz clic nuevamente en "Cancelar" para confirmar la cancelación del turno.',
+        duration: 6000,
       });
+      
+      // Limpiar el estado después de 6 segundos
+      setTimeout(() => {
+        setEsperandoConfirmacionCancelar(false);
+      }, 6000);
+      return;
+    }
+
+    // Segunda vez - ejecutar cancelación
+    setEsperandoConfirmacionCancelar(false);
+    startTransition(async () => {
+      const res = await cancelarTurno(turno.id_turno);
+      if (res.success) {
+        addToast({
+          variant: 'success',
+          message: 'Turno cancelado',
+          description: 'El turno fue cancelado correctamente.',
+        });
+        onDone?.();
+      } else {
+        addToast({
+          variant: 'error',
+          message: 'Error',
+          description: res.error || "Error al cancelar el turno",
+        });
+      }
     });
   };
 
@@ -69,37 +81,90 @@ export default function AccionesTurno({ turno, onDone }: Props) {
     
     // Verificar si el turno ya pasó antes de mostrar confirmación
     if (esPasado) {
-      showMessage('error', 'No se puede eliminar', 'No se pueden eliminar turnos que ya pasaron.');
+      addToast({
+        variant: 'error',
+        message: 'No se puede eliminar',
+        description: 'No se pueden eliminar turnos que ya pasaron.',
+      });
       return;
     }
 
-    showConfirm('error', 'Eliminar turno', 'Esto elimina definitivamente el turno. ¿Continuar?', () => {
-      setDialog({ ...dialog, open: false });
-      startTransition(async () => {
-        const res = await eliminarTurno(turno.id_turno);
-        if (res.success) {
-          showMessage('success', 'Turno eliminado', 'El turno fue eliminado correctamente.');
-          onDone?.();
-        } else {
-          showMessage('error', 'Error', res.error || "Error");
-        }
+    if (!esperandoConfirmacionEliminar) {
+      // Primera vez - mostrar confirmación
+      setEsperandoConfirmacionEliminar(true);
+      addToast({
+        variant: 'error',
+        message: 'Eliminar turno',
+        description: 'ATENCIÓN: Esto elimina definitivamente el turno. Haz clic nuevamente en "Eliminar" para confirmar.',
+        duration: 8000,
       });
+      
+      // Limpiar el estado después de 8 segundos
+      setTimeout(() => {
+        setEsperandoConfirmacionEliminar(false);
+      }, 8000);
+      return;
+    }
+
+    // Segunda vez - ejecutar eliminación
+    setEsperandoConfirmacionEliminar(false);
+    startTransition(async () => {
+      const res = await eliminarTurno(turno.id_turno);
+      if (res.success) {
+        addToast({
+          variant: 'success',
+          message: 'Turno eliminado',
+          description: 'El turno fue eliminado correctamente.',
+        });
+        onDone?.();
+      } else {
+        addToast({
+          variant: 'error',
+          message: 'Error',
+          description: res.error || "Error al eliminar el turno",
+        });
+      }
     });
   };
 
   const onMarcarAtendido = () => {
     setMenuAbierto(false);
-    showConfirm('info', 'Marcar como atendido', '¿Marcar como atendido?', () => {
-      setDialog({ ...dialog, open: false });
-      startTransition(async () => {
-        const res = await marcarComoAtendido(turno.id_turno);
-        if (res.success) {
-          showMessage('success', 'Turno atendido', 'El turno fue marcado como atendido.');
-          onDone?.();
-        } else {
-          showMessage('error', 'Error', res.error || "Error");
-        }
+    
+    if (!esperandoConfirmacionAtendido) {
+      // Primera vez - mostrar confirmación
+      setEsperandoConfirmacionAtendido(true);
+      addToast({
+        variant: 'info',
+        message: 'Marcar como atendido',
+        description: 'Haz clic nuevamente en "Marcar Atendido" para confirmar.',
+        duration: 5000,
       });
+      
+      // Limpiar el estado después de 5 segundos
+      setTimeout(() => {
+        setEsperandoConfirmacionAtendido(false);
+      }, 5000);
+      return;
+    }
+
+    // Segunda vez - ejecutar marcado como atendido
+    setEsperandoConfirmacionAtendido(false);
+    startTransition(async () => {
+      const res = await marcarComoAtendido(turno.id_turno);
+      if (res.success) {
+        addToast({
+          variant: 'success',
+          message: 'Turno atendido',
+          description: 'El turno fue marcado como atendido.',
+        });
+        onDone?.();
+      } else {
+        addToast({
+          variant: 'error',
+          message: 'Error',
+          description: res.error || "Error al marcar como atendido",
+        });
+      }
     });
   };
 
@@ -107,7 +172,11 @@ export default function AccionesTurno({ turno, onDone }: Props) {
     setMenuAbierto(false);
     // Verificar que el turno tenga todos los campos requeridos antes de editar
     if (!turno.id_paciente) {
-      showMessage('error', 'Error', 'No se puede editar un turno sin paciente asignado.');
+      addToast({
+        variant: 'error',
+        message: 'Error',
+        description: 'No se puede editar un turno sin paciente asignado.',
+      });
       return;
     }
     setOpenEdit(true);
@@ -158,10 +227,12 @@ export default function AccionesTurno({ turno, onDone }: Props) {
               {esProgramado && esPasado && (
                 <button
                   onClick={onMarcarAtendido}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-green-600"
+                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${
+                    esperandoConfirmacionAtendido ? 'bg-blue-50 text-blue-700 font-medium' : 'text-green-600'
+                  }`}
                 >
                   <CheckCircle size={14} />
-                  Marcar Atendido
+                  {esperandoConfirmacionAtendido ? 'Confirmar Atendido' : 'Marcar Atendido'}
                 </button>
               )}
               
@@ -169,10 +240,12 @@ export default function AccionesTurno({ turno, onDone }: Props) {
               {esProgramado && !esPasado && (
                 <button
                   onClick={onCancelar}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-orange-600"
+                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${
+                    esperandoConfirmacionCancelar ? 'bg-orange-50 text-orange-700 font-medium' : 'text-orange-600'
+                  }`}
                 >
                   <X size={14} />
-                  Cancelar
+                  {esperandoConfirmacionCancelar ? 'Confirmar Cancelación' : 'Cancelar'}
                 </button>
               )}
               
@@ -180,10 +253,12 @@ export default function AccionesTurno({ turno, onDone }: Props) {
               {!esPasado && (
                 <button
                   onClick={onEliminar}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${
+                    esperandoConfirmacionEliminar ? 'bg-red-50 text-red-700 font-medium' : 'text-red-600'
+                  }`}
                 >
                   <Trash size={14} />
-                  Eliminar
+                  {esperandoConfirmacionEliminar ? 'Confirmar Eliminación' : 'Eliminar'}
                 </button>
               )}
 
@@ -192,7 +267,11 @@ export default function AccionesTurno({ turno, onDone }: Props) {
                 <button
                   onClick={() => {
                     setMenuAbierto(false);
-                    showMessage('error', 'No disponible', 'No se pueden eliminar turnos que ya pasaron.');
+                    addToast({
+                      variant: 'error',
+                      message: 'No disponible',
+                      description: 'No se pueden eliminar turnos que ya pasaron.',
+                    });
                   }}
                   className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 text-gray-400 cursor-not-allowed"
                   disabled
@@ -219,38 +298,6 @@ export default function AccionesTurno({ turno, onDone }: Props) {
           }}
         />
       )}
-
-      {/* Diálogo personalizado para confirmaciones y mensajes */}
-      <BaseDialog
-        type={dialog.type}
-        size="sm"
-        title={dialog.title}
-        message={dialog.message}
-        isOpen={dialog.open}
-        onClose={() => setDialog({ ...dialog, open: false })}
-        showCloseButton
-        primaryButton={
-          dialog.onConfirm
-            ? {
-                text: "Confirmar",
-                onClick: () => {
-                  dialog.onConfirm?.();
-                },
-              }
-            : {
-                text: "Aceptar",
-                onClick: () => setDialog({ ...dialog, open: false }),
-              }
-        }
-        secondaryButton={
-          dialog.onConfirm
-            ? {
-                text: "Cancelar",
-                onClick: () => setDialog({ ...dialog, open: false }),
-              }
-            : undefined
-        }
-      />
     </div>
   );
 }

@@ -432,58 +432,64 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     }
   };
 
-  const handleSubmit = async () => {
-    if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
-      addToast({
-        variant: 'error',
-        message: 'Campos requeridos',
-        description: 'Por favor completa fecha, hora, especialista, especialidad y paciente',
-      });
-      return;
-    }
 
-    startTransition(async () => {
-      try {
-        const datosActualizacion: Partial<Database['public']['Tables']['turno']['Update']> = {
-          id_paciente: Number(formData.id_paciente),
-          id_especialista: formData.id_especialista,
-          id_especialidad: Number(formData.id_especialidad),
-          id_box: formData.id_box ? Number(formData.id_box) : null,
-          fecha: formData.fecha,
-          hora: formData.hora + ':00',
-          observaciones: formData.observaciones || null,
-          tipo_plan: formData.tipo_plan,
-          precio: formData.precio ? Number(formData.precio) : null,
-        };
+const handleSubmit = async () => {
+  if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
+    addToast({
+      variant: 'error',
+      message: 'Campos requeridos',
+      description: 'Por favor completa fecha, hora, especialista, especialidad y paciente',
+    });
+    return;
+  }
 
-        const res = await actualizarTurno(turno.id_turno, datosActualizacion);
+  startTransition(async () => {
+    try {
+      const datosActualizacion: Partial<Database['public']['Tables']['turno']['Update']> = {
+        id_paciente: Number(formData.id_paciente),
+        id_especialista: formData.id_especialista,
+        id_especialidad: Number(formData.id_especialidad),
+        id_box: formData.id_box ? Number(formData.id_box) : null,
+        fecha: formData.fecha,
+        hora: formData.hora + ':00',
+        observaciones: formData.observaciones || null,
+        tipo_plan: formData.tipo_plan,
+        precio: formData.precio ? Number(formData.precio) : null,
+      };
 
-        if (res.success) {
-          addToast({
-            variant: 'success',
-            message: 'Turno actualizado',
-            description: 'Los cambios se guardaron correctamente',
-          });
-          
-          onSaved?.(res.data as TurnoConRelaciones);
-          onClose();
+      const res: { success: boolean; data?: TurnoConRelaciones; error?: string } = await actualizarTurno(turno.id_turno, datosActualizacion);
+
+      if (res.success) {
+        addToast({
+          variant: 'success',
+          message: 'Turno actualizado',
+          description: 'Los cambios se guardaron correctamente',
+        });
+        
+        // Manejar el caso donde res.data puede ser undefined
+        if (res.data) {
+          onSaved?.(res.data);
         } else {
-          addToast({
-            variant: 'error',
-            message: 'Error al actualizar',
-            description: res.error || 'No se pudo actualizar el turno',
-          });
+          onSaved?.(); // Llamar sin parámetros si no hay data
         }
-      } catch (error) {
-        console.error('Error al actualizar turno:', error);
+        onClose();
+      } else {
         addToast({
           variant: 'error',
-          message: 'Error inesperado',
-          description: 'Ocurrió un problema al actualizar el turno',
+          message: 'Error al actualizar',
+          description: res.error || 'No se pudo actualizar el turno',
         });
       }
-    });
-  };
+    } catch (error) {
+      console.error('Error al actualizar turno:', error);
+      addToast({
+        variant: 'error',
+        message: 'Error inesperado',
+        description: 'Ocurrió un problema al actualizar el turno',
+      });
+    }
+  });
+};
 
   // Mostrar loading mientras carga datos
   if (loading) {
