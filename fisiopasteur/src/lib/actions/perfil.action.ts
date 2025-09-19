@@ -25,10 +25,15 @@ export interface PerfilCompleto {
   especialidad_principal: {
     id_especialidad: number;
     nombre: string;
+    precio_particular?: number | null;
+    precio_obra_social?: number | null;
+
   } | null;
   especialidades_adicionales: Array<{
     id_especialidad: number;
     nombre: string;
+    precio_particular?: number | null;
+    precio_obra_social?: number | null;
   }>;
 }
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import BaseDialog from "../dialog/base-dialog";
-import { deleteEspecialista } from "@/lib/actions/especialista.action";
+import { toggleEspecialistaActivo } from "@/lib/actions/especialista.action";
 import { Tables } from "@/types/database.types";
 import { ToastItem } from "@/stores/toast-store";
 
@@ -21,7 +21,7 @@ export function DeleteEspecialistaDialog({isOpen, onClose, especialista, handleT
     const handleDelete = async () => {
         try {
             setIsDeleting(true);
-            await deleteEspecialista(especialista.id_usuario);
+            await toggleEspecialistaActivo(especialista.id_usuario, false);
             handleToast({
                 variant: "success",
                 message: "El especialista se ha eliminado correctamente.",
