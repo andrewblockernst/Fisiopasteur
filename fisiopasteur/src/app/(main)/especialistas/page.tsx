@@ -27,9 +27,9 @@ export default function EspecialistasPage() {
   const [filter, setFilter] = useState<Filter>("activos");
   const [especialistas, setEspecialistas] = useState<Usuario[]>([]);
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
-  const [showDialog, setShowDialog] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  // const [showDialog, setShowDialog] = useState(false);
+  // const [loading, setLoading] = useState(true);
+  // const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
