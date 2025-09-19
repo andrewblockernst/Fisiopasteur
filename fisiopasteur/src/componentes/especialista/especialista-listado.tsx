@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { EditarEspecialistaDialog } from "./editar-especialista-dialog";
 import type { Tables } from "@/types/database.types";
 import { formatoNumeroTelefono } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 import { toggleEspecialistaActivo } from "@/lib/actions/especialista.action";
 import { useToastStore } from "@/stores/toast-store";
 
@@ -17,17 +18,20 @@ interface EspecialistasTableProps {
   onEspecialistaDeleted?: () => void;
   onEspecialistaUpdated?: () => void;
   especialidades: Especialidad[];
+  setShowDialog: (show: boolean) => void;
 }
 
 export function EspecialistasTable({ 
   especialistas, 
   onEspecialistaDeleted, 
   onEspecialistaUpdated,
-  especialidades 
+  especialidades,
+  setShowDialog
 }: EspecialistasTableProps) {
   const [editingEspecialista, setEditingEspecialista] = useState<Usuario | null>(null);
   const [isPending, startTransition] = useTransition();
   const { addToast } = useToastStore();
+  const router = useRouter();
 
   const handleEditClose = () => {
     setEditingEspecialista(null);
@@ -130,8 +134,8 @@ export function EspecialistasTable({
         </table>
       </div>
 
-      {/* Cards mobile */}
-      <div className="md:hidden space-y-4">
+      {/* Vista de cards para mobile */}
+      {/* <div className="md:hidden space-y-4">
         {especialistas.map((especialista) => (
           <div key={especialista.id_usuario} className={`bg-white shadow-md rounded-lg p-4 border border-gray-200 ${!especialista.activo ? "opacity-60" : ""}`}>
             <div className="flex items-start justify-between mb-3">
@@ -196,6 +200,51 @@ export function EspecialistasTable({
             </div>
           </div>
         ))}
+      </div> */}
+      {/* Vista mobile (xs - sm) */}
+      <div className="block sm:hidden bg-white relative">
+
+        <div className="divide-y divide-gray-200">
+          {especialistas.map((especialista) => (
+            <div
+              key={especialista.id_usuario}
+              className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+              onClick={() => {
+                router.push(`/especialistas/${especialista.id_usuario}`);
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-gray-900 font-medium">
+                  {especialista.nombre} {especialista.apellido}
+                </p>
+                <div className={`w-3 h-3 rounded-full`} style={{ backgroundColor: especialista.color || "#6B7280" }}></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Boton flotante para agregar especialista */}
+        <button
+          onClick={() => setShowDialog(true)}
+          className="fixed bottom-20 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"
+          aria-label="Agregar nuevo paciente"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+        </button>
+
       </div>
 
       {editingEspecialista && (

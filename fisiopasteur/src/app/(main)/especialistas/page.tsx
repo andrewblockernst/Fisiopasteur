@@ -27,6 +27,9 @@ export default function EspecialistasPage() {
   const [filter, setFilter] = useState<Filter>("activos");
   const [especialistas, setEspecialistas] = useState<Usuario[]>([]);
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
+  // const [showDialog, setShowDialog] = useState(false);
+  // const [loading, setLoading] = useState(true);
+  // const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
@@ -85,8 +88,55 @@ export default function EspecialistasPage() {
 
   return (
     <div className="min-h-screen text-black">
-      {/* Mobile Header - Sticky mejorado */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
+
+      {/* Mobile Header */}
+      <div className="sm:hidden bg-white border-b border-gray-200">
+        <div className="flex items-center px-4 py-3">
+          {/* Boton de regreso */}
+          <button
+            className="mr-3 p-1"
+            onClick={handleBack}
+          >
+            <svg
+              className="w-6 h-6 text-gray-600" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
+          {/* Titulo */}
+          <h1 className="text-lg font-medium text-gray-900 flex-1 text-center mr-9">
+            Especialistas
+          </h1>
+        </div>
+
+        {/* Campo de búsqueda mobile */}
+        <div className="px-4 pb-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                name="search"
+                type="text"
+                placeholder="Buscar"
+                className="w-full px-4 py-2 bg-gray-100 border-0 rounded-lg focus:outline-none focus:ring-0 focus:bg-white focus:shadow-sm transition-all duration-200"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+            </div>
+
+
+          </div>
+        </div>
+
+      </div>
+
+      {/* <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
         <div className="flex items-center justify-between">
           <button
             onClick={handleBack}
@@ -106,7 +156,7 @@ export default function EspecialistasPage() {
             <Plus className="w-5 h-5" />
             </button>
         </div>
-      </header>
+      </header> */}
 
       {/* Contenido Principal */}
       <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
@@ -186,7 +236,7 @@ export default function EspecialistasPage() {
         </div>
 
         <EspecialistasTable 
-          especialistas={especialistasFiltrados}
+          especialistas={especialistas.filter(e => e.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || e.apellido.toLowerCase().includes(searchTerm.toLowerCase()))}
           especialidades={especialidades}
           onEspecialistaDeleted={async () => {
             // Recargar la lista después de eliminar
@@ -206,6 +256,7 @@ export default function EspecialistasPage() {
               console.error("Error reloading specialists:", error);
             }
           }}
+          setShowDialog={setShowDialog}
           />
       </div>
 
@@ -214,6 +265,8 @@ export default function EspecialistasPage() {
         onClose={handleDialogClose}
         especialidades={especialidades}
       />
+
+      
     </div>
   );
 }

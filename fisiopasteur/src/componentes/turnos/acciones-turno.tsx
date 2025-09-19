@@ -5,8 +5,9 @@ import { cancelarTurno, eliminarTurno, marcarComoAtendido } from "@/lib/actions/
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
 import Button from "@/componentes/boton";
 import { Database } from "@/types/database.types";
-import { MoreVertical, Edit, X, Trash, CheckCircle } from "lucide-react";
-import { useToastStore } from '@/stores/toast-store';
+
+import { MoreVertical, Edit, X, Trash, CheckCircle, ChevronUp, EllipsisVertical } from "lucide-react";
+
 
 // Usar el tipo exacto de la base de datos
 type TurnoFromDB = Database['public']['Tables']['turno']['Row'];
@@ -17,6 +18,8 @@ type TurnoCompleto = TurnoFromDB & {
   id_paciente: number; // Garantizamos que no sea null
   fecha: string;
   hora: string;
+  index: number;
+  total: number;
 };
 
 type Props = {
@@ -194,14 +197,35 @@ export default function AccionesTurno({ turno, onDone }: Props) {
 
   return (
     <div className="relative">
-      <button
+      {/* <button
         onClick={() => setMenuAbierto(!menuAbierto)}
         className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         title="Acciones"
         disabled={isPending}
       >
         <MoreVertical size={18} className="text-gray-600" />
-      </button>
+      </button> */}
+      <button
+                                            onClick={() => setMenuAbierto(!menuAbierto)}
+                                            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                        >   
+                                            <div className="relative w-5 h-5">
+                                                <ChevronUp 
+                                                    className={`absolute w-5 h-5 transition-all duration-300 ease-in-out ${
+                                                        menuAbierto
+                                                            ? 'opacity-100 rotate-0' 
+                                                            : 'opacity-0 rotate-180'
+                                                    }`}
+                                                />
+                                                <EllipsisVertical 
+                                                    className={`absolute w-5 h-5 transition-all duration-300 ease-in-out ${
+                                                        menuAbierto
+                                                            ? 'opacity-0 rotate-180' 
+                                                            : 'opacity-100 rotate-0'
+                                                    }`}
+                                                />
+                                            </div>
+                                        </button>
 
       {menuAbierto && (
         <>
@@ -212,7 +236,8 @@ export default function AccionesTurno({ turno, onDone }: Props) {
           />
           
           {/* Menú desplegable */}
-          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[140px]">
+          <div className={`absolute right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[140px] 
+            ${turno.index >= turno.total - 2 ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
             <div className="py-1">
               <button
                 onClick={handleEditar}
