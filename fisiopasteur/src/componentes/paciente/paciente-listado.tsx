@@ -21,9 +21,10 @@ interface PacientesTableProps {
     onPacienteDeleted?: () => void;
     onActivatePaciente: (paciente: Paciente) => void;
     handleToast: (toast: Omit<ToastItem, 'id'>) => void;
+    pacientesSeleccionados?: number[];
 }
 
-export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted, onActivatePaciente, handleToast}: PacientesTableProps) {
+export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted, onActivatePaciente, handleToast, pacientesSeleccionados}: PacientesTableProps) {
     const[editingPaciente, setEditingPaciente] = useState<Paciente | null>(null);
     const[deletingPaciente, setDeletingPaciente] = useState<Paciente | null>(null);
     const[viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
@@ -111,9 +112,11 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                             <p className="text-gray-900 font-medium">
                                 {paciente.nombre} {paciente.apellido}
                             </p>
-                            <div className={`w-2 h-2 rounded-full ${
-                                paciente.activo ? 'bg-green-500' : 'bg-gray-400'
-                            }`}></div>
+                            <input
+                              type="checkbox"
+                              checked={pacientesSeleccionados?.includes(paciente.id_paciente) || false}
+                              readOnly
+                            />
                         </div>
                     </div>
                 ))}
