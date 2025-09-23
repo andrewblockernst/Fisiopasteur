@@ -6,7 +6,7 @@ import Button from "../boton";
 
 export default function TurnosTable({ turnos }: { turnos: any[] }) {
 
-  const [openNew, setOpenNew] = useState(false);
+  // const [openNew, setOpenNew] = useState(false);
 
   // Función para formatear fecha como DD/MM/YYYY
   const formatearFecha = (fechaStr: string) => {
@@ -84,8 +84,8 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
     }) || [];
 
   return (
-    <div className="bg-white space-y-3">
-      <div className="flex justify-between items-center">
+    <div className="block bg-white shadow-md rounded-lg overflow-visible  space-y-4">
+      {/* <div className="flex justify-between items-center">
         <h1 className="text-xl font-semibold">Turnos</h1>
         <Button
           variant="primary"
@@ -93,24 +93,25 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
         >
           Nuevo turno
         </Button>
-      </div>
+      </div> */}
 
-      <div className="overflow-auto border rounded-lg">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto overflow-y-visible">
+        <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left p-3 font-medium text-gray-600">Fecha</th>
-              <th className="text-left p-3 font-medium text-gray-600">Hora</th>
-              <th className="text-left p-3 font-medium text-gray-600">Paciente</th>
-              <th className="text-left p-3 font-medium text-gray-600">Especialista</th>
-              <th className="text-left p-3 font-medium text-gray-600">Especialidad</th>
-              <th className="text-left p-3 font-medium text-gray-600">Box</th>
-              <th className="text-left p-3 font-medium text-gray-600">Estado</th>
-              <th className="text-left p-3 font-medium text-gray-600">Observaciones</th>
-              <th className="text-left p-3 font-medium text-gray-600 w-16">Acciones</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Especialista</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Especialidad</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Box</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Observaciones</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Acciones</th>
             </tr>
           </thead>
-          <tbody>
+
+          <tbody className="bg-white divide-y divide-gray-200">
             {turnosOrdenados.map((t) => (
               <tr key={t.id_turno} className={getRowClassName(t)}>
                 <td className={`p-3 ${getTextStyle(t)}`}>
@@ -147,7 +148,7 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
                   {t.observaciones || "-"}
                 </td>
                 <td className="p-3">
-                  <AccionesTurno turno={t} onDone={() => window.location.reload()} />
+                  <AccionesTurno turno={{ ...t, index: turnosOrdenados.indexOf(t), total: turnosOrdenados.length }} onDone={() => window.location.reload()} />
                 </td>
               </tr>
             ))}
@@ -164,11 +165,11 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
         </table>
       </div>
 
-      <NuevoTurnoModal 
+      {/* <NuevoTurnoModal 
         isOpen={openNew} 
         onClose={() => setOpenNew(false)}
         onTurnoCreated={() => window.location.reload()}
-      />
+      /> */}
     </div>
   );
 }

@@ -21,9 +21,10 @@ interface PacientesTableProps {
     onPacienteDeleted?: () => void;
     onActivatePaciente: (paciente: Paciente) => void;
     handleToast: (toast: Omit<ToastItem, 'id'>) => void;
+    pacientesSeleccionados?: number[];
 }
 
-export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted, onActivatePaciente, handleToast}: PacientesTableProps) {
+export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted, onActivatePaciente, handleToast, pacientesSeleccionados}: PacientesTableProps) {
     const[editingPaciente, setEditingPaciente] = useState<Paciente | null>(null);
     const[deletingPaciente, setDeletingPaciente] = useState<Paciente | null>(null);
     const[viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
@@ -208,13 +209,25 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                             >
                                 Editar
                             </Button>
-                            <Button
+                            {paciente.activo && (
+                                <Button
                                 variant="danger"
                                 className="text-xs px-3 py-2 h-8 flex items-center justify-center"
                                 onClick={() => setDeletingPaciente(paciente)}
-                            >
-                                Eliminar
-                            </Button>
+                                >
+                                    Eliminar
+                                </Button>
+                            )}
+                            {!(paciente.activo) && (
+                                <Button
+                                    variant="success"
+                                    className="text-xs px-3 py-2 h-8 flex items-center justify-center"
+                                    onClick={() => onActivatePaciente(paciente)}
+                                >
+                                    Activar
+                                </Button>
+                            )}
+                            
                             <Button
                                 variant="secondary"
                                 className="text-xs px-3 py-2 h-8 flex items-center justify-center"
@@ -229,11 +242,11 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
         </div>
 
         {/* NIVEL 3: Vista Desktop (lg+) - Tabla optimizada */}
-        <div className="hidden lg:block bg-white shadow-md rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
+        <div className="hidden lg:block bg-white shadow-md rounded-lg overflow-visible">
+            <div className="overflow-x-auto overflow-y-visible">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
+                    <thead className="bg-gray-50 justify-between">
+                        <tr className="justify-between">
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Paciente
                             </th>
@@ -366,7 +379,11 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
 
                                         {dropdownOpen === paciente.id_paciente && (
                                             <div 
-                                                className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-50"
+                                                className={`absolute right-0 w-40 bg-white rounded-md shadow-xl border border-gray-200 z-[100] ${
+                                                    pacientes.indexOf(paciente) >= pacientes.length - 2 
+                                                        ? 'bottom-full mb-1' 
+                                                        : 'top-full mt-1'
+                                                }`}
                                                 onClick={(e) => e.stopPropagation()}
                                             >
                                                 <div className="py-1">
@@ -381,7 +398,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                                     </button>
                                                     {paciente.activo && (
                                                     <button
-                                                        onClick={() => setDeletingPaciente(paciente)}
+                                                        onClick={() => {
+                                                            setDeletingPaciente(paciente);
+                                                            setDropdownOpen(null);
+                                                        }}
                                                         className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-red-600 hover:bg-red-50 transition-colors"
                                                     >
                                                         Eliminar
@@ -389,7 +409,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                                     )}
                                                     {!(paciente.activo) && (
                                                         <button
-                                                            onClick={() => onActivatePaciente(paciente)}
+                                                            onClick={() => {
+                                                                onActivatePaciente(paciente);
+                                                                setDropdownOpen(null);
+                                                            }}
                                                             className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-green-600 hover:bg-green-50 transition-colors"
                                                         >
                                                             Activar

@@ -434,3 +434,137 @@ export async function getEspecialidades() {
     return [];
   }
 }
+
+// interface PerfilCompleto {
+//   id_usuario: string;
+//   nombre: string;
+//   apellido: string;
+//   email: string;
+//   telefono: string | null;
+//   color: string | null;
+//   rol: {
+//     id: number;
+//     nombre: string;
+//     jerarquia: number;
+//   };
+//   especialidad_principal: {
+//     id_especialidad: number;
+//     nombre: string;
+//     precio_particular?: number | null;
+//     precio_obra_social?: number | null;
+    
+//   } | null;
+//   especialidades_adicionales: Array<{
+//     id_especialidad: number;
+//     nombre: string;
+//     precio_particular?: number | null;
+//     precio_obra_social?: number | null;
+//   }>;
+// }
+
+import { PerfilCompleto } from "./perfil.action";
+
+// obtener perfil de especialista
+export async function getPerfilEspecialista(id_especialista: string): Promise<PerfilCompleto | null> {
+  try {
+    const supabase = await createClient();
+
+    // 1. Obtener datos del usuario con joins
+    const { data: userData, error: userError } = await supabase
+      .from('usuario')
+      .select(`
+        id_usuario,
+        nombre,
+        apellido,
+        email,
+        telefono,
+        color,
+        rol:id_rol (
+          id,
+          nombre,
+          jerarquia
+        ),
+        especialidad:id_especialidad (
+          id_especialidad,
+          nombre
+        )
+      `)
+      .eq('id_usuario', id_especialista)
+      // .eq('id_rol', 2) // Asegurarse que es especialista
+      .single();
+
+      if (userError) {
+        console.error('Error consultando usuario:', userError);
+        throw new Error(`No se pudo obtener el perfil: ${userError.message}`);
+      }
+
+      if (!userData) {
+        throw new Error('Usuario no encontrado en la base de datos');
+      }
+
+      // 2. Obtener especialidades adicionales
+      const { data: especialidadesData, error: especialidadesError } = await supabase
+        .from('usuario_especialidad')
+        .select(`
+          precio_particular,
+          precio_obra_social,
+          especialidad:id_especialidad (
+            id_especialidad,
+            nombre
+          )
+        `)
+        .eq('id_usuario', id_especialista)
+        .eq('activo', true);
+
+        // 3. Obtener precio de especialidad principal (si existe)
+        let especialidadPrincipalConPrecios = null;
+        if (userData.especialidad) {
+          // Buscar si la especialidad principal también está en usuario_especialidad
+          const especialidadPrincipalEnRelacion = especialidadesData?.find(
+            item => item.especialidad?.id_especialidad === userData.especialidad?.id_especialidad
+          );
+
+          especialidadPrincipalConPrecios = {
+            id_especialidad: userData.especialidad.id_especialidad,
+            nombre: userData.especialidad.nombre,
+            precio_particular: especialidadPrincipalEnRelacion?.precio_particular || null,
+            precio_obra_social: especialidadPrincipalEnRelacion?.precio_obra_social || null,
+          };
+        }
+
+    // 4. Procesar especialidades adicionales con precios
+    const especialidadesAdicionales = especialidadesError
+      ? []
+      : (especialidadesData || [])
+          .map(item => ({
+            id_especialidad: item.especialidad?.id_especialidad,
+            nombre: item.especialidad?.nombre,
+            precio_particular: item.precio_particular,
+            precio_obra_social: item.precio_obra_social
+          }))
+          .filter(esp => esp.id_especialidad); // Filtrar elementos válidos
+
+      // 3. Combinar datos
+      const perfil: PerfilCompleto = {
+      id_usuario: userData.id_usuario,
+      nombre: userData.nombre,
+      apellido: userData.apellido,
+      email: userData.email,
+      telefono: userData.telefono,
+      color: userData.color,
+      rol: {
+        id: userData.rol?.id || 1,
+        nombre: userData.rol?.nombre || 'usuario',
+        jerarquia: userData.rol?.jerarquia || 1
+      },
+      especialidad_principal: especialidadPrincipalConPrecios,
+      especialidades_adicionales: especialidadesAdicionales
+    };        
+
+    return perfil;
+
+  } catch (error) {
+    console.error('Error en getPerfilEspecialista:', error);
+    return null;
+  }
+}
