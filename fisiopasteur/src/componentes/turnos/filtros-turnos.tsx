@@ -1,17 +1,19 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Search, Filter, X } from "lucide-react";
+import { Search, Filter, X, Plus } from "lucide-react";
 import Button from "@/componentes/boton";
+import NuevoTurnoModal from "../calendario/nuevo-turno-dialog";
 
 export default function FiltrosTurnos({ especialistas, especialidades, boxes, initial }: any) {
   const router = useRouter();
   const params = useSearchParams();
-  const [f, setF] = useState(initial);
+  const [filter, setFilter] = useState(initial);
   const [tipoFiltro, setTipoFiltro] = useState<string>("");
   const [valorFiltro, setValorFiltro] = useState<string>("");
+  const [openNew, setOpenNew] = useState(false);
 
-  useEffect(() => setF(initial), [params]);
+  useEffect(() => setFilter(initial), [params]);
 
   // Función para formatear fecha como DD/MM/YYYY
   const formatearFecha = (fechaStr: string) => {
@@ -46,33 +48,35 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     { value: "cancelado", label: "Cancelado" },
   ];
 
-  const aplicarFiltro = () => {
-    if (!tipoFiltro || !valorFiltro) return;
 
-    const nuevosFiltros = { ...f };
+  const aplicarFiltro = (e: React.ChangeEvent<HTMLElement>) => {
+
+    const target = e.target as HTMLInputElement | HTMLSelectElement;
+    if (!tipoFiltro || !target.value) return;
+
+    const nuevosFiltros = { ...filter };
 
     switch (tipoFiltro) {
       case "fecha_desde":
-        nuevosFiltros.fecha_desde = valorFiltro;
+        nuevosFiltros.fecha_desde = target.value;
         break;
       case "fecha_hasta":
-        nuevosFiltros.fecha_hasta = valorFiltro;
+        nuevosFiltros.fecha_hasta = target.value;
         break;
       case "especialista":
-        nuevosFiltros.especialista_id = valorFiltro;
+        nuevosFiltros.especialista_id = target.value;
         break;
       case "especialidad":
-        nuevosFiltros.especialidad_id = valorFiltro;
+        nuevosFiltros.especialidad_id = target.value;
         break;
       case "estado":
-        nuevosFiltros.estado = valorFiltro;
+        nuevosFiltros.estado = target.value;
         break;
     }
 
-    setF(nuevosFiltros);
+    setFilter(nuevosFiltros);
     aplicarFiltros(nuevosFiltros);
-    setTipoFiltro("");
-    setValorFiltro("");
+    // setTipoFiltro("");
   };
 
   const aplicarFiltros = (filtros: any) => {
@@ -85,8 +89,34 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     router.push(`/turnos?${usp.toString()}`);
   };
 
+  const removerFiltro = (tipoFiltro: string) => {
+    const nuevosFiltros = { ...filter };
+    
+    // Remover el filtro específico
+    switch (tipoFiltro) {
+      case 'fecha_desde':
+        delete nuevosFiltros.fecha_desde;
+        break;
+      case 'fecha_hasta':
+        delete nuevosFiltros.fecha_hasta;
+        break;
+      case 'especialista':
+        delete nuevosFiltros.especialista_id;
+        break;
+      case 'especialidad':
+        delete nuevosFiltros.especialidad_id;
+        break;
+      case 'estado':
+        delete nuevosFiltros.estado;
+        break;
+    }
+    
+    setFilter(nuevosFiltros);
+    aplicarFiltros(nuevosFiltros);
+  };
+
   const limpiarFiltros = () => {
-    setF({});
+    setFilter({});
     setTipoFiltro("");
     setValorFiltro("");
     router.push("/turnos");
@@ -101,8 +131,8 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
         return (
           <input
             type="date"
-            value={valorFiltro}
-            onChange={(e) => setValorFiltro(e.target.value)}
+            value={tipoFiltro === "fecha_desde" ? filter.fecha_desde || "" : filter.fecha_hasta || ""}
+            onChange={aplicarFiltro}
             className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         );
@@ -110,8 +140,8 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
       case "especialista":
         return (
           <select
-            value={valorFiltro}
-            onChange={(e) => setValorFiltro(e.target.value)}
+            value={filter.especialista_id || ""}
+            onChange={aplicarFiltro}
             className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Seleccionar especialista...</option>
@@ -127,7 +157,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
         return (
           <select
             value={valorFiltro}
-            onChange={(e) => setValorFiltro(e.target.value)}
+            onChange={aplicarFiltro}
             className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Seleccionar especialidad...</option>
@@ -143,7 +173,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
         return (
           <select
             value={valorFiltro}
-            onChange={(e) => setValorFiltro(e.target.value)}
+            onChange={aplicarFiltro}
             className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             {estadosPosibles.map((estado) => (
@@ -171,90 +201,151 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     return esp ? esp.nombre : 'Especialidad filtrada';
   };
 
-  const filtrosActivos = Object.keys(f).filter(key => f[key as keyof typeof f]).length;
+  const filtrosActivos = Object.keys(filter).filter(key => filter[key as keyof typeof filter]).length;
 
   return (
     <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Selector de tipo de filtro */}
-        <div className="flex items-center gap-2">
-          <Filter size={18} className="text-gray-600" />
-          <select
-            value={tipoFiltro}
-            onChange={(e) => {
-              setTipoFiltro(e.target.value);
-              setValorFiltro("");
-            }}
-            className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[180px]"
-          >
-            {tiposFiltro.map((tipo) => (
-              <option key={tipo.value} value={tipo.value}>
-                {tipo.label}
-              </option>
-            ))}
-          </select>
+      <div className="flex justify-between items-center ">
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Selector de tipo de filtro */}
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-gray-600" />
+              <select
+                value={tipoFiltro}
+                onChange={(e) => {
+                  setTipoFiltro(e.target.value);
+                  setValorFiltro("");
+                }}
+                className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[180px]"
+              >
+                {tiposFiltro.map((tipo) => (
+                  <option key={tipo.value} value={tipo.value}>
+                    {tipo.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Campo de valor */}
+            {renderCampoValor()}
+
+            {/* Botones */}
+            <div className="flex items-center gap-2">
+              {/* <Button
+                variant="primary"
+                onClick={aplicarFiltro}
+                disabled={!tipoFiltro || !valorFiltro}
+                className="flex items-center gap-2"
+              >
+                <Search size={16} />
+                Filtrar
+              </Button> */}
+
+              {filtrosActivos > 0 && (
+                <Button
+                  variant="secondary"
+                  onClick={limpiarFiltros}
+                  className="flex items-center gap-2"
+                >
+                  <X size={16} />
+                  Limpiar ({filtrosActivos})
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Campo de valor */}
-        {renderCampoValor()}
 
-        {/* Botones */}
         <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            onClick={aplicarFiltro}
-            disabled={!tipoFiltro || !valorFiltro}
-            className="flex items-center gap-2"
-          >
-            <Search size={16} />
-            Filtrar
-          </Button>
-
-          {filtrosActivos > 0 && (
             <Button
-              variant="secondary"
-              onClick={limpiarFiltros}
+              variant="primary"
+              onClick={() => setOpenNew(true)}
               className="flex items-center gap-2"
             >
-              <X size={16} />
-              Limpiar ({filtrosActivos})
+              Nuevo turno
             </Button>
-          )}
         </div>
       </div>
 
-      {/* Mostrar filtros activos */}
-      {filtrosActivos > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <div className="flex flex-wrap gap-2">
-            {f.fecha_desde && (
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                Desde: {formatearFecha(f.fecha_desde)}
-              </span>
-            )}
-            {f.fecha_hasta && (
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                Hasta: {formatearFecha(f.fecha_hasta)}
-              </span>
-            )}
-            {f.especialista_id && (
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-                Especialista: {getNombreEspecialista(f.especialista_id)}
-              </span>
-            )}
-            {f.especialidad_id && (
-              <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs">
-                Especialidad: {getNombreEspecialidad(f.especialidad_id)}
-              </span>
-            )}
-            {f.estado && (
-              <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">
-                Estado: {f.estado}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
+          {/* Mostrar filtros activos */}
+          {filtrosActivos > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-100 ">
+              <div className="flex flex-wrap gap-2">
+                {filter.fecha_desde && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center gap-1 group">
+                    Desde: {formatearFecha(filter.fecha_desde)}
+                    <button
+                      onClick={() => removerFiltro('fecha_desde')}
+                      className="ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors group-hover:bg-blue-200"
+                      aria-label="Remover filtro de fecha desde"
+                    >
+                      <X size={12} className="text-blue-600 hover:text-blue-800" />
+                    </button>
+                  </span>
+                )}
+                {filter.fecha_hasta && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center gap-1 group">
+                    Hasta: {formatearFecha(filter.fecha_hasta)}
+                    <button
+                      onClick={() => removerFiltro('fecha_hasta')}
+                      className="ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors group-hover:bg-blue-200"
+                      aria-label="Remover filtro de fecha hasta"
+                    >
+                      <X size={12} className="text-blue-600 hover:text-blue-800" />
+                    </button>
+                  </span>
+                )}
+                {filter.especialista_id && (
+                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center gap-1 group">
+                    Especialista: {getNombreEspecialista(filter.especialista_id)}
+                    <button
+                      onClick={() => removerFiltro('especialista')}
+                      className="ml-1 hover:bg-green-200 rounded-full p-0.5 transition-colors group-hover:bg-green-200"
+                      aria-label="Remover filtro de especialista"
+                    >
+                      <X size={12} className="text-green-600 hover:text-green-800" />
+                    </button>
+                  </span>
+                )}
+                {filter.especialidad_id && (
+                  <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs flex items-center gap-1 group">
+                    Especialidad: {getNombreEspecialidad(filter.especialidad_id)}
+                    <button
+                      onClick={() => removerFiltro('especialidad')}
+                      className="ml-1 hover:bg-purple-200 rounded-full p-0.5 transition-colors group-hover:bg-purple-200"
+                      aria-label="Remover filtro de especialidad"
+                    >
+                      <X size={12} className="text-purple-600 hover:text-purple-800" />
+                    </button>
+                  </span>
+                )}
+                {filter.estado && (
+                  <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs flex items-center gap-1 group">
+                    Estado: {filter.estado}
+                    <button
+                      onClick={() => removerFiltro('estado')}
+                      className="ml-1 hover:bg-orange-200 rounded-full p-0.5 transition-colors group-hover:bg-orange-200"
+                      aria-label="Remover filtro de estado"
+                    >
+                      <X size={12} className="text-orange-600 hover:text-orange-800" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        
+
+        
+        
+
+      <NuevoTurnoModal 
+        isOpen={openNew} 
+        onClose={() => setOpenNew(false)}
+        onTurnoCreated={() => window.location.reload()}
+      />
+
     </div>
   );
 }
