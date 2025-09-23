@@ -37,14 +37,6 @@ export default async function ImprimirHistorialPage({ params, searchParams }: Pr
     paciente = pacienteResult as Paciente;
     evoluciones = (evolucionesResult as Evolucion[]) || [];
     
-    console.log("=== DEBUG ===");
-    console.log("Paciente:", paciente);
-    console.log("Evoluciones:", evoluciones);
-    console.log("Cantidad evoluciones:", evoluciones.length);
-    
-    // DEBUG: Verificar también los turnos del paciente
-    console.log("=== VERIFICAR TURNOS ===");
-    // Esta query manual para ver si tiene turnos
     
   } catch (error) {
     console.error("Error cargando datos:", error);
