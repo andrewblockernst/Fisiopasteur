@@ -7,6 +7,7 @@ import Button from "@/componentes/boton";
 import { Database } from "@/types/database.types";
 
 import { MoreVertical, Edit, X, Trash, CheckCircle, ChevronUp, EllipsisVertical } from "lucide-react";
+import { useToastStore } from "@/stores/toast-store";
 
 
 // Usar el tipo exacto de la base de datos
