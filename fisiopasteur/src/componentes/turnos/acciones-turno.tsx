@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import { cancelarTurno, eliminarTurno, marcarComoAtendido } from "@/lib/actions/turno.action";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
-import Button from "@/componentes/boton";
+
 import { Database } from "@/types/database.types";
 
 import { MoreVertical, Edit, X, Trash, CheckCircle, ChevronUp, EllipsisVertical } from "lucide-react";
+import { useToastStore } from "@/stores/toast-store";
 
 
 // Usar el tipo exacto de la base de datos
