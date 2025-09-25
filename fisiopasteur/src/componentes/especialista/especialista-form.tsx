@@ -156,24 +156,6 @@ export default function EspecialistaForm({
             {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
           </div>
 
-          {/* Usuario */}
-          <div>
-            <label htmlFor="usuario" className="block text-sm font-medium text-gray-700 mb-2">
-              Usuario *
-            </label>
-            <input
-              type="text"
-              id="usuario"
-              name="usuario"
-              defaultValue={initialData?.usuario || ""}
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.usuario ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="nombre_usuario"
-            />
-            {errors.usuario && <p className="text-red-500 text-sm mt-1">{errors.usuario}</p>}
-          </div>
-
           {/* Contraseña */}
           <div>
             <label htmlFor="contraseña" className="block text-sm font-medium text-gray-700 mb-2">
