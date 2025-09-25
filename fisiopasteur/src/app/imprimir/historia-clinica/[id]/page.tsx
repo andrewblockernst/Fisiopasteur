@@ -1,6 +1,7 @@
 import { getPaciente, getEvolucionesClinicas } from "@/lib/actions/paciente.action";
 import PlantillaImpresion from "@/componentes/impresion/plantilla";
 import AutoImpresion from "@/componentes/impresion/autoImpresion";
+import ControladorVistaPrevia from "@/componentes/impresion/controladorVistaPrevia";
 import { notFound } from "next/navigation";
 import { Tables } from "@/types/database.types";
 
@@ -8,8 +9,8 @@ type Paciente = Tables<"paciente">;
 type Evolucion = Tables<"evolucion_clinica">;
 
 type Props = {
-  params: Promise<{ id: string }>; // ← Cambiar a Promise
-  searchParams: Promise<{  // ← Cambiar a Promise
+  params: Promise<{ id: string }>; 
+  searchParams: Promise<{  
     desde?: string; 
     hasta?: string; 
     auto?: string; 
@@ -102,10 +103,19 @@ export default async function ImprimirHistorialPage({ params, searchParams }: Pr
     ? `Período: ${resolvedSearchParams.desde || 'Inicio'} - ${resolvedSearchParams.hasta || 'Actual'}`
     : undefined;
 
-  const autoImprimir = resolvedSearchParams.auto !== "0";
+  const autoImprimir = resolvedSearchParams.auto === "1";
 
   return (
     <>
+      {/* Vista previa - solo se muestra si auto !== "1" */}
+    <ControladorVistaPrevia
+      pacienteId={resolvedParams.id}
+      pacienteNombre={`${paciente.nombre} ${paciente.apellido}`}
+      totalRegistros={evolucionesFiltradas.length}
+    />
+
+    {/* Contenido de impresión - se oculta en vista previa, se muestra al imprimir */}
+    <div className={autoImprimir ? 'block' : 'hidden print:block'}></div>
       <AutoImpresion habilitado={autoImprimir} />
       
       <PlantillaImpresion
