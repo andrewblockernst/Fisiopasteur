@@ -64,7 +64,7 @@ export default function ControladorVistaPrevia({
   return (
     <div className="p-6 bg-gray-50 no-imprimir">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6">
+        <h1 className="text-2xl text-black mb-6">
           Vista previa - Historia Clínica de {pacienteNombre}
         </h1>
         
@@ -75,8 +75,8 @@ export default function ControladorVistaPrevia({
         />
 
         <div className="bg-white rounded-lg shadow p-6 mb-4">
-          <h2 className="text-lg font-semibold mb-2">Resumen</h2>
-          <p>Registros encontrados: <span className="font-bold">{totalRegistros}</span></p>
+          <h2 className="text-lg text-gray-800 mb-2">Resumen</h2>
+          <p className="text-gray-800">Registros encontrados: <span className="text-gray-800">{totalRegistros}</span></p>
         </div>
 
         <div className="flex gap-4">
