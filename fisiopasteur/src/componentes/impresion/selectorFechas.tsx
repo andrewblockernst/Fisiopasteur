@@ -20,7 +20,7 @@ export default function SelectorFechas({
     fechaFin ? fechaFin.toISOString().split('T')[0] : ''
   );
 
-  // Función para formatear fecha como DD/MM/YYYY (igual que en filtros-turnos)
+  // Función para formatear fecha 
   const formatearFecha = (fechaStr: string) => {
     if (!fechaStr) return '';
     const fecha = new Date(fechaStr + 'T00:00:00');
@@ -84,7 +84,7 @@ export default function SelectorFechas({
                 id="fechaInicio"
                 value={fechaInicioLocal}
                 onChange={handleFechaInicioChange}
-                className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800"
               />
             </div>
 
@@ -98,7 +98,7 @@ export default function SelectorFechas({
                 value={fechaFinLocal}
                 onChange={handleFechaFinChange}
                 min={fechaInicioLocal}
-                className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800"
               />
             </div>
 
