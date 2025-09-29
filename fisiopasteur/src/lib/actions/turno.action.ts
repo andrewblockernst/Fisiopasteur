@@ -12,6 +12,35 @@ type TurnoUpdate = Database["public"]["Tables"]["turno"]["Update"];
 // 📋 FUNCIONES BÁSICAS DE TURNOS
 // =====================================
 
+// Obtener un turno específico por ID
+export async function obtenerTurno(id: number) {
+  const supabase = await createClient();
+  
+  try {
+    const { data, error } = await supabase
+      .from("turno")
+      .select(`
+        *,
+        paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email),
+        especialista:id_especialista(id_usuario, nombre, apellido, color),
+        especialidad:id_especialidad(id_especialidad, nombre),
+        box:id_box(id_box, numero)
+      `)
+      .eq("id_turno", id)
+      .single();
+
+    if (error) {
+      console.error("Error al obtener turno:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (error) {
+    console.error("Error inesperado:", error);
+    return { success: false, error: "Error inesperado" };
+  }
+}
+
 // Obtener todos los turnos (con filtros básicos)
 export async function obtenerTurnos(filtros?: {
   fecha?: string;

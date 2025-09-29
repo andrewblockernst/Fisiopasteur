@@ -513,6 +513,83 @@ export type CompositeTypes<
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
+// ========================================
+// TIPOS CONSOLIDADOS PARA COMPONENTES
+// ========================================
+
+// Tipo para turnos con relaciones completas (usado en listados y detalles)
+export type TurnoWithRelations = {
+  id_turno: number;
+  fecha: string;
+  hora: string;
+  estado: string | null;
+  observaciones: string | null;
+  notas: string | null;
+  precio: number | null;
+  tipo_plan: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  id_box: number | null;
+  id_especialidad: number | null;
+  id_especialista: string | null;
+  id_paciente: number | null;
+  paciente: {
+    id_paciente: number;
+    nombre: string;
+    apellido: string;
+    telefono: string;
+    dni: string | null;
+    email: string | null;
+  } | null;
+  especialista: {
+    id_usuario: string;
+    nombre: string;
+    apellido: string;
+    color: string | null;
+  } | null;
+  especialidad: {
+    id_especialidad: number;
+    nombre: string;
+  } | null;
+  box: {
+    id_box: number;
+    numero: number;
+  } | null;
+};
+
+// Tipo para especialistas con especialidades (usado en formularios)
+export type EspecialistaWithSpecialties = {
+  id_usuario: string;
+  nombre: string;
+  apellido: string;
+  color: string | null;
+  email: string;
+  telefono: string | null;
+  activo: boolean | null;
+  especialidad: { 
+    id_especialidad: number; 
+    nombre: string; 
+  } | null;
+  usuario_especialidad: { 
+    especialidad: { 
+      id_especialidad: number; 
+      nombre: string; 
+    }; 
+  }[];
+};
+
+// Tipo para opciones de select/dropdown
+export type SelectOption = { 
+  label: string; 
+  value: string; 
+};
+
+// Tipos de estado para turnos
+export type EstadoTurno = 'programado' | 'en_curso' | 'atendido' | 'cancelado' | 'no_asistio';
+
+// Tipos de plan para turnos
+export type TipoPlan = 'particular' | 'obra_social';
+
 export const Constants = {
   public: {
     Enums: {},
