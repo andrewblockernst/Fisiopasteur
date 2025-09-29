@@ -10,20 +10,24 @@ import {
   ChevronRight,
   Plus,
   Filter,
-  Search
+  Search,
+  ArrowLeft
 } from 'lucide-react';
+import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
 import type { TurnoWithRelations } from "@/types/database.types";
 
 interface TurnosMobileListProps {
   turnos: TurnoWithRelations[];
   fecha: string;
   onDateChange: (date: string) => void;
+  onTurnoCreated?: () => void;
 }
 
-export default function TurnosMobileList({ turnos, fecha, onDateChange }: TurnosMobileListProps) {
+export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoCreated }: TurnosMobileListProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [showNuevoTurnoModal, setShowNuevoTurnoModal] = useState(false);
 
   // Filtrar turnos por término de búsqueda
   const turnosFiltrados = turnos.filter(turno => {
@@ -89,18 +93,24 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange }: Turnos
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      {/* Header fijo */}
-      <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 px-4 py-3">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold text-gray-900">Turnos</h1>
+      {/* Header fijo - Estilo similar al perfil */}
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between">
           <button
-            onClick={() => router.push('/turnos/nuevo-mobile')}
-            className="flex items-center gap-2 px-4 py-2 bg-[#9C1838] text-white rounded-xl font-medium text-sm hover:bg-[#9C1838]/90 transition-colors"
+            onClick={() => router.back()}
+            className="p-2 -ml-2 rounded-md active:scale-95 transition hover:bg-gray-100"
+            aria-label="Volver"
           >
-            <Plus className="w-4 h-4" />
-            Nuevo
+            <ArrowLeft className="w-6 h-6" />
           </button>
+          <div className="flex-1 flex justify-center">
+            <h1 className="text-lg font-semibold text-center">Turnos</h1>
+          </div>
         </div>
+      </header>
+
+      {/* Contenido principal */}
+      <div className="px-4 py-3">
 
         {/* Selector de fecha */}
         <div className="flex items-center gap-3 mb-3">
@@ -149,15 +159,6 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange }: Turnos
             <p className="text-neutral-500 mb-6">
               {searchTerm ? 'Prueba con otro término de búsqueda' : `No tienes turnos para ${formatDate(fecha)}`}
             </p>
-            {!searchTerm && (
-              <button
-                onClick={() => router.push('/turnos/nuevo-mobile')}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[#9C1838] text-white rounded-xl font-medium hover:bg-[#9C1838]/90 transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-                Programar Turno
-              </button>
-            )}
           </div>
         ) : (
           <div className="space-y-6 pt-4">
@@ -186,6 +187,26 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange }: Turnos
           </div>
         )}
       </div>
+
+      {/* Botón flotante para agregar turno */}
+      <button
+        onClick={() => setShowNuevoTurnoModal(true)}
+        className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"
+        aria-label="Agregar nuevo turno"
+      >
+        <Plus size={30} />
+      </button>
+
+      {/* Modal de Nuevo Turno */}
+      <NuevoTurnoModal
+        isOpen={showNuevoTurnoModal}
+        onClose={() => setShowNuevoTurnoModal(false)}
+        onTurnoCreated={() => {
+          setShowNuevoTurnoModal(false);
+          if (onTurnoCreated) onTurnoCreated();
+        }}
+        fechaSeleccionada={new Date(fecha)}
+      />
     </div>
   );
 }

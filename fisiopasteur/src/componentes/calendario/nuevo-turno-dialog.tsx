@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista, obtenerTurnos} from "@/lib/actions/turno.action";
+import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
+import { UserPlus2 } from "lucide-react";
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -49,6 +51,7 @@ export function NuevoTurnoModal({
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
   const [verificandoBoxes, setVerificandoBoxes] = useState(false);
+  const [showNuevoPacienteDialog, setShowNuevoPacienteDialog] = useState(false);
   const { addToast } = useToastStore();
 
   // Estados para el autocomplete de pacientes
@@ -408,6 +411,20 @@ export function NuevoTurnoModal({
     }
   };
 
+  const handleNuevoPacienteClose = () => {
+    setShowNuevoPacienteDialog(false);
+  };
+
+  const handlePatientCreated = () => {
+    // Recargar la lista de pacientes después de crear uno nuevo
+    if (pacientesProp.length === 0) {
+      // Solo recargar si no vinieron pacientes por props
+      obtenerPacientes().then(res => {
+        if (res.success) setPacientes(res.data || []);
+      });
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
       addToast({
@@ -562,17 +579,27 @@ export function NuevoTurnoModal({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Paciente*
               </label>
-              <input
-                ref={inputPacienteRef}
-                type="text"
-                value={busquedaPaciente}
-                onChange={handleBusquedaPacienteChange}
-                onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                placeholder="Buscar paciente por nombre, apellido o DNI..."
-                required
-                autoComplete="off"
-              />
+              <div className="flex gap-2">
+                <input
+                  ref={inputPacienteRef}
+                  type="text"
+                  value={busquedaPaciente}
+                  onChange={handleBusquedaPacienteChange}
+                  onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  placeholder="Ej. Juan, teléfono, DNI... "
+                  required
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNuevoPacienteDialog(true)}
+                  className="px-3 py-2 bg-[#9C1838] text-white rounded-full hover:bg-[#7D1329] transition-colors flex items-center gap-1"
+                  title="Agregar nuevo paciente"
+                >
+                  <UserPlus2 className="w-4 h-4" />
+                </button>
+              </div>
               
               {/* Lista de resultados */}
               {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
@@ -769,6 +796,14 @@ export function NuevoTurnoModal({
           text: "Aceptar",
           onClick: () => setDialog({ ...dialog, open: false }),
         }}
+      />
+
+      {/* Modal de Nuevo Paciente */}
+      <NuevoPacienteDialog
+        isOpen={showNuevoPacienteDialog}
+        onClose={handleNuevoPacienteClose}
+        handleToast={addToast}
+        onPatientCreated={handlePatientCreated}
       />
     </>
   );

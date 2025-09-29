@@ -42,12 +42,18 @@ export default function TurnosPageContainer({
     router.push(`/turnos?${params.toString()}`);
   };
 
+  const handleTurnoCreated = () => {
+    // Recargar la página para mostrar los nuevos turnos
+    router.refresh();
+  };
+
   if (isMobile) {
     return (
       <TurnosMobileList 
         turnos={turnos}
         fecha={selectedDate}
         onDateChange={handleDateChange}
+        onTurnoCreated={handleTurnoCreated}
       />
     );
   }

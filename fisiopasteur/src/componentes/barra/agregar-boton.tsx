@@ -12,6 +12,7 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
 
 interface MenuOption {
   icon: React.ReactNode;
@@ -21,6 +22,7 @@ interface MenuOption {
 
 const AgregarBoton = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showNuevoTurnoModal, setShowNuevoTurnoModal] = useState(false);
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -28,7 +30,7 @@ const AgregarBoton = () => {
     {
       icon: <CalendarDays size={28} />,
       label: 'Turnos',
-      route: '/turnos/nuevo-mobile'
+      route: '/turnos' // Identificador especial para abrir modal
     },
     {
       icon: <Accessibility size={28} />,
@@ -47,9 +49,17 @@ const AgregarBoton = () => {
   const handleOptionClick = (option: MenuOption) => {
     setIsOpen(false);
     
-    if (option.route) {
+    if (option.route === 'turno-modal') {
+      setShowNuevoTurnoModal(true);
+    } else if (option.route) {
       router.push(option.route);
     }
+  };
+
+  const handleTurnoCreated = () => {
+    setShowNuevoTurnoModal(false);
+    // Recargar la página para mostrar los nuevos turnos
+    router.refresh();
   };
 
   // Cerrar menú al hacer clic fuera
@@ -105,6 +115,13 @@ const AgregarBoton = () => {
         </div>
         <span className="text-xs font-medium truncate">Agregar</span>
       </button>
+
+      {/* Modal de Nuevo Turno */}
+      <NuevoTurnoModal
+        isOpen={showNuevoTurnoModal}
+        onClose={() => setShowNuevoTurnoModal(false)}
+        onTurnoCreated={handleTurnoCreated}
+      />
     </div>
   );
 };

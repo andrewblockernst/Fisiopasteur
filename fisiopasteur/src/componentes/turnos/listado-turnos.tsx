@@ -85,16 +85,6 @@ export default function TurnosTable({ turnos }: { turnos: any[] }) {
 
   return (
     <div className="block bg-white shadow-md rounded-lg overflow-visible  space-y-4">
-      {/* <div className="flex justify-between items-center">
-        <h1 className="text-xl font-semibold">Turnos</h1>
-        <Button
-          variant="primary"
-          onClick={() => setOpenNew(true)}
-        >
-          Nuevo turno
-        </Button>
-      </div> */}
-
       <div className="overflow-x-auto overflow-y-visible">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
