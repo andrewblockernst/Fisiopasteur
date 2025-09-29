@@ -1,3 +1,13 @@
+/**
+ * ARCHIVO OBSOLETO - YA NO SE USA
+ * 
+ * El formulario de crear turnos ahora es un modal (NuevoTurnoModal) 
+ * en lugar de una página separada.
+ * 
+ * Se mantiene temporalmente para evitar errores de compilación,
+ * pero debería eliminarse en futuras versiones.
+ */
+
 "use client";
 
 import { useMemo, useState, useEffect } from 'react';

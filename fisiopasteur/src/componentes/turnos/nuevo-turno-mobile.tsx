@@ -1,3 +1,13 @@
+/**
+ * ARCHIVO OBSOLETO - YA NO SE USA
+ * 
+ * Esta era una versión preliminar del formulario móvil.
+ * Ahora se usa NuevoTurnoModal para crear turnos.
+ * 
+ * Se mantiene temporalmente para referencia,
+ * pero debería eliminarse en futuras versiones.
+ */
+
 'use client';
 
 import { useMemo, useState } from 'react';
