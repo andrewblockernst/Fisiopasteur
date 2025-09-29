@@ -7,6 +7,7 @@ import { formatoNumeroTelefono } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toggleEspecialistaActivo } from "@/lib/actions/especialista.action";
 import { useToastStore } from "@/stores/toast-store";
+import { Plus } from "lucide-react";
 
 type Especialidad = Tables<"especialidad">;
 type Usuario = Tables<"usuario"> & { 
@@ -226,23 +227,10 @@ export function EspecialistasTable({
         {/* Boton flotante para agregar especialista */}
         <button
           onClick={() => setShowDialog(true)}
-          className="fixed bottom-20 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"
+          className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"
           aria-label="Agregar nuevo paciente"
         >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
+          <Plus size={30} />
         </button>
 
       </div>
