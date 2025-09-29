@@ -104,6 +104,7 @@ export function NuevoTurnoModalRefactored({
       onClose={handleClose}
       title="Nuevo Turno"
       size="lg"
+      message=""
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         
