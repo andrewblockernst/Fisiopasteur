@@ -129,15 +129,30 @@ const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recorda
 
 // Función auxiliar para validar número de teléfono
 const formatearTelefono = (telefono: string): string => {
+    console.log(`📱 Formateando teléfono: ${telefono}`)
+    
     // Remover caracteres especiales y espacios
     const numero = telefono.replace(/[^0-9]/g, '')
+    console.log(`📱 Número limpio: ${numero}`)
+    
+    let numeroFinal = numero
     
     // Si no tiene código de país, agregar Argentina (+54)
     if (!numero.startsWith('54') && numero.length === 10) {
-        return `549${numero}`
+        numeroFinal = `549${numero}`
+    } else if (numero.startsWith('549') && numero.length === 13) {
+        numeroFinal = numero
+    } else if (numero.startsWith('54') && numero.length === 12) {
+        numeroFinal = numero
+    } else if (numero.length === 10) {
+        numeroFinal = `549${numero}`
     }
     
-    return numero
+    // Agregar @s.whatsapp.net al final
+    const numeroFormateado = `${numeroFinal}@s.whatsapp.net`
+    console.log(`📱 Número formateado final: ${numeroFormateado}`)
+    
+    return numeroFormateado
 }
 
 const main = async () => {
@@ -178,8 +193,21 @@ const main = async () => {
         '/api/turno/confirmar',
         handleCtx(async (bot, req, res) => {
             try {
-                // Verificar si el bot está autenticado
+                // Verificar múltiples condiciones del bot
+                if (!bot) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' })
+                    return res.end(JSON.stringify({ 
+                        status: 'error', 
+                        message: 'Bot no inicializado',
+                        code: 'BOT_NOT_READY'
+                    }))
+                }
+                
+                // Verificar si el bot está autenticado y listo
                 const isAuthenticated = adapterProvider.vendor?.authState?.creds ? true : false
+                // Simplificamos la verificación de conexión
+                const isReady = adapterProvider.vendor ? true : false
+                
                 if (!isAuthenticated) {
                     res.writeHead(503, { 'Content-Type': 'application/json' })
                     return res.end(JSON.stringify({ 
@@ -189,15 +217,40 @@ const main = async () => {
                     }))
                 }
                 
+                if (!isReady) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' })
+                    return res.end(JSON.stringify({ 
+                        status: 'error', 
+                        message: 'Bot no conectado a WhatsApp. Intente nuevamente en unos segundos.',
+                        code: 'NOT_CONNECTED'
+                    }))
+                }
+                
                 const turnoData: TurnoData = req.body
+                
+                // Validar datos requeridos
+                if (!turnoData.telefono || !turnoData.pacienteNombre) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' })
+                    return res.end(JSON.stringify({ 
+                        status: 'error', 
+                        message: 'Datos incompletos. Teléfono y nombre son requeridos.',
+                        code: 'INVALID_DATA'
+                    }))
+                }
+                
                 const numeroFormateado = formatearTelefono(turnoData.telefono)
                 const mensaje = formatearMensajeTurno(turnoData, 'confirmacion')
                 
-                if (!bot) {
-                    throw new Error('Bot no inicializado')
-                }
+                console.log(`📤 Enviando mensaje a ${numeroFormateado}: ${mensaje.substring(0, 50)}...`)
                 
-                await bot.sendMessage(numeroFormateado, mensaje)
+                // Intentar enviar el mensaje con manejo de errores específico
+                try {
+                    await bot.sendMessage(numeroFormateado, mensaje)
+                    console.log(`✅ Mensaje enviado exitosamente a ${numeroFormateado}`)
+                } catch (sendError) {
+                    console.error(`❌ Error específico enviando mensaje:`, sendError)
+                    throw new Error(`Error enviando mensaje: ${sendError instanceof Error ? sendError.message : 'Error desconocido'}`)
+                }
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' })
                 return res.end(JSON.stringify({ 
@@ -222,8 +275,20 @@ const main = async () => {
         '/api/turno/recordatorio',
         handleCtx(async (bot, req, res) => {
             try {
-                // Verificar si el bot está autenticado
+                // Verificar múltiples condiciones del bot
+                if (!bot) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' })
+                    return res.end(JSON.stringify({ 
+                        status: 'error', 
+                        message: 'Bot no inicializado',
+                        code: 'BOT_NOT_READY'
+                    }))
+                }
+                
+                // Verificar si el bot está autenticado y listo
                 const isAuthenticated = adapterProvider.vendor?.authState?.creds ? true : false
+                const isReady = adapterProvider.vendor ? true : false
+                
                 if (!isAuthenticated) {
                     res.writeHead(503, { 'Content-Type': 'application/json' })
                     return res.end(JSON.stringify({ 
@@ -233,15 +298,40 @@ const main = async () => {
                     }))
                 }
                 
+                if (!isReady) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' })
+                    return res.end(JSON.stringify({ 
+                        status: 'error', 
+                        message: 'Bot no conectado a WhatsApp. Intente nuevamente en unos segundos.',
+                        code: 'NOT_CONNECTED'
+                    }))
+                }
+                
                 const turnoData: TurnoData = req.body
+                
+                // Validar datos requeridos
+                if (!turnoData.telefono || !turnoData.pacienteNombre) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' })
+                    return res.end(JSON.stringify({ 
+                        status: 'error', 
+                        message: 'Datos incompletos. Teléfono y nombre son requeridos.',
+                        code: 'INVALID_DATA'
+                    }))
+                }
+                
                 const numeroFormateado = formatearTelefono(turnoData.telefono)
                 const mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
                 
-                if (!bot) {
-                    throw new Error('Bot no inicializado')
-                }
+                console.log(`📤 Enviando recordatorio a ${numeroFormateado}: ${mensaje.substring(0, 50)}...`)
                 
-                await bot.sendMessage(numeroFormateado, mensaje)
+                // Intentar enviar el mensaje con manejo de errores específico
+                try {
+                    await bot.sendMessage(numeroFormateado, mensaje)
+                    console.log(`✅ Recordatorio enviado exitosamente a ${numeroFormateado}`)
+                } catch (sendError) {
+                    console.error(`❌ Error específico enviando recordatorio:`, sendError)
+                    throw new Error(`Error enviando recordatorio: ${sendError instanceof Error ? sendError.message : 'Error desconocido'}`)
+                }
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' })
                 return res.end(JSON.stringify({ 
