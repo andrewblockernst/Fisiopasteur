@@ -316,6 +316,41 @@ const main = async () => {
         })
     )
     
+    // Endpoint temporal para restaurar sesión de WhatsApp
+    adapterProvider.server.get('/api/restore-session', (req, res) => {
+        try {
+            const { execSync } = require('child_process')
+            const fs = require('fs')
+            const path = require('path')
+            
+            // Verificar si existe el archivo de sesión
+            const sessionFile = path.join(__dirname, 'whatsapp_session.tar.gz')
+            if (fs.existsSync(sessionFile)) {
+                // Extraer la sesión
+                execSync(`cd ${__dirname} && tar -xzf whatsapp_session.tar.gz`)
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' })
+                return res.end(JSON.stringify({ 
+                    status: 'success',
+                    message: 'Sesión de WhatsApp restaurada. Reiniciando bot...'
+                }))
+            } else {
+                res.writeHead(404, { 'Content-Type': 'application/json' })
+                return res.end(JSON.stringify({ 
+                    status: 'error',
+                    message: 'Archivo de sesión no encontrado'
+                }))
+            }
+        } catch (error) {
+            console.error('Error restaurando sesión:', error)
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            return res.end(JSON.stringify({ 
+                status: 'error',
+                message: 'Error restaurando sesión'
+            }))
+        }
+    })
+
     // Endpoint de estado/health check
     adapterProvider.server.get('/api/health', (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
