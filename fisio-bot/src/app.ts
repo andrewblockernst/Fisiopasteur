@@ -3,7 +3,7 @@ import { join } from 'path'
 import { createBot, createProvider, createFlow, addKeyword, utils, EVENTS } from '@builderbot/bot'
 import { MemoryDB as Database } from '@builderbot/bot'
 import { BaileysProvider as Provider } from '@builderbot/provider-baileys'
-import { procesarRecordatoriosPendientes } from './recordatorios.service.js'
+import { procesarRecordatoriosPendientes } from './recordatorios.service'
 
 const PORT = process.env.PORT ?? 3008
 
