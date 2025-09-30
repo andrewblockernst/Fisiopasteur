@@ -5,7 +5,7 @@
 # ===============================================
 
 # Configuración
-BASE_URL="http://localhost:3000/"  # Cambiar por tu dominio
+BASE_URL="https://fisiopasteur.vercel.app/"  # Cambiar por tu dominio
 LOG_FILE="/var/log/fisiopasteur-whatsapp.log"
 
 # Función para logging
