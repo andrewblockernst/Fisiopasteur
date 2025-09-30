@@ -12,6 +12,8 @@ import {
   obtenerAgendaEspecialista
 } from '@/lib/actions/turno.action';
 
+import type { TipoRecordatorio } from '@/lib/utils/whatsapp.utils';
+
 export interface TurnoFormData {
   fecha: string;
   hora: string;
@@ -22,6 +24,7 @@ export interface TurnoFormData {
   id_box: string;
   observaciones: string;
   precio: string;
+  recordatorios: TipoRecordatorio[];
 }
 
 export const useTurnoForm = (initialData?: Partial<TurnoFormData>) => {
@@ -37,7 +40,8 @@ export const useTurnoForm = (initialData?: Partial<TurnoFormData>) => {
     id_paciente: initialData?.id_paciente || '',
     id_box: initialData?.id_box || '',
     observaciones: initialData?.observaciones || '',
-    precio: initialData?.precio || ''
+    precio: initialData?.precio || '',
+    recordatorios: initialData?.recordatorios || ['1d', '2h']
   });
 
   // Estados para datos externos
@@ -71,7 +75,8 @@ export const useTurnoForm = (initialData?: Partial<TurnoFormData>) => {
       id_paciente: '',
       id_box: '',
       observaciones: '',
-      precio: ''
+      precio: '',
+      recordatorios: ['1d', '2h']
     });
     setHorasOcupadas([]);
     setEspecialidadesDisponibles([]);
@@ -225,7 +230,13 @@ export const useTurnoForm = (initialData?: Partial<TurnoFormData>) => {
         estado: "programado" as const
       };
 
-      const result = await crearTurno(turnoData);
+      // Crear objeto con recordatorios para pasarlo a la función
+      const turnoConRecordatorios = {
+        ...turnoData,
+        recordatorios: formData.recordatorios
+      };
+
+      const result = await crearTurno(turnoConRecordatorios);
       
       if (result.success) {
         addToast({
