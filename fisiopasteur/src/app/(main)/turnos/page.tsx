@@ -32,9 +32,9 @@ export default async function TurnosPage({ searchParams }: { searchParams: Promi
   return (
     <TurnosPageContainer
       turnos={resTurnos.data ?? []}
-      especialistas={resEspecialistas.success ? resEspecialistas.data : []}
-      especialidades={resEspecialidades.success ? resEspecialidades.data : []}
-      boxes={resBoxes.success ? resBoxes.data : []}
+      especialistas={resEspecialistas.success ? (resEspecialistas.data ?? []) : []}
+      especialidades={resEspecialidades.success ? (resEspecialidades.data ?? []) : []}
+      boxes={resBoxes.success ? (resBoxes.data ?? []) : []}
       initialFilters={filtros}
     />
   );

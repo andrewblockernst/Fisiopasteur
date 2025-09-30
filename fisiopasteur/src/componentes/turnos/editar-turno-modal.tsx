@@ -457,7 +457,7 @@ const handleSubmit = async () => {
         precio: formData.precio ? Number(formData.precio) : null,
       };
 
-      const res: { success: boolean; data?: TurnoConRelaciones; error?: string } = await actualizarTurno(turno.id_turno, datosActualizacion);
+      const res = await actualizarTurno(turno.id_turno, datosActualizacion);
 
       if (res.success) {
         addToast({
@@ -468,7 +468,7 @@ const handleSubmit = async () => {
         
         // Manejar el caso donde res.data puede ser undefined
         if (res.data) {
-          onSaved?.(res.data);
+          onSaved?.(res.data as any);
         } else {
           onSaved?.(); // Llamar sin parámetros si no hay data
         }

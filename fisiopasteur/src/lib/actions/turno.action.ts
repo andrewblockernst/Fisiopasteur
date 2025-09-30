@@ -601,6 +601,8 @@ export async function obtenerEspecialistas() {
         apellido,
         color,
         email,
+        telefono,
+        activo,
         especialidad:id_especialidad(id_especialidad, nombre),
         usuario_especialidad(
           especialidad:id_especialidad(id_especialidad, nombre)
