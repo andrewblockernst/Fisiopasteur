@@ -226,20 +226,36 @@ const main = async () => {
                     }))
                 }
                 
-                const turnoData: TurnoData = req.body
+                const turnoData: any = req.body
+                
+                // Extraer datos con compatibilidad para ambas estructuras
+                const telefono = turnoData.telefono
+                const pacienteNombre = turnoData.pacienteNombre || turnoData.paciente?.nombre
+                const pacienteApellido = turnoData.pacienteApellido || turnoData.paciente?.apellido
+                const especialistaNombre = turnoData.profesional || turnoData.especialista?.nombre
                 
                 // Validar datos requeridos
-                if (!turnoData.telefono || !turnoData.pacienteNombre) {
+                if (!telefono || !pacienteNombre) {
                     res.writeHead(400, { 'Content-Type': 'application/json' })
                     return res.end(JSON.stringify({ 
                         status: 'error', 
                         message: 'Datos incompletos. Teléfono y nombre son requeridos.',
-                        code: 'INVALID_DATA'
+                        code: 'INVALID_DATA',
+                        received: { telefono, pacienteNombre, data: turnoData }
                     }))
                 }
                 
-                const numeroFormateado = formatearTelefono(turnoData.telefono)
-                const mensaje = formatearMensajeTurno(turnoData, 'confirmacion')
+                // Crear objeto normalizado para el mensaje
+                const datosNormalizados = {
+                    ...turnoData,
+                    pacienteNombre,
+                    pacienteApellido,
+                    profesional: especialistaNombre,
+                    telefono
+                }
+                
+                const numeroFormateado = formatearTelefono(telefono)
+                const mensaje = formatearMensajeTurno(datosNormalizados, 'confirmacion')
                 
                 console.log(`📤 Enviando mensaje a ${numeroFormateado}: ${mensaje.substring(0, 50)}...`)
                 
@@ -256,7 +272,7 @@ const main = async () => {
                 return res.end(JSON.stringify({ 
                     status: 'success', 
                     message: 'Confirmación enviada',
-                    turnoId: turnoData.turnoId
+                    turnoId: turnoData.turnoId || turnoData.id_turno
                 }))
             } catch (error) {
                 console.error('Error enviando confirmación:', error)
@@ -307,10 +323,16 @@ const main = async () => {
                     }))
                 }
                 
-                const turnoData: TurnoData = req.body
+                const turnoData: any = req.body
+                
+                // Extraer datos con compatibilidad para ambas estructuras
+                const telefono = turnoData.telefono
+                const pacienteNombre = turnoData.pacienteNombre || turnoData.paciente?.nombre
+                const pacienteApellido = turnoData.pacienteApellido || turnoData.paciente?.apellido
+                const especialistaNombre = turnoData.profesional || turnoData.especialista?.nombre
                 
                 // Validar datos requeridos
-                if (!turnoData.telefono || !turnoData.pacienteNombre) {
+                if (!telefono || !pacienteNombre) {
                     res.writeHead(400, { 'Content-Type': 'application/json' })
                     return res.end(JSON.stringify({ 
                         status: 'error', 
@@ -319,8 +341,17 @@ const main = async () => {
                     }))
                 }
                 
-                const numeroFormateado = formatearTelefono(turnoData.telefono)
-                const mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
+                // Crear objeto normalizado para el mensaje
+                const datosNormalizados = {
+                    ...turnoData,
+                    pacienteNombre,
+                    pacienteApellido,
+                    profesional: especialistaNombre,
+                    telefono
+                }
+                
+                const numeroFormateado = formatearTelefono(telefono)
+                const mensaje = formatearMensajeTurno(datosNormalizados, 'recordatorio')
                 
                 console.log(`📤 Enviando recordatorio a ${numeroFormateado}: ${mensaje.substring(0, 50)}...`)
                 
