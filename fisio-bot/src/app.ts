@@ -152,13 +152,23 @@ const main = async () => {
         fallbackFlow
     ])
     
-    const adapterProvider = createProvider(Provider)
+    // Configuración del provider para mostrar QR en logs de Heroku
+    const adapterProvider = createProvider(Provider, {
+        writeMyself: 'both'
+    })
     const adapterDB = new Database()
 
     const { handleCtx, httpServer } = await createBot({
         flow: adapterFlow,
         provider: adapterProvider,
         database: adapterDB,
+    })
+
+    // Escuchar evento QR y mostrarlo en logs para Heroku
+    adapterProvider.on('qr', (qr) => {
+        console.log('🔥🔥🔥 CODIGO QR PARA ESCANEAR 🔥🔥🔥')
+        console.log(qr)
+        console.log('🔥🔥🔥 ESCANEA ESTE CODIGO CON WHATSAPP 🔥🔥🔥')
     })
 
     // ===== ENDPOINTS PARA INTEGRACIÓN CON FISIOPASTEUR =====
