@@ -152,7 +152,42 @@ const main = async () => {
         fallbackFlow
     ])
     
-    const adapterProvider = createProvider(Provider)
+    console.log('🔄 Creando provider de WhatsApp...')
+    const adapterProvider = createProvider(Provider, {
+        writeMyself: 'none'
+    })
+
+    // Eventos mejorados para debugging del QR
+    adapterProvider.on('ready', () => {
+        console.log('✅ WhatsApp conectado exitosamente!')
+    })
+    
+    adapterProvider.on('qr', (qr) => {
+        console.log('\n' + '='.repeat(50))
+        console.log('📱 CÓDIGO QR PARA WHATSAPP:')
+        console.log('='.repeat(50))
+        console.log(qr)
+        console.log('='.repeat(50))
+        console.log('⚠️  Escanea este QR con WhatsApp en tu teléfono:')
+        console.log('   1. Abre WhatsApp en tu teléfono')
+        console.log('   2. Ve a Ajustes > Dispositivos vinculados')
+        console.log('   3. Toca "Vincular un dispositivo"')
+        console.log('   4. Escanea el código QR de arriba')
+        console.log('='.repeat(50) + '\n')
+    })
+    
+    adapterProvider.on('auth_failure', (error) => {
+        console.error('❌ Error de autenticación:', error)
+    })
+    
+    adapterProvider.on('disconnected', (reason) => {
+        console.log('🔌 WhatsApp desconectado:', reason)
+    })
+    
+    adapterProvider.on('loading.screen', (percent, message) => {
+        console.log('🔄 Cargando WhatsApp:', percent, message)
+    })
+
     const adapterDB = new Database()
 
     const { handleCtx, httpServer } = await createBot({
