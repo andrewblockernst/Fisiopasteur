@@ -259,13 +259,30 @@ const main = async () => {
                 
                 console.log(`📤 Enviando mensaje a ${numeroFormateado}: ${mensaje.substring(0, 50)}...`)
                 
+                // Verificación adicional de la sesión antes de enviar
+                await new Promise(resolve => setTimeout(resolve, 1000)) // Esperar 1 segundo
+                
+                // Verificar que el vendor esté correctamente inicializado
+                if (!adapterProvider.vendor?.authState?.creds) {
+                    throw new Error('Sesión de WhatsApp no inicializada completamente')
+                }
+                
                 // Intentar enviar el mensaje con manejo de errores específico
                 try {
-                    await bot.sendMessage(numeroFormateado, mensaje)
+                    await bot.sendMessage(numeroFormateado, mensaje, {})
                     console.log(`✅ Mensaje enviado exitosamente a ${numeroFormateado}`)
                 } catch (sendError) {
                     console.error(`❌ Error específico enviando mensaje:`, sendError)
-                    throw new Error(`Error enviando mensaje: ${sendError instanceof Error ? sendError.message : 'Error desconocido'}`)
+                    // Intentar una vez más después de un pequeño delay
+                    console.log(`🔄 Reintentando envío en 2 segundos...`)
+                    await new Promise(resolve => setTimeout(resolve, 2000))
+                    try {
+                        await bot.sendMessage(numeroFormateado, mensaje, {})
+                        console.log(`✅ Mensaje enviado exitosamente en segundo intento a ${numeroFormateado}`)
+                    } catch (retryError) {
+                        console.error(`❌ Error en reintento:`, retryError)
+                        throw new Error(`Error enviando mensaje: ${sendError instanceof Error ? sendError.message : 'Error desconocido'}`)
+                    }
                 }
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -355,13 +372,30 @@ const main = async () => {
                 
                 console.log(`📤 Enviando recordatorio a ${numeroFormateado}: ${mensaje.substring(0, 50)}...`)
                 
+                // Verificación adicional de la sesión antes de enviar
+                await new Promise(resolve => setTimeout(resolve, 1000)) // Esperar 1 segundo
+                
+                // Verificar que el vendor esté correctamente inicializado
+                if (!adapterProvider.vendor?.authState?.creds) {
+                    throw new Error('Sesión de WhatsApp no inicializada completamente')
+                }
+                
                 // Intentar enviar el mensaje con manejo de errores específico
                 try {
-                    await bot.sendMessage(numeroFormateado, mensaje)
+                    await bot.sendMessage(numeroFormateado, mensaje, {})
                     console.log(`✅ Recordatorio enviado exitosamente a ${numeroFormateado}`)
                 } catch (sendError) {
                     console.error(`❌ Error específico enviando recordatorio:`, sendError)
-                    throw new Error(`Error enviando recordatorio: ${sendError instanceof Error ? sendError.message : 'Error desconocido'}`)
+                    // Intentar una vez más después de un pequeño delay
+                    console.log(`🔄 Reintentando envío de recordatorio en 2 segundos...`)
+                    await new Promise(resolve => setTimeout(resolve, 2000))
+                    try {
+                        await bot.sendMessage(numeroFormateado, mensaje, {})
+                        console.log(`✅ Recordatorio enviado exitosamente en segundo intento a ${numeroFormateado}`)
+                    } catch (retryError) {
+                        console.error(`❌ Error en reintento de recordatorio:`, retryError)
+                        throw new Error(`Error enviando recordatorio: ${sendError instanceof Error ? sendError.message : 'Error desconocido'}`)
+                    }
                 }
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' })
