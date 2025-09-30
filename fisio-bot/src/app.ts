@@ -178,6 +178,17 @@ const main = async () => {
         '/api/turno/confirmar',
         handleCtx(async (bot, req, res) => {
             try {
+                // Verificar si el bot está autenticado
+                const isAuthenticated = adapterProvider.vendor?.authState?.creds ? true : false
+                if (!isAuthenticated) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' })
+                    return res.end(JSON.stringify({ 
+                        status: 'error', 
+                        message: 'Bot no autenticado. Escanee el código QR.',
+                        code: 'NOT_AUTHENTICATED'
+                    }))
+                }
+                
                 const turnoData: TurnoData = req.body
                 const numeroFormateado = formatearTelefono(turnoData.telefono)
                 const mensaje = formatearMensajeTurno(turnoData, 'confirmacion')
@@ -199,7 +210,8 @@ const main = async () => {
                 res.writeHead(500, { 'Content-Type': 'application/json' })
                 return res.end(JSON.stringify({ 
                     status: 'error', 
-                    message: 'Error interno del servidor'
+                    message: 'Error interno del servidor',
+                    details: error instanceof Error ? error.message : 'Error desconocido'
                 }))
             }
         })
@@ -210,6 +222,17 @@ const main = async () => {
         '/api/turno/recordatorio',
         handleCtx(async (bot, req, res) => {
             try {
+                // Verificar si el bot está autenticado
+                const isAuthenticated = adapterProvider.vendor?.authState?.creds ? true : false
+                if (!isAuthenticated) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' })
+                    return res.end(JSON.stringify({ 
+                        status: 'error', 
+                        message: 'Bot no autenticado. Escanee el código QR.',
+                        code: 'NOT_AUTHENTICATED'
+                    }))
+                }
+                
                 const turnoData: TurnoData = req.body
                 const numeroFormateado = formatearTelefono(turnoData.telefono)
                 const mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
@@ -231,7 +254,8 @@ const main = async () => {
                 res.writeHead(500, { 'Content-Type': 'application/json' })
                 return res.end(JSON.stringify({ 
                     status: 'error', 
-                    message: 'Error interno del servidor'
+                    message: 'Error interno del servidor',
+                    details: error instanceof Error ? error.message : 'Error desconocido'
                 }))
             }
         })
@@ -361,6 +385,17 @@ const main = async () => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ 
             status: 'ok',
+            timestamp: new Date().toISOString(),
+            service: 'Fisiopasteur WhatsApp Bot'
+        }))
+    })
+    
+    // Endpoint para verificar si está autenticado
+    adapterProvider.server.get('/api/status', (req, res) => {
+        const isAuthenticated = adapterProvider.vendor?.authState?.creds ? true : false
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        return res.end(JSON.stringify({ 
+            authenticated: isAuthenticated,
             timestamp: new Date().toISOString(),
             service: 'Fisiopasteur WhatsApp Bot'
         }))

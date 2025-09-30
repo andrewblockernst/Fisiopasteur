@@ -210,6 +210,86 @@ export async function crearTurno(datos: TurnoInsert) {
       return { success: false, error: error.message };
     }
 
+    // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
+    try {
+      // Importar servicios de WhatsApp (solo si el turno se creó correctamente)
+      const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
+      const { 
+        registrarNotificacionConfirmacion, 
+        registrarNotificacionesRecordatorio,
+        marcarNotificacionEnviada,
+        marcarNotificacionFallida
+      } = await import("@/lib/services/notificacion.service");
+      const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+
+      // Verificar que el paciente tenga teléfono
+      if (data.paciente?.telefono) {
+        console.log(`📱 Procesando notificaciones WhatsApp para turno ${data.id_turno}...`);
+
+        // 1. Registrar notificación de confirmación en BD
+        const mensajeConfirmacion = `Turno confirmado para ${data.fecha} a las ${data.hora}`;
+        const notifConfirmacion = await registrarNotificacionConfirmacion(
+          data.id_turno,
+          data.paciente.telefono,
+          mensajeConfirmacion
+        );
+
+        // 2. Enviar confirmación inmediatamente por WhatsApp
+        if (notifConfirmacion.success && notifConfirmacion.data) {
+          // Convertir datos al formato esperado por TurnoWithRelations
+          const turnoCompleto: any = {
+            ...data,
+            paciente: data.paciente ? {
+              ...data.paciente,
+              id_paciente: data.id_paciente || 0,
+              email: null
+            } : null,
+            especialista: data.especialista ? {
+              ...data.especialista,
+              id_usuario: data.id_especialista || ''
+            } : null
+          };
+          
+          const resultadoBot = await enviarConfirmacionTurno(turnoCompleto);
+          
+          if (resultadoBot.status === 'success') {
+            // Marcar como enviada exitosamente
+            await marcarNotificacionEnviada(notifConfirmacion.data.id_notificacion);
+            console.log(`✅ Confirmación WhatsApp enviada para turno ${data.id_turno}`);
+          } else {
+            // Marcar como fallida
+            await marcarNotificacionFallida(notifConfirmacion.data.id_notificacion);
+            console.log(`❌ Falló confirmación WhatsApp para turno ${data.id_turno}: ${resultadoBot.message}`);
+          }
+        }
+
+        // 3. Programar recordatorios automáticos
+        const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora);
+        if (tiemposRecordatorio.recordatorio24h || tiemposRecordatorio.recordatorio2h) {
+          const mensajeRecordatorio = `Recordatorio: Tu turno es mañana ${data.fecha} a las ${data.hora}`;
+          
+          const tiempos = {
+            recordatorio24h: tiemposRecordatorio.recordatorio24h || undefined,
+            recordatorio2h: tiemposRecordatorio.recordatorio2h || undefined
+          };
+          
+          await registrarNotificacionesRecordatorio(
+            data.id_turno,
+            data.paciente.telefono,
+            mensajeRecordatorio,
+            tiempos
+          );
+          
+          console.log(`⏰ Recordatorios programados para turno ${data.id_turno}`);
+        }
+      } else {
+        console.log(`⚠️ Turno ${data.id_turno} creado sin teléfono - no se enviarán notificaciones WhatsApp`);
+      }
+    } catch (botError) {
+      // Si falla la integración con WhatsApp, no afectar la creación del turno
+      console.error("Error en integración WhatsApp (turno creado exitosamente):", botError);
+    }
+
     revalidatePath("/turnos");
     return { success: true, data };
   } catch (error) {

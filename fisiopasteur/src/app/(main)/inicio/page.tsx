@@ -1,53 +1,73 @@
+import EstadisticasWhatsApp from '@/componentes/notificacion/estadisticas-whatsapp';
+import { Calendar, Users, MessageSquare } from 'lucide-react';
+
 export default function Inicio() {
     return (
-        <div className="flex flex-col items-center justify-center h-screen">
-        <h1 className="text-4xl font-bold mb-4 text-black">Bienvenido a Fisiopasteur</h1>
-        <p className="text-lg text-black">Inicio en proceso...</p>
+        <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
+            {/* Header */}
+            <div className="mb-8">
+                <h1 className="text-2xl sm:text-3xl font-bold text-black mb-2">
+                    Bienvenido a Fisiopasteur
+                </h1>
+                <p className="text-gray-600">Panel de control y estadísticas del sistema</p>
+            </div>
+
+            {/* Grid de estadísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {/* Estadísticas WhatsApp */}
+                <div className="md:col-span-1">
+                    <EstadisticasWhatsApp />
+                </div>
+
+                {/* Placeholder para otras estadísticas */}
+                <div className="bg-white rounded-lg border p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <Calendar className="text-blue-600" size={20} />
+                        <h3 className="font-semibold">Turnos Hoy</h3>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-gray-900 mb-2">0</div>
+                        <div className="text-sm text-gray-600">Próximamente</div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-lg border p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <Users className="text-purple-600" size={20} />
+                        <h3 className="font-semibold">Estadísticas</h3>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-gray-900 mb-2">--</div>
+                        <div className="text-sm text-gray-600">Próximamente</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Información de la integración */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                <div className="flex items-start gap-3">
+                    <MessageSquare className="text-green-600 flex-shrink-0 mt-1" size={20} />
+                    <div>
+                        <h3 className="font-semibold text-green-800 mb-2">
+                            🎉 Integración WhatsApp Bot Completa
+                        </h3>
+                        <div className="text-green-700 text-sm space-y-2">
+                            <p>
+                                ✅ El bot de WhatsApp está integrado y funcional. Cuando crees un turno con un paciente que tenga teléfono:
+                            </p>
+                            <ul className="list-disc list-inside space-y-1 ml-4">
+                                <li>Se envía confirmación automática por WhatsApp</li>
+                                <li>Se programan recordatorios (24h y 2h antes)</li>
+                                <li>Se registra todo en la base de datos</li>
+                                <li>Puedes ver estadísticas en tiempo real</li>
+                            </ul>
+                            <p className="mt-3">
+                                💡 <strong>Consejo:</strong> Revisa las estadísticas de WhatsApp arriba para monitorear el estado del bot y mensajes enviados.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        
-        // AGREGUE UNAS ESTADISTICAS RAPIDAS QUE PODEMOS IMPPLEMENTAR EN EL FUTURO 
-    
-        // {/* Estadísticas rápidas */}
-        //       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-        //         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
-        //           {/* Turnos de hoy */}
-        //           <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-        //             <div className="flex items-center gap-3 sm:gap-4">
-        //               <div className="p-2 sm:p-3 bg-blue-100 rounded-lg">
-        //                 <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-        //               </div>
-        //               <div>
-        //                 <p className="text-xs sm:text-sm text-gray-600">Turnos de hoy</p>
-        //                 <p className="text-xl sm:text-2xl font-bold text-gray-900">{turnosHoy.length}</p>
-        //               </div>
-        //             </div>
-        //           </div>
-        
-        //           {/* Próximos turnos */}
-        //           <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-        //             <div className="flex items-center gap-3 sm:gap-4">
-        //               <div className="p-2 sm:p-3 bg-green-100 rounded-lg">
-        //                 <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-        //               </div>
-        //               <div>
-        //                 <p className="text-xs sm:text-sm text-gray-600">Próximos 7 días</p>
-        //                 <p className="text-xl sm:text-2xl font-bold text-gray-900">{turnosProximos.length}</p>
-        //               </div>
-        //             </div>
-        //           </div>
-        
-        //           {/* Total especialistas */}
-        //           <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-        //             <div className="flex items-center gap-3 sm:gap-4">
-        //               <div className="p-2 sm:p-3 bg-purple-100 rounded-lg">
-        //                 <Users className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
-        //               </div>
-        //               <div>
-        //                 <p className="text-xs sm:text-sm text-gray-600">Especialistas</p>
-        //                 <p className="text-xl sm:text-2xl font-bold text-gray-900">{especialistas.length}</p>
-        //               </div>
-        //             </div>
-        //           </div>
-        //         </div>
     );
-    }
+}
