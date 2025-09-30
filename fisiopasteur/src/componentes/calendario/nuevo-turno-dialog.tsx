@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista, obtenerTurnos} from "@/lib/actions/turno.action";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
+import SelectorRecordatorios from "@/componentes/turnos/selector-recordatorios";
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 import { UserPlus2 } from "lucide-react";
+import type { TipoRecordatorio } from "@/lib/utils/whatsapp.utils";
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -36,7 +38,8 @@ export function NuevoTurnoModal({
     id_paciente: '',
     id_box: '',
     observaciones: '',
-    precio: ''
+    precio: '',
+    recordatorios: ['1d', '2h'] as TipoRecordatorio[]
   });
 
   // Estados para datos cargados automáticamente
@@ -317,7 +320,8 @@ export function NuevoTurnoModal({
         id_paciente: '',
         id_box: '',
         observaciones: '',
-        precio: ''
+        precio: '',
+        recordatorios: ['1d', '2h'] as TipoRecordatorio[]
       });
       setEspecialidadesDisponibles([]);
       setBoxesDisponibles([]);
@@ -437,6 +441,7 @@ export function NuevoTurnoModal({
 
     setIsSubmitting(true);
     try {
+      // Objeto limpio para la BD (sin recordatorios)
       const turnoData = {
         fecha: formData.fecha,
         hora: formData.hora + ':00',
@@ -450,7 +455,13 @@ export function NuevoTurnoModal({
         tipo_plan: formData.tipo_plan,
       };
 
-      const resultado = await crearTurno(turnoData);
+      // Crear objeto con recordatorios para pasarlo a la función
+      const turnoConRecordatorios = {
+        ...turnoData,
+        recordatorios: formData.recordatorios
+      };
+
+      const resultado = await crearTurno(turnoConRecordatorios);
 
       if (resultado.success && resultado.data) {
         addToast({
@@ -755,6 +766,20 @@ export function NuevoTurnoModal({
                   pattern="[0-9]*"
                 />
               </div>
+            </div>
+
+            {/* Recordatorios WhatsApp */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Recordatorios automáticos por WhatsApp
+              </label>
+              <SelectorRecordatorios
+                recordatoriosSeleccionados={formData.recordatorios}
+                onRecordatoriosChange={(recordatorios) => setFormData(prev => ({ ...prev, recordatorios }))}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Los recordatorios se enviarán automáticamente al paciente antes del turno
+              </p>
             </div>
 
             {/* Observaciones */}

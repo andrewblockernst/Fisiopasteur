@@ -159,7 +159,37 @@ export async function registrarNotificacionConfirmacion(
 }
 
 /**
- * Registrar notificaciones de recordatorio para un turno
+ * Registrar notificaciones de recordatorio para un turno (versión flexible)
+ */
+export async function registrarNotificacionesRecordatorioFlexible(
+  idTurno: number,
+  telefono: string,
+  mensaje: string,
+  fechasRecordatorio: Record<string, Date>
+) {
+  const resultados = [];
+  
+  for (const [tipo, fecha] of Object.entries(fechasRecordatorio)) {
+    if (fecha) {
+      const notificacionRecordatorio: NotificacionInsert = {
+        id_turno: idTurno,
+        medio: 'whatsapp',
+        mensaje: `[RECORDATORIO ${tipo.toUpperCase()}] ${mensaje}`,
+        telefono: telefono,
+        estado: 'pendiente',
+        fecha_programada: fecha.toISOString(),
+      };
+      
+      const resultado = await crearNotificacion(notificacionRecordatorio);
+      resultados.push({ tipo, resultado });
+    }
+  }
+  
+  return resultados;
+}
+
+/**
+ * Registrar notificaciones de recordatorio para un turno (versión legacy)
  */
 export async function registrarNotificacionesRecordatorio(
   idTurno: number,

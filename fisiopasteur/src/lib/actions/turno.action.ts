@@ -193,9 +193,16 @@ export async function crearTurno(datos: TurnoInsert) {
       }
     }
 
+    // Extraer recordatorios antes del insert (no van a la BD)
+    const { recordatorios, ...datosLimpios } = datos as any;
+    
+    console.log('📝 Datos originales:', Object.keys(datos as any));
+    console.log('📝 Datos limpios para BD:', Object.keys(datosLimpios));
+    console.log('📝 Recordatorios extraídos:', recordatorios);
+
     const { data, error } = await supabase
       .from("turno")
-      .insert(datos)
+      .insert(datosLimpios)
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
@@ -264,23 +271,33 @@ export async function crearTurno(datos: TurnoInsert) {
         }
 
         // 3. Programar recordatorios automáticos
-        const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora);
-        if (tiemposRecordatorio.recordatorio24h || tiemposRecordatorio.recordatorio2h) {
-          const mensajeRecordatorio = `Recordatorio: Tu turno es mañana ${data.fecha} a las ${data.hora}`;
+        const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+        const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
+        
+        // Usar recordatorios especificados o los por defecto
+        const tiposRecordatorio = recordatorios || ['1d', '2h'];
+        const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora, tiposRecordatorio);
+        
+        // Filtrar solo los recordatorios válidos (no null)
+        const recordatoriosValidos = Object.entries(tiemposRecordatorio)
+          .filter(([_, fecha]) => fecha !== null)
+          .reduce((acc, [tipo, fecha]) => {
+            if (fecha) acc[tipo] = fecha;
+            return acc;
+          }, {} as Record<string, Date>);
+        
+        if (Object.keys(recordatoriosValidos).length > 0) {
+          const mensajeRecordatorio = `Recordatorio: Tu turno es el ${data.fecha} a las ${data.hora}`;
           
-          const tiempos = {
-            recordatorio24h: tiemposRecordatorio.recordatorio24h || undefined,
-            recordatorio2h: tiemposRecordatorio.recordatorio2h || undefined
-          };
-          
-          await registrarNotificacionesRecordatorio(
+          await registrarNotificacionesRecordatorioFlexible(
             data.id_turno,
             data.paciente.telefono,
             mensajeRecordatorio,
-            tiempos
+            recordatoriosValidos
           );
           
-          console.log(`⏰ Recordatorios programados para turno ${data.id_turno}`);
+          const tiposConfigurados = Object.keys(recordatoriosValidos).join(', ');
+          console.log(`⏰ Recordatorios programados para turno ${data.id_turno}: ${tiposConfigurados}`);
         }
       } else {
         console.log(`⚠️ Turno ${data.id_turno} creado sin teléfono - no se enviarán notificaciones WhatsApp`);

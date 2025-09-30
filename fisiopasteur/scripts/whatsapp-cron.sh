@@ -17,17 +17,17 @@ log_message() {
 procesar_notificaciones() {
     log_message "🚀 Iniciando procesamiento de notificaciones WhatsApp..."
     
-    # Realizar petición al endpoint
-    response=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/notificaciones" 2>&1)
+    # Realizar petición al endpoint de cron
+    response=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/cron/recordatorios" 2>&1)
     http_code=$(echo "$response" | tail -n1)
     json_response=$(echo "$response" | sed '$d')
     
     if [ "$http_code" -eq 200 ]; then
         # Parsear respuesta JSON (requiere jq)
         if command -v jq >/dev/null 2>&1; then
-            procesadas=$(echo "$json_response" | jq -r '.procesadas // 0')
-            enviadas=$(echo "$json_response" | jq -r '.enviadas // 0')
-            fallidas=$(echo "$json_response" | jq -r '.fallidas // 0')
+            procesadas=$(echo "$json_response" | jq -r '.data.procesadas // 0')
+            enviadas=$(echo "$json_response" | jq -r '.data.enviadas // 0')
+            fallidas=$(echo "$json_response" | jq -r '.data.fallidas // 0')
             
             log_message "✅ Procesamiento exitoso: $enviadas enviadas, $fallidas fallidas de $procesadas total"
         else

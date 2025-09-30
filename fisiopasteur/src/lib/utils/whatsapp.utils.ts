@@ -40,28 +40,71 @@ export function mapearTurnoParaBot(turno: TurnoWithRelations) {
 }
 
 /**
+ * Opciones de recordatorio disponibles
+ */
+export const OPCIONES_RECORDATORIO = {
+  '1h': { label: '1 hora antes', minutos: 60 },
+  '2h': { label: '2 horas antes', minutos: 120 },
+  '3h': { label: '3 horas antes', minutos: 180 },
+  '1d': { label: '1 día antes', minutos: 1440 },
+  '2d': { label: '2 días antes', minutos: 2880 }
+} as const;
+
+export type TipoRecordatorio = keyof typeof OPCIONES_RECORDATORIO;
+
+/**
  * Calcular cuándo enviar recordatorios basado en fecha/hora del turno
  */
-export function calcularTiemposRecordatorio(fecha: string, hora: string): {
-  recordatorio24h: Date | null;
-  recordatorio2h: Date | null;
-} {
+export function calcularTiemposRecordatorio(
+  fecha: string, 
+  hora: string,
+  tiposRecordatorio: TipoRecordatorio[] = ['1d', '2h']
+): Record<TipoRecordatorio, Date | null> {
   try {
     // Crear fecha/hora del turno
     const fechaTurno = new Date(`${fecha} ${hora}`);
     const ahora = new Date();
     
-    // Recordatorio 24 horas antes
-    const tiempo24h = new Date(fechaTurno.getTime() - (24 * 60 * 60 * 1000));
-    const recordatorio24h = tiempo24h > ahora ? tiempo24h : null;
+    const recordatorios: Record<TipoRecordatorio, Date | null> = {
+      '1h': null,
+      '2h': null,
+      '3h': null,
+      '1d': null,
+      '2d': null
+    };
     
-    // Recordatorio 2 horas antes
-    const tiempo2h = new Date(fechaTurno.getTime() - (2 * 60 * 60 * 1000));
-    const recordatorio2h = tiempo2h > ahora ? tiempo2h : null;
+    // Calcular cada tipo de recordatorio solicitado
+    for (const tipo of tiposRecordatorio) {
+      const opcion = OPCIONES_RECORDATORIO[tipo];
+      if (opcion) {
+        const tiempoRecordatorio = new Date(fechaTurno.getTime() - (opcion.minutos * 60 * 1000));
+        recordatorios[tipo] = tiempoRecordatorio > ahora ? tiempoRecordatorio : null;
+      }
+    }
     
-    return { recordatorio24h, recordatorio2h };
+    return recordatorios;
   } catch (error) {
     console.error('Error calculando tiempos de recordatorio:', error);
-    return { recordatorio24h: null, recordatorio2h: null };
+    return {
+      '1h': null,
+      '2h': null,
+      '3h': null,
+      '1d': null,
+      '2d': null
+    };
   }
+}
+
+/**
+ * Función de compatibilidad con el código existente
+ */
+export function calcularTiemposRecordatorioLegacy(fecha: string, hora: string): {
+  recordatorio24h: Date | null;
+  recordatorio2h: Date | null;
+} {
+  const recordatorios = calcularTiemposRecordatorio(fecha, hora, ['1d', '2h']);
+  return {
+    recordatorio24h: recordatorios['1d'],
+    recordatorio2h: recordatorios['2h']
+  };
 }
