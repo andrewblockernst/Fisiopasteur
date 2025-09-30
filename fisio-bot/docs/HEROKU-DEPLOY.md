@@ -121,7 +121,7 @@ heroku logs --tail
 heroku open
 
 # Verificar health check
-curl https://tu-app.herokuapp.com/api/health
+curl https://git.heroku.com/fisio-bot.git/api/health
 
 # Debería responder:
 # {"status":"ok","timestamp":"2025-09-29T...","service":"Fisiopasteur WhatsApp Bot"}
@@ -130,7 +130,7 @@ curl https://tu-app.herokuapp.com/api/health
 ### 2. Probar endpoints:
 ```bash
 # Test de confirmación de turno
-curl -X POST https://tu-app.herokuapp.com/api/turno/confirmar \
+curl -X POST https://git.heroku.com/fisio-bot.git/api/health/api/turno/confirmar \
   -H "Content-Type: application/json" \
   -d '{
     "pacienteNombre": "Juan",
@@ -148,7 +148,7 @@ curl -X POST https://tu-app.herokuapp.com/api/turno/confirmar \
 
 ### En tu sistema principal, usar esta URL:
 ```javascript
-const BOT_URL = 'https://tu-app.herokuapp.com'
+const BOT_URL = 'https://git.heroku.com/fisio-bot.git/'
 
 // Ejemplo: Enviar confirmación de turno
 const enviarConfirmacion = async (turnoData) => {
@@ -255,7 +255,7 @@ Antes de ir a producción:
 ## 🎯 **Resultado Final**
 
 Una vez completado:
-- ✅ Bot disponible 24/7 en `https://tu-app.herokuapp.com`
+- ✅ Bot disponible 24/7 en `https://git.heroku.com/fisio-bot.git/api/health`
 - ✅ Endpoints listos para integrar con Fisiopasteur
 - ✅ Confirmaciones y recordatorios automáticos
 - ✅ Interacciones con pacientes funcionando
