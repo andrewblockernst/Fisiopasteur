@@ -269,7 +269,7 @@ const main = async () => {
                 
                 // Intentar enviar el mensaje con manejo de errores específico
                 try {
-                    await bot.sendMessage(numeroFormateado, mensaje, { media: undefined })
+                    await bot.sendMessage(numeroFormateado, mensaje)
                     console.log(`✅ Mensaje enviado exitosamente a ${numeroFormateado}`)
                 } catch (sendError) {
                     console.error(`❌ Error específico enviando mensaje:`, sendError)
@@ -277,7 +277,7 @@ const main = async () => {
                     console.log(`🔄 Reintentando envío en 2 segundos...`)
                     await new Promise(resolve => setTimeout(resolve, 2000))
                     try {
-                        await bot.sendMessage(numeroFormateado, mensaje, { media: undefined })
+                        await bot.sendMessage(numeroFormateado, mensaje)
                         console.log(`✅ Mensaje enviado exitosamente en segundo intento a ${numeroFormateado}`)
                     } catch (retryError) {
                         console.error(`❌ Error en reintento:`, retryError)
@@ -382,7 +382,7 @@ const main = async () => {
                 
                 // Intentar enviar el mensaje con manejo de errores específico
                 try {
-                    await bot.sendMessage(numeroFormateado, mensaje, { media: undefined })
+                    await bot.sendMessage(numeroFormateado, mensaje)
                     console.log(`✅ Recordatorio enviado exitosamente a ${numeroFormateado}`)
                 } catch (sendError) {
                     console.error(`❌ Error específico enviando recordatorio:`, sendError)
@@ -390,7 +390,7 @@ const main = async () => {
                     console.log(`🔄 Reintentando envío de recordatorio en 2 segundos...`)
                     await new Promise(resolve => setTimeout(resolve, 2000))
                     try {
-                        await bot.sendMessage(numeroFormateado, mensaje, { media: undefined })
+                        await bot.sendMessage(numeroFormateado, mensaje)
                         console.log(`✅ Recordatorio enviado exitosamente en segundo intento a ${numeroFormateado}`)
                     } catch (retryError) {
                         console.error(`❌ Error en reintento de recordatorio:`, retryError)
