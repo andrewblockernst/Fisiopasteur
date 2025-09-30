@@ -3,3 +3,8 @@ dist/
 *.log
 .env
 ejemplos-integracion.js
+docs/
+*.example.js
+*.md
+bot_sessions/
+*.png
