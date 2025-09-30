@@ -317,15 +317,20 @@ const main = async () => {
     )
     
     // Endpoint temporal para restaurar sesión de WhatsApp
-    adapterProvider.server.get('/api/restore-session', (req, res) => {
+    adapterProvider.server.get('/api/restore-session', async (req, res) => {
         try {
-            const { execSync } = require('child_process')
-            const fs = require('fs')
-            const path = require('path')
+            const { execSync } = await import('child_process')
+            const { existsSync } = await import('fs')
+            const { join } = await import('path')
+            const { fileURLToPath } = await import('url')
+            
+            // Obtener __dirname equivalente para módulos ES
+            const __filename = fileURLToPath(import.meta.url)
+            const __dirname = join(__filename, '..')
             
             // Verificar si existe el archivo de sesión
-            const sessionFile = path.join(__dirname, 'whatsapp_session.tar.gz')
-            if (fs.existsSync(sessionFile)) {
+            const sessionFile = join(__dirname, 'whatsapp_session.tar.gz')
+            if (existsSync(sessionFile)) {
                 // Extraer la sesión
                 execSync(`cd ${__dirname} && tar -xzf whatsapp_session.tar.gz`)
                 
