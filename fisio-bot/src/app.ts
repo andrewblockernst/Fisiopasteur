@@ -256,23 +256,45 @@ const main = async () => {
     adapterProvider.on('ready', () => {
         console.log('🤖 Bot conectado y listo')
         
-        // Iniciar sistema de recordatorios autónomo
-        console.log('🚀 Iniciando sistema de recordatorios autónomos...')
+        // Iniciar sistema de recordatorios autónomo via API de Fisiopasteur
+        console.log('🚀 Iniciando sistema de recordatorios autónomos vía API...')
         
-        // Crear función para enviar mensajes
-        const enviarMensajeRecordatorio = async (telefono: string, mensaje: string) => {
-            return await adapterProvider.sendText(telefono, mensaje)
+        const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app'
+        
+        // Función para procesar recordatorios llamando al endpoint de Vercel
+        const procesarRecordatoriosViaAPI = async () => {
+            try {
+                console.log('🔄 Llamando al endpoint de recordatorios...')
+                const response = await fetch(`${FISIOPASTEUR_URL}/api/cron/recordatorios`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                })
+                
+                if (!response.ok) {
+                    console.error(`❌ Error en llamada API: ${response.status}`)
+                    return
+                }
+                
+                const resultado = await response.json()
+                if (resultado.success) {
+                    console.log(`✅ Recordatorios procesados vía API: ${JSON.stringify(resultado.data)}`)
+                } else {
+                    console.error(`❌ Error en API de recordatorios: ${resultado.message}`)
+                }
+            } catch (error) {
+                console.error('❌ Error llamando al endpoint de recordatorios:', error)
+            }
         }
         
         // Ejecutar inmediatamente
-        procesarRecordatoriosPendientes(enviarMensajeRecordatorio)
+        procesarRecordatoriosViaAPI()
         
-        // Ejecutar cada 60 segundos (1 minuto)
-        recordatoriosInterval = setInterval(() => {
-            procesarRecordatoriosPendientes(enviarMensajeRecordatorio)
-        }, 60000)
+        // Ejecutar cada 2 minutos (120 segundos)
+        recordatoriosInterval = setInterval(procesarRecordatoriosViaAPI, 120000)
         
-        console.log('✅ Sistema de recordatorios autónomos iniciado (cada 60 segundos)')
+        console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 2 minutos)')
     })
     
     // Escuchar cuando el bot se desconecta para detener recordatorios
