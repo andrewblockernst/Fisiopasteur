@@ -5,10 +5,12 @@
   "main": "dist/app.js",
   "type": "module",
   "scripts": {
-    "start": "node ./dist/app.js",
+    "start": "npx tsx src/app.ts",
+    "start:prod": "node ./dist/app.js",
     "lint": "eslint . --no-ignore",
     "dev": "npm run lint && nodemon ./src/app.ts",
-    "build": "npx rollup -c"
+    "build": "npx rollup -c",
+    "postinstall": "npm run build"
   },
   "keywords": [],
   "dependencies": {
@@ -17,6 +19,9 @@
     "jimp": "^0.16.13",
     "qrcode-terminal": "^0.12.0",
     "sharp": "^0.34.4"
+  },
+  "engines": {
+    "node": "18.x"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",
