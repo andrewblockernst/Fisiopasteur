@@ -394,14 +394,26 @@ export async function eliminarTurno(id: number) {
   const supabase = await createClient();
   
   try {
-    const { error } = await supabase
+    // Primero eliminar todas las notificaciones asociadas al turno
+    const { error: notificacionesError } = await supabase
+      .from("notificacion")
+      .delete()
+      .eq("id_turno", id);
+
+    if (notificacionesError) {
+      console.error("Error al eliminar notificaciones del turno:", notificacionesError);
+      return { success: false, error: `Error eliminando notificaciones: ${notificacionesError.message}` };
+    }
+
+    // Luego eliminar el turno
+    const { error: turnoError } = await supabase
       .from("turno")
       .delete()
       .eq("id_turno", id);
 
-    if (error) {
-      console.error("Error al eliminar turno:", error);
-      return { success: false, error: error.message };
+    if (turnoError) {
+      console.error("Error al eliminar turno:", turnoError);
+      return { success: false, error: turnoError.message };
     }
 
     revalidatePath("/turnos");
