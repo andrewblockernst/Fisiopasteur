@@ -291,10 +291,10 @@ const main = async () => {
         // Ejecutar inmediatamente
         procesarRecordatoriosViaAPI()
         
-        // Ejecutar cada 2 minutos (120 segundos)
-        recordatoriosInterval = setInterval(procesarRecordatoriosViaAPI, 120000)
+        // Ejecutar cada 60 segundos
+        recordatoriosInterval = setInterval(procesarRecordatoriosViaAPI, 60000)
         
-        console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 2 minutos)')
+        console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 60 segundos)')
     })
     
     // Escuchar cuando el bot se desconecta para detener recordatorios
