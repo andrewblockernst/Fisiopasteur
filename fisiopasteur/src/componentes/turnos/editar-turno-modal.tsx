@@ -457,7 +457,7 @@ const handleSubmit = async () => {
         precio: formData.precio ? Number(formData.precio) : null,
       };
 
-      const res: { success: boolean; data?: TurnoConRelaciones; error?: string } = await actualizarTurno(turno.id_turno, datosActualizacion);
+      const res = await actualizarTurno(turno.id_turno, datosActualizacion);
 
       if (res.success) {
         addToast({
@@ -468,7 +468,15 @@ const handleSubmit = async () => {
         
         // Manejar el caso donde res.data puede ser undefined
         if (res.data) {
-          onSaved?.(res.data);
+          // Adaptar res.data a TurnoConRelaciones
+          const turnoActualizado: TurnoConRelaciones = {
+            ...res.data,
+            paciente: res.data.paciente ?? undefined,
+            especialista: res.data.especialista ?? undefined,
+            especialidad: res.data.especialidad ?? undefined,
+            box: res.data.box ?? undefined,
+          };
+          onSaved?.(turnoActualizado);
         } else {
           onSaved?.(); // Llamar sin parámetros si no hay data
         }

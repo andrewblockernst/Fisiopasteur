@@ -29,6 +29,7 @@ export function CalendarioClient({
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedDayTurnos, setSelectedDayTurnos] = useState<TurnoConDetalles[]>([]);
   const [especialistaFiltro, setEspecialistaFiltro] = useState<string>("");
+  const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
 
   const { 
     turnos, 
@@ -170,8 +171,9 @@ export function CalendarioClient({
               setSelectedDayTurnos(turnos);
               setIsDayModalOpen(true);
             }}
-            onCreateTurno={(date: Date) => {
+            onCreateTurno={(date: Date, hora?: string) => {
               setSelectedDate(date);
+              setHoraSeleccionada(hora || '');
               setIsCreateModalOpen(true);
             }}
             especialistas={especialistas}
@@ -192,10 +194,15 @@ export function CalendarioClient({
       {/* Modal de crear turno */}
       <NuevoTurnoModal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setHoraSeleccionada('');
+        }}
         fechaSeleccionada={selectedDate}
+        horaSeleccionada={horaSeleccionada} // Pasar la hora preseleccionada
         especialistas={especialistas}
         pacientes={pacientes}
+        onTurnoCreated={handleSuccessfulTurnoCreation}
       />
     </div>
   );
