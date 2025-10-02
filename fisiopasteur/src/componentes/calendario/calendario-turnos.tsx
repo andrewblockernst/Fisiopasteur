@@ -11,7 +11,7 @@ interface CalendarioTurnosProps {
   especialistaSeleccionado: string;
   onEspecialistaChange: (especialistaId: string) => void;
   onDayClick: (date: Date, turnos: TurnoConDetalles[]) => void;
-  onCreateTurno: (date: Date) => void;
+  onCreateTurno: (date: Date, hora?: string) => void;
 }
 
 type VistaCalendario = 'mes' | 'semana' | 'dia';
@@ -279,11 +279,13 @@ export function CalendarioTurnos({
                         esHoy ? 'bg-red-50/30' : 'hover:bg-blue-50/30'
                       }`}
                       onClick={() => {
-                        // Cuando se clickea la celda vacía, abrir modal para crear turno
+                        // Cuando se clickea la celda vacía, crear turno con hora específica
                         const fechaConHora = new Date(fecha);
                         fechaConHora.setHours(hora, 0, 0, 0);
-                        onCreateTurno(fechaConHora);
+                        const horaString = `${hora.toString().padStart(2, '0')}:00`;
+                        onCreateTurno(fecha, horaString); // Pasar fecha original y hora como string
                       }}
+
                     >
                       <div className="h-full overflow-hidden flex flex-col">
                         {turnosEnHora.length > 0 && (
@@ -370,9 +372,8 @@ export function CalendarioTurnos({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const fechaConHora = new Date(fecha);
-                          fechaConHora.setHours(hora, 0, 0, 0);
-                          onCreateTurno(fechaConHora);
+                          const horaString = `${hora.toString().padStart(2, '0')}:00`;
+                          onCreateTurno(fecha, horaString); // Pasar fecha y hora como string
                         }}
                         className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-0.5 rounded-full"
                       >
@@ -525,9 +526,8 @@ export function CalendarioTurnos({
                                             <div 
                                                 className="text-gray-400 text-sm cursor-pointer hover:text-[#9C1838] transition-colors py-2"
                                                 onClick={() => {
-                                                    const fechaConHora = new Date(fechaActual);
-                                                    fechaConHora.setHours(hora, 0, 0, 0);
-                                                    onCreateTurno(fechaConHora);
+                                                    const horaString = `${hora.toString().padStart(2, '0')}:00`;
+                                                    onCreateTurno(fechaActual, horaString); // Pasar hora como string
                                                 }}
                                             >
                                                 Sin turnos - Toca para agregar
@@ -554,7 +554,7 @@ export function CalendarioTurnos({
                             })}
                         </h3>
                         <button
-                            onClick={() => onCreateTurno(fechaActual)}
+                            onClick={() => onCreateTurno(fechaActual)} // Vista día header - sin hora específica
                             className="bg-[#9C1838] text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1"
                         >
                             <Plus className="w-4 h-4" /> Nuevo Turno
