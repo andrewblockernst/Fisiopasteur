@@ -468,15 +468,7 @@ const handleSubmit = async () => {
         
         // Manejar el caso donde res.data puede ser undefined
         if (res.data) {
-          // Adaptar res.data a TurnoConRelaciones
-          const turnoActualizado: TurnoConRelaciones = {
-            ...res.data,
-            paciente: res.data.paciente ?? undefined,
-            especialista: res.data.especialista ?? undefined,
-            especialidad: res.data.especialidad ?? undefined,
-            box: res.data.box ?? undefined,
-          };
-          onSaved?.(turnoActualizado);
+          onSaved?.(res.data as any);
         } else {
           onSaved?.(); // Llamar sin parámetros si no hay data
         }

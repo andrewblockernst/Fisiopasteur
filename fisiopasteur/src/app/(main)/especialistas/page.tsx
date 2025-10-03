@@ -136,28 +136,6 @@ export default function EspecialistasPage() {
 
       </div>
 
-      {/* <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={handleBack}
-            className="p-2 -ml-2 rounded-md active:scale-95 transition hover:bg-gray-100"
-            aria-label="Volver"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-lg font-semibold">Especialistas</h1>
-            <button
-            onClick={() => setShowDialog(true)}
-            className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white"
-            style={{ backgroundColor: BRAND }}
-            aria-label="Nuevo especialista"
-            title="Nuevo especialista"
-            >
-            <Plus className="w-5 h-5" />
-            </button>
-        </div>
-      </header> */}
-
       {/* Contenido Principal */}
       <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
         {/* Desktop Header */}

@@ -12,6 +12,35 @@ type TurnoUpdate = Database["public"]["Tables"]["turno"]["Update"];
 // 📋 FUNCIONES BÁSICAS DE TURNOS
 // =====================================
 
+// Obtener un turno específico por ID
+export async function obtenerTurno(id: number) {
+  const supabase = await createClient();
+  
+  try {
+    const { data, error } = await supabase
+      .from("turno")
+      .select(`
+        *,
+        paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email),
+        especialista:id_especialista(id_usuario, nombre, apellido, color),
+        especialidad:id_especialidad(id_especialidad, nombre),
+        box:id_box(id_box, numero)
+      `)
+      .eq("id_turno", id)
+      .single();
+
+    if (error) {
+      console.error("Error al obtener turno:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (error) {
+    console.error("Error inesperado:", error);
+    return { success: false, error: "Error inesperado" };
+  }
+}
+
 // Obtener todos los turnos (con filtros básicos)
 export async function obtenerTurnos(filtros?: {
   fecha?: string;
@@ -164,9 +193,16 @@ export async function crearTurno(datos: TurnoInsert) {
       }
     }
 
+    // Extraer recordatorios antes del insert (no van a la BD)
+    const { recordatorios, ...datosLimpios } = datos as any;
+    
+    console.log('📝 Datos originales:', Object.keys(datos as any));
+    console.log('📝 Datos limpios para BD:', Object.keys(datosLimpios));
+    console.log('📝 Recordatorios extraídos:', recordatorios);
+
     const { data, error } = await supabase
       .from("turno")
-      .insert(datos)
+      .insert(datosLimpios)
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
@@ -179,6 +215,96 @@ export async function crearTurno(datos: TurnoInsert) {
     if (error) {
       console.error("Error al crear turno:", error);
       return { success: false, error: error.message };
+    }
+
+    // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
+    try {
+      // Importar servicios de WhatsApp (solo si el turno se creó correctamente)
+      const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
+      const { 
+        registrarNotificacionConfirmacion, 
+        registrarNotificacionesRecordatorio,
+        marcarNotificacionEnviada,
+        marcarNotificacionFallida
+      } = await import("@/lib/services/notificacion.service");
+      const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+
+      // Verificar que el paciente tenga teléfono
+      if (data.paciente?.telefono) {
+        console.log(`📱 Procesando notificaciones WhatsApp para turno ${data.id_turno}...`);
+
+        // 1. Registrar notificación de confirmación en BD
+        const mensajeConfirmacion = `Turno confirmado para ${data.fecha} a las ${data.hora}`;
+        const notifConfirmacion = await registrarNotificacionConfirmacion(
+          data.id_turno,
+          data.paciente.telefono,
+          mensajeConfirmacion
+        );
+
+        // 2. Enviar confirmación inmediatamente por WhatsApp
+        if (notifConfirmacion.success && notifConfirmacion.data) {
+          // Convertir datos al formato esperado por TurnoWithRelations
+          const turnoCompleto: any = {
+            ...data,
+            paciente: data.paciente ? {
+              ...data.paciente,
+              id_paciente: data.id_paciente || 0,
+              email: null
+            } : null,
+            especialista: data.especialista ? {
+              ...data.especialista,
+              id_usuario: data.id_especialista || ''
+            } : null
+          };
+          
+          const resultadoBot = await enviarConfirmacionTurno(turnoCompleto);
+          
+          if (resultadoBot.status === 'success') {
+            // Marcar como enviada exitosamente
+            await marcarNotificacionEnviada(notifConfirmacion.data.id_notificacion);
+            console.log(`✅ Confirmación WhatsApp enviada para turno ${data.id_turno}`);
+          } else {
+            // Marcar como fallida
+            await marcarNotificacionFallida(notifConfirmacion.data.id_notificacion);
+            console.log(`❌ Falló confirmación WhatsApp para turno ${data.id_turno}: ${resultadoBot.message}`);
+          }
+        }
+
+        // 3. Programar recordatorios automáticos
+        const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+        const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
+        
+        // Usar recordatorios especificados o los por defecto
+        const tiposRecordatorio = recordatorios || ['1d', '2h'];
+        const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora, tiposRecordatorio);
+        
+        // Filtrar solo los recordatorios válidos (no null)
+        const recordatoriosValidos = Object.entries(tiemposRecordatorio)
+          .filter(([_, fecha]) => fecha !== null)
+          .reduce((acc, [tipo, fecha]) => {
+            if (fecha) acc[tipo] = fecha;
+            return acc;
+          }, {} as Record<string, Date>);
+        
+        if (Object.keys(recordatoriosValidos).length > 0) {
+          const mensajeRecordatorio = `Recordatorio: Tu turno es el ${data.fecha} a las ${data.hora}`;
+          
+          await registrarNotificacionesRecordatorioFlexible(
+            data.id_turno,
+            data.paciente.telefono,
+            mensajeRecordatorio,
+            recordatoriosValidos
+          );
+          
+          const tiposConfigurados = Object.keys(recordatoriosValidos).join(', ');
+          console.log(`⏰ Recordatorios programados para turno ${data.id_turno}: ${tiposConfigurados}`);
+        }
+      } else {
+        console.log(`⚠️ Turno ${data.id_turno} creado sin teléfono - no se enviarán notificaciones WhatsApp`);
+      }
+    } catch (botError) {
+      // Si falla la integración con WhatsApp, no afectar la creación del turno
+      console.error("Error en integración WhatsApp (turno creado exitosamente):", botError);
     }
 
     revalidatePath("/turnos");
@@ -268,14 +394,26 @@ export async function eliminarTurno(id: number) {
   const supabase = await createClient();
   
   try {
-    const { error } = await supabase
+    // Primero eliminar todas las notificaciones asociadas al turno
+    const { error: notificacionesError } = await supabase
+      .from("notificacion")
+      .delete()
+      .eq("id_turno", id);
+
+    if (notificacionesError) {
+      console.error("Error al eliminar notificaciones del turno:", notificacionesError);
+      return { success: false, error: `Error eliminando notificaciones: ${notificacionesError.message}` };
+    }
+
+    // Luego eliminar el turno
+    const { error: turnoError } = await supabase
       .from("turno")
       .delete()
       .eq("id_turno", id);
 
-    if (error) {
-      console.error("Error al eliminar turno:", error);
-      return { success: false, error: error.message };
+    if (turnoError) {
+      console.error("Error al eliminar turno:", turnoError);
+      return { success: false, error: turnoError.message };
     }
 
     revalidatePath("/turnos");
@@ -475,6 +613,8 @@ export async function obtenerEspecialistas() {
         apellido,
         color,
         email,
+        telefono,
+        activo,
         especialidad:id_especialidad(id_especialidad, nombre),
         usuario_especialidad(
           especialidad:id_especialidad(id_especialidad, nombre)
