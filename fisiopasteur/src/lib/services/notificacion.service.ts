@@ -169,6 +169,8 @@ export async function registrarNotificacionesRecordatorioFlexible(
 ) {
   const resultados = [];
   
+  console.log(`📝 Iniciando registro de ${Object.keys(fechasRecordatorio).length} notificaciones para turno ${idTurno}`);
+  
   for (const [tipo, fecha] of Object.entries(fechasRecordatorio)) {
     if (fecha) {
       const notificacionRecordatorio: NotificacionInsert = {
@@ -180,11 +182,14 @@ export async function registrarNotificacionesRecordatorioFlexible(
         fecha_programada: fecha.toISOString(),
       };
       
+      console.log(`  💾 Guardando notificación ${tipo}: fecha_programada=${fecha.toISOString()}, telefono=${telefono}`);
       const resultado = await crearNotificacion(notificacionRecordatorio);
+      console.log(`  ${resultado.success ? '✅' : '❌'} Resultado para ${tipo}:`, resultado.success ? 'OK' : resultado.error);
       resultados.push({ tipo, resultado });
     }
   }
   
+  console.log(`📝 Registro completado: ${resultados.length} notificaciones procesadas`);
   return resultados;
 }
 

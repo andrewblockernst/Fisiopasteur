@@ -276,7 +276,14 @@ export async function crearTurno(datos: TurnoInsert) {
         
         // Usar recordatorios especificados o los por defecto
         const tiposRecordatorio = recordatorios || ['1d', '2h'];
+        console.log(`🔍 Calculando recordatorios para turno ${data.id_turno}: tipos=[${tiposRecordatorio.join(', ')}], fecha=${data.fecha}, hora=${data.hora}`);
+        
         const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora, tiposRecordatorio);
+        console.log(`🔍 Tiempos calculados:`, JSON.stringify(
+          Object.fromEntries(
+            Object.entries(tiemposRecordatorio).map(([k, v]) => [k, v?.toISOString() || 'null'])
+          ), null, 2
+        ));
         
         // Filtrar solo los recordatorios válidos (no null)
         const recordatoriosValidos = Object.entries(tiemposRecordatorio)
@@ -286,18 +293,24 @@ export async function crearTurno(datos: TurnoInsert) {
             return acc;
           }, {} as Record<string, Date>);
         
+        console.log(`🔍 Recordatorios válidos a guardar: ${Object.keys(recordatoriosValidos).join(', ')}`);
+        
         if (Object.keys(recordatoriosValidos).length > 0) {
           const mensajeRecordatorio = `Recordatorio: Tu turno es el ${data.fecha} a las ${data.hora}`;
           
-          await registrarNotificacionesRecordatorioFlexible(
+          const resultadosNotif = await registrarNotificacionesRecordatorioFlexible(
             data.id_turno,
             data.paciente.telefono,
             mensajeRecordatorio,
             recordatoriosValidos
           );
           
+          console.log(`🔍 Resultados de registro de notificaciones:`, JSON.stringify(resultadosNotif, null, 2));
+          
           const tiposConfigurados = Object.keys(recordatoriosValidos).join(', ');
           console.log(`⏰ Recordatorios programados para turno ${data.id_turno}: ${tiposConfigurados}`);
+        } else {
+          console.log(`⚠️ No hay recordatorios válidos para programar (todos están en el pasado)`);
         }
       } else {
         console.log(`⚠️ Turno ${data.id_turno} creado sin teléfono - no se enviarán notificaciones WhatsApp`);
