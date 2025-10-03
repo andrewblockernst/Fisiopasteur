@@ -9,6 +9,7 @@ import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
+import { useAuth } from '@/hooks/usePerfil';
 import { UserPlus2 } from "lucide-react";
 import type { TipoRecordatorio } from "@/lib/utils/whatsapp.utils";
 
@@ -17,6 +18,7 @@ interface NuevoTurnoModalProps {
   onClose: () => void;
   onTurnoCreated?: () => void;
   fechaSeleccionada?: Date | null;
+  horaSeleccionada?: string | null;
   especialistas?: any[];
   pacientes?: any[];
 }
@@ -26,9 +28,11 @@ export function NuevoTurnoModal({
   onClose,
   onTurnoCreated,
   fechaSeleccionada = null,
+  horaSeleccionada = '',
   especialistas: especialistasProp = [],
   pacientes: pacientesProp = []
 }: NuevoTurnoModalProps) {
+  const { user, loading: authLoading } = useAuth(); // agarramos usuario autenticado
   const [formData, setFormData] = useState({
     fecha: '',
     hora: '',
@@ -153,29 +157,53 @@ export function NuevoTurnoModal({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Establecer fecha seleccionada cuando se abre el modal
+  // Establecer fecha y hora seleccionadas cuando se abre el modal
   useEffect(() => {
-    if (fechaSeleccionada && isOpen) {
+    if (isOpen) {
+      if (fechaSeleccionada) {
+        setFormData(prev => ({
+          ...prev,
+          fecha: fechaSeleccionada.toISOString().split('T')[0]
+        }));
+      }
+      
+      // Precargar la hora si viene especificada
+      if (horaSeleccionada) {
+        console.log('Precargando hora:', horaSeleccionada); // Debug
+        setFormData(prev => ({
+          ...prev,
+          hora: horaSeleccionada
+        }));
+      }
+    }
+  }, [fechaSeleccionada, horaSeleccionada, isOpen]);
+
+  // Precargar especialista si no es admin
+  useEffect(() => {
+    if (user && !user.esAdmin && user.id_usuario && isOpen && user.id_usuario) {
       setFormData(prev => ({
         ...prev,
-        fecha: fechaSeleccionada.toISOString().split('T')[0]
+        id_especialista: String(user.id_usuario)
       }));
     }
-  }, [fechaSeleccionada, isOpen]);
+  }, [user, isOpen]);
 
   // Construir lista de especialidades del especialista seleccionado
+  // ESTA LÓGICA SE MANTIENE IGUAL - funciona tanto para admin como especialista
   useEffect(() => {
     if (!formData.id_especialista) {
       setEspecialidadesDisponibles([]);
       setFormData(prev => ({ ...prev, id_especialidad: '' }));
       return;
     }
+    
     const especialista = especialistas.find(e => String(e.id_usuario) === String(formData.id_especialista));
     if (!especialista) {
       setEspecialidadesDisponibles([]);
       setFormData(prev => ({ ...prev, id_especialidad: '' }));
       return;
     }
+    
     const lista: any[] = [];
     if (especialista.especialidad) lista.push(especialista.especialidad);
     if (Array.isArray(especialista.usuario_especialidad)) {
@@ -183,28 +211,16 @@ export function NuevoTurnoModal({
         if (ue.especialidad) lista.push(ue.especialidad);
       });
     }
+    
     const unicas = lista.filter((esp, i, arr) => i === arr.findIndex((e: any) => e.id_especialidad === esp.id_especialidad));
     setEspecialidadesDisponibles(unicas);
-    // Si la seleccionada ya no existe, limpiar
+    
+    // Si la especialidad seleccionada ya no existe, limpiar
     if (formData.id_especialidad && !unicas.some((e: any) => String(e.id_especialidad) === String(formData.id_especialidad))) {
       setFormData(prev => ({ ...prev, id_especialidad: '' }));
     }
   }, [formData.id_especialista, especialistas, formData.id_especialidad]);
 
-  // Autocompletar precio según especialista + especialidad + plan
-  useEffect(() => {
-    (async () => {
-      if (!formData.id_especialista || !formData.id_especialidad || !formData.tipo_plan) return;
-      try {
-        const res = await obtenerPrecioEspecialidad(
-          String(formData.id_especialista),
-          Number(formData.id_especialidad),
-          formData.tipo_plan
-        );
-        if (res.success) setFormData(prev => ({ ...prev, precio: res.precio != null ? String(res.precio) : '' }));
-      } catch {}
-    })();
-  }, [formData.id_especialista, formData.id_especialidad, formData.tipo_plan]);
 
   // Verificar horarios ocupados cuando cambia especialista o fecha
   useEffect(() => {
@@ -445,7 +461,6 @@ export function NuevoTurnoModal({
       const turnoData = {
         fecha: formData.fecha,
         hora: formData.hora + ':00',
-        precio: formData.precio ? Number(formData.precio) : null,
         id_especialista: formData.id_especialista,
         id_paciente: parseInt(formData.id_paciente),
         id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
@@ -453,6 +468,7 @@ export function NuevoTurnoModal({
         observaciones: formData.observaciones || null,
         estado: "programado" as const,
         tipo_plan: formData.tipo_plan,
+        // REMOVER EL PRECIO - no se incluye aquí
       };
 
       // Crear objeto con recordatorios para pasarlo a la función
@@ -491,8 +507,8 @@ export function NuevoTurnoModal({
     }
   };
 
-  // Mostrar loading mientras carga datos
-  if (loading) {
+  // Mostrar loading mientras carga datos o auth
+  if (loading || authLoading) {
     return (
       <BaseDialog
         type="custom"
@@ -539,27 +555,46 @@ export function NuevoTurnoModal({
             onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
             className="space-y-4 text-left"
           >
-            {/* Especialista */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Especialista*
-              </label>
-              <select
-                value={formData.id_especialista}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                required
-              >
-                <option value="">Seleccionar especialista</option>
-                {especialistas.map((especialista) => (
-                  <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                    {especialista.nombre} {especialista.apellido}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Especialista - Solo mostrar si es admin */}
+            {user?.esAdmin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Especialista*
+                </label>
+                <select
+                  value={formData.id_especialista}
+                  onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  required
+                >
+                  <option value="">Seleccionar especialista</option>
+                  {especialistas.map((especialista) => (
+                    <option key={especialista.id_usuario} value={especialista.id_usuario}>
+                      {especialista.nombre} {especialista.apellido}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-            {/* Especialidad */}
+            {/* Mostrar información del especialista si no es admin */}
+            {!user?.esAdmin && user?.nombre && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Especialista
+                </label>
+                <div className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700">
+                  {user.nombre} {user.apellido}
+                  {user.rol && (
+                    <span className="ml-2 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                      {user.rol.nombre}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Especialidad - LA LÓGICA SE MANTIENE IGUAL */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Especialidad*
@@ -585,6 +620,9 @@ export function NuevoTurnoModal({
               )}
             </div>
           
+            {/* ...resto del formulario (paciente, fecha, hora, box, plan, observaciones)... */}
+            {/* PERO SIN LA SECCIÓN DE PRECIO */}
+
             {/* Paciente con Autocomplete */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -741,32 +779,7 @@ export function NuevoTurnoModal({
               </select>
             </div>
 
-            {/* Precio */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Precio (ARS)
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-lg select-none">$</span>
-                <input
-                  type="text"
-                  value={
-                    formData.precio
-                      ? Number(formData.precio).toLocaleString('es-AR')
-                      : ''
-                  }
-                  onChange={(e) => {
-                    // Remover todo excepto números
-                    const raw = e.target.value.replace(/[^\d]/g, '');
-                    setFormData(prev => ({ ...prev, precio: raw }));
-                  }}
-                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                  placeholder="..."
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                />
-              </div>
-            </div>
+            {/* REMOVER COMPLETAMENTE LA SECCIÓN DE PRECIO */}
 
             {/* Recordatorios WhatsApp */}
             <div>

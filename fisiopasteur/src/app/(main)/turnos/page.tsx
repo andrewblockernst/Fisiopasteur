@@ -4,22 +4,20 @@ import TablaTurnos from "@/componentes/turnos/listado-turnos";
 import TurnosPageContainer from "@/componentes/turnos/turnos-page-container";
 
 export default async function TurnosPage({ searchParams }: { searchParams: Promise<any> }) {
-  // Await searchParams antes de usar sus propiedades
   const params = await searchParams;
   
-  // Si no hay filtros, mostrar por defecto los del día
   const hoy = new Date().toISOString().split('T')[0];
   const filtros = {
     fecha_desde: params?.desde ?? hoy,
     fecha_hasta: params?.hasta ?? hoy,
     especialista_id: params?.especialista ?? undefined,
     especialidad_id: params?.especialidad ?? undefined,
-    // Eliminamos hora_desde y hora_hasta
     estado: params?.estado ?? undefined,
   };
 
+  // Usar la función original sin filtro automático de usuario
   const [resTurnos, resEspecialistas, resEspecialidades, resBoxes] = await Promise.all([
-    obtenerTurnosConFiltros(filtros),
+    obtenerTurnosConFiltros(filtros), // Cambiar de vuelta a esta función
     obtenerEspecialistas(),
     obtenerEspecialidades(),
     obtenerBoxes(),
