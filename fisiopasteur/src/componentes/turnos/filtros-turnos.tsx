@@ -29,9 +29,10 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
   useEffect(() => {
     if (!loading && user && !user.esAdmin) {
       const currentEspecialistaParam = params.get('especialista');
+      const verTodosParam = params.get('ver_todos'); // Nuevo parámetro
       
-      // Si no hay filtro de especialista y el usuario no es admin, redirigir
-      if (!currentEspecialistaParam && user.id_usuario) {
+      // Si no hay filtro de especialista, no hay parámetro ver_todos, y el usuario no es admin, redirigir
+      if (!currentEspecialistaParam && !verTodosParam && user.id_usuario) {
         const usp = new URLSearchParams(params.toString());
         usp.set('especialista', user.id_usuario);
         
@@ -63,8 +64,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     { value: "", label: "Seleccionar filtro..." },
     { value: "fecha_desde", label: "Fecha desde" },
     { value: "fecha_hasta", label: "Fecha hasta" },
-    // Solo mostrar filtro de especialista si es admin
-    ...(user?.esAdmin ? [{ value: "especialista", label: "Especialista" }] : []),
+    { value: "especialista", label: "Especialista" },
     { value: "especialidad", label: "Especialidad" },
     { value: "estado", label: "Estado" },
   ];
@@ -90,10 +90,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
         nuevosFiltros.fecha_hasta = target.value;
         break;
       case "especialista":
-        // Solo permitir si es admin
-        if (user?.esAdmin) {
           nuevosFiltros.especialista_id = target.value;
-        }
         break;
       case "especialidad":
         nuevosFiltros.especialidad_id = target.value;
@@ -129,10 +126,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
         delete nuevosFiltros.fecha_hasta;
         break;
       case 'especialista':
-        // Solo permitir remover si es admin
-        if (user?.esAdmin) {
           delete nuevosFiltros.especialista_id;
-        }
         break;
       case 'especialidad':
         delete nuevosFiltros.especialidad_id;
@@ -147,17 +141,15 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
   };
 
   const limpiarFiltros = () => {
-    // Si no es admin, mantener el filtro del especialista actual
-    const filtrosBase = user?.esAdmin ? {} : { especialista_id: user?.id_usuario };
+    // Limpiar todos los filtros (no mantener especialista automático)
+    const filtrosBase = {};
     setFilter(filtrosBase);
     setTipoFiltro("");
     setValorFiltro("");
     
-    // Construir URL con filtros base
-    if (!user?.esAdmin && user?.id_usuario) {
-      const usp = new URLSearchParams();
-      usp.set("especialista", user.id_usuario);
-      router.push(`/turnos?${usp.toString()}`);
+    // Para usuarios no-admin, agregar parámetro especial para indicar que quieren ver todos
+    if (!user?.esAdmin) {
+      router.push("/turnos?ver_todos=1");
     } else {
       router.push("/turnos");
     }
@@ -179,16 +171,13 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
         );
 
       case "especialista":
-        // Solo mostrar si es admin
-        if (!user?.esAdmin) return null;
-        
         return (
           <select
             value={filter.especialista_id || ""}
             onChange={aplicarFiltro}
             className="border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <option value="">Seleccionar especialista...</option>
+            <option value="">Todos los especialistas</option>
             {especialistas.map((esp: any) => (
               <option key={esp.id_usuario} value={esp.id_usuario}>
                 {esp.apellido}, {esp.nombre}
@@ -346,8 +335,8 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
                 </button>
               </span>
             )}
-            {/* Solo mostrar filtro de especialista si es admin */}
-            {filter.especialista_id && user?.esAdmin && (
+            {/* Mostrar filtro de especialista para todos los usuarios */}
+            {filter.especialista_id && (
               <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center gap-1 group">
                 Especialista: {getNombreEspecialista(filter.especialista_id)}
                 <button
