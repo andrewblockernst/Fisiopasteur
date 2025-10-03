@@ -869,3 +869,110 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
     return { success: false, error: "Error inesperado" };
   }
 }
+
+// =====================================
+// 📱 CONSULTA DE TURNO POR WHATSAPP
+// =====================================
+
+/**
+ * Obtener el próximo turno de un paciente por su número de teléfono
+ */
+export async function obtenerProximoTurnoPorTelefono(telefono: string) {
+  const supabase = await createClient();
+  
+  try {
+    console.log(`🔍 Buscando próximo turno para teléfono: ${telefono}`);
+    
+    // Limpiar el número de teléfono (remover caracteres especiales)
+    const telefonoLimpio = telefono.replace(/[^0-9]/g, '');
+    console.log(`🔍 Teléfono limpio: ${telefonoLimpio}`);
+    
+    // Obtener fecha y hora actual en Argentina (UTC-3)
+    const ahora = new Date();
+    const ahoraArgentina = new Date(ahora.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+    const fechaActual = ahoraArgentina.toISOString().split('T')[0];
+    const horaActual = ahoraArgentina.toTimeString().split(' ')[0]; // HH:MM:SS
+    
+    console.log(`📅 Fecha actual: ${fechaActual}, Hora actual: ${horaActual}`);
+    
+    // Buscar turnos futuros ordenados por fecha y hora
+    const { data: turnos, error } = await supabase
+      .from('turno')
+      .select(`
+        *,
+        paciente:id_paciente(id_paciente, nombre, apellido, telefono, email),
+        especialista:id_especialista(id_usuario, nombre, apellido),
+        especialidad:id_especialidad(id_especialidad, nombre)
+      `)
+      .gte('fecha', fechaActual)
+      .in('estado', ['pendiente', 'confirmado', 'programado'])
+      .order('fecha', { ascending: true })
+      .order('hora', { ascending: true });
+    
+    console.log(`📋 Turnos encontrados en BD: ${turnos?.length || 0}`);
+    
+    if (error) {
+      console.error('❌ Error obteniendo turnos:', error);
+      return { success: false, error: error.message };
+    }
+    
+    if (!turnos || turnos.length === 0) {
+      console.log(`📭 No se encontraron turnos futuros`);
+      return { success: true, data: null };
+    }
+    
+    // Log de todos los teléfonos encontrados
+    console.log('📱 Teléfonos en turnos encontrados:');
+    turnos.forEach((t: any, idx: number) => {
+      console.log(`  ${idx + 1}. ${t.paciente?.telefono || 'SIN TELÉFONO'} - Turno ID: ${t.id_turno} - Fecha: ${t.fecha} ${t.hora}`);
+    });
+    
+    // Filtrar turnos que ya pasaron hoy
+    const turnosFuturos = turnos.filter((turno: any) => {
+      // Si es una fecha futura, incluirlo
+      if (turno.fecha > fechaActual) {
+        return true;
+      }
+      
+      // Si es hoy, verificar que la hora no haya pasado
+      if (turno.fecha === fechaActual) {
+        return turno.hora > horaActual;
+      }
+      
+      // Si es fecha pasada, no incluirlo
+      return false;
+    });
+    
+    console.log(`📋 Turnos futuros (después de filtrar por hora): ${turnosFuturos.length}`);
+    
+    // Filtrar por teléfono del paciente
+    const turnoFiltrado = turnosFuturos.find((turno: any) => {
+      if (!turno.paciente?.telefono) {
+        console.log(`⚠️ Turno ${turno.id_turno} sin teléfono en paciente`);
+        return false;
+      }
+      
+      const telefonoPaciente = turno.paciente.telefono.replace(/[^0-9]/g, '');
+      
+      // Comparar los últimos 10 dígitos (número sin código de país)
+      const ultimos10Limpio = telefonoLimpio.slice(-10);
+      const ultimos10Paciente = telefonoPaciente.slice(-10);
+      
+      console.log(`🔍 Comparando: ${ultimos10Limpio} vs ${ultimos10Paciente} (${ultimos10Limpio === ultimos10Paciente ? 'MATCH ✅' : 'NO MATCH ❌'})`);
+      
+      return ultimos10Limpio === ultimos10Paciente;
+    });
+    
+    if (!turnoFiltrado) {
+      console.log(`📭 No se encontró próximo turno para teléfono: ${telefono}`);
+      return { success: true, data: null };
+    }
+    
+    console.log(`✅ Próximo turno encontrado: ID ${turnoFiltrado.id_turno}`);
+    return { success: true, data: turnoFiltrado };
+    
+  } catch (error) {
+    console.error('❌ Error inesperado:', error);
+    return { success: false, error: 'Error inesperado' };
+  }
+}
