@@ -624,40 +624,56 @@ export async function obtenerEspecialistas() {
       .select(`
         id_usuario,
         activo,
-        usuario:id_usuario(
+        usuario!inner(
           id_usuario,
           nombre,
           apellido,
           color,
           email,
           telefono,
-          activo,
-          especialidad:id_especialidad(id_especialidad, nombre)
+          activo
         ),
-        especialidad:id_especialidad(id_especialidad, nombre)
+        especialidad!inner(
+          id_especialidad,
+          nombre
+        )
       `)
       .eq("activo", true)
-      .order("usuario(nombre)");
+      .eq("usuario.activo", true);
 
     if (error) {
       console.error("Error al obtener especialistas:", error);
       return { success: false, error: error.message };
     }
 
-    // Transformar los datos para mantener la estructura esperada
-    const especialistas = data
-      ?.filter(item => item.usuario && item.usuario.activo) // Solo usuarios activos
-      .map(item => ({
-        id_usuario: item.usuario!.id_usuario,
-        nombre: item.usuario!.nombre,
-        apellido: item.usuario!.apellido,
-        color: item.usuario!.color,
-        email: item.usuario!.email,
-        telefono: item.usuario!.telefono,
-        activo: item.usuario!.activo,
-        especialidad: item.especialidad,
-        usuario_especialidad: [{ especialidad: item.especialidad }]
-      })) || [];
+    // Transformar los datos para agrupar especialidades por usuario
+    const especialistasMap = new Map();
+    
+    data?.forEach(item => {
+      const usuario = item.usuario;
+      const especialidad = item.especialidad;
+      
+      if (!especialistasMap.has(usuario.id_usuario)) {
+        especialistasMap.set(usuario.id_usuario, {
+          id_usuario: usuario.id_usuario,
+          nombre: usuario.nombre,
+          apellido: usuario.apellido,
+          color: usuario.color,
+          email: usuario.email,
+          telefono: usuario.telefono,
+          activo: usuario.activo,
+          especialidad: null, // No hay especialidad principal
+          usuario_especialidad: []
+        });
+      }
+      
+      // Agregar la especialidad a la lista
+      especialistasMap.get(usuario.id_usuario).usuario_especialidad.push({
+        especialidad: especialidad
+      });
+    });
+
+    const especialistas = Array.from(especialistasMap.values());
 
     return { success: true, data: especialistas };
   } catch (error) {
