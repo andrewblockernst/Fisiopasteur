@@ -61,8 +61,11 @@ export function calcularTiemposRecordatorio(
   tiposRecordatorio: TipoRecordatorio[] = ['1d', '2h']
 ): Record<TipoRecordatorio, Date | null> {
   try {
-    // Crear fecha/hora del turno
-    const fechaTurno = new Date(`${fecha} ${hora}`);
+    // Crear fecha/hora del turno en zona horaria de Argentina (UTC-3)
+    // Formato ISO: YYYY-MM-DDTHH:mm:ss-03:00
+    const [year, month, day] = fecha.split('-');
+    const [hours, minutes] = hora.split(':');
+    const fechaTurno = new Date(`${year}-${month}-${day}T${hours}:${minutes}:00-03:00`);
     const ahora = new Date();
     
     const recordatorios: Record<TipoRecordatorio, Date | null> = {
