@@ -309,6 +309,27 @@ export async function crearTurno(datos: TurnoInsert) {
           
           const tiposConfigurados = Object.keys(recordatoriosValidos).join(', ');
           console.log(`⏰ Recordatorios programados para turno ${data.id_turno}: ${tiposConfigurados}`);
+          
+          // 🚀 Trigger inmediato: disparar procesamiento de recordatorios sin esperar al polling
+          try {
+            const apiUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app';
+            console.log(`🔥 Disparando procesamiento inmediato de recordatorios en ${apiUrl}`);
+            
+            const response = await fetch(`${apiUrl}/api/cron/recordatorios`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            });
+            
+            if (response.ok) {
+              const resultado = await response.json();
+              console.log(`✅ Procesamiento inmediato completado:`, resultado);
+            } else {
+              console.log(`⚠️ Procesamiento inmediato respondió con status ${response.status} (se procesará en el próximo ciclo)`);
+            }
+          } catch (triggerError) {
+            // No bloquear si falla, el polling cada 60s lo manejará
+            console.log('⚠️ No se pudo disparar procesamiento inmediato (se procesará en el próximo ciclo):', triggerError);
+          }
         } else {
           console.log(`⚠️ No hay recordatorios válidos para programar (todos están en el pasado)`);
         }
