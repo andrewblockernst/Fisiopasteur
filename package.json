@@ -1,0 +1,26 @@
+{
+  "name": "fisiopasteur-bot-wrapper",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp para Fisiopasteur",
+  "main": "fisio-bot/dist/app.js",
+  "scripts": {
+    "start": "cd fisio-bot && npm start",
+    "build": "cd fisio-bot && npm run build",
+    "postinstall": "cd fisio-bot && npm install"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "@builderbot/bot": "1.3.2-y.0",
+    "@builderbot/provider-baileys": "^1.3.2-y.0",
+    "jimp": "^0.22.12"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3"
+  },
+  "author": "Andrew Block",
+  "license": "ISC"
+}

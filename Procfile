@@ -1,0 +1,1 @@
+web: cd fisio-bot && npm start
