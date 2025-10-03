@@ -2,13 +2,13 @@
 
 import {
   Home,
-  Accessibility,
-  Plus,
   CalendarDays,
   User,
-  ClipboardList
+  ClipboardList,
+  Bed
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import AgregarBoton from './agregar-boton';
 
 const BarraCelular = () => {
   const router = useRouter();
@@ -21,15 +21,11 @@ const BarraCelular = () => {
         label="Inicio" 
       />
       <NavItem 
-        icon={<ClipboardList size={24} />} 
-        onClick={() => router.push('/pacientes')} 
-        label="Pacientes" 
+        icon={<Bed size={24} />} 
+        onClick={() => router.push('/pilates')} 
+        label="Pilates" 
       />
-      <NavItem 
-        icon={<Plus size={24} />} 
-        onClick={() => router.push('/agregar')} 
-        label="Agregar" 
-      />
+      <AgregarBoton />
       <NavItem 
         icon={<CalendarDays size={24} />} 
         onClick={() => router.push('/calendario')} 

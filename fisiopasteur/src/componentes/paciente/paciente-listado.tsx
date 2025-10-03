@@ -7,7 +7,7 @@ import { ConsultaPacienteMobile } from "./consulta-paciente-mobile";
 import { useRouter } from "next/navigation";
 import { NuevoPacienteDialog } from "./nuevo-paciente-dialog";
 import { activarPaciente, getPacientes } from "@/lib/actions/paciente.action";
-import { ChevronUp, EllipsisVertical } from "lucide-react";
+import { ChevronUp, EllipsisVertical, Plus } from "lucide-react";
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 import { ToastItem, useToastStore } from "@/stores/toast-store";
 
@@ -125,23 +125,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
             {/* Botón flotante para agregar paciente */}
             <button
                 onClick={() => setShowDialog(true)}
-                className="fixed bottom-20 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"
+                className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"
                 aria-label="Agregar nuevo paciente"
             >
-                <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4v16m8-8H4"
-                    />
-                </svg>
+                <Plus size={30} />
             </button>
         </div>
 

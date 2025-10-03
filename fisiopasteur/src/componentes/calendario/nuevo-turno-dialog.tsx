@@ -2,12 +2,16 @@
 
 import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerAgendaEspecialista, obtenerTurnos} from "@/lib/actions/turno.action";
+import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerPrecioEspecialidad, obtenerAgendaEspecialista, obtenerTurnos} from "@/lib/actions/turno.action";
+import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
+import SelectorRecordatorios from "@/componentes/turnos/selector-recordatorios";
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 import { useAuth } from '@/hooks/usePerfil';
+import { UserPlus2 } from "lucide-react";
+import type { TipoRecordatorio } from "@/lib/utils/whatsapp.utils";
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -38,6 +42,8 @@ export function NuevoTurnoModal({
     id_paciente: '',
     id_box: '',
     observaciones: '',
+    precio: '',
+    recordatorios: ['1d', '2h'] as TipoRecordatorio[]
   });
 
   // Estados para datos cargados automáticamente
@@ -52,6 +58,7 @@ export function NuevoTurnoModal({
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
   const [verificandoBoxes, setVerificandoBoxes] = useState(false);
+  const [showNuevoPacienteDialog, setShowNuevoPacienteDialog] = useState(false);
   const { addToast } = useToastStore();
 
   // Estados para el autocomplete de pacientes
@@ -329,6 +336,8 @@ export function NuevoTurnoModal({
         id_paciente: '',
         id_box: '',
         observaciones: '',
+        precio: '',
+        recordatorios: ['1d', '2h'] as TipoRecordatorio[]
       });
       setEspecialidadesDisponibles([]);
       setBoxesDisponibles([]);
@@ -422,6 +431,20 @@ export function NuevoTurnoModal({
     }
   };
 
+  const handleNuevoPacienteClose = () => {
+    setShowNuevoPacienteDialog(false);
+  };
+
+  const handlePatientCreated = () => {
+    // Recargar la lista de pacientes después de crear uno nuevo
+    if (pacientesProp.length === 0) {
+      // Solo recargar si no vinieron pacientes por props
+      obtenerPacientes().then(res => {
+        if (res.success) setPacientes(res.data || []);
+      });
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
       addToast({
@@ -434,6 +457,7 @@ export function NuevoTurnoModal({
 
     setIsSubmitting(true);
     try {
+      // Objeto limpio para la BD (sin recordatorios)
       const turnoData = {
         fecha: formData.fecha,
         hora: formData.hora + ':00',
@@ -447,7 +471,13 @@ export function NuevoTurnoModal({
         // REMOVER EL PRECIO - no se incluye aquí
       };
 
-      const resultado = await crearTurno(turnoData);
+      // Crear objeto con recordatorios para pasarlo a la función
+      const turnoConRecordatorios = {
+        ...turnoData,
+        recordatorios: formData.recordatorios
+      };
+
+      const resultado = await crearTurno(turnoConRecordatorios);
 
       if (resultado.success && resultado.data) {
         addToast({
@@ -598,17 +628,27 @@ export function NuevoTurnoModal({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Paciente*
               </label>
-              <input
-                ref={inputPacienteRef}
-                type="text"
-                value={busquedaPaciente}
-                onChange={handleBusquedaPacienteChange}
-                onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                placeholder="Buscar paciente por nombre, apellido o DNI..."
-                required
-                autoComplete="off"
-              />
+              <div className="flex gap-2">
+                <input
+                  ref={inputPacienteRef}
+                  type="text"
+                  value={busquedaPaciente}
+                  onChange={handleBusquedaPacienteChange}
+                  onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  placeholder="Ej. Juan, teléfono, DNI... "
+                  required
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNuevoPacienteDialog(true)}
+                  className="px-3 py-2 bg-[#9C1838] text-white rounded-full hover:bg-[#7D1329] transition-colors flex items-center gap-1"
+                  title="Agregar nuevo paciente"
+                >
+                  <UserPlus2 className="w-4 h-4" />
+                </button>
+              </div>
               
               {/* Lista de resultados */}
               {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
@@ -741,6 +781,20 @@ export function NuevoTurnoModal({
 
             {/* REMOVER COMPLETAMENTE LA SECCIÓN DE PRECIO */}
 
+            {/* Recordatorios WhatsApp */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Recordatorios automáticos por WhatsApp
+              </label>
+              <SelectorRecordatorios
+                recordatoriosSeleccionados={formData.recordatorios}
+                onRecordatoriosChange={(recordatorios) => setFormData(prev => ({ ...prev, recordatorios }))}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Los recordatorios se enviarán automáticamente al paciente antes del turno
+              </p>
+            </div>
+
             {/* Observaciones */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -780,6 +834,14 @@ export function NuevoTurnoModal({
           text: "Aceptar",
           onClick: () => setDialog({ ...dialog, open: false }),
         }}
+      />
+
+      {/* Modal de Nuevo Paciente */}
+      <NuevoPacienteDialog
+        isOpen={showNuevoPacienteDialog}
+        onClose={handleNuevoPacienteClose}
+        handleToast={addToast}
+        onPatientCreated={handlePatientCreated}
       />
     </>
   );

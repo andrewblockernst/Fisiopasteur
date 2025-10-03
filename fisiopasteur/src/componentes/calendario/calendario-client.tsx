@@ -95,16 +95,8 @@ export function CalendarioClient({
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-semibold">Calendario</h1>
-          <button
-            onClick={handleCreateTurno}
-            className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white"
-            style={{ backgroundColor: BRAND }}
-            aria-label="Nuevo turno"
-            title="Nuevo turno"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
+          <h1 className="text-lg font-semibold text-center flex-1">Calendario</h1>
+          <div className="w-6" />
         </div>
       </header>
 
@@ -204,6 +196,15 @@ export function CalendarioClient({
         pacientes={pacientes}
         onTurnoCreated={handleSuccessfulTurnoCreation}
       />
+
+      {/* Botón flotante para agregar turno - Solo móvil */}
+      <button
+        onClick={handleCreateTurno}
+        className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center sm:hidden"
+        aria-label="Agregar nuevo turno"
+      >
+        <Plus size={30} />
+      </button>
     </div>
   );
 }

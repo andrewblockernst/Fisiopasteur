@@ -1,6 +1,7 @@
 import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEspecialidades } from "@/lib/actions/turno.action";
 import FiltrosTurnos from "@/componentes/turnos/filtros-turnos";
 import TablaTurnos from "@/componentes/turnos/listado-turnos";
+import TurnosPageContainer from "@/componentes/turnos/turnos-page-container";
 
 export default async function TurnosPage({ searchParams }: { searchParams: Promise<any> }) {
   const params = await searchParams;
@@ -27,15 +28,12 @@ export default async function TurnosPage({ searchParams }: { searchParams: Promi
   }
 
   return (
-    <div className="sm:container sm:p-6 text-black">
-      <h1 className="text-2xl font-bold mb-4">Turnos</h1>
-      <FiltrosTurnos
-        especialistas={resEspecialistas.success ? resEspecialistas.data : []}
-        especialidades={resEspecialidades.success ? resEspecialidades.data : []}
-        boxes={resBoxes.success ? resBoxes.data : []}
-        initial={filtros}
-      />
-      <TablaTurnos turnos={resTurnos.data ?? []} />
-    </div>
+    <TurnosPageContainer
+      turnos={resTurnos.data ?? []}
+      especialistas={resEspecialistas.success ? (resEspecialistas.data ?? []) : []}
+      especialidades={resEspecialidades.success ? (resEspecialidades.data ?? []) : []}
+      boxes={resBoxes.success ? (resBoxes.data ?? []) : []}
+      initialFilters={filtros}
+    />
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, Check, Pen, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getPaciente, agregarObservacion, editarObservacion, getEvolucionesClinicas } from "@/lib/actions/paciente.action";
 import Boton from "@/componentes/boton";
@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 type Paciente = Tables<"paciente">;
 type Observacion = Tables<"evolucion_clinica">;
 
-export default function HistorialClinicoPage() {
+function HistorialClinicoContent() {
   const params = useSearchParams();
   const idPaciente = Number(params.get("id"));
   const [paciente, setPaciente] = useState<Paciente | null>(null);
@@ -236,5 +236,13 @@ export default function HistorialClinicoPage() {
         </Boton>
       </div>
     </div>
+  );
+}
+
+export default function HistorialClinicoPage() {
+  return (
+    <Suspense fallback={<div className="p-4">Cargando...</div>}>
+      <HistorialClinicoContent />
+    </Suspense>
   );
 }

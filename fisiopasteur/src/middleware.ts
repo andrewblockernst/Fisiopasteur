@@ -111,3 +111,5 @@ export const config = {
     '/((?!_next/static|_next/image|_next/webpack-hmr|favicon\\.ico|favicon\\.svg|.*\\.(?:css|js|png|jpg|jpeg|gif|webp|svg|woff|woff2|ttf|eot)$).*)',
   ],
 }
+
+// hola como andan.

@@ -8,11 +8,15 @@ interface NuevoPacienteDialogProps {
     isOpen: boolean;
     onClose: () => void;
     handleToast: (toast: Omit<ToastItem, 'id'>) => void;
+    onPatientCreated?: () => void;
 }
 
-export function NuevoPacienteDialog({ isOpen, onClose, handleToast }: NuevoPacienteDialogProps) {
+export function NuevoPacienteDialog({ isOpen, onClose, handleToast, onPatientCreated }: NuevoPacienteDialogProps) {
     const onSuccess = () => {
         handleToast({message: "Paciente creado exitosamente", variant: "success"});
+        if (onPatientCreated) {
+            onPatientCreated();
+        }
         onClose();
     }
 
@@ -45,6 +49,7 @@ export function NuevoPacienteDialog({ isOpen, onClose, handleToast }: NuevoPacie
                     <PacienteFormWrapper
                         onSuccess={onSuccess}
                         onError={onError}
+                        onCancel={onClose}
                     />
                 </div>
             }
@@ -58,15 +63,17 @@ export function NuevoPacienteDialog({ isOpen, onClose, handleToast }: NuevoPacie
 interface PacienteFormWrapperProps {
     onSuccess: () => void;
     onError: (error: unknown) => void;
+    onCancel: () => void;
 }
 
-function PacienteFormWrapper({ onSuccess, onError }: PacienteFormWrapperProps) {
+function PacienteFormWrapper({ onSuccess, onError, onCancel }: PacienteFormWrapperProps) {
     return (
         <div className="max-w-4xl">
             <PacienteFormForDialog
                 mode="create"
                 onSuccess={onSuccess}
                 onError={onError}
+                onCancel={onCancel}
             />
         </div>
     );
@@ -82,9 +89,10 @@ interface PacienteFormForDialogProps {
     mode: "create" | "edit";
     onSuccess: () => void;
     onError: (error: unknown) => void;
+    onCancel: () => void;
 }
 
-function PacienteFormForDialog({ mode, onSuccess, onError }: PacienteFormForDialogProps) {
+function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteFormForDialogProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -256,7 +264,7 @@ function PacienteFormForDialog({ mode, onSuccess, onError }: PacienteFormForDial
                 type="button"
                 variant="secondary"
                 disabled={isSubmitting}
-                onClick={onSuccess}
+                onClick={onCancel}
                 >
                 Cancelar
                 </Button>
