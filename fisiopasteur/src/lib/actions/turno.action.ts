@@ -613,35 +613,53 @@ export async function verificarDisponibilidadParaActualizacion(
 // 📊 FUNCIONES AUXILIARES
 // =====================================
 
-// Obtener especialistas activos con sus especialidades
+// Obtener especialistas activos con sus especialidades (incluye admins con especialidades)
 export async function obtenerEspecialistas() {
   const supabase = await createClient();
   
   try {
+    // Obtener usuarios que tienen especialidades asignadas en usuario_especialidad
     const { data, error } = await supabase
-      .from("usuario")
+      .from("usuario_especialidad")
       .select(`
         id_usuario,
-        nombre,
-        apellido,
-        color,
-        email,
-        telefono,
         activo,
-        especialidad:id_especialidad(id_especialidad, nombre),
-        usuario_especialidad(
+        usuario:id_usuario(
+          id_usuario,
+          nombre,
+          apellido,
+          color,
+          email,
+          telefono,
+          activo,
           especialidad:id_especialidad(id_especialidad, nombre)
-        )
+        ),
+        especialidad:id_especialidad(id_especialidad, nombre)
       `)
-      .eq("id_rol", 2) // Asumiendo que rol 2 es especialista
-      .order("nombre");
+      .eq("activo", true)
+      .order("usuario(nombre)");
 
     if (error) {
       console.error("Error al obtener especialistas:", error);
       return { success: false, error: error.message };
     }
 
-    return { success: true, data };
+    // Transformar los datos para mantener la estructura esperada
+    const especialistas = data
+      ?.filter(item => item.usuario && item.usuario.activo) // Solo usuarios activos
+      .map(item => ({
+        id_usuario: item.usuario!.id_usuario,
+        nombre: item.usuario!.nombre,
+        apellido: item.usuario!.apellido,
+        color: item.usuario!.color,
+        email: item.usuario!.email,
+        telefono: item.usuario!.telefono,
+        activo: item.usuario!.activo,
+        especialidad: item.especialidad,
+        usuario_especialidad: [{ especialidad: item.especialidad }]
+      })) || [];
+
+    return { success: true, data: especialistas };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };

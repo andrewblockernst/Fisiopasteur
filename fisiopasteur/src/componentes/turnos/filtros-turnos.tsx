@@ -25,14 +25,20 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
 
   useEffect(() => setFilter(initial), [params]);
 
-  // Aplicar filtro automático para especialistas (no admin)
+  // Aplicar filtro automático para especialistas (incluyendo admins que son especialistas)
   useEffect(() => {
-    if (!loading && user && !user.esAdmin) {
+    if (!loading && user) {
       const currentEspecialistaParam = params.get('especialista');
       const verTodosParam = params.get('ver_todos'); // Nuevo parámetro
       
-      // Si no hay filtro de especialista, no hay parámetro ver_todos, y el usuario no es admin, redirigir
-      if (!currentEspecialistaParam && !verTodosParam && user.id_usuario) {
+      // Aplicar filtro automático si:
+      // 1. No es admin, O
+      // 2. Es admin pero también aparece en la lista de especialistas (es especialista activo)
+      const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
+      
+      const debeAplicarFiltro = !user.esAdmin || (user.esAdmin && esEspecialistaActivo);
+      
+      if (debeAplicarFiltro && !currentEspecialistaParam && !verTodosParam && user.id_usuario) {
         const usp = new URLSearchParams(params.toString());
         usp.set('especialista', user.id_usuario);
         
@@ -147,8 +153,12 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     setTipoFiltro("");
     setValorFiltro("");
     
-    // Para usuarios no-admin, agregar parámetro especial para indicar que quieren ver todos
-    if (!user?.esAdmin) {
+    // Determinar si el usuario necesita el parámetro ver_todos
+    const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user?.id_usuario);
+    
+    const necesitaVerTodos = !user?.esAdmin || (user?.esAdmin && esEspecialistaActivo);
+    
+    if (necesitaVerTodos) {
       router.push("/turnos?ver_todos=1");
     } else {
       router.push("/turnos");
@@ -238,8 +248,8 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
 
   return (
     <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
-      {/* Mostrar información del usuario actual si no es admin */}
-      {!user?.esAdmin && user?.nombre && (
+      {/* Mostrar información del usuario actual si tiene filtro de especialista aplicado */}
+      {user?.nombre && filter.especialista_id === user.id_usuario && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center gap-2 text-sm">
             <span className="text-blue-700 font-medium">Viendo turnos de:</span>
