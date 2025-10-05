@@ -6,7 +6,8 @@ import { DayViewModal } from "@/componentes/calendario/dia-vista-dialog";
 import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import { useTurnoStore, type TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
-import { Calendar, Users, Clock, Filter, ArrowLeft, Plus } from "lucide-react";
+import { useAuth } from "@/hooks/usePerfil";
+import { Calendar, Users, Clock, ArrowLeft, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Button from "../boton";
 
@@ -24,6 +25,7 @@ export function CalendarioClient({
   pacientes 
 }: CalendarioClientProps) {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -47,6 +49,21 @@ export function CalendarioClient({
   useEffect(() => {
     setTurnos(turnosIniciales);
   }, [turnosIniciales, setTurnos]);
+
+  // Aplicar filtro automático por especialista al cargar
+  useEffect(() => {
+    if (!authLoading && user && !especialistaFiltro) {
+      // Verificar si el usuario es especialista activo
+      const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
+      
+      // Aplicar filtro si no es admin O si es admin pero también es especialista activo
+      const debeAplicarFiltro = !user.esAdmin || (user.esAdmin && esEspecialistaActivo);
+      
+      if (debeAplicarFiltro && user.id_usuario) {
+        setEspecialistaFiltro(user.id_usuario);
+      }
+    }
+  }, [user, authLoading, especialistas]);
 
   // Handler para volver (mobile)
   const handleBack = () => {

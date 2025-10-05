@@ -406,13 +406,6 @@ export function CalendarioTurnos({
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             {/* MOBILE LAYOUT */}
             <div className="block sm:hidden">
-                {/* Mes actual centrado con navegación */}
-                <div className="flex items-center justify-center py-4 px-4 border-b">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                        {MESES[fechaActual.getMonth()]} {fechaActual.getFullYear()}
-                    </h2>
-                </div>
-                
                 {/* Botón Hoy y Toggle en la misma línea */}
                 <div className="flex items-center justify-center gap-4 py-3 bg-gray-50 border-b">
                     <button
