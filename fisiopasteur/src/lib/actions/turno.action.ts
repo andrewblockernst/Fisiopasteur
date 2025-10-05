@@ -634,7 +634,7 @@ export async function verificarDisponibilidadParaActualizacion(
 // 📊 FUNCIONES AUXILIARES
 // =====================================
 
-// Obtener especialistas activos con sus especialidades (incluye admins con especialidades)
+// Obtener especialistas activos con sus especialidades Y ROL (incluye admins con especialidades)
 export async function obtenerEspecialistas() {
   const supabase = await createClient();
   
@@ -652,7 +652,12 @@ export async function obtenerEspecialistas() {
           color,
           email,
           telefono,
-          activo
+          activo,
+          id_rol,
+          rol:id_rol (
+            id,
+            nombre
+          )
         ),
         especialidad!inner(
           id_especialidad,
@@ -683,6 +688,8 @@ export async function obtenerEspecialistas() {
           email: usuario.email,
           telefono: usuario.telefono,
           activo: usuario.activo,
+          id_rol: usuario.id_rol, 
+          rol: usuario.rol,       
           especialidad: null, // No hay especialidad principal
           usuario_especialidad: []
         });
