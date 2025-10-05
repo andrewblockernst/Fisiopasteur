@@ -246,24 +246,34 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
 
   const filtrosActivos = Object.keys(filter).filter(key => filter[key as keyof typeof filter]).length;
 
+ const getRolEspecialista = (id: string) => {
+  const esp = especialistas?.find((e: any) => e.id_usuario === id);
+  
+  if (!esp) return 'Especialista';
+  return esp.rol?.nombre || 'Especialista';
+};
+
   return (
     <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
-      {/* Mostrar información del usuario actual si tiene filtro de especialista aplicado */}
-      {user?.nombre && filter.especialista_id === user.id_usuario && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-blue-700 font-medium">Viendo turnos de:</span>
-            <span className="text-blue-900 font-semibold">
-              {user.nombre} {user.apellido}
+      {/* REEMPLAZAR completamente la lógica anterior */}
+      {/* Encabezado siempre visible con contexto actual */}
+      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-blue-700 font-medium">Viendo turnos:</span>
+          <span className="text-blue-900 font-semibold">
+            {filter.especialista_id 
+              ? `de ${getNombreEspecialista(filter.especialista_id)}` 
+              : "de todos los especialistas"
+            }
+          </span>
+          {/* Mostrar rol SIEMPRE que haya especialista filtrado */}
+          {filter.especialista_id && (
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
+              {getRolEspecialista(filter.especialista_id)}
             </span>
-            {user.rol && (
-              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
-                {user.rol.nombre}
-              </span>
-            )}
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       <div className="flex justify-between items-center ">
         <div>
