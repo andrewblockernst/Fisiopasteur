@@ -146,10 +146,6 @@ return (
               </button>
             )}
 
-            <div className="dialog-icon-wrapper">
-              {getIcon()}
-            </div>
-
             <h3 className="dialog-title">{title}</h3>
             <div className="dialog-message">{message}</div>
 
@@ -245,25 +241,6 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
 
   .dialog-close-button:hover {
     background-color: ${props => props.$colors.medium}20;
-  }
-
-  .dialog-icon-wrapper {
-    margin-bottom: 1rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: ${props => props.$colors.medium}30;
-    border-radius: 50%;
-    width: 3.5rem;
-    height: 3.5rem;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .dialog-icon {
-    color: ${props => props.$colors.primary};
-    width: 1.8rem;
-    height: 1.8rem;
   }
 
   .dialog-title {
