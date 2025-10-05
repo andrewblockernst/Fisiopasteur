@@ -9,6 +9,7 @@ import type { Tables } from "@/types/database.types";
 import SkeletonLoader from "@/componentes/skeleton-loader";
 import { ArrowLeft, Plus, Search, Filter } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/usePerfil";
 
 type Especialidad = Tables<"especialidad">;
 type Usuario = Tables<"usuario"> & { 
@@ -21,6 +22,7 @@ type Filter = "activos" | "inactivos" | "todos";
 
 export default function EspecialistasPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [showDialog, setShowDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -82,7 +84,7 @@ export default function EspecialistasPage() {
     return true;
   });
 
-  if (loading) {
+  if (loading || authLoading) {
     return <SkeletonLoader/>;
   }
 
@@ -190,16 +192,18 @@ export default function EspecialistasPage() {
               </div>
             </div>
 
-            {/* Lado derecho: Botón Nuevo Especialista */}
-            <div className="flex items-center">
-              <Button 
-                variant="primary"
-                onClick={() => setShowDialog(true)}
-                className="whitespace-nowrap px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow duration-200"
-              >
-                Nuevo Especialista
-              </Button>
-            </div>
+            {/* Lado derecho: Botón Nuevo Especialista - Solo para Admin */}
+            {user?.esAdmin && (
+              <div className="flex items-center">
+                <Button 
+                  variant="primary"
+                  onClick={() => setShowDialog(true)}
+                  className="whitespace-nowrap px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow duration-200"
+                >
+                  Nuevo Especialista
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Contador de resultados */}
