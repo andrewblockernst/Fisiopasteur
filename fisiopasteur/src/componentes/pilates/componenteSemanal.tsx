@@ -2,13 +2,14 @@
 import { useState } from "react";
 import { addDays, format, startOfWeek, isToday, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Eye } from "lucide-react";
 
 interface PilatesCalendarioSemanalProps {
   turnos: any[];
   semanaBase: Date;
   onSemanaChange: (fecha: Date) => void;
   onAgregarTurno: (dia: Date, horario: string) => void;
+  onVerTurno?: (turnos: any[]) => void;
   especialistas: any[];
 }
 
@@ -29,6 +30,7 @@ export default function PilatesCalendarioSemanal({
   semanaBase,
   onSemanaChange,
   onAgregarTurno,
+  onVerTurno,
   especialistas
 }: PilatesCalendarioSemanalProps) {
   const diasSemana = getWeekDays(semanaBase);
@@ -55,15 +57,44 @@ export default function PilatesCalendarioSemanal({
     );
   };
 
+  // Agrupar turnos por especialista
+  const agruparTurnosPorEspecialista = (turnosSlot: any[]) => {
+    const grupos: { [key: string]: any[] } = {};
+    
+    turnosSlot.forEach(turno => {
+      const especialistaId = turno.id_especialista;
+      if (!grupos[especialistaId]) {
+        grupos[especialistaId] = [];
+      }
+      grupos[especialistaId].push(turno);
+    });
+    
+    return grupos;
+  };
+
   // Verificar si un slot está ocupado
   const isSlotOcupado = (dia: Date, horario: string) => {
     const turnosEnSlot = getTurnosParaSlot(dia, horario);
+    const grupos = agruparTurnosPorEspecialista(turnosEnSlot);
+    
+    // Si hay múltiples especialistas, está mal configurado
+    if (Object.keys(grupos).length > 1) {
+      return true;
+    }
+    
     return turnosEnSlot.length >= 4; // Máximo 4 personas por clase
   };
 
   // Obtener el color de fondo según la ocupación
   const getSlotBackgroundColor = (dia: Date, horario: string) => {
     const turnosEnSlot = getTurnosParaSlot(dia, horario);
+    const grupos = agruparTurnosPorEspecialista(turnosEnSlot);
+    
+    // Si hay múltiples especialistas, mostrar error
+    if (Object.keys(grupos).length > 1) {
+      return "bg-red-100 border-red-300";
+    }
+    
     const count = turnosEnSlot.length;
     
     if (count === 0) return "bg-gray-50 hover:bg-gray-100";
@@ -75,26 +106,86 @@ export default function PilatesCalendarioSemanal({
     return "bg-gray-50 hover:bg-gray-100";
   };
 
-  // Renderizar un turno individual
-  const renderTurno = (turno: any) => {
-    const especialista = especialistas.find(e => String(e.id_usuario) === String(turno.id_especialista));
-    const color = especialista?.color || "#e0e7ff";
+  // Renderizar el contenido de un slot con clase
+  const renderClaseContent = (dia: Date, horario: string) => {
+    const turnosEnSlot = getTurnosParaSlot(dia, horario);
+    const grupos = agruparTurnosPorEspecialista(turnosEnSlot);
     
-    return (
-      <div
-        key={turno.id_turno}
-        className="text-xs p-1 rounded mb-1 border border-gray-200"
-        style={{ 
-          backgroundColor: color + "30",
-          borderColor: color
-        }}
-        title={`${turno.paciente?.nombre} ${turno.paciente?.apellido} - ${especialista?.nombre} ${especialista?.apellido}`}
-      >
-        <div className="font-medium truncate">
-          {turno.paciente?.nombre} {turno.paciente?.apellido}
+    if (turnosEnSlot.length === 0) {
+      return null;
+    }
+
+    // Si hay múltiples especialistas (error de configuración)
+    if (Object.keys(grupos).length > 1) {
+      return (
+        <div className="h-full flex flex-col justify-center items-center text-center p-2">
+          <div className="text-xs font-medium text-red-600 mb-1">⚠️ CONFLICTO</div>
+          <div className="text-xs text-red-500 mb-2">Múltiples especialistas</div>
+          <button 
+            onClick={() => onVerTurno?.(turnosEnSlot)}
+            className="text-xs text-red-600 underline hover:text-red-800"
+          >
+            Ver detalles
+          </button>
         </div>
-        <div className="text-gray-600 truncate">
+      );
+    }
+
+    // Clase normal con un especialista
+    const especialistaId = Object.keys(grupos)[0];
+    const turnosEspecialista = grupos[especialistaId];
+    const especialista = especialistas.find(e => String(e.id_usuario) === String(especialistaId));
+    const color = especialista?.color || "#e0e7ff";
+
+    // Calcular espacios disponibles
+    const espaciosDisponibles = 4 - turnosEspecialista.length;
+
+    return (
+      <div 
+        className="h-full w full p-2 rounded-lg cursor-pointer hover:shadow-md transition-all"
+        style={{ 
+          backgroundColor: color + "40",
+          border: `2px solid ${color}`
+        }}
+        onClick={() => onVerTurno?.(turnosEnSlot)}
+      >
+        {/* Horario en la esquina superior derecha */}
+        <div className="text-right mb-1">
+          <span className="text-xs font-medium text-gray-700 bg-white bg-opacity-60 px-1 rounded">
+            {horario}
+          </span>
+        </div>
+
+        {/* Nombre del especialista */}
+        <div className="text-sm font-semibold text-gray-800 mb-2 text-center">
           {especialista?.nombre} {especialista?.apellido}
+        </div>
+
+        {/* Lista de participantes */}
+        <div className="space-y-1 mb-2">
+          {turnosEspecialista.map((turno, index) => (
+            <div key={turno.id_turno} className="flex items-center text-xs text-gray-700">
+              <span className="w-1 h-1 bg-gray-600 rounded-full mr-2 flex-shrink-0"></span>
+              <span className="truncate">
+                {turno.paciente?.nombre} {turno.paciente?.apellido}
+              </span>
+            </div>
+          ))}
+          
+          {/* Mostrar espacios disponibles */}
+          {Array.from({ length: espaciosDisponibles }, (_, index) => (
+            <div key={`disponible-${index}`} className="flex items-center text-xs text-gray-500">
+              <span className="w-1 h-1 bg-gray-400 rounded-full mr-2 flex-shrink-0"></span>
+              <span className="italic">Lugar disponible</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Indicador de capacidad en la parte inferior */}
+        <div className="text-center">
+          <span className="text-xs font-medium text-gray-600 bg-white bg-opacity-60 px-2 py-1 rounded-full">
+            {turnosEspecialista.length}/4
+          </span>
         </div>
       </div>
     );
@@ -138,20 +229,24 @@ export default function PilatesCalendarioSemanal({
           </div>
         </div>
 
-        {/* Leyenda de dificultad */}
+        {/* Leyenda de ocupación */}
         <div className="mt-3 flex items-center gap-4 text-xs">
-          <span className="text-gray-600">Dificultad:</span>
+          <span className="text-gray-600">Ocupación:</span>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-200 rounded"></div>
-            <span>Principiante</span>
+            <span className="text-gray-700">1 participante</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-yellow-200 rounded"></div>
-            <span>Intermedio</span>
+            <span className="text-gray-700">2 participantes</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-orange-200 rounded"></div>
+            <span className="text-gray-700">3 participantes</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-200 rounded"></div>
-            <span>Avanzado</span>
+            <span className="text-gray-700">Completo (4)</span>
           </div>
         </div>
       </div>
@@ -197,39 +292,38 @@ export default function PilatesCalendarioSemanal({
                 const turnosEnSlot = getTurnosParaSlot(dia, horario);
                 const isOcupado = isSlotOcupado(dia, horario);
                 const bgColor = getSlotBackgroundColor(dia, horario);
+                const tieneClase = turnosEnSlot.length > 0;
 
                 return (
                   <div
                     key={`${horario}-${diaIndex}`}
                     className={`
-                      border-b border-l border-gray-200 p-1 min-h-[80px] relative
-                      ${bgColor}
-                      ${!isOcupado ? 'cursor-pointer' : 'cursor-not-allowed'}
+                      border-b border-l border-gray-200 min-h-[120px] relative
+                      ${!tieneClase ? bgColor : ''}
+                      ${!isOcupado && !tieneClase ? 'cursor-pointer' : ''}
                       transition-colors
                     `}
-                    onClick={() => !isOcupado && onAgregarTurno(dia, horario)}
+                    onClick={() => !isOcupado && !tieneClase && onAgregarTurno(dia, horario)}
                   >
-                    {/* Botón de agregar */}
-                    {!isOcupado && (
-                      <div className="absolute top-1 right-1">
-                        <Plus className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                      </div>
+                    {/* Slot vacío */}
+                    {!tieneClase && (
+                      <>
+                        {/* Botón de agregar */}
+                        <div className="absolute top-2 right-2">
+                          <Plus className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+                        </div>
+                        
+                        {/* Contador de participantes */}
+                        <div className="absolute top-2 left-2 text-xs font-medium text-gray-600">
+                          0/4
+                        </div>
+                      </>
                     )}
 
-                    {/* Contador de participantes */}
-                    <div className="absolute top-1 left-1 text-xs text-gray-600">
-                      {turnosEnSlot.length}/4
-                    </div>
-
-                    {/* Lista de turnos */}
-                    <div className="mt-4 space-y-1">
-                      {turnosEnSlot.map(renderTurno)}
-                    </div>
-
-                    {/* Indicador de lleno */}
-                    {isOcupado && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-red-50 bg-opacity-75">
-                        <span className="text-xs font-medium text-red-600">COMPLETO</span>
+                    {/* Slot con clase */}
+                    {tieneClase && (
+                      <div className="h-full p-1">
+                        {renderClaseContent(dia, horario)}
                       </div>
                     )}
                   </div>

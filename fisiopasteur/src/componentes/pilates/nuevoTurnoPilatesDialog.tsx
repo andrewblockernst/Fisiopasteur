@@ -6,7 +6,16 @@ import { crearTurno } from "@/lib/actions/turno.action";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToastStore } from '@/stores/toast-store';
+import { AlertTriangle, Users, Clock, Info } from "lucide-react";
 import Image from "next/image";
+
+interface SlotInfo {
+  disponible: boolean;
+  razon: string;
+  tipo: 'libre' | 'existente' | 'completa';
+  especialistaAsignado?: string;
+  participantes?: number;
+}
 
 interface NuevoTurnoPilatesModalProps {
   isOpen: boolean;
@@ -16,6 +25,8 @@ interface NuevoTurnoPilatesModalProps {
   horaSeleccionada?: string | null;
   especialistas: any[];
   pacientes: any[];
+  slotInfo?: SlotInfo | null;  // ← Nueva prop
+  userRole?: number;           // ← Nueva prop (1 = admin, otros = usuario normal)
 }
 
 export function NuevoTurnoPilatesModal({
@@ -25,7 +36,9 @@ export function NuevoTurnoPilatesModal({
   fechaSeleccionada,
   horaSeleccionada,
   especialistas,
-  pacientes
+  pacientes,
+  slotInfo,
+  userRole = 2
 }: NuevoTurnoPilatesModalProps) {
   const { addToast } = useToastStore();
   
@@ -37,16 +50,26 @@ export function NuevoTurnoPilatesModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Limpiar formulario al abrir/cerrar
+  // ============= INICIALIZAR FORMULARIO SEGÚN EL TIPO DE SLOT =============
   useEffect(() => {
     if (isOpen) {
-      setFormData({
-        especialistaId: '',
-        pacientesSeleccionados: [],
-        observaciones: '',
-      });
+      // Si es una clase existente, preseleccionar el especialista
+      if (slotInfo?.tipo === 'existente' && slotInfo.especialistaAsignado) {
+        setFormData({
+          especialistaId: slotInfo.especialistaAsignado,
+          pacientesSeleccionados: [],
+          observaciones: '',
+        });
+      } else {
+        // Slot libre, limpiar formulario
+        setFormData({
+          especialistaId: '',
+          pacientesSeleccionados: [],
+          observaciones: '',
+        });
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, slotInfo]);
 
   const handlePacienteClick = (pacienteId: number) => {
     setFormData(prev => ({
@@ -69,6 +92,16 @@ export function NuevoTurnoPilatesModal({
       return;
     }
 
+    // ============= VALIDACIÓN DE PERMISOS =============
+    if (slotInfo?.tipo === 'existente' && userRole !== 1 && formData.especialistaId !== slotInfo.especialistaAsignado) {
+      addToast({
+        variant: 'error',
+        message: 'Sin permisos',
+        description: 'Solo los administradores pueden cambiar el especialista de una clase existente.',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
@@ -86,14 +119,18 @@ export function NuevoTurnoPilatesModal({
           estado: "programado",
           observaciones: formData.observaciones || null,
           tipo_plan: "particular"
-          // Removido recordatorios - se manejan por separado
         });
       }
 
+      const esClaseNueva = slotInfo?.tipo === 'libre';
+      const mensaje = esClaseNueva 
+        ? `Se creó nueva clase con ${formData.pacientesSeleccionados.length} participante(s)`
+        : `Se agregaron ${formData.pacientesSeleccionados.length} participante(s) a la clase existente`;
+
       addToast({
         variant: 'success',
-        message: 'Turnos creados',
-        description: `Se crearon ${formData.pacientesSeleccionados.length} turno(s) de Pilates exitosamente`,
+        message: esClaseNueva ? 'Clase creada' : 'Participantes agregados',
+        description: mensaje,
       });
 
       onTurnoCreated?.();
@@ -110,11 +147,59 @@ export function NuevoTurnoPilatesModal({
     }
   };
 
+  // ============= RENDERIZAR INFORMACIÓN DEL SLOT =============
+  const renderSlotInfo = () => {
+    if (!slotInfo) return null;
+
+    const getIconAndColor = () => {
+      switch (slotInfo.tipo) {
+        case 'libre':
+          return { icon: <Clock className="w-4 h-4" />, color: 'bg-green-50 border-green-200 text-green-800' };
+        case 'existente':
+          return { icon: <Users className="w-4 h-4" />, color: 'bg-blue-50 border-blue-200 text-blue-800' };
+        case 'completa':
+          return { icon: <AlertTriangle className="w-4 h-4" />, color: 'bg-red-50 border-red-200 text-red-800' };
+        default:
+          return { icon: <Info className="w-4 h-4" />, color: 'bg-gray-50 border-gray-200 text-gray-800' };
+      }
+    };
+
+    const { icon, color } = getIconAndColor();
+
+    return (
+      <div className={`p-3 rounded-lg border ${color} mb-4`}>
+        <div className="flex items-center gap-2 mb-2">
+          {icon}
+          <span className="font-medium">
+            {slotInfo.tipo === 'libre' && 'Nuevo horario disponible'}
+            {slotInfo.tipo === 'existente' && 'Agregar a clase existente'}
+            {slotInfo.tipo === 'completa' && 'Horario completo'}
+          </span>
+        </div>
+        <p className="text-sm">{slotInfo.razon}</p>
+        {slotInfo.tipo === 'existente' && (
+          <p className="text-xs mt-1">
+            Participantes actuales: {slotInfo.participantes}/4
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  // ============= CALCULAR ESPACIOS DISPONIBLES =============
+  const espaciosDisponibles = slotInfo?.tipo === 'existente' 
+    ? 4 - (slotInfo.participantes || 0)
+    : 4;
+
   return (
     <BaseDialog
       type="custom"
       size="md"
-      title="Agregar Turno de Pilates"
+      title={
+        slotInfo?.tipo === 'existente' 
+          ? "Agregar Participantes a Clase de Pilates"
+          : "Crear Nueva Clase de Pilates"
+      }
       customIcon={
         <Image
           src="/favicon.svg"
@@ -130,12 +215,15 @@ export function NuevoTurnoPilatesModal({
       customColor="#9C1838"
       message={
         <div className="space-y-4 text-left">
-          {/* Información del turno */}
-          <div className="p-3 bg-blue-50 rounded-lg">
+          {/* Información del slot */}
+          {renderSlotInfo()}
+
+          {/* Información básica del turno */}
+          <div className="p-3 bg-gray-50 rounded-lg">
             <p className="text-sm">
-              <strong>Día:</strong> {fechaSeleccionada ? format(fechaSeleccionada, "EEEE dd/MM", { locale: es }) : ""}
+              <span className="font-medium text-gray-700">Día:</span> {fechaSeleccionada ? format(fechaSeleccionada, "EEEE dd/MM", { locale: es }) : ""}
               <br />
-              <strong>Horario:</strong> {horaSeleccionada}
+              <span className="font-medium text-gray-700">Horario:</span> {horaSeleccionada}
             </p>
           </div>
 
@@ -143,11 +231,15 @@ export function NuevoTurnoPilatesModal({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Especialista*
+              {slotInfo?.tipo === 'existente' && userRole !== 1 && (
+                <span className="text-xs text-gray-500 ml-2">(Preseleccionado por clase existente)</span>
+              )}
             </label>
             <select
               value={formData.especialistaId}
               onChange={(e) => setFormData(prev => ({ ...prev, especialistaId: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+              disabled={slotInfo?.tipo === 'existente' && userRole !== 1}
               required
             >
               <option value="">Seleccionar especialista</option>
@@ -157,12 +249,17 @@ export function NuevoTurnoPilatesModal({
                 </option>
               ))}
             </select>
+            {slotInfo?.tipo === 'existente' && userRole !== 1 && (
+              <p className="text-xs text-gray-500 mt-1">
+                Solo los administradores pueden cambiar el especialista de una clase existente.
+              </p>
+            )}
           </div>
 
-          {/* Selección de pacientes (máximo 4) */}
+          {/* Selección de pacientes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Pacientes (máximo 4)*
+              Pacientes (máximo {espaciosDisponibles} disponibles)*
             </label>
             <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-lg">
               {pacientes.map(paciente => (
@@ -176,7 +273,7 @@ export function NuevoTurnoPilatesModal({
                     onChange={() => handlePacienteClick(paciente.id_paciente)}
                     disabled={
                       !formData.pacientesSeleccionados.includes(paciente.id_paciente) &&
-                      formData.pacientesSeleccionados.length >= 4
+                      formData.pacientesSeleccionados.length >= espaciosDisponibles
                     }
                     className="w-4 h-4 text-[#9C1838] focus:ring-[#9C1838] border-gray-300 rounded"
                   />
@@ -187,7 +284,7 @@ export function NuevoTurnoPilatesModal({
               ))}
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Seleccionados: {formData.pacientesSeleccionados.length}/4
+              Seleccionados: {formData.pacientesSeleccionados.length}/{espaciosDisponibles}
             </p>
           </div>
 
@@ -207,7 +304,11 @@ export function NuevoTurnoPilatesModal({
         </div>
       }
       primaryButton={{
-        text: isSubmitting ? "Creando..." : "Crear Turnos",
+        text: isSubmitting 
+          ? "Procesando..." 
+          : slotInfo?.tipo === 'existente' 
+            ? "Agregar Participantes" 
+            : "Crear Clase",
         onClick: handleSubmit,
         disabled: isSubmitting,
       }}
