@@ -21,17 +21,17 @@ interface TurnoData {
 }
 
 // Flow de bienvenida general  
-const welcomeFlow = addKeyword<Provider, Database>(['hola', 'hi', 'hello', 'buenos dias', 'buenas tardes', 'buenas noches', 'buenas', 'como te va', 'que tal', 'saludos', 'buen dia'])
+const welcomeFlow = addKeyword<Provider, Database>(['hola', 'hi', 'hello', 'buenos dias', 'buenas tardes', 'buenas noches', 'buenas', 'como te va', 'que tal', 'saludos', 'buen dia', 'saludos', 'que onda'])
     .addAnswer('👋 ¡Hola! Bienvenido/a a *Fisiopasteur*')
     .addAnswer([
-        '😊 Estoy aquí para asistirte con información sobre tus turnos.',
+        '💪 Estoy acá para asistirte con información sobre tus turnos.',
         '',
-        'Podés consultar:',
+        'Podés consultar esribiendo:',
         '• *Próximo turno* - Ver tu próximo turno',
         '• *Especialista* - Información de tu especialista',
         '• *Info* - Información del centro'
     ])
-    .addAnswer('📌 *Importante:* Este es un medio de comunicación automático. Para gestiones administrativas (agendar, cancelar o reprogramar turnos), por favor comunicate directamente al *+54 9 3435 03-4865*.')
+    .addAnswer('📌 *Importante:* Este es un medio de comunicación automático. Para gestiones administrativas (agendar, cancelar o reprogramar turnos) u otro tipos de consultas particulares, por favor comunicate con tu especialista o directamente al *+54 9 3435 03-4865*.')
 
 // Flow para consultar próximo turno
 const proximoTurnoFlow = addKeyword<Provider, Database>([
@@ -41,7 +41,12 @@ const proximoTurnoFlow = addKeyword<Provider, Database>([
     'cuando es mi turno',
     'turno',
     'consultar turno',
-    'ver turno'
+    'ver turno',
+    'cual es mi turno',
+    'cuando tengo turno',
+    'cuando',
+    'cuando es mi proximo turno',
+    'cual es mi proximo turno',
 ])
     .addAnswer('🔍 Consultando tu próximo turno...')
     .addAction(async (ctx, { flowDynamic }) => {
@@ -55,13 +60,13 @@ const proximoTurnoFlow = addKeyword<Provider, Database>([
             const resultado = await response.json();
             
             if (!resultado.success) {
-                await flowDynamic('😔 Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
+                await flowDynamic('😵‍💫 Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
                 return;
             }
             
             if (!resultado.hasTurno) {
                 await flowDynamic([
-                    '📅 No tenés turnos próximos programados en este momento.',
+                    'ℹ️ No tenés turnos próximos programados en este momento.',
                     '',
                     '💡 Para agendar un turno, comunicate al:',
                     '📞 *+54 9 3435 03-4865*'
@@ -87,7 +92,7 @@ const proximoTurnoFlow = addKeyword<Provider, Database>([
             
         } catch (error) {
             console.error('❌ Error consultando próximo turno:', error);
-            await flowDynamic('？ Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
+            await flowDynamic('😵‍💫 Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
         }
     })
 
@@ -98,7 +103,13 @@ const contactoEspecialistaFlow = addKeyword<Provider, Database>([
     'telefono especialista',
     'teléfono especialista',
     'contacto profesional',
-    'hablar con especialista'
+    'hablar con especialista',
+    'con quien tengo turno',
+    'hablar con especialista',
+    'con quien tengo el proximo turno',
+    'con quien tengo el turno',
+    'con quien me atiendo',
+    'quien me atiende',
 ])
     .addAnswer('🔍 Consultando información de tu especialista...')
     .addAction(async (ctx, { flowDynamic }) => {
@@ -106,21 +117,21 @@ const contactoEspecialistaFlow = addKeyword<Provider, Database>([
             const telefono = ctx.from;
             const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app';
             
-            console.log(`� Consultando especialista del próximo turno para: ${telefono}`);
+            console.log(`🔍 Consultando especialista del próximo turno para: ${telefono}`);
             
             const response = await fetch(`${FISIOPASTEUR_URL}/api/paciente/proximo-turno?telefono=${telefono}`);
             const resultado = await response.json();
             
             if (!resultado.success) {
-                await flowDynamic('� Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
+                await flowDynamic('﹖ Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
                 return;
             }
             
             if (!resultado.hasTurno) {
                 await flowDynamic([
-                    '� No tenés turnos próximos programados en este momento.',
+                    'ℹ️ No tenés turnos programados en este momento.',
                     '',
-                    '� Para agendar un turno, comunicate al:',
+                    'Para agendar un turno, comunicate al:',
                     '📞 *+54 9 3435 03-4865*'
                 ].join('\n'));
                 return;
@@ -140,13 +151,11 @@ const contactoEspecialistaFlow = addKeyword<Provider, Database>([
             const fechaFormateada = `${diaSemana} ${day} de ${nombreMes}`;
             
             const mensaje = [
-                `👨‍⚕️ *Tu próximo turno es con:*`,
-                `${especialista.nombre} ${especialista.apellido}`,
+                `📋 *Tu próximo turno es con:*`, `${especialista.nombre} ${especialista.apellido}`,
                 '',
-                `📅 ${fechaFormateada} a las ${turno.hora.substring(0, 5)}`,
-                `🏥 ${turno.especialidad.nombre}`,
+                `El día ${fechaFormateada} a las ${turno.hora.substring(0, 5)} hs.`,
                 '',
-                '📌 Para consultas sobre tu tratamiento o turno, comunicate al *+54 9 3435 03-4865*.',
+                '📌 Para consultas sobre tu tratamiento o turno, comunicate directamente con tu especialista.',
                 '',
                 '¡Te deseamos una pronta recuperación! 💪'
             ].join('\n');
@@ -160,30 +169,30 @@ const contactoEspecialistaFlow = addKeyword<Provider, Database>([
     })
 
 // Flow de información del centro
-const infoFlow = addKeyword<Provider, Database>(['info', 'información', 'informacion', 'direccion', 'dirección', 'horarios', 'centro', 'donde', 'ubicacion', 'ubicación', 'telefono', 'teléfono'])
+const infoFlow = addKeyword<Provider, Database>(['info', 'información', 'informacion', 'direccion', 'dirección', 'horarios', 'centro', 'donde', 'ubicacion', 'ubicación', 'telefono', 'teléfono', 'contacto', 'ayuda', 'help'])
     .addAnswer([
-        '🏥 *Información de Fisiopasteur*',
-        '',
-        '📍 *Dirección:* Pasteur 206, Libertador San Martín, Entre Ríos',
-        '🚗 Frente a la plaza principal',
+        '📍 *Dirección:* Pasteur 206, Libertador San Martín, Entre Ríos.',
+        '🚗 Frente a Centro Vida Sana ó al lado del Pasaje Juan de Garay.',
         '',
         '👤 *Contacto:* +54 9 3435 03-4865',
-        '🕐 *Horarios:* Lun a Vie 8:00 - 20:00, Sáb 8:00 - 14:00',
+        '🕐 *Horarios:* Lun a Vie 8:00 - 20:00',
+        '🤸 *Pilates: Lun a Vie 8:00 - 12:00 y 15:30 - 22:30 *',
         '',
-        '😊 ¡Te esperamos!'
+        '💪 ¡Te esperamos!'
     ].join('\n'))
 
 // Flow para casos no entendidos
 const fallbackFlow = addKeyword<Provider, Database>(utils.setEvent('FALLBACK'))
     .addAnswer([
-        '😊 Hola, soy el asistente virtual de Fisiopasteur.',
+        '😅 Disculpame, no pude comprender lo que necesitas.',
+        '',
+        'Recordá que este es un medio de comunicación para informar.',
+        'Cualquier consulta hacela con tu especialista, o si no tenés uno, comunicate directamente al *+54 9 3435 03-4865*.',
         '',
         'Podés escribir:',
         '• *próximo turno* - Para ver tu próximo turno',
         '• *especialista* - Para información de tu especialista',
-        '• *info* - Para información del centro',
-        '',
-        '📌 Para agendar, cancelar o reprogramar turnos, comunicate con al *+54 9 3435 03-4865*'
+        '• *info* - Para información del centro'
     ].join('\n'))
 
 // Función auxiliar para formatear mensajes de turno
@@ -194,40 +203,28 @@ const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recorda
     const mensajeBase = [
         `${emoji} *${titulo}*`,
         '',
-        `👤 *Paciente:* ${turno.pacienteNombre} ${turno.pacienteApellido}`,
-        `📅 *Fecha:* ${turno.fecha}`,
-        `🕐 *Hora:* ${turno.hora}`,
-        `�‍⚕️ *Profesional:* ${turno.profesional}`,
-        `🏥 *Especialidad:* ${turno.especialidad}`,
-        turno.centroMedico ? `🏢 *Centro:* ${turno.centroMedico}` : '',
+        '',
+        `Paciente: ${turno.pacienteNombre} ${turno.pacienteApellido}`,
+        `Fecha: ${turno.fecha}`,
+        `Hora: ${turno.hora}`,
+        `Profesional: ${turno.profesional}`,
+        `Especialidad: ${turno.especialidad}`,
         ''
     ].filter(line => line !== '');
     
-    const mensajeFinal = tipo === 'confirmacion' ? 
-        [
-            ...mensajeBase,
-            '📌 *Recordá:*',
-            '• Llegá 10 minutos antes',
-            '• Traé ropa cómoda',
-            '',
-            '📍 Pasteur 206, Libertador San Martín',
-            '📞 Consultas: +54 9 3435 03-4865',
-            '',
-            '😊 ¡Te esperamos!'
-        ] :
-        [
-            ...mensajeBase,
-            '⚠️ *Tu turno es en las próximas horas*',
-            '',
-            '📌 Recordá:',
-            '• Llegá 10 minutos antes',
-            '• Traé ropa cómoda',
-            '',
-            '� Si necesitás reprogramar, comunicate al +54 9 3435 03-4865',
-            '',
-            '😊 ¡Te esperamos!'
-        ];
-    
+    const mensajeFinal = [
+        ...mensajeBase,
+        '',
+        '✔️ *Recomendaciones para tu turno:*',
+        '• Llegá 10 minutos antes',
+        '• Traé ropa cómoda',
+        '',
+        '📍 Pasteur 206, Libertador San Martín',
+        'Ante cualquier consulta, comuniquese directamente con su especialista.',
+        '',
+        '💪 ¡Te esperamos!'
+    ];
+
     return mensajeFinal.join('\n');
 }
 
