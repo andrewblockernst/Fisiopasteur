@@ -92,6 +92,9 @@ export async function obtenerTurnos(filtros?: {
 }
 
 // Obtener turnos con filtros avanzados (para la página principal)
+// ...existing code...
+
+// Obtener turnos con filtros avanzados (para la página principal)
 export async function obtenerTurnosConFiltros(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
@@ -104,6 +107,8 @@ export async function obtenerTurnosConFiltros(filtros?: {
   const supabase = await createClient();
   
   try {
+    console.log('🔍 Filtros recibidos en obtenerTurnosConFiltros:', filtros);
+    
     let query = supabase
       .from("turno")
       .select(`
@@ -125,19 +130,23 @@ export async function obtenerTurnosConFiltros(filtros?: {
     // Aplicar filtros de rango de fechas
     if (filtros?.fecha_desde) {
       query = query.gte("fecha", filtros.fecha_desde);
+      console.log('📅 Filtro fecha_desde aplicado:', filtros.fecha_desde);
     }
     if (filtros?.fecha_hasta) {
       query = query.lte("fecha", filtros.fecha_hasta);
+      console.log('📅 Filtro fecha_hasta aplicado:', filtros.fecha_hasta);
     }
     
     // Filtro por especialista específico
     if (typeof filtros?.especialista_id === "string") {
       query = query.eq("id_especialista", filtros.especialista_id);
+      console.log('👨‍⚕️ Filtro especialista aplicado:', filtros.especialista_id);
     }
     
     // Filtro por especialidad del turno
     if (filtros?.especialidad_id) {
       query = query.eq("id_especialidad", filtros.especialidad_id);
+      console.log('🏥 Filtro especialidad aplicado:', filtros.especialidad_id);
     }
     
     // Filtros de horario
@@ -160,12 +169,19 @@ export async function obtenerTurnosConFiltros(filtros?: {
       return { success: false, error: error.message };
     }
 
+    console.log('📊 Turnos encontrados en BD:', data?.length || 0);
+    if (filtros?.especialidad_id === 4) {
+      console.log('🧘‍♀️ Turnos de Pilates específicos:', data);
+    }
+
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };
   }
 }
+
+// ...existing code...
 
 // =====================================
 // ✏️ CRUD DE TURNOS
