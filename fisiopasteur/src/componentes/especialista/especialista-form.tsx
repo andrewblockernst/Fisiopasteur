@@ -35,7 +35,6 @@ export default function EspecialistaForm({
     if (!formData.get("nombre")) newErrors.nombre = "El nombre es requerido";
     if (!formData.get("apellido")) newErrors.apellido = "El apellido es requerido";
     if (!formData.get("email")) newErrors.email = "El email es requerido";
-    if (!formData.get("usuario")) newErrors.usuario = "El usuario es requerido";
     
     // Solo validar contraseña en modo crear o si se proporciona en editar
     if (mode === "create" && !formData.get("contraseña")) {

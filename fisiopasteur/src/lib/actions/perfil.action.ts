@@ -151,23 +151,16 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
 
       if (existeUsuarioPorEmail && existeUsuarioPorEmail.length > 0) {
         // El usuario existe con el mismo email pero diferente id_usuario
-        // Actualizar el id_usuario para vincularlo con Auth
-        
-        const { data: usuarioActualizado, error: updateError } = await supabase
-          .from('usuario')
-          .update({ 
-            id_usuario: user.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('email', user.email || '')
-          .select()
-          .single();
+        // NO podemos cambiar el id_usuario porque puede tener turnos asociados
+        // En su lugar, registramos el conflicto y continuamos con el usuario existente
+        console.warn('⚠️ Usuario encontrado por email pero con ID diferente. Usando usuario existente:', {
+          authId: user.id,
+          dbId: existeUsuarioPorEmail[0].id_usuario,
+          email: user.email
+        });
 
-        if (updateError) {
-          console.error('❌ Error actualizando usuario:', updateError);
-          throw new Error(`Error vinculando usuario: ${updateError.message}`);
-        }
-
+        // No intentar actualizar el id_usuario, usar el usuario existente
+        // El perfil se cargará usando el ID de Auth (que puede no coincidir)
       } else {
         // No existe el usuario, crear uno nuevo
         
@@ -196,7 +189,11 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
     }
 
     // 2. Obtener datos del usuario con joins
-    const { data: userData, error: userError } = await supabase
+    // Primero intentar por ID de Auth
+    let userData = null;
+    let userError = null;
+
+    const { data: userById, error: errorById } = await supabase
       .from('usuario')
       .select(`
         id_usuario,
@@ -218,8 +215,47 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       .eq('id_usuario', user.id)
       .single();
 
+    if (userById && !errorById) {
+      // Usuario encontrado por ID de Auth
+      userData = userById;
+    } else {
+      // No encontrado por ID, buscar por email
+      const { data: userByEmail, error: errorByEmail } = await supabase
+        .from('usuario')
+        .select(`
+          id_usuario,
+          nombre,
+          apellido,
+          email,
+          telefono,
+          color,
+          rol:id_rol (
+            id,
+            nombre,
+            jerarquia
+          ),
+          especialidad:id_especialidad (
+            id_especialidad,
+            nombre
+          )
+        `)
+        .eq('email', user.email || '')
+        .single();
 
-    if (userError) {
+      if (userByEmail && !errorByEmail) {
+        // Usuario encontrado por email
+        userData = userByEmail;
+        console.log('Usuario encontrado por email, usando perfil existente:', {
+          authId: user.id,
+          dbId: userByEmail.id_usuario,
+          email: user.email
+        });
+      } else {
+        userError = errorById || errorByEmail;
+      }
+    }
+
+    if (userError && !userData) {
       console.error('Error consultando usuario:', userError);
       throw new Error(`No se pudo obtener el perfil: ${userError.message}`);
     }
@@ -237,7 +273,7 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
           nombre
         )
       `)
-      .eq('id_usuario', user.id);
+      .eq('id_usuario', userData.id_usuario); // Usar el ID del usuario encontrado
 
     // 4. Construir perfil completo
     const especialidadesAdicionales = especialidadesError 
@@ -280,10 +316,10 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
 export async function actualizarPerfil(formData: FormData) {
   try {
     const supabase = await createClient();
-    
+
     // Verificar autenticación
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       throw new Error('No autenticado');
     }
@@ -294,7 +330,29 @@ export async function actualizarPerfil(formData: FormData) {
     const telefono = formData.get('telefono') as string;
     const color = formData.get('color') as string;
 
-    // Actualizar usuario
+    // Buscar el usuario en la DB (primero por ID de Auth, luego por email)
+    let usuarioId = user.id;
+
+    const { data: userById } = await supabase
+      .from('usuario')
+      .select('id_usuario')
+      .eq('id_usuario', user.id)
+      .single();
+
+    if (!userById) {
+      // No encontrado por ID, buscar por email
+      const { data: userByEmail } = await supabase
+        .from('usuario')
+        .select('id_usuario')
+        .eq('email', user.email || '')
+        .single();
+
+      if (userByEmail) {
+        usuarioId = userByEmail.id_usuario;
+      }
+    }
+
+    // Actualizar usuario usando el ID correcto
     const { error: updateError } = await supabase
       .from('usuario')
       .update({
@@ -304,7 +362,7 @@ export async function actualizarPerfil(formData: FormData) {
         color: color || null,
         updated_at: new Date().toISOString()
       })
-      .eq('id_usuario', user.id);
+      .eq('id_usuario', usuarioId);
 
     if (updateError) {
       throw new Error(`Error al actualizar: ${updateError.message}`);
@@ -314,9 +372,9 @@ export async function actualizarPerfil(formData: FormData) {
 
   } catch (error) {
     console.error('Error en actualizarPerfil:', error);
-    return { 
-      success: false, 
-      message: error instanceof Error ? error.message : 'Error desconocido' 
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Error desconocido'
     };
   }
 }
