@@ -9,7 +9,7 @@
     "start:prod": "node ./dist/app.js",
     "lint": "eslint . --no-ignore",
     "dev": "npm run lint && nodemon ./src/app.ts",
-    "build": "npx rollup -c"
+    "build:rollup": "npx rollup -c"
   },
   "keywords": [],
   "dependencies": {
