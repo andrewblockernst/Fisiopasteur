@@ -230,10 +230,25 @@ export default function PilatesPage() {
   };
 
   // ============= HANDLER PARA REFRESCAR DATOS DESPUÉS DE CAMBIOS =============
-  const handleTurnoCreated = () => {
-    console.log('🔄 Recargando turnos después de cambios...');
-    cargarTurnos();
-  };
+  const handleTurnoCreated = async () => {
+  console.log('🔄 Recargando turnos después de cambios...');
+  
+  try {
+    // Esperar un poco más para asegurar que la BD esté actualizada
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    await cargarTurnos();
+    
+    console.log('✅ Turnos recargados exitosamente');
+  } catch (error) {
+    console.error('❌ Error recargando turnos:', error);
+    addToast({
+      variant: 'error',
+      message: 'Error actualizando datos',
+      description: 'No se pudieron recargar los turnos automáticamente. Recarga la página.',
+    });
+  }
+};
 
   // ============= OBTENER INFORMACIÓN DE SLOT PARA PASAR AL MODAL =============
   const getSlotInfo = (): SlotInfo | null => {
@@ -283,12 +298,15 @@ export default function PilatesPage() {
       {/* ============= MODAL PARA VER/EDITAR DETALLES DE CLASES EXISTENTES ============= */}
       <DetalleClaseModal
         isOpen={showDetalleDialog}
-        onClose={handleCloseDetalleDialog}
-        onTurnosActualizados={handleTurnoCreated}
+        onClose={() => setShowDetalleDialog(false)}
+        onTurnosActualizados={async () => {
+          console.log('🔄 Recargando datos de la página principal...');
+          await cargarTurnos(); // ← Hacer esta función async si no lo es
+        }}
         turnos={turnosSeleccionados}
         especialistas={especialistas}
         pacientes={pacientes}
-        userRole={userRole} // ← Pasar rol para determinar qué puede editar
+        userRole={userRole}
       />
     </div>
   );

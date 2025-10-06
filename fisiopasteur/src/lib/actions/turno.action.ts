@@ -92,9 +92,6 @@ export async function obtenerTurnos(filtros?: {
 }
 
 // Obtener turnos con filtros avanzados (para la página principal)
-// ...existing code...
-
-// Obtener turnos con filtros avanzados (para la página principal)
 export async function obtenerTurnosConFiltros(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
@@ -181,8 +178,6 @@ export async function obtenerTurnosConFiltros(filtros?: {
   }
 }
 
-// ...existing code...
-
 // =====================================
 // ✏️ CRUD DE TURNOS
 // =====================================
@@ -192,20 +187,29 @@ export async function crearTurno(datos: TurnoInsert) {
   const supabase = await createClient();
   
   try {
-    // Primero verificar disponibilidad
+    // ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
     if (datos.fecha && datos.hora && datos.id_especialista) {
       const disponibilidad = await verificarDisponibilidad(
         datos.fecha,
         datos.hora,
         datos.id_especialista,
-        datos.id_box || undefined
+        datos.id_box || undefined,
+        datos.id_especialidad ?? undefined // ← PASAR LA ESPECIALIDAD
       );
       
       if (!disponibilidad.success || !disponibilidad.disponible) {
-        return { 
-          success: false, 
-          error: `Horario no disponible. Conflictos: ${disponibilidad.conflictos || 0}` 
-        };
+        // Mensaje más específico para Pilates
+        if (datos.id_especialidad === 4) {
+          return { 
+            success: false, 
+            error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4` 
+          };
+        } else {
+          return { 
+            success: false, 
+            error: `Horario no disponible. Conflictos: ${disponibilidad.conflictos || 0}` 
+          };
+        }
       }
     }
 
@@ -232,6 +236,9 @@ export async function crearTurno(datos: TurnoInsert) {
       console.error("Error al crear turno:", error);
       return { success: false, error: error.message };
     }
+
+    console.log("✅ Turno creado exitosamente:", data.id_turno);
+    
 
     // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
     try {
@@ -358,6 +365,7 @@ export async function crearTurno(datos: TurnoInsert) {
     }
 
     revalidatePath("/turnos");
+    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
@@ -373,7 +381,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
     if (datos.fecha || datos.hora || datos.id_especialista || datos.id_box !== undefined) {
       const turnoActual = await supabase
         .from("turno")
-        .select("fecha, hora, id_especialista, id_box")
+        .select("fecha, hora, id_especialista, id_box, id_especialidad")
         .eq("id_turno", id)
         .single();
 
@@ -382,6 +390,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
         const nuevaHora = datos.hora || turnoActual.data.hora;
         const nuevoEspecialista = datos.id_especialista || turnoActual.data.id_especialista;
         const nuevoBox = datos.id_box !== undefined ? datos.id_box : turnoActual.data.id_box;
+        const especialidadId = turnoActual.data.id_especialidad;
 
         // Solo verificar si cambió algo relevante Y si tenemos especialista
         const cambioRelevante = 
@@ -397,14 +406,23 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
             nuevaHora,
             nuevoEspecialista,
             nuevoBox,
-            id // excluir el turno actual de la verificación
+            id, // excluir el turno actual de la verificación
+            especialidadId ?? undefined // ← PASAR LA ESPECIALIDAD
           );
           
           if (!disponibilidad.success || !disponibilidad.disponible) {
-            return { 
-              success: false, 
-              error: `Horario no disponible. Conflictos: ${disponibilidad.conflictos || 0}` 
-            };
+            // Mensaje específico para Pilates
+            if (especialidadId === 4) {
+              return { 
+                success: false, 
+                error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4` 
+              };
+            } else {
+              return { 
+                success: false, 
+                error: `Horario no disponible. Conflictos: ${disponibilidad.conflictos || 0}` 
+              };
+            }
           }
         }
       }
@@ -432,6 +450,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
     }
 
     revalidatePath("/turnos");
+    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
@@ -467,6 +486,7 @@ export async function eliminarTurno(id: number) {
     }
 
     revalidatePath("/turnos");
+    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
     return { success: true };
   } catch (error) {
     console.error("Error inesperado:", error);
@@ -490,6 +510,7 @@ export async function cancelarTurno(id: number, motivo?: string) {
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/turnos");
+    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
     return { success: true, data };
   } catch {
     return { success: false, error: "Error inesperado" };
@@ -511,6 +532,7 @@ export async function marcarComoAtendido(id_turno: number) {
     if (error) throw error;
 
     revalidatePath('/turnos');
+    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
     return { success: true };
   } catch (error) {
     console.error('Error al marcar turno como atendido:', error);
@@ -562,21 +584,22 @@ export async function obtenerAgendaEspecialista(
 // ✅ FUNCIONES DE DISPONIBILIDAD
 // =====================================
 
-// Verificar disponibilidad de horario (para nuevos turnos)
+// ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
 export async function verificarDisponibilidad(
   fecha: string,
   hora: string,
   especialista_id?: string,
-  box_id?: number
+  box_id?: number,
+  especialidad_id?: number // ← NUEVO PARÁMETRO
 ) {
   const supabase = await createClient();
   try {
     let query = supabase
       .from("turno")
-      .select("id_turno, estado, hora")
+      .select("id_turno, estado, hora, id_especialidad")
       .eq("fecha", fecha)
       .eq("id_especialista", especialista_id!)
-      .eq("hora", hora) // <-- SOLO la hora exacta
+      .eq("hora", hora)
       .neq("estado", "cancelado");
 
     if (box_id) {
@@ -589,6 +612,25 @@ export async function verificarDisponibilidad(
       return { success: false, error: error.message };
     }
 
+    // ============= LÓGICA ESPECIAL PARA PILATES =============
+    if (especialidad_id === 4) { // Si es Pilates
+      console.log(`🧘‍♀️ Verificando disponibilidad Pilates: ${data.length} participantes actuales`);
+      
+      // En Pilates se permiten hasta 4 participantes por clase
+      const pilatesTurnos = data.filter(t => t.id_especialidad === 4);
+      const disponible = pilatesTurnos.length < 4;
+      
+      console.log(`🧘‍♀️ Pilates - Participantes: ${pilatesTurnos.length}/4, Disponible: ${disponible}`);
+      
+      return { 
+        success: true, 
+        disponible,
+        conflictos: disponible ? 0 : pilatesTurnos.length,
+        participantes_actuales: pilatesTurnos.length
+      };
+    }
+
+    // ============= LÓGICA NORMAL PARA OTRAS ESPECIALIDADES =============
     return { 
       success: true, 
       disponible: data.length === 0,
@@ -600,29 +642,26 @@ export async function verificarDisponibilidad(
   }
 }
 
-// Verificar disponibilidad excluyendo un turno específico (para actualizaciones)
+// ============= VERIFICAR DISPONIBILIDAD PARA ACTUALIZACIÓN CON LÓGICA PILATES =============
 export async function verificarDisponibilidadParaActualizacion(
   fecha: string,
   hora: string,
   especialista_id: string,
   box_id: number | null | undefined,
-  turno_excluir: number
+  turno_excluir: number,
+  especialidad_id?: number // ← NUEVO PARÁMETRO
 ) {
   const supabase = await createClient();
   
   try {
-    // Calcular hora final (hora + 1)
-    const [h, m] = hora.split(":");
-    const horaFin = `${String(Number(h) + 1).padStart(2, "0")}:${m}`;
     let query = supabase
       .from("turno")
-      .select("id_turno")
+      .select("id_turno, id_especialidad")
       .eq("fecha", fecha)
       .eq("id_especialista", especialista_id)
       .neq("estado", "cancelado")
       .neq("id_turno", turno_excluir)
-      .gte("hora", hora)
-      .lt("hora", horaFin);
+      .eq("hora", hora); // Solo la hora exacta para Pilates
 
     if (box_id !== null && box_id !== undefined) {
       query = query.eq("id_box", box_id);
@@ -635,6 +674,20 @@ export async function verificarDisponibilidadParaActualizacion(
       return { success: false, error: error.message };
     }
 
+    // ============= LÓGICA ESPECIAL PARA PILATES =============
+    if (especialidad_id === 4) {
+      const pilatesTurnos = data.filter(t => t.id_especialidad === 4);
+      const disponible = pilatesTurnos.length < 4;
+      
+      return { 
+        success: true, 
+        disponible,
+        conflictos: disponible ? 0 : pilatesTurnos.length,
+        participantes_actuales: pilatesTurnos.length
+      };
+    }
+
+    // ============= LÓGICA NORMAL =============
     return { 
       success: true, 
       disponible: data.length === 0,
@@ -885,6 +938,9 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
         porEstado,
         porEspecialista,
         periodo: { fecha_desde, fecha_hasta }
+
+
+        
       }
     };
   } catch (error) {
