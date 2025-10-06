@@ -6,13 +6,13 @@ import { eliminarTurno, crearTurno, actualizarTurno } from "@/lib/actions/turno.
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToastStore } from '@/stores/toast-store';
-import { Users, Clock, Calendar, User, AlertTriangle, Trash2, UserPlus, Settings } from "lucide-react";
+import { Users, Clock, Calendar, User, AlertTriangle, Trash2, UserPlus, Settings, Plus } from "lucide-react";
 import Image from "next/image";
 
 interface DetalleClaseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onTurnosActualizados?: () => void;
+  onTurnosActualizados?: () => Promise<void> | void;
   turnos: any[];
   especialistas: any[];
   pacientes: any[];
@@ -23,21 +23,30 @@ export function DetalleClaseModal({
   isOpen,
   onClose,
   onTurnosActualizados,
-  turnos,
+  turnos: turnosIniciales,
   especialistas,
   pacientes,
   userRole = 2
 }: DetalleClaseModalProps) {
   const { addToast } = useToastStore();
   
+  // ============= ESTADO INTERNO PARA LOS TURNOS =============
+  const [turnos, setTurnos] = useState(turnosIniciales);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [modoResolucionConflicto, setModoResolucionConflicto] = useState(false);
+  const [modoAgregarRapido, setModoAgregarRapido] = useState(false);
   const [especialistaSeleccionado, setEspecialistaSeleccionado] = useState('');
   const [pacientesSeleccionados, setPacientesSeleccionados] = useState<number[]>([]);
+  const [pacienteRapido, setPacienteRapido] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mostrarConfirmacionEliminar, setMostrarConfirmacionEliminar] = useState(false);
 
-  // Obtener información de la clase
+  // ============= SINCRONIZAR CON PROPS CUANDO CAMBIAN =============
+  useEffect(() => {
+    setTurnos(turnosIniciales);
+  }, [turnosIniciales]);
+
+  // Obtener información de la clase (usar estado interno)
   const primeraClase = turnos[0];
   const fechaClase = primeraClase?.fecha;
   const horaClase = primeraClase?.hora?.substring(0, 5);
@@ -56,6 +65,50 @@ export function DetalleClaseModal({
     return acc;
   }, {});
 
+  // ============= FUNCIÓN PARA RECARGAR DATOS INTERNOS =============
+  const recargarDatosModal = async () => {
+    try {
+      if (!turnos.length) return;
+      
+      const primeraClase = turnos[0];
+      const fechaClase = primeraClase?.fecha;
+      const horaClase = primeraClase?.hora?.slice(0, 5);
+      
+      console.log('🔄 Recargando datos del modal para:', { fechaClase, horaClase });
+      
+      // Importar la función para obtener turnos
+      const { obtenerTurnosConFiltros } = await import("@/lib/actions/turno.action");
+      
+      const resultado = await obtenerTurnosConFiltros({
+        fecha_desde: fechaClase,
+        fecha_hasta: fechaClase,
+        especialidad_id: 4, // Pilates
+        hora_desde: horaClase,
+        hora_hasta: horaClase
+      });
+      
+      if (resultado.success && resultado.data) {
+        // Filtrar solo los turnos de esta clase específica
+        const turnosClase = resultado.data.filter(turno => 
+          turno.fecha === fechaClase && 
+          turno.hora?.slice(0, 5) === horaClase &&
+          turno.id_especialista === primeraClase.id_especialista
+        );
+        
+        console.log('✅ Datos recargados del modal:', turnosClase.length, 'participantes');
+        setTurnos(turnosClase);
+        
+        return turnosClase;
+      } else {
+        console.error('❌ Error recargando datos del modal:', resultado.error);
+      }
+    } catch (error) {
+      console.error('❌ Error inesperado recargando datos del modal:', error);
+    }
+    
+    return turnos; // Fallback a los datos actuales
+  };
+
   // Inicializar valores cuando se abre el modal
   useEffect(() => {
     if (isOpen && turnos.length > 0) {
@@ -69,10 +122,12 @@ export function DetalleClaseModal({
         setModoEdicion(false);
         setModoResolucionConflicto(false);
       }
+      setModoAgregarRapido(false);
+      setPacienteRapido('');
     }
   }, [isOpen, turnos, hayConflicto]);
 
-  // ============= RESOLVER CONFLICTO (FUNCIÓN CORREGIDA) =============
+  // ============= RESOLVER CONFLICTO =============
   const handleResolverConflicto = async () => {
     if (!especialistaSeleccionado) {
       addToast({
@@ -115,20 +170,19 @@ export function DetalleClaseModal({
 
       setModoResolucionConflicto(false);
       
-      // ============= AQUÍ ESTÁ LA CORRECCIÓN: ESPERAR A QUE SE RECARGUEN LOS DATOS =============
-      console.log('🔄 Recargando datos del calendario...');
+      // ============= RECARGAR DATOS =============
+      console.log('🔄 Recargando datos después de resolver conflicto...');
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await recargarDatosModal();
       
       if (onTurnosActualizados) {
-        // Si onTurnosActualizados es asíncrona, esperarla
         await Promise.resolve(onTurnosActualizados());
       }
       
-      console.log('✅ Datos recargados, cerrando modal...');
-      
-      // Pequeño delay para asegurar que la UI se actualice
       setTimeout(() => {
         onClose();
-      }, 500);
+      }, 1000);
       
     } catch (error) {
       console.error('❌ Error resolviendo conflicto:', error);
@@ -142,7 +196,102 @@ export function DetalleClaseModal({
     }
   };
 
-  // ============= GUARDAR CAMBIOS NORMALES (TAMBIÉN CORREGIDA) =============
+  // ============= AGREGAR PARTICIPANTE RÁPIDO =============
+  const handleAgregarRapido = async () => {
+    if (!pacienteRapido) {
+      addToast({
+        variant: 'error',
+        message: 'Selecciona un paciente',
+        description: 'Debes elegir un paciente para agregar a la clase.',
+      });
+      return;
+    }
+
+    if (turnos.length >= 4) {
+      addToast({
+        variant: 'error',
+        message: 'Clase completa',
+        description: 'No se pueden agregar más participantes (máximo 4).',
+      });
+      return;
+    }
+
+    // Verificar que no se duplique el paciente
+    const pacienteYaEnClase = turnos.some(t => t.id_paciente === parseInt(pacienteRapido));
+    if (pacienteYaEnClase) {
+      addToast({
+        variant: 'warning',
+        message: 'Paciente ya inscrito',
+        description: 'Este paciente ya está en la clase.',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      const fecha = fechaClase;
+      const hora = horaClase + ':00';
+      
+      console.log('➕ Agregando participante rápido:', {
+        paciente: pacienteRapido,
+        fecha,
+        hora,
+        especialista: especialistaSeleccionado,
+        participantes_actuales: turnos.length
+      });
+
+      const resultado = await crearTurno({
+        fecha,
+        hora,
+        id_especialista: especialistaSeleccionado,
+        id_especialidad: 4,
+        id_paciente: parseInt(pacienteRapido),
+        estado: "programado",
+        tipo_plan: "particular"
+      });
+
+      if (!resultado.success) {
+        throw new Error(resultado.error || 'Error al crear turno');
+      }
+
+      console.log('✅ Participante agregado:', resultado);
+
+      addToast({
+        variant: 'success',
+        message: 'Participante agregado',
+        description: `Se agregó el participante a la clase correctamente. (${turnos.length + 1}/4)`,
+      });
+
+      setModoAgregarRapido(false);
+      setPacienteRapido('');
+      
+      // ============= RECARGAR DATOS DEL MODAL PRIMERO =============
+      console.log('🔄 Recargando datos del modal después de agregar participante...');
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Recargar datos internos del modal
+      await recargarDatosModal();
+      
+      // Luego recargar los datos de la página principal
+      if (onTurnosActualizados) {
+        await Promise.resolve(onTurnosActualizados());
+      }
+      
+    } catch (error) {
+      console.error('❌ Error agregando participante:', error);
+      addToast({
+        variant: 'error',
+        message: 'Error al agregar participante',
+        description: error instanceof Error ? error.message : 'No se pudo agregar el participante a la clase.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ============= GUARDAR CAMBIOS NORMALES =============
   const handleGuardarCambios = async () => {
     setIsSubmitting(true);
     
@@ -151,79 +300,111 @@ export function DetalleClaseModal({
       const hora = horaClase + ':00';
       
       console.log('💾 Guardando cambios en la clase...');
+      console.log('📋 Estado actual:', {
+        fecha,
+        hora,
+        especialistaSeleccionado,
+        pacientesSeleccionados,
+        pacientesActuales: turnos.map(t => t.id_paciente)
+      });
       
-      // 1. Eliminar turnos que ya no están seleccionados
       const pacientesActuales = turnos.map(t => t.id_paciente);
       const pacientesAEliminar = pacientesActuales.filter(id => !pacientesSeleccionados.includes(id));
+      const pacientesNuevos = pacientesSeleccionados.filter(id => !pacientesActuales.includes(id));
       
+      console.log('🗑️ Pacientes a eliminar:', pacientesAEliminar);
+      console.log('➕ Pacientes nuevos a crear:', pacientesNuevos);
+      
+      // 1. Eliminar turnos
       for (const pacienteId of pacientesAEliminar) {
         const turnoAEliminar = turnos.find(t => t.id_paciente === pacienteId);
         if (turnoAEliminar) {
-          console.log(`🗑️ Eliminando turno de paciente ${pacienteId}`);
-          await eliminarTurno(turnoAEliminar.id_turno);
+          console.log(`🗑️ Eliminando turno ${turnoAEliminar.id_turno}`);
+          const resultado = await eliminarTurno(turnoAEliminar.id_turno);
+          if (!resultado.success) {
+            throw new Error(`Error eliminando turno: ${resultado.error}`);
+          }
         }
       }
 
       // 2. Actualizar especialista en turnos existentes (solo admin)
       if (userRole === 1) {
         const pacientesExistentes = pacientesSeleccionados.filter(id => pacientesActuales.includes(id));
+        
         for (const pacienteId of pacientesExistentes) {
           const turnoExistente = turnos.find(t => t.id_paciente === pacienteId);
           if (turnoExistente && turnoExistente.id_especialista !== especialistaSeleccionado) {
-            console.log(`🔄 Actualizando especialista para paciente ${pacienteId}`);
-            await actualizarTurno(turnoExistente.id_turno, {
+            console.log(`🔄 Actualizando especialista para turno ${turnoExistente.id_turno}`);
+            const resultado = await actualizarTurno(turnoExistente.id_turno, {
               id_especialista: especialistaSeleccionado
             });
+            if (!resultado.success) {
+              throw new Error(`Error actualizando turno: ${resultado.error}`);
+            }
           }
         }
       }
 
-      // 3. Crear nuevos turnos para pacientes agregados
-      const pacientesNuevos = pacientesSeleccionados.filter(id => !pacientesActuales.includes(id));
+      // 3. Crear nuevos turnos
       for (const pacienteId of pacientesNuevos) {
         console.log(`➕ Creando nuevo turno para paciente ${pacienteId}`);
-        await crearTurno({
+        const resultado = await crearTurno({
           fecha,
           hora,
           id_especialista: especialistaSeleccionado,
-          id_especialidad: 4,
+          id_especialidad: 4, // Pilates
           id_paciente: pacienteId,
           estado: "programado",
           tipo_plan: "particular"
         });
+        
+        if (!resultado.success) {
+          throw new Error(`Error creando turno para paciente ${pacienteId}: ${resultado.error}`);
+        }
       }
+
+      console.log('✅ Todos los cambios aplicados exitosamente');
 
       addToast({
         variant: 'success',
         message: 'Clase actualizada',
-        description: 'Los cambios se guardaron correctamente',
+        description: `Se aplicaron todos los cambios correctamente`,
       });
 
       setModoEdicion(false);
       
-      // Esperar a que se recarguen los datos
+      // ============= RECARGAR DATOS DEL MODAL =============
       console.log('🔄 Recargando datos después de guardar cambios...');
+      
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Recargar datos internos del modal
+      await recargarDatosModal();
+      
+      // Luego recargar los datos de la página principal
       if (onTurnosActualizados) {
         await Promise.resolve(onTurnosActualizados());
       }
       
-      setTimeout(() => {
-        onClose();
-      }, 500);
+      // Esperar más tiempo antes de cerrar
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      
+      console.log('✅ Cerrando modal después de recargar datos');
+      onClose();
       
     } catch (error) {
       console.error('❌ Error actualizando clase:', error);
       addToast({
         variant: 'error',
         message: 'Error al actualizar',
-        description: 'No se pudieron guardar los cambios',
+        description: error instanceof Error ? error.message : 'No se pudieron guardar los cambios',
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ============= ELIMINAR CLASE (TAMBIÉN CORREGIDA) =============
+  // ============= ELIMINAR CLASE =============
   const handleEliminarClase = async () => {
     setIsSubmitting(true);
     
@@ -249,7 +430,7 @@ export function DetalleClaseModal({
       
       setTimeout(() => {
         onClose();
-      }, 500);
+      }, 1000);
       
     } catch (error) {
       console.error('❌ Error eliminando clase:', error);
@@ -275,7 +456,11 @@ export function DetalleClaseModal({
     });
   };
 
-  // ============= EL RESTO DEL CÓDIGO PERMANECE IGUAL =============
+  // ============= OBTENER PACIENTES DISPONIBLES PARA AGREGAR =============
+  const pacientesDisponibles = pacientes.filter(p => 
+    !turnos.some(t => t.id_paciente === p.id_paciente)
+  );
+
   const renderContenido = () => {
     // Confirmación de eliminación
     if (mostrarConfirmacionEliminar) {
@@ -303,6 +488,80 @@ export function DetalleClaseModal({
               className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
               {isSubmitting ? 'Eliminando...' : 'Eliminar'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Modo agregar participante rápido
+    if (modoAgregarRapido) {
+      return (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Plus className="w-5 h-5 text-blue-600" />
+              <span className="font-medium text-blue-800">Agregar Participante</span>
+            </div>
+            <p className="text-sm text-blue-700">
+              Agregar rápidamente un participante a esta clase de Pilates.
+            </p>
+          </div>
+
+          {/* Información de la clase */}
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <div className="text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>
+                  {fechaClase ? format(new Date(fechaClase), "EEEE dd/MM", { locale: es }) : ''} - {horaClase}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Users className="w-4 h-4" />
+                <span>{turnos.length}/4 participantes actuales</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Selección de paciente */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Seleccionar paciente para agregar:
+            </label>
+            <select
+              value={pacienteRapido}
+              onChange={(e) => setPacienteRapido(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            >
+              <option value="">Seleccionar paciente...</option>
+              {pacientesDisponibles.map(paciente => (
+                <option key={paciente.id_paciente} value={paciente.id_paciente}>
+                  {paciente.nombre} {paciente.apellido}
+                </option>
+              ))}
+            </select>
+            {pacientesDisponibles.length === 0 && (
+              <p className="text-sm text-gray-500 mt-1">
+                No hay pacientes disponibles para agregar.
+              </p>
+            )}
+          </div>
+
+          {/* Botones */}
+          <div className="flex gap-2 pt-4 border-t">
+            <button
+              onClick={() => setModoAgregarRapido(false)}
+              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleAgregarRapido}
+              disabled={isSubmitting || !pacienteRapido}
+              className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors"
+            >
+              {isSubmitting ? 'Agregando...' : 'Agregar Participante'}
             </button>
           </div>
         </div>
@@ -538,11 +797,19 @@ export function DetalleClaseModal({
                 </div>
               ))}
               
-              {/* Mostrar espacios disponibles */}
+              {/* Mostrar espacios disponibles con botón de agregar */}
               {Array.from({ length: 4 - turnos.length }, (_, index) => (
-                <div key={`disponible-${index}`} className="flex items-center gap-2 p-2 bg-gray-50 rounded opacity-60">
-                  <div className="w-2 h-2 bg-gray-300 rounded-full" />
-                  <span className="text-sm italic text-gray-500">Lugar disponible</span>
+                <div key={`disponible-${index}`} className="flex items-center justify-between group p-2 bg-gray-50 rounded opacity-60 hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-gray-300 rounded-full" />
+                    <span className="text-sm italic text-gray-500">Lugar disponible</span>
+                  </div>
+                  <button
+                    onClick={() => setModoAgregarRapido(true)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-[#9C1838] hover:text-[#7d1329] font-medium"
+                  >
+                    + Agregar
+                  </button>
                 </div>
               ))}
             </div>
@@ -564,7 +831,7 @@ export function DetalleClaseModal({
                 disabled={isSubmitting}
                 className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors"
               >
-                {isSubmitting ? 'Guardando..' : 'Guardar cambios'}
+                {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </>
           ) : (
@@ -586,11 +853,13 @@ export function DetalleClaseModal({
       type="custom"
       size="lg"
       title={
-        hayConflicto && modoResolucionConflicto
-          ? "🚨 Resolver Conflicto de Especialistas"
-          : hayConflicto 
-            ? "⚠️ Clase con Conflicto - Modo Administrador" 
-            : "Detalles de Clase de Pilates"
+        modoAgregarRapido
+          ? "➕ Agregar Participante a Clase"
+          : hayConflicto && modoResolucionConflicto
+            ? "🚨 Resolver Conflicto de Especialistas"
+            : hayConflicto 
+              ? "⚠️ Clase con Conflicto - Modo Administrador" 
+              : "Detalles de Clase de Pilates"
       }
       customIcon={
         <Image

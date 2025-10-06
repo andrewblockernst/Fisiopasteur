@@ -82,7 +82,7 @@ export function NuevoTurnoPilatesModal({
     }));
   };
 
-  const handleSubmit = async () => {
+const handleSubmit = async () => {
     if (!fechaSeleccionada || !horaSeleccionada || !formData.especialistaId || formData.pacientesSeleccionados.length === 0) {
       addToast({
         variant: 'error',
@@ -108,9 +108,19 @@ export function NuevoTurnoPilatesModal({
       const fecha = format(fechaSeleccionada, "yyyy-MM-dd");
       const hora = horaSeleccionada;
       
-      // Crear un turno por cada paciente seleccionado
+      console.log('🔄 Creando turnos para:', {
+        fecha,
+        hora,
+        especialista: formData.especialistaId,
+        pacientes: formData.pacientesSeleccionados
+      });
+      
+      // ============= AQUÍ ESTÁ EL PROBLEMA: CREAR UN TURNO POR CADA PACIENTE =============
+      const resultados = [];
       for (const pacienteId of formData.pacientesSeleccionados) {
-        await crearTurno({
+        console.log(`➕ Creando turno para paciente ${pacienteId}`);
+        
+        const resultado = await crearTurno({
           fecha,
           hora: hora + ':00',
           id_especialista: formData.especialistaId,
@@ -120,6 +130,9 @@ export function NuevoTurnoPilatesModal({
           observaciones: formData.observaciones || null,
           tipo_plan: "particular"
         });
+        
+        console.log(`✅ Turno creado para paciente ${pacienteId}:`, resultado);
+        resultados.push(resultado);
       }
 
       const esClaseNueva = slotInfo?.tipo === 'libre';
@@ -133,10 +146,21 @@ export function NuevoTurnoPilatesModal({
         description: mensaje,
       });
 
-      onTurnoCreated?.();
-      onClose();
+      console.log('✅ Todos los turnos creados exitosamente:', resultados);
+
+      // ============= ESPERAR A QUE SE RECARGUEN LOS DATOS =============
+      if (onTurnoCreated) {
+        console.log('🔄 Recargando datos...');
+        await Promise.resolve(onTurnoCreated());
+      }
+      
+      // Delay antes de cerrar para asegurar que se actualice la UI
+      setTimeout(() => {
+        onClose();
+      }, 500);
+      
     } catch (error) {
-      console.error('Error creando turnos de Pilates:', error);
+      console.error('💥 Error creando turnos de Pilates:', error);
       addToast({
         variant: 'error',
         message: 'Error al crear turnos',
