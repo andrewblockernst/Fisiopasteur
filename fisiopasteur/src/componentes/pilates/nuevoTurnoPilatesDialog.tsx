@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react"; // ← Agregué useRef
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { crearTurno } from "@/lib/actions/turno.action";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToastStore } from '@/stores/toast-store';
-import { AlertTriangle, Users, Clock, Info } from "lucide-react";
+import { AlertTriangle, Users, Clock, Info, Plus, Trash2 } from "lucide-react"; // ← Agregué Plus y Trash2
 import Image from "next/image";
 
 interface SlotInfo {
@@ -25,8 +25,8 @@ interface NuevoTurnoPilatesModalProps {
   horaSeleccionada?: string | null;
   especialistas: any[];
   pacientes: any[];
-  slotInfo?: SlotInfo | null;  // ← Nueva prop
-  userRole?: number;           // ← Nueva prop (1 = admin, otros = usuario normal)
+  slotInfo?: SlotInfo | null;
+  userRole?: number;
 }
 
 export function NuevoTurnoPilatesModal({
@@ -46,9 +46,54 @@ export function NuevoTurnoPilatesModal({
     especialistaId: '',
     pacientesSeleccionados: [] as number[],
     observaciones: '',
+    dificultad: 'principiante' as 'principiante' | 'intermedio' | 'avanzado',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ============= NUEVOS ESTADOS PARA BÚSQUEDA DE PACIENTES =============
+  const [busquedaPaciente, setBusquedaPaciente] = useState('');
+  const [pacientesFiltrados, setPacientesFiltrados] = useState<any[]>([]);
+  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
+  const inputPacienteRef = useRef<HTMLInputElement>(null);
+  const listaPacientesRef = useRef<HTMLDivElement>(null);
+
+  // ============= FILTRAR PACIENTES SEGÚN BÚSQUEDA =============
+  useEffect(() => {
+    if (!busquedaPaciente.trim()) {
+      setPacientesFiltrados([]);
+      return;
+    }
+
+    const filtrados = pacientes.filter(paciente => {
+      const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
+      const busqueda = busquedaPaciente.toLowerCase();
+      
+      return nombreCompleto.includes(busqueda) ||
+             paciente.nombre.toLowerCase().includes(busqueda) ||
+             paciente.apellido.toLowerCase().includes(busqueda) ||
+             paciente.dni?.toString().includes(busqueda);
+    }).slice(0, 10); // Limitar a 10 resultados
+
+    setPacientesFiltrados(filtrados);
+  }, [busquedaPaciente, pacientes]);
+
+  // ============= MANEJAR CLICKS FUERA DEL AUTOCOMPLETE =============
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        inputPacienteRef.current && 
+        !inputPacienteRef.current.contains(event.target as Node) &&
+        listaPacientesRef.current && 
+        !listaPacientesRef.current.contains(event.target as Node)
+      ) {
+        setMostrarListaPacientes(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ============= INICIALIZAR FORMULARIO SEGÚN EL TIPO DE SLOT =============
   useEffect(() => {
@@ -59,6 +104,7 @@ export function NuevoTurnoPilatesModal({
           especialistaId: slotInfo.especialistaAsignado,
           pacientesSeleccionados: [],
           observaciones: '',
+          dificultad: 'principiante'
         });
       } else {
         // Slot libre, limpiar formulario
@@ -66,23 +112,60 @@ export function NuevoTurnoPilatesModal({
           especialistaId: '',
           pacientesSeleccionados: [],
           observaciones: '',
+          dificultad: 'principiante'
         });
       }
+      
+      // Limpiar búsqueda de pacientes
+      setBusquedaPaciente('');
+      setMostrarListaPacientes(false);
     }
   }, [isOpen, slotInfo]);
 
-  const handlePacienteClick = (pacienteId: number) => {
+  // ============= FUNCIONES PARA MANEJAR PACIENTES =============
+  const espaciosDisponibles = slotInfo?.tipo === 'existente' 
+    ? 4 - (slotInfo.participantes || 0)
+    : 4;
+
+  const agregarPaciente = (paciente: any) => {
+    if (formData.pacientesSeleccionados.length >= espaciosDisponibles) {
+      addToast({
+        variant: 'error',
+        message: 'Límite alcanzado',
+        description: `No se pueden agregar más de ${espaciosDisponibles} participantes`,
+      });
+      return;
+    }
+
+    if (!formData.pacientesSeleccionados.includes(paciente.id_paciente)) {
+      setFormData(prev => ({
+        ...prev,
+        pacientesSeleccionados: [...prev.pacientesSeleccionados, paciente.id_paciente]
+      }));
+      setBusquedaPaciente('');
+      setMostrarListaPacientes(false);
+    }
+  };
+
+  const eliminarPaciente = (pacienteId: number) => {
     setFormData(prev => ({
       ...prev,
-      pacientesSeleccionados: prev.pacientesSeleccionados.includes(pacienteId)
-        ? prev.pacientesSeleccionados.filter(id => id !== pacienteId)
-        : prev.pacientesSeleccionados.length < 4
-        ? [...prev.pacientesSeleccionados, pacienteId]
-        : prev.pacientesSeleccionados
+      pacientesSeleccionados: prev.pacientesSeleccionados.filter(id => id !== pacienteId)
     }));
   };
 
-const handleSubmit = async () => {
+  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setBusquedaPaciente(valor);
+    
+    if (!valor.trim()) {
+      setMostrarListaPacientes(false);
+    } else {
+      setMostrarListaPacientes(true);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!fechaSeleccionada || !horaSeleccionada || !formData.especialistaId || formData.pacientesSeleccionados.length === 0) {
       addToast({
         variant: 'error',
@@ -115,7 +198,7 @@ const handleSubmit = async () => {
         pacientes: formData.pacientesSeleccionados
       });
       
-      // ============= AQUÍ ESTÁ EL PROBLEMA: CREAR UN TURNO POR CADA PACIENTE =============
+      // ============= CREAR UN TURNO POR CADA PACIENTE =============
       const resultados = [];
       for (const pacienteId of formData.pacientesSeleccionados) {
         console.log(`➕ Creando turno para paciente ${pacienteId}`);
@@ -128,7 +211,8 @@ const handleSubmit = async () => {
           id_paciente: pacienteId,
           estado: "programado",
           observaciones: formData.observaciones || null,
-          tipo_plan: "particular"
+          tipo_plan: "particular",
+          dificultad: formData.dificultad
         });
         
         console.log(`✅ Turno creado para paciente ${pacienteId}:`, resultado);
@@ -210,11 +294,6 @@ const handleSubmit = async () => {
     );
   };
 
-  // ============= CALCULAR ESPACIOS DISPONIBLES =============
-  const espaciosDisponibles = slotInfo?.tipo === 'existente' 
-    ? 4 - (slotInfo.participantes || 0)
-    : 4;
-
   return (
     <BaseDialog
       type="custom"
@@ -280,36 +359,121 @@ const handleSubmit = async () => {
             )}
           </div>
 
-          {/* Selección de pacientes */}
+          {/* Selección de dificultad */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Pacientes (máximo {espaciosDisponibles} disponibles)*
+              Nivel de Dificultad*
             </label>
-            <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-lg">
-              {pacientes.map(paciente => (
-                <label
-                  key={paciente.id_paciente}
-                  className="flex items-center gap-2 cursor-pointer px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.pacientesSeleccionados.includes(paciente.id_paciente)}
-                    onChange={() => handlePacienteClick(paciente.id_paciente)}
-                    disabled={
-                      !formData.pacientesSeleccionados.includes(paciente.id_paciente) &&
-                      formData.pacientesSeleccionados.length >= espaciosDisponibles
-                    }
-                    className="w-4 h-4 text-[#9C1838] focus:ring-[#9C1838] border-gray-300 rounded"
-                  />
-                  <span className="text-sm">
-                    {paciente.nombre} {paciente.apellido}
-                  </span>
-                </label>
-              ))}
-            </div>
+            <select
+              value={formData.dificultad}
+              onChange={(e) => setFormData(prev => ({ ...prev, dificultad: e.target.value as any }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+              required
+            >
+              <option value="principiante">🟢 Principiante</option>
+              <option value="intermedio">🟡 Intermedio</option>
+              <option value="avanzado">🔴 Avanzado</option>
+            </select>
             <p className="text-xs text-gray-500 mt-1">
-              Seleccionados: {formData.pacientesSeleccionados.length}/{espaciosDisponibles}
+              {formData.dificultad === 'principiante' && 'Ideal para personas que recién comienzan con Pilates'}
+              {formData.dificultad === 'intermedio' && 'Para personas con experiencia básica en Pilates'}
+              {formData.dificultad === 'avanzado' && 'Para personas con experiencia avanzada en Pilates'}
             </p>
+          </div>
+
+          {/* Selección de pacientes - CON BÚSQUEDA */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Participantes ({formData.pacientesSeleccionados.length}/{espaciosDisponibles})*
+            </label>
+
+            {/* Lista de participantes seleccionados */}
+            {formData.pacientesSeleccionados.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {formData.pacientesSeleccionados.map(pacienteId => {
+                  const paciente = pacientes.find(p => p.id_paciente === pacienteId);
+                  if (!paciente) return null;
+                  
+                  return (
+                    <div key={pacienteId} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <span className="text-sm font-medium text-green-800">
+                        {paciente.nombre} {paciente.apellido}
+                      </span>
+                      <button
+                        onClick={() => eliminarPaciente(pacienteId)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                        title="Eliminar participante"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Input para agregar participantes */}
+            {formData.pacientesSeleccionados.length < espaciosDisponibles && (
+              <div className="relative">
+                <div className="flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">Agregar participante</span>
+                </div>
+                
+                <input
+                  ref={inputPacienteRef}
+                  type="text"
+                  value={busquedaPaciente}
+                  onChange={handleBusquedaPacienteChange}
+                  onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
+                  className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  placeholder="Buscar por nombre, DNI..."
+                  autoComplete="off"
+                />
+                
+                {/* Lista de resultados de búsqueda */}
+                {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
+                  <div 
+                    ref={listaPacientesRef}
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                  >
+                    {pacientesFiltrados
+                      .filter(paciente => !formData.pacientesSeleccionados.includes(paciente.id_paciente))
+                      .map((paciente) => (
+                      <div
+                        key={paciente.id_paciente}
+                        onClick={() => agregarPaciente(paciente)}
+                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="font-medium">
+                          {paciente.nombre} {paciente.apellido}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Mensaje cuando no hay resultados */}
+                {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
+                  <div 
+                    ref={listaPacientesRef}
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
+                  >
+                    No se encontraron pacientes
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {formData.pacientesSeleccionados.length === espaciosDisponibles && (
+              <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                <span>⚠️</span>
+                Límite alcanzado ({espaciosDisponibles} participantes máximo)
+              </p>
+            )}
           </div>
 
           {/* Observaciones */}

@@ -208,6 +208,7 @@ export type Database = {
           precio: number | null
           tipo_plan: string | null
           updated_at: string | null
+          dificultad: 'principiante' | 'intermedio' | 'avanzado' | null
         }
         Insert: {
           created_at?: string | null
@@ -224,6 +225,7 @@ export type Database = {
           precio?: number | null
           tipo_plan?: string | null
           updated_at?: string | null
+          dificultad?: 'principiante' | 'intermedio' | 'avanzado' | null
         }
         Update: {
           created_at?: string | null
@@ -240,6 +242,7 @@ export type Database = {
           precio?: number | null
           tipo_plan?: string | null
           updated_at?: string | null
+          dificultad?: 'principiante' | 'intermedio' | 'avanzado' | null
         }
         Relationships: [
           {
