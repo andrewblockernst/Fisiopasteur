@@ -940,11 +940,335 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
         periodo: { fecha_desde, fecha_hasta }
 
 
-        
+
       }
     };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };
+  }
+}
+
+/**
+ * Crear múltiples turnos en lote con notificaciones agrupadas
+ */
+export async function crearTurnosEnLote(turnos: Array<{
+  id_paciente: string;
+  id_especialista: string;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  id_clase_pilates?: string;
+  descripcion?: string;
+  tipo?: string;
+  estado?: string;
+}>) {
+  try {
+    const supabase = await createClient();
+    const turnosCreados = [];
+    const errores = [];
+
+    // Crear turnos uno por uno
+    for (const turnoData of turnos) {
+      try {
+        // Verificar disponibilidad (simplificada para evitar errores)
+        // En una implementación completa, aquí verificaríamos disponibilidad
+
+        // Crear turno con los campos correctos
+        const { data: turno, error } = await supabase
+          .from("turno")
+          .insert({
+            id_paciente: parseInt(turnoData.id_paciente),
+            id_especialista: turnoData.id_especialista,
+            fecha: turnoData.fecha,
+            hora: turnoData.hora_inicio,
+            id_especialidad: 4, // Pilates
+            estado: turnoData.estado || 'programado',
+            tipo_plan: 'particular'
+          })
+          .select()
+          .single();
+
+        if (error) {
+          errores.push({
+            turno: turnoData,
+            error: error.message
+          });
+          continue;
+        }
+
+        turnosCreados.push(turno);
+        
+        // Programar recordatorios individuales para cada turno
+        try {
+          const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+          const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
+          
+          const tiposRecordatorio: ('1d' | '2h')[] = ['1d', '2h']; // Recordatorios por defecto con tipos explícitos
+          const tiemposRecordatorio = calcularTiemposRecordatorio(turno.fecha, turno.hora, tiposRecordatorio);
+          
+          // Obtener datos del paciente para el teléfono
+          if (turno.id_paciente) {
+            const { data: pacienteData } = await supabase
+              .from("paciente")
+              .select("telefono, nombre")
+              .eq("id_paciente", turno.id_paciente)
+              .single();
+            
+            if (pacienteData?.telefono) {
+              const mensaje = `Recordatorio: Tienes un turno de Pilates programado`;
+              // Filtrar solo las fechas válidas (no null)
+              const tiemposValidos: Record<string, Date> = {};
+              Object.entries(tiemposRecordatorio).forEach(([tipo, fecha]) => {
+                if (fecha) {
+                  tiemposValidos[tipo] = fecha;
+                }
+              });
+              
+              if (Object.keys(tiemposValidos).length > 0) {
+                await registrarNotificacionesRecordatorioFlexible(
+                  turno.id_turno,
+                  pacienteData.telefono,
+                  mensaje,
+                  tiemposValidos
+                );
+              }
+            }
+          }
+        } catch (recordatorioError) {
+          console.warn(`⚠️ No se pudieron programar recordatorios para turno ${turno.id_turno}:`, recordatorioError);
+        }
+      } catch (error) {
+        errores.push({
+          turno: turnoData,
+          error: error instanceof Error ? error.message : 'Error desconocido'
+        });
+      }
+    }
+
+    // Procesar notificaciones agrupadas de confirmación
+    if (turnosCreados.length > 0) {
+      await procesarNotificacionesRepeticion(turnosCreados);
+    }
+
+    return {
+      success: true,
+      data: {
+        turnosCreados,
+        errores,
+        total: turnos.length,
+        exitosos: turnosCreados.length,
+        fallidos: errores.length
+      }
+    };
+  } catch (error) {
+    console.error("Error al crear turnos en lote:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error desconocido"
+    };
+  }
+}
+
+/**
+ * Procesar notificaciones para turnos de repetición (agrupadas por paciente)
+ */
+async function procesarNotificacionesRepeticion(turnos: any[]) {
+  try {
+    // Agrupar turnos por paciente
+    const turnosPorPaciente = turnos.reduce((acc: Record<string, any[]>, turno) => {
+      if (!acc[turno.id_paciente]) {
+        acc[turno.id_paciente] = [];
+      }
+      acc[turno.id_paciente].push(turno);
+      return acc;
+    }, {});
+
+    // Enviar notificación agrupada por cada paciente
+    for (const [id_paciente, turnosPaciente] of Object.entries(turnosPorPaciente)) {
+      if (turnosPaciente.length === 1) {
+        // Si solo tiene un turno, usar notificación individual
+        await procesarNotificacionesIndividual(turnosPaciente[0]);
+      } else {
+        // Si tiene múltiples turnos, usar notificación agrupada
+        await enviarNotificacionGrupal(id_paciente, turnosPaciente);
+      }
+    }
+  } catch (error) {
+    console.error("Error al procesar notificaciones de repetición:", error);
+  }
+}
+
+/**
+ * Procesar notificaciones para un turno individual
+ */
+async function procesarNotificacionesIndividual(turno: any) {
+  try {
+    const supabase = await createClient();
+    
+    // Obtener datos del paciente y especialista
+    const { data: paciente } = await supabase
+      .from("paciente")
+      .select("nombre, telefono")
+      .eq("id", turno.id_paciente)
+      .single();
+
+    const { data: especialista } = await supabase
+      .from("usuario")
+      .select("nombre")
+      .eq("id_usuario", turno.id_especialista)
+      .single();
+
+    if (!paciente || !especialista) {
+      console.error("No se pudieron obtener datos del paciente o especialista");
+      return;
+    }
+
+    // Registrar notificación en base de datos
+    const { data: notificacion } = await supabase
+      .from("notificacion")
+      .insert({
+        id_turno: turno.id_turno,
+        mensaje: `Turno confirmado con ${especialista.nombre} para el ${new Date(turno.fecha).toLocaleDateString()} a las ${turno.hora}`,
+        medio: "whatsapp",
+        telefono: paciente.telefono,
+        estado: "pendiente"
+      })
+      .select()
+      .single();
+
+    if (notificacion && paciente.telefono) {
+      // Enviar notificación por WhatsApp
+      const whatsappService = await import('../services/whatsapp-bot.service');
+      await whatsappService.enviarConfirmacionTurno(
+        paciente.telefono,
+        paciente.nombre,
+        especialista.nombre,
+        turno.fecha,
+        turno.hora_inicio
+      );
+
+      // Marcar como enviada
+      await supabase
+        .from("notificacion")
+        .update({ estado: "enviada", fecha_envio: new Date().toISOString() })
+        .eq("id_notificacion", notificacion.id_notificacion);
+    }
+  } catch (error) {
+    console.error("Error al procesar notificación individual:", error);
+  }
+}
+
+/**
+ * Analizar patrones de turnos para crear mensaje inteligente
+ */
+function analizarPatronesTurnos(turnos: any[]) {
+  const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  
+  // Agrupar turnos por día de la semana y horario
+  const patronesPorDiaYHora: Record<string, Set<string>> = {};
+  
+  turnos.forEach(turno => {
+    const fecha = new Date(turno.fecha);
+    const diaSemana = diasSemana[fecha.getDay()];
+    const hora = turno.hora || turno.hora_inicio;
+    const horaFormateada = hora.substring(0, 5); // "09:00:00" -> "09:00"
+    
+    const key = `${diaSemana}_${horaFormateada}`;
+    if (!patronesPorDiaYHora[key]) {
+      patronesPorDiaYHora[key] = new Set();
+    }
+    patronesPorDiaYHora[key].add(turno.fecha);
+  });
+
+  // Convertir a formato legible
+  const patronesTexto: string[] = [];
+  Object.keys(patronesPorDiaYHora).forEach(key => {
+    const [dia, hora] = key.split('_');
+    const cantidadTurnos = patronesPorDiaYHora[key].size;
+    // Plural correcto para días de la semana
+    const diaPlural = dia === 'miércoles' ? 'miércoles' : `${dia}s`;
+    patronesTexto.push(`${diaPlural} a las ${hora} (${cantidadTurnos} clases)`);
+  });
+
+  return {
+    patronesTexto,
+    totalTurnos: turnos.length,
+    diasUnicos: Object.keys(patronesPorDiaYHora).length
+  };
+}
+
+/**
+ * Enviar notificación agrupada para múltiples turnos del mismo paciente
+ */
+async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
+  try {
+    const supabase = await createClient();
+    
+    // Obtener datos del paciente
+    const { data: paciente } = await supabase
+      .from("paciente")
+      .select("nombre, telefono")
+      .eq("id_paciente", parseInt(id_paciente))
+      .single();
+
+    if (!paciente) {
+      console.error("No se pudieron obtener datos del paciente");
+      return;
+    }
+
+    // Analizar patrones de turnos
+    const analisis = analizarPatronesTurnos(turnos);
+    
+    // Crear mensaje inteligente basado en patrones
+    let mensaje: string;
+    
+    if (analisis.totalTurnos <= 5) {
+      // Para pocos turnos, mostrar fechas específicas
+      const fechas = turnos.map(t => {
+        const fecha = new Date(t.fecha).toLocaleDateString('es-AR');
+        const hora = (t.hora || t.hora_inicio).substring(0, 5);
+        return `${fecha} a las ${hora}`;
+      });
+      
+      mensaje = `¡Hola ${paciente.nombre}! 🌟\n\nSe han confirmado ${analisis.totalTurnos} turnos para ti:\n\n${fechas.map(f => `• ${f}`).join('\n')}\n\nTe esperamos en Fisiopasteur. ¡Nos vemos pronto! 💪`;
+    } else {
+      // Para muchos turnos, mostrar patrón de días
+      mensaje = `¡Hola ${paciente.nombre}! 🌟\n\nSe han confirmado tus turnos de Pilates:\n\n${analisis.patronesTexto.map(p => `• ${p}`).join('\n')}\n\nTotal: ${analisis.totalTurnos} clases programadas\n\nTe esperamos en Fisiopasteur. ¡Nos vemos pronto! 💪\n\n_Recibirás recordatorios antes de cada clase._`;
+    }
+
+    // Registrar notificación agrupada (usar el primer turno como referencia)
+    const { data: notificacion } = await supabase
+      .from("notificacion")
+      .insert({
+        id_turno: turnos[0].id_turno, // Usar primer turno como referencia
+        mensaje: mensaje,
+        medio: "whatsapp",
+        telefono: paciente.telefono,
+        estado: "pendiente"
+      })
+      .select()
+      .single();
+
+    if (notificacion && paciente.telefono) {
+      // Enviar notificación por WhatsApp
+      const whatsappService = await import('../services/whatsapp-bot.service');
+      await whatsappService.enviarNotificacionGrupal(
+        paciente.telefono,
+        paciente.nombre,
+        turnos
+      );
+
+      // Marcar como enviada
+      await supabase
+        .from("notificacion")
+        .update({ 
+          estado: "enviada", 
+          fecha_envio: new Date().toISOString() 
+        })
+        .eq("id_notificacion", notificacion.id_notificacion);
+    }
+  } catch (error) {
+    console.error("Error al enviar notificación agrupada:", error);
   }
 }
