@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { eliminarTurno, crearTurno, actualizarTurno } from "@/lib/actions/turno.action";
+import { eliminarTurno, crearTurno, actualizarTurno, crearTurnosEnLote } from "@/lib/actions/turno.action";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToastStore } from '@/stores/toast-store';
-import { Users, Clock, Calendar, User, AlertTriangle, Trash2, UserPlus, Settings, Plus } from "lucide-react";
+import { Users, Clock, Calendar, User, AlertTriangle, Trash2, UserPlus, Settings, Plus, Repeat } from "lucide-react";
 import Image from "next/image";
 
 interface DetalleClaseModalProps {
@@ -47,6 +47,17 @@ export function DetalleClaseModal({
   const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
   const inputPacienteRef = useRef<HTMLInputElement>(null);
   const listaPacientesRef = useRef<HTMLDivElement>(null);
+
+  // ============= NUEVOS ESTADOS PARA REPETIR CLASE =============
+  const [mostrarModalRepetir, setMostrarModalRepetir] = useState(false);
+  const [configuracionRepetir, setConfiguracionRepetir] = useState({
+    tipoRepeticion: 'semanal' as 'semanal' | 'personalizado',
+    diasSemana: [] as string[], // ['lunes', 'miercoles', 'viernes']
+    fechaHasta: '',
+    mantieneParticipantes: true,
+    mantieneDificultad: true,
+    mantieneEspecialista: true
+  });
 
   // ============= SINCRONIZAR CON PROPS CUANDO CAMBIAN =============
   useEffect(() => {
@@ -460,8 +471,365 @@ export function DetalleClaseModal({
       setMostrarConfirmacionEliminar(false);
     }
   };
+    // ============= NUEVA FUNCIÓN PARA REPETIR CLASE =============
+  const handleRepetirClase = async () => {
+    if (!configuracionRepetir.fechaHasta) {
+      addToast({
+        variant: 'error',
+        message: 'Fecha requerida',
+        description: 'Debes seleccionar hasta qué fecha repetir la clase',
+      });
+      return;
+    }
 
-  const renderContenido = () => {
+    if (configuracionRepetir.tipoRepeticion === 'personalizado' && configuracionRepetir.diasSemana.length === 0) {
+      addToast({
+        variant: 'error',
+        message: 'Días requeridos',
+        description: 'Debes seleccionar al menos un día de la semana',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const fechaActual = new Date(fechaClase!);
+      const fechaLimite = new Date(configuracionRepetir.fechaHasta);
+      
+      console.log('🔄 Iniciando repetición de clase...');
+      console.log('📅 Desde:', fechaActual, 'Hasta:', fechaLimite);
+      
+      // Determinar días de la semana a repetir
+      let diasARepeir: string[] = [];
+      
+      if (configuracionRepetir.tipoRepeticion === 'semanal') {
+        // Repetir el mismo día de la semana
+        const diaSemanaActual = fechaActual.getDay(); // 0=domingo, 1=lunes, ..., 6=sábado
+        const nombresDias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        diasARepeir = [nombresDias[diaSemanaActual]];
+      } else {
+        diasARepeir = configuracionRepetir.diasSemana;
+      }
+
+      console.log('📋 Días a repetir:', diasARepeir);
+
+      const fechasACrear: Date[] = [];
+      const fechaIteracion = new Date(fechaActual);
+      fechaIteracion.setDate(fechaIteracion.getDate() + 7); // Empezar la próxima semana
+
+      // Generar todas las fechas donde crear las clases
+      while (fechaIteracion <= fechaLimite) {
+        const diaSemanaIteracion = fechaIteracion.getDay();
+        const nombreDiaIteracion = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][diaSemanaIteracion];
+        
+        if (diasARepeir.includes(nombreDiaIteracion)) {
+          fechasACrear.push(new Date(fechaIteracion));
+        }
+        
+        fechaIteracion.setDate(fechaIteracion.getDate() + 1);
+      }
+
+      console.log('📅 Fechas a crear:', fechasACrear.map(f => format(f, 'yyyy-MM-dd')));
+
+      let clasesCreadas = 0;
+      let errores = 0;
+
+      // Crear clases para cada fecha
+      for (const fecha of fechasACrear) {
+        try {
+          const fechaString = format(fecha, 'yyyy-MM-dd');
+          
+          console.log(`➕ Creando clase para ${fechaString}...`);
+          
+          // Verificar si ya existe una clase en esa fecha/hora/especialista
+          const { obtenerTurnosConFiltros } = await import("@/lib/actions/turno.action");
+          const turnosExistentes = await obtenerTurnosConFiltros({
+            fecha_desde: fechaString,
+            fecha_hasta: fechaString,
+            especialidad_id: 4, // Pilates
+            hora_desde: horaClase,
+            hora_hasta: horaClase,
+            especialista_id: configuracionRepetir.mantieneEspecialista ? especialistaSeleccionado : undefined
+          });
+
+          if (turnosExistentes.success && turnosExistentes.data && turnosExistentes.data.length > 0) {
+            console.log(`⚠️ Ya existe clase en ${fechaString} a las ${horaClase}, saltando...`);
+            continue;
+          }
+
+          // Determinar qué datos usar para la nueva clase
+          const especialistaAUsar = configuracionRepetir.mantieneEspecialista ? especialistaSeleccionado : '';
+          const dificultadAUsar = configuracionRepetir.mantieneDificultad ? dificultadSeleccionada : 'principiante';
+          const participantesAUsar = configuracionRepetir.mantieneParticipantes ? pacientesSeleccionados : [];
+
+          // Si no mantiene especialista, usar el primero disponible (esto se puede mejorar)
+          const especialistaFinal = especialistaAUsar || especialistas[0]?.id_usuario;
+
+          if (!especialistaFinal) {
+            console.error(`❌ No hay especialista disponible para ${fechaString}`);
+            errores++;
+            continue;
+          }
+
+          // Preparar turnos para crear en lote (optimizado para notificaciones)
+          const turnosParaLote = participantesAUsar.map(pacienteId => ({
+            id_paciente: pacienteId.toString(),
+            id_especialista: especialistaFinal,
+            fecha: fechaString,
+            hora_inicio: horaClase + ':00',
+            hora_fin: (parseInt(horaClase.split(':')[0]) + 1).toString().padStart(2, '0') + ':00',
+            id_clase_pilates: undefined, // Se puede agregar después si se tiene la referencia
+            descripcion: `Clase de Pilates - ${dificultadAUsar} (Repetición)`,
+            tipo: 'pilates',
+            estado: 'programado'
+          }));
+
+          // Usar función de lote para evitar spam de notificaciones
+          const { crearTurnosEnLote } = await import("@/lib/actions/turno.action");
+          const resultado = await crearTurnosEnLote(turnosParaLote);
+
+          if (resultado.success && resultado.data) {
+            console.log(`✅ Turnos creados en lote: ${resultado.data.exitosos}/${resultado.data.total}`);
+            if (resultado.data.errores.length > 0) {
+              console.warn(`⚠️ Algunos turnos tuvieron errores:`, resultado.data.errores);
+              errores += resultado.data.errores.length;
+            }
+          } else {
+            console.error(`❌ Error creando turnos en lote para ${fechaString}:`, resultado.error);
+            errores += participantesAUsar.length;
+          }
+
+          clasesCreadas++;
+          console.log(`✅ Clase creada para ${fechaString} con ${participantesAUsar.length} participantes`);
+
+        } catch (error) {
+          console.error(`❌ Error creando clase para ${format(fecha, 'yyyy-MM-dd')}:`, error);
+          errores++;
+        }
+      }
+
+      // Mostrar resultado
+      if (clasesCreadas > 0) {
+        addToast({
+          variant: 'success',
+          message: 'Clases repetidas exitosamente',
+          description: `Se crearon ${clasesCreadas} clases nuevas${errores > 0 ? ` (${errores} errores)` : ''}`,
+        });
+      } else {
+        addToast({
+          variant: 'warning',
+          message: 'No se crearon clases',
+          description: 'Puede que ya existan clases en las fechas seleccionadas',
+        });
+      }
+
+      console.log(`✅ Proceso completado: ${clasesCreadas} clases creadas, ${errores} errores`);
+
+      // Recargar datos
+      if (onTurnosActualizados) {
+        await Promise.resolve(onTurnosActualizados());
+      }
+
+      setMostrarModalRepetir(false);
+
+    } catch (error) {
+      console.error('❌ Error repitiendo clase:', error);
+      addToast({
+        variant: 'error',
+        message: 'Error al repetir clase',
+        description: 'No se pudo completar el proceso de repetición',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ============= FUNCIÓN PARA MANEJAR DÍAS DE LA SEMANA =============
+  const toggleDiaSemana = (dia: string) => {
+    setConfiguracionRepetir(prev => ({
+      ...prev,
+      diasSemana: prev.diasSemana.includes(dia)
+        ? prev.diasSemana.filter(d => d !== dia)
+        : [...prev.diasSemana, dia]
+    }));
+  };
+
+  // ============= RENDERIZAR MODAL DE REPETIR CLASE =============
+  const renderModalRepetir = () => {
+    if (!mostrarModalRepetir) return null;
+
+    const diasSemanaOpciones = [
+      { key: 'lunes', label: 'Lunes' },
+      { key: 'martes', label: 'Martes' },
+      { key: 'miércoles', label: 'Miércoles' },
+      { key: 'jueves', label: 'Jueves' },
+      { key: 'viernes', label: 'Viernes' },
+      { key: 'sábado', label: 'Sábado' },
+      { key: 'domingo', label: 'Domingo' }
+    ];
+
+    // Calcular fecha mínima (próxima semana)
+    const fechaMinima = new Date();
+    fechaMinima.setDate(fechaMinima.getDate() + 7);
+    const fechaMinimaString = format(fechaMinima, 'yyyy-MM-dd');
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            🔄 Repetir Clase de Pilates
+          </h3>
+          <p className="text-gray-600 text-sm">
+            Crear clases automáticamente manteniendo la configuración actual
+          </p>
+        </div>
+
+        {/* Información de la clase actual */}
+        <div className="bg-blue-50 p-3 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Clase actual:</strong> {fechaClase ? format(new Date(fechaClase), "EEEE dd/MM", { locale: es }) : ''} a las {horaClase}
+            <br />
+            <strong>Participantes:</strong> {pacientesSeleccionados.length}
+            <br />
+            <strong>Dificultad:</strong> {dificultadSeleccionada}
+          </p>
+        </div>
+
+        {/* Tipo de repetición */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tipo de repetición
+          </label>
+          <div className="space-y-2">
+            <label className="flex items-center">
+              <input
+                type="radio"
+                name="tipoRepeticion"
+                value="semanal"
+                checked={configuracionRepetir.tipoRepeticion === 'semanal'}
+                onChange={(e) => setConfiguracionRepetir(prev => ({ ...prev, tipoRepeticion: e.target.value as any }))}
+                className="mr-2"
+              />
+              <span className="text-sm">Repetir el mismo día de la semana</span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="radio"
+                name="tipoRepeticion"
+                value="personalizado"
+                checked={configuracionRepetir.tipoRepeticion === 'personalizado'}
+                onChange={(e) => setConfiguracionRepetir(prev => ({ ...prev, tipoRepeticion: e.target.value as any }))}
+                className="mr-2"
+              />
+              <span className="text-sm">Elegir días específicos</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Selección de días (solo si es personalizado) */}
+        {configuracionRepetir.tipoRepeticion === 'personalizado' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Días de la semana
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {diasSemanaOpciones.map(dia => (
+                <label key={dia.key} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={configuracionRepetir.diasSemana.includes(dia.key)}
+                    onChange={() => toggleDiaSemana(dia.key)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">{dia.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fecha hasta */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Repetir hasta la fecha*
+          </label>
+          <input
+            type="date"
+            value={configuracionRepetir.fechaHasta}
+            onChange={(e) => setConfiguracionRepetir(prev => ({ ...prev, fechaHasta: e.target.value }))}
+            min={fechaMinimaString}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            required
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Las clases se crearán desde la próxima semana hasta esta fecha
+          </p>
+        </div>
+
+        {/* Opciones avanzadas */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Configuración de las nuevas clases
+          </label>
+          <div className="space-y-2">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={configuracionRepetir.mantieneParticipantes}
+                onChange={(e) => setConfiguracionRepetir(prev => ({ ...prev, mantieneParticipantes: e.target.checked }))}
+                className="mr-2"
+              />
+              <span className="text-sm">Mantener los mismos participantes</span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={configuracionRepetir.mantieneEspecialista}
+                onChange={(e) => setConfiguracionRepetir(prev => ({ ...prev, mantieneEspecialista: e.target.checked }))}
+                className="mr-2"
+              />
+              <span className="text-sm">Mantener el mismo especialista</span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={configuracionRepetir.mantieneDificultad}
+                onChange={(e) => setConfiguracionRepetir(prev => ({ ...prev, mantieneDificultad: e.target.checked }))}
+                className="mr-2"
+              />
+              <span className="text-sm">Mantener el mismo nivel de dificultad</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Botones */}
+        <div className="flex gap-2 pt-4 border-t">
+          <button
+            onClick={() => setMostrarModalRepetir(false)}
+            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+            disabled={isSubmitting}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleRepetirClase}
+            disabled={isSubmitting}
+            className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors"
+          >
+            {isSubmitting ? 'Creando clases...' : 'Repetir clase'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+    const renderContenido = () => {
+    // Modal de repetir clase
+    if (mostrarModalRepetir) {
+      return renderModalRepetir();
+    }
+
     // Confirmación de eliminación
     if (mostrarConfirmacionEliminar) {
       return (
@@ -815,6 +1183,19 @@ export function DetalleClaseModal({
           >
             <Trash2 className="w-4 h-4" />
             Eliminar clase
+          </button>
+          
+          {/* BOTÓN DE REPETIR CON DEBUG */}
+          <button
+            onClick={() => {
+              console.log('🔄 Click en botón repetir clase');
+              setMostrarModalRepetir(true);
+              console.log('✅ Estado mostrarModalRepetir cambiado a true');
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 transition-colors"
+          >
+            <Repeat className="w-4 h-4" />
+            Repetir clase
           </button>
           
           <div className="flex-1"></div>
