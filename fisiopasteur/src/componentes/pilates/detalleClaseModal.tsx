@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { eliminarTurno, crearTurno, actualizarTurno } from "@/lib/actions/turno.action";
 import { format } from "date-fns";
@@ -19,6 +19,7 @@ interface DetalleClaseModalProps {
   userRole?: number;
 }
 
+
 export function DetalleClaseModal({
   isOpen,
   onClose,
@@ -32,19 +33,62 @@ export function DetalleClaseModal({
   
   // ============= ESTADO INTERNO PARA LOS TURNOS =============
   const [turnos, setTurnos] = useState(turnosIniciales);
-  const [modoEdicion, setModoEdicion] = useState(false);
   const [modoResolucionConflicto, setModoResolucionConflicto] = useState(false);
-  const [modoAgregarRapido, setModoAgregarRapido] = useState(false);
   const [especialistaSeleccionado, setEspecialistaSeleccionado] = useState('');
   const [pacientesSeleccionados, setPacientesSeleccionados] = useState<number[]>([]);
-  const [pacienteRapido, setPacienteRapido] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mostrarConfirmacionEliminar, setMostrarConfirmacionEliminar] = useState(false);
+  const [dificultadSeleccionada, setDificultadSeleccionada] = useState<'principiante' | 'intermedio' | 'avanzado'>('principiante');
+  const [cambiosPendientes, setCambiosPendientes] = useState(false);
+
+  // ============= NUEVOS ESTADOS PARA BÚSQUEDA DE PACIENTES =============
+  const [busquedaPaciente, setBusquedaPaciente] = useState('');
+  const [pacientesFiltrados, setPacientesFiltrados] = useState<any[]>([]);
+  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
+  const inputPacienteRef = useRef<HTMLInputElement>(null);
+  const listaPacientesRef = useRef<HTMLDivElement>(null);
 
   // ============= SINCRONIZAR CON PROPS CUANDO CAMBIAN =============
   useEffect(() => {
     setTurnos(turnosIniciales);
   }, [turnosIniciales]);
+
+  // ============= FILTRAR PACIENTES SEGÚN BÚSQUEDA =============
+  useEffect(() => {
+    if (!busquedaPaciente.trim()) {
+      setPacientesFiltrados([]);
+      return;
+    }
+
+    const filtrados = pacientes.filter(paciente => {
+      const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
+      const busqueda = busquedaPaciente.toLowerCase();
+      
+      return nombreCompleto.includes(busqueda) ||
+             paciente.nombre.toLowerCase().includes(busqueda) ||
+             paciente.apellido.toLowerCase().includes(busqueda) ||
+             paciente.dni?.toString().includes(busqueda);
+    }).slice(0, 10); // Limitar a 10 resultados
+
+    setPacientesFiltrados(filtrados);
+  }, [busquedaPaciente, pacientes]);
+
+  // ============= MANEJAR CLICKS FUERA DEL AUTOCOMPLETE =============
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        inputPacienteRef.current && 
+        !inputPacienteRef.current.contains(event.target as Node) &&
+        listaPacientesRef.current && 
+        !listaPacientesRef.current.contains(event.target as Node)
+      ) {
+        setMostrarListaPacientes(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Obtener información de la clase (usar estado interno)
   const primeraClase = turnos[0];
@@ -119,13 +163,66 @@ export function DetalleClaseModal({
       } else {
         setEspecialistaSeleccionado(primeraClase.id_especialista);
         setPacientesSeleccionados(turnos.map(t => t.id_paciente));
-        setModoEdicion(false);
         setModoResolucionConflicto(false);
       }
-      setModoAgregarRapido(false);
-      setPacienteRapido('');
+      // Inicializar dificultad con el valor de la clase
+      setDificultadSeleccionada(primeraClase?.dificultad || 'principiante');
+      setCambiosPendientes(false);
+      
+      // Limpiar búsqueda de pacientes
+      setBusquedaPaciente('');
+      setMostrarListaPacientes(false);
     }
   }, [isOpen, turnos, hayConflicto]);
+
+  // ============= DETECTAR CAMBIOS =============
+  useEffect(() => {
+    if (!isOpen || !turnos.length || hayConflicto) return;
+    
+    const pacientesOriginales = turnos.map(t => t.id_paciente).sort();
+    const pacientesActuales = [...pacientesSeleccionados].sort();
+    const especialistaOriginal = primeraClase?.id_especialista;
+    const dificultadOriginal = primeraClase?.dificultad || 'principiante';
+    
+    const hayCambiosParticipantes = JSON.stringify(pacientesOriginales) !== JSON.stringify(pacientesActuales);
+    const hayCambioEspecialista = especialistaSeleccionado !== especialistaOriginal;
+    const hayCambioDificultad = dificultadSeleccionada !== dificultadOriginal;
+    
+    setCambiosPendientes(hayCambiosParticipantes || hayCambioEspecialista || hayCambioDificultad);
+  }, [pacientesSeleccionados, especialistaSeleccionado, dificultadSeleccionada, turnos, isOpen, hayConflicto]);
+
+  // ============= FUNCIONES PARA MANEJAR PACIENTES =============
+  const agregarPaciente = (paciente: any) => {
+    if (pacientesSeleccionados.length >= 4) {
+      addToast({
+        variant: 'error',
+        message: 'Clase completa',
+        description: 'No se pueden agregar más de 4 participantes',
+      });
+      return;
+    }
+
+    if (!pacientesSeleccionados.includes(paciente.id_paciente)) {
+      setPacientesSeleccionados(prev => [...prev, paciente.id_paciente]);
+      setBusquedaPaciente('');
+      setMostrarListaPacientes(false);
+    }
+  };
+
+  const eliminarPaciente = (pacienteId: number) => {
+    setPacientesSeleccionados(prev => prev.filter(id => id !== pacienteId));
+  };
+
+  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setBusquedaPaciente(valor);
+    
+    if (!valor.trim()) {
+      setMostrarListaPacientes(false);
+    } else {
+      setMostrarListaPacientes(true);
+    }
+  };
 
   // ============= RESOLVER CONFLICTO =============
   const handleResolverConflicto = async () => {
@@ -145,13 +242,14 @@ export function DetalleClaseModal({
       console.log('📝 Especialista seleccionado:', especialistaSeleccionado);
       console.log('📋 Turnos a actualizar:', turnos.length);
 
-      // Actualizar todos los turnos al especialista seleccionado
+      // Actualizar todos los turnos al especialista seleccionado y dificultad
       for (const turno of turnos) {
         if (turno.id_especialista !== especialistaSeleccionado) {
           console.log(`🔄 Actualizando turno ${turno.id_turno} de ${turno.id_especialista} a ${especialistaSeleccionado}`);
           
           const resultado = await actualizarTurno(turno.id_turno, {
-            id_especialista: especialistaSeleccionado
+            id_especialista: especialistaSeleccionado,
+            dificultad: dificultadSeleccionada
           });
           
           console.log(`✅ Turno ${turno.id_turno} actualizado:`, resultado);
@@ -196,101 +294,6 @@ export function DetalleClaseModal({
     }
   };
 
-  // ============= AGREGAR PARTICIPANTE RÁPIDO =============
-  const handleAgregarRapido = async () => {
-    if (!pacienteRapido) {
-      addToast({
-        variant: 'error',
-        message: 'Selecciona un paciente',
-        description: 'Debes elegir un paciente para agregar a la clase.',
-      });
-      return;
-    }
-
-    if (turnos.length >= 4) {
-      addToast({
-        variant: 'error',
-        message: 'Clase completa',
-        description: 'No se pueden agregar más participantes (máximo 4).',
-      });
-      return;
-    }
-
-    // Verificar que no se duplique el paciente
-    const pacienteYaEnClase = turnos.some(t => t.id_paciente === parseInt(pacienteRapido));
-    if (pacienteYaEnClase) {
-      addToast({
-        variant: 'warning',
-        message: 'Paciente ya inscrito',
-        description: 'Este paciente ya está en la clase.',
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    try {
-      const fecha = fechaClase;
-      const hora = horaClase + ':00';
-      
-      console.log('➕ Agregando participante rápido:', {
-        paciente: pacienteRapido,
-        fecha,
-        hora,
-        especialista: especialistaSeleccionado,
-        participantes_actuales: turnos.length
-      });
-
-      const resultado = await crearTurno({
-        fecha,
-        hora,
-        id_especialista: especialistaSeleccionado,
-        id_especialidad: 4,
-        id_paciente: parseInt(pacienteRapido),
-        estado: "programado",
-        tipo_plan: "particular"
-      });
-
-      if (!resultado.success) {
-        throw new Error(resultado.error || 'Error al crear turno');
-      }
-
-      console.log('✅ Participante agregado:', resultado);
-
-      addToast({
-        variant: 'success',
-        message: 'Participante agregado',
-        description: `Se agregó el participante a la clase correctamente. (${turnos.length + 1}/4)`,
-      });
-
-      setModoAgregarRapido(false);
-      setPacienteRapido('');
-      
-      // ============= RECARGAR DATOS DEL MODAL PRIMERO =============
-      console.log('🔄 Recargando datos del modal después de agregar participante...');
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Recargar datos internos del modal
-      await recargarDatosModal();
-      
-      // Luego recargar los datos de la página principal
-      if (onTurnosActualizados) {
-        await Promise.resolve(onTurnosActualizados());
-      }
-      
-    } catch (error) {
-      console.error('❌ Error agregando participante:', error);
-      addToast({
-        variant: 'error',
-        message: 'Error al agregar participante',
-        description: error instanceof Error ? error.message : 'No se pudo agregar el participante a la clase.',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   // ============= GUARDAR CAMBIOS NORMALES =============
   const handleGuardarCambios = async () => {
     setIsSubmitting(true);
@@ -305,6 +308,7 @@ export function DetalleClaseModal({
         hora,
         especialistaSeleccionado,
         pacientesSeleccionados,
+        dificultadSeleccionada,
         pacientesActuales: turnos.map(t => t.id_paciente)
       });
       
@@ -327,17 +331,28 @@ export function DetalleClaseModal({
         }
       }
 
-      // 2. Actualizar especialista en turnos existentes (solo admin)
-      if (userRole === 1) {
-        const pacientesExistentes = pacientesSeleccionados.filter(id => pacientesActuales.includes(id));
-        
-        for (const pacienteId of pacientesExistentes) {
-          const turnoExistente = turnos.find(t => t.id_paciente === pacienteId);
-          if (turnoExistente && turnoExistente.id_especialista !== especialistaSeleccionado) {
-            console.log(`🔄 Actualizando especialista para turno ${turnoExistente.id_turno}`);
-            const resultado = await actualizarTurno(turnoExistente.id_turno, {
-              id_especialista: especialistaSeleccionado
-            });
+      // 2. Actualizar especialista y dificultad en turnos existentes  
+      const pacientesExistentes = pacientesSeleccionados.filter(id => pacientesActuales.includes(id));
+      
+      for (const pacienteId of pacientesExistentes) {
+        const turnoExistente = turnos.find(t => t.id_paciente === pacienteId);
+        if (turnoExistente) {
+          const actualizaciones: any = {};
+          
+          // Solo actualizar especialista si es admin
+          if (userRole === 1 && turnoExistente.id_especialista !== especialistaSeleccionado) {
+            actualizaciones.id_especialista = especialistaSeleccionado;
+          }
+          
+          // Siempre actualizar dificultad si cambió
+          if (turnoExistente.dificultad !== dificultadSeleccionada) {
+            actualizaciones.dificultad = dificultadSeleccionada;
+          }
+          
+          // Solo actualizar si hay cambios
+          if (Object.keys(actualizaciones).length > 0) {
+            console.log(`🔄 Actualizando turno ${turnoExistente.id_turno}`, actualizaciones);
+            const resultado = await actualizarTurno(turnoExistente.id_turno, actualizaciones);
             if (!resultado.success) {
               throw new Error(`Error actualizando turno: ${resultado.error}`);
             }
@@ -355,7 +370,8 @@ export function DetalleClaseModal({
           id_especialidad: 4, // Pilates
           id_paciente: pacienteId,
           estado: "programado",
-          tipo_plan: "particular"
+          tipo_plan: "particular",
+          dificultad: dificultadSeleccionada
         });
         
         if (!resultado.success) {
@@ -371,7 +387,7 @@ export function DetalleClaseModal({
         description: `Se aplicaron todos los cambios correctamente`,
       });
 
-      setModoEdicion(false);
+      setCambiosPendientes(false);
       
       // ============= RECARGAR DATOS DEL MODAL =============
       console.log('🔄 Recargando datos después de guardar cambios...');
@@ -445,22 +461,6 @@ export function DetalleClaseModal({
     }
   };
 
-  // Manejar selección de pacientes
-  const handlePacienteToggle = (pacienteId: number) => {
-    setPacientesSeleccionados(prev => {
-      if (prev.includes(pacienteId)) {
-        return prev.filter(id => id !== pacienteId);
-      } else {
-        return prev.length < 4 ? [...prev, pacienteId] : prev;
-      }
-    });
-  };
-
-  // ============= OBTENER PACIENTES DISPONIBLES PARA AGREGAR =============
-  const pacientesDisponibles = pacientes.filter(p => 
-    !turnos.some(t => t.id_paciente === p.id_paciente)
-  );
-
   const renderContenido = () => {
     // Confirmación de eliminación
     if (mostrarConfirmacionEliminar) {
@@ -488,80 +488,6 @@ export function DetalleClaseModal({
               className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
               {isSubmitting ? 'Eliminando...' : 'Eliminar'}
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    // Modo agregar participante rápido
-    if (modoAgregarRapido) {
-      return (
-        <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Plus className="w-5 h-5 text-blue-600" />
-              <span className="font-medium text-blue-800">Agregar Participante</span>
-            </div>
-            <p className="text-sm text-blue-700">
-              Agregar rápidamente un participante a esta clase de Pilates.
-            </p>
-          </div>
-
-          {/* Información de la clase */}
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="text-sm text-gray-600">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                <span>
-                  {fechaClase ? format(new Date(fechaClase), "EEEE dd/MM", { locale: es }) : ''} - {horaClase}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <Users className="w-4 h-4" />
-                <span>{turnos.length}/4 participantes actuales</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Selección de paciente */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Seleccionar paciente para agregar:
-            </label>
-            <select
-              value={pacienteRapido}
-              onChange={(e) => setPacienteRapido(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-            >
-              <option value="">Seleccionar paciente...</option>
-              {pacientesDisponibles.map(paciente => (
-                <option key={paciente.id_paciente} value={paciente.id_paciente}>
-                  {paciente.nombre} {paciente.apellido}
-                </option>
-              ))}
-            </select>
-            {pacientesDisponibles.length === 0 && (
-              <p className="text-sm text-gray-500 mt-1">
-                No hay pacientes disponibles para agregar.
-              </p>
-            )}
-          </div>
-
-          {/* Botones */}
-          <div className="flex gap-2 pt-4 border-t">
-            <button
-              onClick={() => setModoAgregarRapido(false)}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleAgregarRapido}
-              disabled={isSubmitting || !pacienteRapido}
-              className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors"
-            >
-              {isSubmitting ? 'Agregando...' : 'Agregar Participante'}
             </button>
           </div>
         </div>
@@ -638,6 +564,22 @@ export function DetalleClaseModal({
             </p>
           </div>
 
+          {/* Selección de dificultad para resolver conflicto */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nivel de dificultad para toda la clase:
+            </label>
+            <select
+              value={dificultadSeleccionada}
+              onChange={(e) => setDificultadSeleccionada(e.target.value as any)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="principiante">🟢 Principiante</option>
+              <option value="intermedio">🟡 Intermedio</option>
+              <option value="avanzado">🔴 Avanzado</option>
+            </select>
+          </div>
+
           {/* Lista de participantes afectados */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -679,7 +621,7 @@ export function DetalleClaseModal({
       );
     }
 
-    // Vista normal de la clase (sin conflictos)
+    // Vista principal del modal - TODO EDITABLE
     const especialistaActual = especialistas.find(e => String(e.id_usuario) === String(primeraClase?.id_especialista));
 
     return (
@@ -699,12 +641,12 @@ export function DetalleClaseModal({
             </div>
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-gray-500" />
-              <span>{turnos.length}/4 participantes</span>
+              <span>{pacientesSeleccionados.length}/4 participantes</span>
             </div>
           </div>
         </div>
 
-        {/* Especialista */}
+        {/* Especialista - EDITABLE PARA ADMIN */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -718,7 +660,7 @@ export function DetalleClaseModal({
             )}
           </div>
 
-          {modoEdicion && userRole === 1 ? (
+          {userRole === 1 ? (
             <select
               value={especialistaSeleccionado}
               onChange={(e) => setEspecialistaSeleccionado(e.target.value)}
@@ -743,104 +685,147 @@ export function DetalleClaseModal({
           )}
         </div>
 
-        {/* Participantes */}
+        {/* Nivel de Dificultad - SIEMPRE EDITABLE */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-gray-500" />
-              <span className="font-medium text-gray-700">
-                Participantes ({modoEdicion ? pacientesSeleccionados.length : turnos.length}/4)
-              </span>
-            </div>
-            {!modoEdicion && (
-              <button
-                onClick={() => setModoEdicion(true)}
-                className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
-              >
-                <UserPlus className="w-4 h-4" />
-                Editar
-              </button>
-            )}
+          <div className="flex items-center gap-2 mb-3">
+            <Settings className="w-4 h-4 text-gray-500" />
+            <span className="font-medium text-gray-700">Nivel de Dificultad</span>
           </div>
 
-          {modoEdicion ? (
-            <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-lg">
-              {pacientes.map(paciente => (
-                <label
-                  key={paciente.id_paciente}
-                  className="flex items-center gap-2 cursor-pointer px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                >
-                  <input
-                    type="checkbox"
-                    checked={pacientesSeleccionados.includes(paciente.id_paciente)}
-                    onChange={() => handlePacienteToggle(paciente.id_paciente)}
-                    disabled={
-                      !pacientesSeleccionados.includes(paciente.id_paciente) &&
-                      pacientesSeleccionados.length >= 4
-                    }
-                    className="w-4 h-4 text-[#9C1838] focus:ring-[#9C1838] border-gray-300 rounded"
-                  />
-                  <span className="text-sm">
-                    {paciente.nombre} {paciente.apellido}
-                  </span>
-                </label>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {turnos.map((turno, index) => (
-                <div key={turno.id_turno} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                  <span className="text-sm">
-                    {turno.paciente?.nombre} {turno.paciente?.apellido}
-                  </span>
-                </div>
-              ))}
-              
-              {/* Mostrar espacios disponibles con botón de agregar */}
-              {Array.from({ length: 4 - turnos.length }, (_, index) => (
-                <div key={`disponible-${index}`} className="flex items-center justify-between group p-2 bg-gray-50 rounded opacity-60 hover:opacity-100 transition-opacity">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-gray-300 rounded-full" />
-                    <span className="text-sm italic text-gray-500">Lugar disponible</span>
+          <select
+            value={dificultadSeleccionada}
+            onChange={(e) => setDificultadSeleccionada(e.target.value as any)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+          >
+            <option value="principiante">🟢 Principiante</option>
+            <option value="intermedio">🟡 Intermedio</option>
+            <option value="avanzado">🔴 Avanzado</option>
+          </select>
+          
+          <p className="text-xs text-gray-500 mt-2">
+            {dificultadSeleccionada === 'principiante' && 'Ideal para personas que recién comienzan con Pilates'}
+            {dificultadSeleccionada === 'intermedio' && 'Para personas con experiencia básica en Pilates'}
+            {dificultadSeleccionada === 'avanzado' && 'Para personas con experiencia avanzada en Pilates'}
+          </p>
+        </div>
+
+        {/* Participantes - CON BÚSQUEDA COMO EN NUEVO TURNO */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="w-4 h-4 text-gray-500" />
+            <span className="font-medium text-gray-700">
+              Participantes ({pacientesSeleccionados.length}/4)
+            </span>
+          </div>
+
+          {/* Lista de participantes actuales */}
+          {pacientesSeleccionados.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {pacientesSeleccionados.map(pacienteId => {
+                const paciente = pacientes.find(p => p.id_paciente === pacienteId);
+                if (!paciente) return null;
+                
+                return (
+                  <div key={pacienteId} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <span className="text-sm font-medium text-green-800">
+                      {paciente.nombre} {paciente.apellido}
+                    </span>
+                    <button
+                      onClick={() => eliminarPaciente(pacienteId)}
+                      className="text-red-500 hover:text-red-700 transition-colors"
+                      title="Eliminar participante"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setModoAgregarRapido(true)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-[#9C1838] hover:text-[#7d1329] font-medium"
-                  >
-                    + Agregar
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
+          )}
+
+          {/* Input para agregar participantes */}
+          {pacientesSeleccionados.length < 4 && (
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <Plus className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Agregar participante</span>
+              </div>
+              
+              <input
+                ref={inputPacienteRef}
+                type="text"
+                value={busquedaPaciente}
+                onChange={handleBusquedaPacienteChange}
+                onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
+                className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                placeholder="Buscar por nombre, DNI..."
+                autoComplete="off"
+              />
+              
+              {/* Lista de resultados de búsqueda */}
+              {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
+                <div 
+                  ref={listaPacientesRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                >
+                  {pacientesFiltrados
+                    .filter(paciente => !pacientesSeleccionados.includes(paciente.id_paciente))
+                    .map((paciente) => (
+                    <div
+                      key={paciente.id_paciente}
+                      onClick={() => agregarPaciente(paciente)}
+                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium">
+                        {paciente.nombre} {paciente.apellido}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Mensaje cuando no hay resultados */}
+              {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
+                <div 
+                  ref={listaPacientesRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
+                >
+                  No se encontraron pacientes
+                </div>
+              )}
+            </div>
+          )}
+          
+          {pacientesSeleccionados.length === 4 && (
+            <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+              <span>⚠️</span>
+              Clase completa (máximo 4 participantes)
+            </p>
           )}
         </div>
 
         {/* Botones de acción */}
         <div className="flex gap-2 pt-4 border-t">
-          {modoEdicion ? (
-            <>
-              <button
-                onClick={() => setModoEdicion(false)}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleGuardarCambios}
-                disabled={isSubmitting}
-                className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors"
-              >
-                {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
-              </button>
-            </>
-          ) : (
+          <button
+            onClick={() => setMostrarConfirmacionEliminar(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Eliminar clase
+          </button>
+          
+          <div className="flex-1"></div>
+          
+          {cambiosPendientes && (
             <button
-              onClick={() => setMostrarConfirmacionEliminar(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors"
+              onClick={handleGuardarCambios}
+              disabled={isSubmitting}
+              className="px-6 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors font-medium"
             >
-              <Trash2 className="w-4 h-4" />
-              Eliminar clase
+              {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
             </button>
           )}
         </div>
@@ -853,13 +838,11 @@ export function DetalleClaseModal({
       type="custom"
       size="lg"
       title={
-        modoAgregarRapido
-          ? "➕ Agregar Participante a Clase"
-          : hayConflicto && modoResolucionConflicto
-            ? "🚨 Resolver Conflicto de Especialistas"
-            : hayConflicto 
-              ? "⚠️ Clase con Conflicto - Modo Administrador" 
-              : "Detalles de Clase de Pilates"
+        hayConflicto && modoResolucionConflicto
+          ? "🚨 Resolver Conflicto de Especialistas"
+          : hayConflicto 
+            ? "⚠️ Clase con Conflicto - Modo Administrador" 
+            : "Detalles de Clase de Pilates"
       }
       customIcon={
         <Image

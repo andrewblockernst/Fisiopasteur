@@ -85,7 +85,7 @@ export default function PilatesCalendarioSemanal({
     return turnosEnSlot.length >= 4; // Máximo 4 personas por clase
   };
 
-  // Obtener el color de fondo según la ocupación
+  // Obtener el color de fondo según la dificultad
   const getSlotBackgroundColor = (dia: Date, horario: string) => {
     const turnosEnSlot = getTurnosParaSlot(dia, horario);
     const grupos = agruparTurnosPorEspecialista(turnosEnSlot);
@@ -95,15 +95,24 @@ export default function PilatesCalendarioSemanal({
       return "bg-red-100 border-red-300";
     }
     
-    const count = turnosEnSlot.length;
+    // Si no hay turnos, mostrar color neutro
+    if (turnosEnSlot.length === 0) {
+      return "bg-gray-50 hover:bg-gray-100";
+    }
     
-    if (count === 0) return "bg-gray-50 hover:bg-gray-100";
-    if (count === 1) return "bg-green-50 hover:bg-green-100";
-    if (count === 2) return "bg-yellow-50 hover:bg-yellow-100";
-    if (count === 3) return "bg-orange-50 hover:bg-orange-100";
-    if (count >= 4) return "bg-red-50";
+    // Obtener la dificultad del primer turno (todos deben tener la misma dificultad)
+    const dificultad = turnosEnSlot[0]?.dificultad;
     
-    return "bg-gray-50 hover:bg-gray-100";
+    switch (dificultad) {
+      case 'principiante':
+        return "bg-green-100 hover:bg-green-200";
+      case 'intermedio':
+        return "bg-yellow-100 hover:bg-yellow-200";
+      case 'avanzado':
+        return "bg-red-100 hover:bg-red-200";
+      default:
+        return "bg-gray-100 hover:bg-gray-200";
+    }
   };
 
   // Renderizar el contenido de un slot con clase
@@ -135,38 +144,42 @@ export default function PilatesCalendarioSemanal({
     const especialistaId = Object.keys(grupos)[0];
     const turnosEspecialista = grupos[especialistaId];
     const especialista = especialistas.find(e => String(e.id_usuario) === String(especialistaId));
-    const color = especialista?.color || "#e0e7ff";
+    
+    // Obtener color de fondo según dificultad
+    const dificultad = turnosEspecialista[0]?.dificultad;
+    let backgroundColorClass = "bg-gray-100";
+    
+    switch (dificultad) {
+      case 'principiante':
+        backgroundColorClass = "bg-green-100";
+        break;
+      case 'intermedio':
+        backgroundColorClass = "bg-yellow-100";
+        break;
+      case 'avanzado':
+        backgroundColorClass = "bg-red-100";
+        break;
+    }
 
     // Calcular espacios disponibles
     const espaciosDisponibles = 4 - turnosEspecialista.length;
 
     return (
       <div 
-        className="h-full w full p-2 rounded-lg cursor-pointer hover:shadow-md transition-all"
-        style={{ 
-          backgroundColor: color + "40",
-          border: `2px solid ${color}`
-        }}
+        className={`h-full w-full p-3 rounded-lg cursor-pointer hover:shadow-lg transition-all ${backgroundColorClass}`}
         onClick={() => onVerTurno?.(turnosEnSlot)}
       >
-        {/* Horario en la esquina superior derecha */}
-        <div className="text-right mb-1">
-          <span className="text-xs font-medium text-gray-700 bg-white bg-opacity-60 px-1 rounded">
-            {horario}
-          </span>
-        </div>
-
         {/* Nombre del especialista */}
-        <div className="text-sm font-semibold text-gray-800 mb-2 text-center">
+        <div className="text-sm font-bold text-gray-800 mb-3 text-center">
           {especialista?.nombre} {especialista?.apellido}
         </div>
 
         {/* Lista de participantes */}
-        <div className="space-y-1 mb-2">
+        <div className="space-y-1 mb-3">
           {turnosEspecialista.map((turno, index) => (
             <div key={turno.id_turno} className="flex items-center text-xs text-gray-700">
-              <span className="w-1 h-1 bg-gray-600 rounded-full mr-2 flex-shrink-0"></span>
-              <span className="truncate">
+              <span className="w-1.5 h-1.5 bg-gray-600 rounded-full mr-2 flex-shrink-0"></span>
+              <span className="truncate font-medium">
                 {turno.paciente?.nombre} {turno.paciente?.apellido}
               </span>
             </div>
@@ -175,7 +188,7 @@ export default function PilatesCalendarioSemanal({
           {/* Mostrar espacios disponibles */}
           {Array.from({ length: espaciosDisponibles }, (_, index) => (
             <div key={`disponible-${index}`} className="flex items-center text-xs text-gray-500">
-              <span className="w-1 h-1 bg-gray-400 rounded-full mr-2 flex-shrink-0"></span>
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full mr-2 flex-shrink-0"></span>
               <span className="italic">Lugar disponible</span>
             </div>
           ))}
@@ -183,14 +196,13 @@ export default function PilatesCalendarioSemanal({
 
         {/* Indicador de capacidad en la parte inferior */}
         <div className="text-center">
-          <span className="text-xs font-medium text-gray-600 bg-white bg-opacity-60 px-2 py-1 rounded-full">
+          <span className="text-sm font-bold text-gray-700 bg-white bg-opacity-80 px-3 py-1 rounded-full shadow-sm">
             {turnosEspecialista.length}/4
           </span>
         </div>
       </div>
     );
   };
-
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Header del calendario */}
@@ -229,24 +241,20 @@ export default function PilatesCalendarioSemanal({
           </div>
         </div>
 
-        {/* Leyenda de ocupación */}
+        {/* Leyenda de dificultades */}
         <div className="mt-3 flex items-center gap-4 text-xs">
-          <span className="text-gray-600">Ocupación:</span>
+          <span className="text-gray-600">Niveles de dificultad:</span>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-200 rounded"></div>
-            <span className="text-gray-700">1 participante</span>
+            <span className="text-gray-700">Principiante</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-yellow-200 rounded"></div>
-            <span className="text-gray-700">2 participantes</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-orange-200 rounded"></div>
-            <span className="text-gray-700">3 participantes</span>
+            <span className="text-gray-700">Intermedio</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-200 rounded"></div>
-            <span className="text-gray-700">Completo (4)</span>
+            <span className="text-gray-700">Avanzado</span>
           </div>
         </div>
       </div>
