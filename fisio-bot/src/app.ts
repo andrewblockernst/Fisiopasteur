@@ -883,17 +883,22 @@ const main = async () => {
     )
 
     // Endpoint de health check simple y rápido (para monitoring)
-    adapterProvider.server.get('/health', (req, res) => {
+    // Soporta tanto GET como HEAD (requerido por UptimeRobot)
+    const healthHandler = (req: any, res: any) => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ 
             status: 'ok',
             uptime: Math.floor(process.uptime()),
             timestamp: new Date().toISOString()
         }))
-    })
+    }
+    
+    adapterProvider.server.get('/health', healthHandler)
+    adapterProvider.server.head('/health', healthHandler)
     
     // Endpoint de estado/health check detallado
-    adapterProvider.server.get('/api/health', (req, res) => {
+    // Soporta tanto GET como HEAD (requerido por UptimeRobot)
+    const apiHealthHandler = (req: any, res: any) => {
         const uptime = Math.floor(process.uptime())
         const hours = Math.floor(uptime / 3600)
         const minutes = Math.floor((uptime % 3600) / 60)
@@ -910,7 +915,10 @@ const main = async () => {
                 heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
             }
         }))
-    })
+    }
+    
+    adapterProvider.server.get('/api/health', apiHealthHandler)
+    adapterProvider.server.head('/api/health', apiHealthHandler)
     
     // Endpoint para verificar si está autenticado
     adapterProvider.server.get('/api/status', (req, res) => {
