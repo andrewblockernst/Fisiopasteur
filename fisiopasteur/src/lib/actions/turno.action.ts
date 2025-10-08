@@ -962,6 +962,7 @@ export async function crearTurnosEnLote(turnos: Array<{
   descripcion?: string;
   tipo?: string;
   estado?: string;
+  dificultad?: 'principiante' | 'intermedio' | 'avanzado';
 }>) {
   try {
     const supabase = await createClient();
@@ -971,9 +972,6 @@ export async function crearTurnosEnLote(turnos: Array<{
     // Crear turnos uno por uno
     for (const turnoData of turnos) {
       try {
-        // Verificar disponibilidad (simplificada para evitar errores)
-        // En una implementación completa, aquí verificaríamos disponibilidad
-
         // Crear turno con los campos correctos
         const { data: turno, error } = await supabase
           .from("turno")
@@ -984,7 +982,8 @@ export async function crearTurnosEnLote(turnos: Array<{
             hora: turnoData.hora_inicio,
             id_especialidad: 4, // Pilates
             estado: turnoData.estado || 'programado',
-            tipo_plan: 'particular'
+            tipo_plan: 'particular',
+            dificultad: turnoData.dificultad || 'principiante' // ✅ USAR LA DIFICULTAD PASADA O DEFAULT
           })
           .select()
           .single();
