@@ -582,7 +582,8 @@ export function DetalleClaseModal({
             id_clase_pilates: undefined, // Se puede agregar después si se tiene la referencia
             descripcion: `Clase de Pilates - ${dificultadAUsar} (Repetición)`,
             tipo: 'pilates',
-            estado: 'programado'
+            estado: 'programado',
+            dificultad: dificultadAUsar,
           }));
 
           // Usar función de lote para evitar spam de notificaciones

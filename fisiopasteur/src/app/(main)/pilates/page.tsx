@@ -43,18 +43,13 @@ export default function PilatesPage() {
     const hasta = format(addDays(startOfWeek(semanaBase, { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
     
     try {
-      console.log('🔍 Cargando turnos de Pilates desde:', desde, 'hasta:', hasta);
-      
       const res = await obtenerTurnosConFiltros({ 
         fecha_desde: desde, 
         fecha_hasta: hasta,
         especialidad_id: 4 // Filtrar solo turnos de Pilates
       });
       
-      console.log('📊 Respuesta de turnos:', res);
-      
       if (res.success && Array.isArray(res.data)) {
-        console.log('📋 Turnos encontrados:', res.data.length);
         
         const turnosConColor = res.data.map((t: any) => {
           const especialista = especialistas.find(e => String(e.id_usuario) === String(t.id_especialista));
@@ -63,8 +58,6 @@ export default function PilatesPage() {
             especialista_color: especialista?.color || "#e0e7ff"
           };
         });
-        
-        console.log('🎨 Turnos con color:', turnosConColor);
         setTurnos(turnosConColor);
       } else {
         console.error('❌ Error en respuesta de turnos:', res.error);
