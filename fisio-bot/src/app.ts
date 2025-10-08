@@ -381,6 +381,27 @@ const main = async () => {
         }
     }
     
+    // Función helper para fetch con timeout
+    const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 25000) => {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), timeoutMs)
+        
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            })
+            clearTimeout(timeout)
+            return response
+        } catch (error: any) {
+            clearTimeout(timeout)
+            if (error.name === 'AbortError') {
+                throw new Error(`Timeout después de ${timeoutMs}ms`)
+            }
+            throw error
+        }
+    }
+
     // Escuchar cuando el bot se conecta para iniciar recordatorios
     adapterProvider.on('ready', () => {
         console.log('🤖 Bot conectado y listo')
@@ -390,40 +411,52 @@ const main = async () => {
         
         const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app'
         
-        // Función para procesar recordatorios llamando al endpoint de Vercel
+        // Función para procesar recordatorios llamando al endpoint de Vercel con timeout
         const procesarRecordatoriosViaAPI = async () => {
             try {
-                console.log('🔄 Llamando al endpoint de recordatorios...')
-                const response = await fetch(`${FISIOPASTEUR_URL}/api/cron/recordatorios`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
+                const startTime = Date.now()
+                console.log(`🔄 [${new Date().toISOString()}] Llamando al endpoint de recordatorios...`)
+                
+                const response = await fetchWithTimeout(
+                    `${FISIOPASTEUR_URL}/api/cron/recordatorios`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
                     },
-                })
+                    25000 // Timeout de 25 segundos (menos que el límite de Heroku de 30s)
+                )
+                
+                const duration = Date.now() - startTime
                 
                 if (!response.ok) {
-                    console.error(`❌ Error en llamada API: ${response.status}`)
+                    console.error(`❌ Error en llamada API: ${response.status} (${duration}ms)`)
                     return
                 }
                 
                 const resultado = await response.json()
                 if (resultado.success) {
-                    console.log(`✅ Recordatorios procesados vía API: ${JSON.stringify(resultado.data)}`)
+                    console.log(`✅ Recordatorios procesados vía API en ${duration}ms: ${JSON.stringify(resultado.data)}`)
                 } else {
-                    console.error(`❌ Error en API de recordatorios: ${resultado.message}`)
+                    console.error(`❌ Error en API de recordatorios (${duration}ms): ${resultado.message}`)
                 }
-            } catch (error) {
-                console.error('❌ Error llamando al endpoint de recordatorios:', error)
+            } catch (error: any) {
+                if (error.message.includes('Timeout')) {
+                    console.error(`⏱️ Timeout al llamar al endpoint de recordatorios (>25s)`)
+                } else {
+                    console.error('❌ Error llamando al endpoint de recordatorios:', error.message)
+                }
             }
         }
         
         // Ejecutar inmediatamente
         procesarRecordatoriosViaAPI()
         
-        // Ejecutar cada 60 segundos
-        recordatoriosInterval = setInterval(procesarRecordatoriosViaAPI, 60000)
+        // Ejecutar cada 2 minutos (reducido de 60s para evitar sobrecarga)
+        recordatoriosInterval = setInterval(procesarRecordatoriosViaAPI, 120000)
         
-        console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 60 segundos)')
+        console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 2 minutos)')
     })
     
     // Escuchar cuando el bot se desconecta para detener recordatorios
@@ -849,22 +882,45 @@ const main = async () => {
         })
     )
 
-    // Endpoint de estado/health check
-    adapterProvider.server.get('/api/health', (req, res) => {
+    // Endpoint de health check simple y rápido (para monitoring)
+    adapterProvider.server.get('/health', (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ 
             status: 'ok',
+            uptime: Math.floor(process.uptime()),
+            timestamp: new Date().toISOString()
+        }))
+    })
+    
+    // Endpoint de estado/health check detallado
+    adapterProvider.server.get('/api/health', (req, res) => {
+        const uptime = Math.floor(process.uptime())
+        const hours = Math.floor(uptime / 3600)
+        const minutes = Math.floor((uptime % 3600) / 60)
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        return res.end(JSON.stringify({ 
+            status: 'ok',
+            uptime: `${hours}h ${minutes}m`,
+            uptimeSeconds: uptime,
             timestamp: new Date().toISOString(),
-            service: 'Fisiopasteur WhatsApp Bot'
+            service: 'Fisiopasteur WhatsApp Bot',
+            memory: {
+                rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
+                heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+            }
         }))
     })
     
     // Endpoint para verificar si está autenticado
     adapterProvider.server.get('/api/status', (req, res) => {
         const isAuthenticated = adapterProvider.vendor?.authState?.creds ? true : false
+        const uptime = Math.floor(process.uptime())
+        
         res.writeHead(200, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ 
             authenticated: isAuthenticated,
+            uptime: uptime,
             timestamp: new Date().toISOString(),
             service: 'Fisiopasteur WhatsApp Bot'
         }))
