@@ -154,6 +154,7 @@ export function DayViewModal({
             precio: (turnoEditando as any).precio ?? null,
             updated_at: (turnoEditando as any).updated_at ?? null,
             tipo_plan: (turnoEditando as any).tipo_plan ?? null,
+            dificultad: (turnoEditando as any).dificultad ?? null,
           }}
           open={Boolean(turnoEditando)}
           onClose={() => setTurnoEditando(null)}
