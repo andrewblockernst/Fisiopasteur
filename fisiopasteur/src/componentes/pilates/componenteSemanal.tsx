@@ -16,7 +16,7 @@ interface PilatesCalendarioSemanalProps {
 // Horarios disponibles para Pilates
 const HORARIOS_PILATES = [
   "08:00", "09:00", "10:00", "11:00", 
-  "14:30", "15:30", "16:30", "17:30", "18:30", "19:30"
+  "14:30", "15:30", "16:30", "17:30", "18:30", "19:30", "20:30", "21:30"
 ];
 
 // Función para obtener días de la semana

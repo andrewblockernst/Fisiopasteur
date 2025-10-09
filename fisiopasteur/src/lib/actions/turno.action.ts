@@ -194,7 +194,7 @@ export async function crearTurno(datos: TurnoInsert) {
         datos.hora,
         datos.id_especialista,
         datos.id_box || undefined,
-        datos.id_especialidad ?? undefined // ← PASAR LA ESPECIALIDAD
+        datos.id_especialidad ?? undefined
       );
       
       if (!disponibilidad.success || !disponibilidad.disponible) {
@@ -365,7 +365,7 @@ export async function crearTurno(datos: TurnoInsert) {
     }
 
     revalidatePath("/turnos");
-    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
+    revalidatePath("/pilates");
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
@@ -406,8 +406,8 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
             nuevaHora,
             nuevoEspecialista,
             nuevoBox,
-            id, // excluir el turno actual de la verificación
-            especialidadId ?? undefined // ← PASAR LA ESPECIALIDAD
+            id,
+            especialidadId ?? undefined
           );
           
           if (!disponibilidad.success || !disponibilidad.disponible) {
@@ -450,7 +450,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
     }
 
     revalidatePath("/turnos");
-    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
+    revalidatePath("/pilates");
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
@@ -486,7 +486,7 @@ export async function eliminarTurno(id: number) {
     }
 
     revalidatePath("/turnos");
-    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
+    revalidatePath("/pilates");
     return { success: true };
   } catch (error) {
     console.error("Error inesperado:", error);
@@ -510,7 +510,7 @@ export async function cancelarTurno(id: number, motivo?: string) {
 
     if (error) return { success: false, error: error.message };
     revalidatePath("/turnos");
-    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
+    revalidatePath("/pilates");
     return { success: true, data };
   } catch {
     return { success: false, error: "Error inesperado" };
@@ -532,7 +532,7 @@ export async function marcarComoAtendido(id_turno: number) {
     if (error) throw error;
 
     revalidatePath('/turnos');
-    revalidatePath("/pilates"); // ← AGREGADO PARA PILATES
+    revalidatePath("/pilates");
     return { success: true };
   } catch (error) {
     console.error('Error al marcar turno como atendido:', error);
@@ -584,13 +584,12 @@ export async function obtenerAgendaEspecialista(
 // ✅ FUNCIONES DE DISPONIBILIDAD
 // =====================================
 
-// ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
 export async function verificarDisponibilidad(
   fecha: string,
   hora: string,
   especialista_id?: string,
   box_id?: number,
-  especialidad_id?: number // ← NUEVO PARÁMETRO
+  especialidad_id?: number
 ) {
   const supabase = await createClient();
   try {
@@ -613,10 +612,9 @@ export async function verificarDisponibilidad(
     }
 
     // ============= LÓGICA ESPECIAL PARA PILATES =============
-    if (especialidad_id === 4) { // Si es Pilates
+    if (especialidad_id === 4) {
       console.log(`🧘‍♀️ Verificando disponibilidad Pilates: ${data.length} participantes actuales`);
       
-      // En Pilates se permiten hasta 4 participantes por clase
       const pilatesTurnos = data.filter(t => t.id_especialidad === 4);
       const disponible = pilatesTurnos.length < 4;
       
@@ -642,14 +640,13 @@ export async function verificarDisponibilidad(
   }
 }
 
-// ============= VERIFICAR DISPONIBILIDAD PARA ACTUALIZACIÓN CON LÓGICA PILATES =============
 export async function verificarDisponibilidadParaActualizacion(
   fecha: string,
   hora: string,
   especialista_id: string,
   box_id: number | null | undefined,
   turno_excluir: number,
-  especialidad_id?: number // ← NUEVO PARÁMETRO
+  especialidad_id?: number
 ) {
   const supabase = await createClient();
   
@@ -661,7 +658,7 @@ export async function verificarDisponibilidadParaActualizacion(
       .eq("id_especialista", especialista_id)
       .neq("estado", "cancelado")
       .neq("id_turno", turno_excluir)
-      .eq("hora", hora); // Solo la hora exacta para Pilates
+      .eq("hora", hora);
 
     if (box_id !== null && box_id !== undefined) {
       query = query.eq("id_box", box_id);
@@ -703,12 +700,10 @@ export async function verificarDisponibilidadParaActualizacion(
 // 📊 FUNCIONES AUXILIARES
 // =====================================
 
-// Obtener especialistas activos con sus especialidades Y ROL (incluye admins con especialidades)
 export async function obtenerEspecialistas() {
   const supabase = await createClient();
   
   try {
-    // Obtener usuarios que tienen especialidades asignadas en usuario_especialidad
     const { data, error } = await supabase
       .from("usuario_especialidad")
       .select(`
@@ -741,7 +736,6 @@ export async function obtenerEspecialistas() {
       return { success: false, error: error.message };
     }
 
-    // Transformar los datos para agrupar especialidades por usuario
     const especialistasMap = new Map();
     
     data?.forEach(item => {
@@ -759,12 +753,11 @@ export async function obtenerEspecialistas() {
           activo: usuario.activo,
           id_rol: usuario.id_rol, 
           rol: usuario.rol,       
-          especialidad: null, // No hay especialidad principal
+          especialidad: null,
           usuario_especialidad: []
         });
       }
       
-      // Agregar la especialidad a la lista
       especialistasMap.get(usuario.id_usuario).usuario_especialidad.push({
         especialidad: especialidad
       });
@@ -779,7 +772,6 @@ export async function obtenerEspecialistas() {
   }
 }
 
-// Obtener todas las especialidades
 export async function obtenerEspecialidades() {
   const supabase = await createClient();
   
@@ -801,7 +793,6 @@ export async function obtenerEspecialidades() {
   }
 }
 
-// Obtener boxes/consultorios disponibles
 export async function obtenerBoxes() {
   const supabase = await createClient();
   
@@ -824,7 +815,6 @@ export async function obtenerBoxes() {
   }
 }
 
-// Obtener precio configurado para un especialista por especialidad y plan
 export async function obtenerPrecioEspecialidad(
   especialista_id: string,
   especialidad_id: number,
@@ -859,7 +849,6 @@ export async function obtenerPrecioEspecialidad(
   }
 }
 
-// Obtener pacientes (para el selector de pacientes)
 export async function obtenerPacientes(busqueda?: string) {
   const supabase = await createClient();
   
@@ -869,9 +858,8 @@ export async function obtenerPacientes(busqueda?: string) {
       .select("id_paciente, nombre, apellido, dni, telefono, email")
       .order("apellido")
       .order("nombre")
-      .limit(50); // Limitar para performance
+      .limit(50);
 
-    // Si hay búsqueda, filtrar por nombre, apellido o DNI
     if (busqueda && busqueda.length > 2) {
       query = query.or(`nombre.ilike.%${busqueda}%,apellido.ilike.%${busqueda}%,dni.ilike.%${busqueda}%`);
     }
@@ -894,7 +882,6 @@ export async function obtenerPacientes(busqueda?: string) {
 // 📈 FUNCIONES DE ESTADÍSTICAS
 // =====================================
 
-// Obtener estadísticas de turnos para dashboard
 export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hasta?: string) {
   const supabase = await createClient();
   
@@ -917,7 +904,6 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
       return { success: false, error: error.message };
     }
 
-    // Procesar estadísticas
     const total = data.length;
     const porEstado = data.reduce((acc: any, turno) => {
       acc[turno.estado || 'sin_estado'] = (acc[turno.estado || 'sin_estado'] || 0) + 1;
@@ -938,9 +924,6 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
         porEstado,
         porEspecialista,
         periodo: { fecha_desde, fecha_hasta }
-
-
-
       }
     };
   } catch (error) {
@@ -949,9 +932,10 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
   }
 }
 
-/**
- * Crear múltiples turnos en lote con notificaciones agrupadas
- */
+// =====================================
+// 🔁 CREAR TURNOS EN LOTE (PILATES)
+// =====================================
+
 export async function crearTurnosEnLote(turnos: Array<{
   id_paciente: string;
   id_especialista: string;
@@ -972,7 +956,6 @@ export async function crearTurnosEnLote(turnos: Array<{
     // Crear turnos uno por uno
     for (const turnoData of turnos) {
       try {
-        // Crear turno con los campos correctos
         const { data: turno, error } = await supabase
           .from("turno")
           .insert({
@@ -980,10 +963,10 @@ export async function crearTurnosEnLote(turnos: Array<{
             id_especialista: turnoData.id_especialista,
             fecha: turnoData.fecha,
             hora: turnoData.hora_inicio,
-            id_especialidad: 4, // Pilates
+            id_especialidad: 4,
             estado: turnoData.estado || 'programado',
             tipo_plan: 'particular',
-            dificultad: turnoData.dificultad || 'principiante' // ✅ USAR LA DIFICULTAD PASADA O DEFAULT
+            dificultad: turnoData.dificultad || 'principiante'
           })
           .select()
           .single();
@@ -1003,10 +986,9 @@ export async function crearTurnosEnLote(turnos: Array<{
           const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
           const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
           
-          const tiposRecordatorio: ('1d' | '2h')[] = ['1d', '2h']; // Recordatorios por defecto con tipos explícitos
+          const tiposRecordatorio: ('1d' | '2h')[] = ['1d', '2h'];
           const tiemposRecordatorio = calcularTiemposRecordatorio(turno.fecha, turno.hora, tiposRecordatorio);
           
-          // Obtener datos del paciente para el teléfono
           if (turno.id_paciente) {
             const { data: pacienteData } = await supabase
               .from("paciente")
@@ -1016,7 +998,6 @@ export async function crearTurnosEnLote(turnos: Array<{
             
             if (pacienteData?.telefono) {
               const mensaje = `Recordatorio: Tienes un turno de Pilates programado`;
-              // Filtrar solo las fechas válidas (no null)
               const tiemposValidos: Record<string, Date> = {};
               Object.entries(tiemposRecordatorio).forEach(([tipo, fecha]) => {
                 if (fecha) {
@@ -1069,9 +1050,10 @@ export async function crearTurnosEnLote(turnos: Array<{
   }
 }
 
-/**
- * Procesar notificaciones para turnos de repetición (agrupadas por paciente)
- */
+// =====================================
+// 📱 NOTIFICACIONES AGRUPADAS
+// =====================================
+
 async function procesarNotificacionesRepeticion(turnos: any[]) {
   try {
     // Agrupar turnos por paciente
@@ -1085,163 +1067,36 @@ async function procesarNotificacionesRepeticion(turnos: any[]) {
 
     // Enviar notificación agrupada por cada paciente
     for (const [id_paciente, turnosPaciente] of Object.entries(turnosPorPaciente)) {
-      if (turnosPaciente.length === 1) {
-        // Si solo tiene un turno, usar notificación individual
-        await procesarNotificacionesIndividual(turnosPaciente[0]);
-      } else {
-        // Si tiene múltiples turnos, usar notificación agrupada
-        await enviarNotificacionGrupal(id_paciente, turnosPaciente);
-      }
+      await enviarNotificacionGrupal(id_paciente, turnosPaciente);
     }
   } catch (error) {
     console.error("Error al procesar notificaciones de repetición:", error);
   }
 }
 
-/**
- * Procesar notificaciones para un turno individual
- */
-async function procesarNotificacionesIndividual(turno: any) {
-  try {
-    const supabase = await createClient();
-    
-    // Obtener datos del paciente y especialista
-    const { data: paciente } = await supabase
-      .from("paciente")
-      .select("nombre, telefono")
-      .eq("id", turno.id_paciente)
-      .single();
-
-    const { data: especialista } = await supabase
-      .from("usuario")
-      .select("nombre")
-      .eq("id_usuario", turno.id_especialista)
-      .single();
-
-    if (!paciente || !especialista) {
-      console.error("No se pudieron obtener datos del paciente o especialista");
-      return;
-    }
-
-    // Registrar notificación en base de datos
-    const { data: notificacion } = await supabase
-      .from("notificacion")
-      .insert({
-        id_turno: turno.id_turno,
-        mensaje: `Turno confirmado con ${especialista.nombre} para el ${new Date(turno.fecha).toLocaleDateString()} a las ${turno.hora}`,
-        medio: "whatsapp",
-        telefono: paciente.telefono,
-        estado: "pendiente"
-      })
-      .select()
-      .single();
-
-    if (notificacion && paciente.telefono) {
-      // Enviar notificación por WhatsApp
-      const whatsappService = await import('../services/whatsapp-bot.service');
-      await whatsappService.enviarConfirmacionTurno(
-        paciente.telefono,
-        paciente.nombre,
-        especialista.nombre,
-        turno.fecha,
-        turno.hora_inicio
-      );
-
-      // Marcar como enviada
-      await supabase
-        .from("notificacion")
-        .update({ estado: "enviada", fecha_envio: new Date().toISOString() })
-        .eq("id_notificacion", notificacion.id_notificacion);
-    }
-  } catch (error) {
-    console.error("Error al procesar notificación individual:", error);
-  }
-}
-
-/**
- * Analizar patrones de turnos para crear mensaje inteligente
- */
-function analizarPatronesTurnos(turnos: any[]) {
-  const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-  
-  // Agrupar turnos por día de la semana y horario
-  const patronesPorDiaYHora: Record<string, Set<string>> = {};
-  
-  turnos.forEach(turno => {
-    const fecha = new Date(turno.fecha);
-    const diaSemana = diasSemana[fecha.getDay()];
-    const hora = turno.hora || turno.hora_inicio;
-    const horaFormateada = hora.substring(0, 5); // "09:00:00" -> "09:00"
-    
-    const key = `${diaSemana}_${horaFormateada}`;
-    if (!patronesPorDiaYHora[key]) {
-      patronesPorDiaYHora[key] = new Set();
-    }
-    patronesPorDiaYHora[key].add(turno.fecha);
-  });
-
-  // Convertir a formato legible
-  const patronesTexto: string[] = [];
-  Object.keys(patronesPorDiaYHora).forEach(key => {
-    const [dia, hora] = key.split('_');
-    const cantidadTurnos = patronesPorDiaYHora[key].size;
-    // Plural correcto para días de la semana
-    const diaPlural = dia === 'miércoles' ? 'miércoles' : `${dia}s`;
-    patronesTexto.push(`${diaPlural} a las ${hora} (${cantidadTurnos} clases)`);
-  });
-
-  return {
-    patronesTexto,
-    totalTurnos: turnos.length,
-    diasUnicos: Object.keys(patronesPorDiaYHora).length
-  };
-}
-
-/**
- * Enviar notificación agrupada para múltiples turnos del mismo paciente
- */
+// ✅ FUNCIÓN SIMPLIFICADA - Solo delega al servicio de WhatsApp
 async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
   try {
     const supabase = await createClient();
     
-    // Obtener datos del paciente
+    // 1. Obtener datos del paciente
     const { data: paciente } = await supabase
       .from("paciente")
       .select("nombre, telefono")
       .eq("id_paciente", parseInt(id_paciente))
       .single();
 
-    if (!paciente) {
-      console.error("No se pudieron obtener datos del paciente");
+    if (!paciente || !paciente.telefono) {
+      console.error("No se pudieron obtener datos del paciente o no tiene teléfono");
       return;
     }
 
-    // Analizar patrones de turnos
-    const analisis = analizarPatronesTurnos(turnos);
-    
-    // Crear mensaje inteligente basado en patrones
-    let mensaje: string;
-    
-    if (analisis.totalTurnos <= 5) {
-      // Para pocos turnos, mostrar fechas específicas
-      const fechas = turnos.map(t => {
-        const fecha = new Date(t.fecha).toLocaleDateString('es-AR');
-        const hora = (t.hora || t.hora_inicio).substring(0, 5);
-        return `${fecha} a las ${hora}`;
-      });
-      
-      mensaje = `¡Hola ${paciente.nombre}! 🌟\n\nSe han confirmado ${analisis.totalTurnos} turnos para ti:\n\n${fechas.map(f => `• ${f}`).join('\n')}\n\nTe esperamos en Fisiopasteur. ¡Nos vemos pronto! 💪`;
-    } else {
-      // Para muchos turnos, mostrar patrón de días
-      mensaje = `¡Hola ${paciente.nombre}! 🌟\n\nSe han confirmado tus turnos de Pilates:\n\n${analisis.patronesTexto.map(p => `• ${p}`).join('\n')}\n\nTotal: ${analisis.totalTurnos} clases programadas\n\nTe esperamos en Fisiopasteur. ¡Nos vemos pronto! 💪\n\n_Recibirás recordatorios antes de cada clase._`;
-    }
-
-    // Registrar notificación agrupada (usar el primer turno como referencia)
+    // 2. Registrar notificación en BD
     const { data: notificacion } = await supabase
       .from("notificacion")
       .insert({
-        id_turno: turnos[0].id_turno, // Usar primer turno como referencia
-        mensaje: mensaje,
+        id_turno: turnos[0].id_turno,
+        mensaje: `Confirmación de ${turnos.length} turnos de Pilates`,
         medio: "whatsapp",
         telefono: paciente.telefono,
         estado: "pendiente"
@@ -1249,23 +1104,36 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
       .select()
       .single();
 
-    if (notificacion && paciente.telefono) {
-      // Enviar notificación por WhatsApp
-      const whatsappService = await import('../services/whatsapp-bot.service');
-      await whatsappService.enviarNotificacionGrupal(
-        paciente.telefono,
-        paciente.nombre,
-        turnos
-      );
+    // 3. Importar y llamar al servicio de WhatsApp (que tiene toda la lógica)
+    const whatsappService = await import('../services/whatsapp-bot.service');
+    const resultado = await whatsappService.enviarNotificacionGrupal(
+      paciente.telefono,
+      paciente.nombre,
+      turnos
+    );
 
-      // Marcar como enviada
-      await supabase
-        .from("notificacion")
-        .update({ 
-          estado: "enviada", 
-          fecha_envio: new Date().toISOString() 
-        })
-        .eq("id_notificacion", notificacion.id_notificacion);
+    // 4. Actualizar estado según resultado
+    if (resultado.status === 'success') {
+      console.log(`✅ Notificación agrupada enviada a ${paciente.telefono} para ${turnos.length} turnos`);
+      
+      if (notificacion) {
+        await supabase
+          .from("notificacion")
+          .update({ 
+            estado: "enviada", 
+            fecha_envio: new Date().toISOString() 
+          })
+          .eq("id_notificacion", notificacion.id_notificacion);
+      }
+    } else {
+      console.error(`❌ Error enviando notificación agrupada: ${resultado.message}`);
+      
+      if (notificacion) {
+        await supabase
+          .from("notificacion")
+          .update({ estado: "fallida" })
+          .eq("id_notificacion", notificacion.id_notificacion);
+      }
     }
   } catch (error) {
     console.error("Error al enviar notificación agrupada:", error);
