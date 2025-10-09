@@ -183,7 +183,10 @@ export async function obtenerTurnosConFiltros(filtros?: {
 // =====================================
 
 // Crear un nuevo turno
-export async function crearTurno(datos: TurnoInsert) {
+export async function crearTurno(
+  datos: TurnoInsert, 
+  recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[]
+) {
   const supabase = await createClient();
   
   try {
@@ -213,16 +216,10 @@ export async function crearTurno(datos: TurnoInsert) {
       }
     }
 
-    // Extraer recordatorios antes del insert (no van a la BD)
-    const { recordatorios, ...datosLimpios } = datos as any;
-    
-    console.log('📝 Datos originales:', Object.keys(datos as any));
-    console.log('📝 Datos limpios para BD:', Object.keys(datosLimpios));
-    console.log('📝 Recordatorios extraídos:', recordatorios);
-
+    // ✅ AHORA datos es TurnoInsert puro, sin recordatorios
     const { data, error } = await supabase
       .from("turno")
-      .insert(datosLimpios)
+      .insert(datos)
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
@@ -297,7 +294,7 @@ export async function crearTurno(datos: TurnoInsert) {
         const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
         const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
         
-        // Usar recordatorios especificados o los por defecto
+        // ✅ USAR recordatorios del parámetro o los por defecto
         const tiposRecordatorio = recordatorios || ['1d', '2h'];
         console.log(`🔍 Calculando recordatorios para turno ${data.id_turno}: tipos=[${tiposRecordatorio.join(', ')}], fecha=${data.fecha}, hora=${data.hora}`);
         
@@ -372,6 +369,7 @@ export async function crearTurno(datos: TurnoInsert) {
     return { success: false, error: "Error inesperado" };
   }
 }
+
 
 export async function actualizarTurno(id: number, datos: TurnoUpdate) {
   const supabase = await createClient();
