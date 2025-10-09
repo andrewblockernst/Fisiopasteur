@@ -624,50 +624,50 @@ export function DetalleClaseModal({
     if (!mostrarModalRepetir) return null;
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         <div className="text-center">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-2">
             🔄 Repetir Clase de Pilates
           </h3>
-          <p className="text-gray-600 text-sm">
+          <p className="text-gray-600 text-xs md:text-sm">
             Esta clase se repetirá con la misma configuración actual
           </p>
         </div>
 
         {/* Información de la clase que se repetirá */}
-        <div className="bg-blue-50 p-4 rounded-lg space-y-2">
-          <p className="text-sm text-blue-800">
+        <div className="bg-blue-50 p-2 md:p-4 rounded-lg space-y-2">
+          <p className="text-xs md:text-sm text-blue-800">
             <strong>📅 Clase base:</strong> {fechaClaseDate ? format(fechaClaseDate, "EEEE dd/MM/yyyy", { locale: es }) : ''} a las {horaClase}
           </p>
-          <p className="text-sm text-blue-800">
+          <p className="text-xs md:text-sm text-blue-800">
             <strong>👥 Participantes:</strong> {pacientesSeleccionados.length}
-            <span className="text-xs text-blue-600 ml-2">
+            <span className="text-xs text-blue-600 ml-2 block md:inline">
               ({pacientesSeleccionados.map(id => {
                 const p = pacientes.find(pac => pac.id_paciente === id);
                 return p ? `${p.nombre} ${p.apellido}` : '';
               }).filter(Boolean).join(', ')})
             </span>
           </p>
-          <p className="text-sm text-blue-800">
+          <p className="text-xs md:text-sm text-blue-800">
             <strong>👨‍⚕️ Especialista:</strong> {especialistas.find(e => e.id_usuario === especialistaSeleccionado)?.nombre} {especialistas.find(e => e.id_usuario === especialistaSeleccionado)?.apellido}
           </p>
-          <p className="text-sm text-blue-800">
+          <p className="text-xs md:text-sm text-blue-800">
             <strong>📊 Nivel:</strong> {dificultadSeleccionada === 'principiante' ? '🟢 Principiante' : dificultadSeleccionada === 'intermedio' ? '🟡 Intermedio' : '🔴 Avanzado'}
           </p>
         </div>
 
         {/* Selección de días (Lunes a Viernes) */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
             Seleccionar días (Lunes a Viernes)
           </label>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1 md:gap-2 flex-wrap">
             {DIAS_SEMANA.map((dia) => (
               <button
                 key={dia.id}
                 type="button"
                 onClick={() => toggleDia(dia.id)}
-                className={`w-10 h-10 rounded-lg font-medium transition-colors ${
+                className={`w-8 h-8 md:w-10 md:h-10 rounded-lg text-xs md:text-sm font-medium transition-colors ${
                   diasSeleccionados.includes(dia.id)
                     ? 'bg-[#9C1838] text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -681,7 +681,7 @@ export function DetalleClaseModal({
 
         {/* Número de semanas */}
         <div>
-          <label htmlFor="semanas" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="semanas" className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
             Cantidad de semanas
           </label>
           <input
@@ -691,13 +691,13 @@ export function DetalleClaseModal({
             max="12"
             value={semanas}
             onChange={(e) => setSemanas(parseInt(e.target.value) || 1)}
-            className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            className="w-20 md:w-24 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
           />
         </div>
 
         {/* Preview */}
         {diasSeleccionados.length > 0 && pacientesSeleccionados.length > 0 && (
-          <div className="text-sm bg-green-50 border border-green-200 text-green-800 p-4 rounded-lg">
+          <div className="text-xs md:text-sm bg-green-50 border border-green-200 text-green-800 p-2 md:p-4 rounded-lg">
             <strong>✅ Se crearán hasta {diasSeleccionados.length * semanas * pacientesSeleccionados.length} turnos</strong>
             <div className="text-xs mt-2 text-green-600">
               {pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
@@ -901,22 +901,22 @@ export function DetalleClaseModal({
     const especialistaActual = especialistas.find(e => String(e.id_usuario) === String(primeraClase?.id_especialista));
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6 max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1">
         {/* Información de la clase */}
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <div className="flex items-center gap-2 mb-3">
-            <Calendar className="w-4 h-4 text-blue-600" />
-            <span className="font-medium text-blue-800">Información de la clase</span>
+        <div className="bg-blue-50 p-3 md:p-4 rounded-lg">
+          <div className="flex items-center gap-2 mb-2 md:mb-3">
+            <Calendar className="w-3 h-3 md:w-4 md:h-4 text-blue-600" />
+            <span className="text-xs md:text-sm font-medium text-blue-800">Información de la clase</span>
           </div>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 text-xs md:text-sm">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-500" />
+              <Clock className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
               <span>
                 {fechaClaseDate ? format(fechaClaseDate, "EEEE dd/MM", { locale: es }) : ''} - {horaClase}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-gray-500" />
+              <Users className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
               <span>{pacientesSeleccionados.length}/4 participantes</span>
             </div>
           </div>
@@ -924,10 +924,10 @@ export function DetalleClaseModal({
 
         {/* Especialista - EDITABLE PARA ADMIN */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2 md:mb-3">
             <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-gray-500" />
-              <span className="font-medium text-gray-700">Especialista</span>
+              <User className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+              <span className="text-xs md:text-sm font-medium text-gray-700">Especialista</span>
             </div>
             {userRole === 1 && (
               <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">
@@ -940,7 +940,7 @@ export function DetalleClaseModal({
             <select
               value={especialistaSeleccionado}
               onChange={(e) => setEspecialistaSeleccionado(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
             >
               {especialistas.map(esp => (
                 <option key={esp.id_usuario} value={esp.id_usuario}>
@@ -949,12 +949,12 @@ export function DetalleClaseModal({
               ))}
             </select>
           ) : (
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-gray-50 rounded-lg">
               <div
-                className="w-4 h-4 rounded-full"
+                className="w-3 h-3 md:w-4 md:h-4 rounded-full flex-shrink-0"
                 style={{ backgroundColor: especialistaActual?.color || '#e0e7ff' }}
               />
-              <span className="font-medium">
+              <span className="text-xs md:text-sm font-medium">
                 {especialistaActual?.nombre} {especialistaActual?.apellido}
               </span>
             </div>
@@ -963,15 +963,15 @@ export function DetalleClaseModal({
 
         {/* Nivel de Dificultad - SIEMPRE EDITABLE */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Settings className="w-4 h-4 text-gray-500" />
-            <span className="font-medium text-gray-700">Nivel de Dificultad</span>
+          <div className="flex items-center gap-2 mb-2 md:mb-3">
+            <Settings className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+            <span className="text-xs md:text-sm font-medium text-gray-700">Nivel de Dificultad</span>
           </div>
 
           <select
             value={dificultadSeleccionada}
             onChange={(e) => setDificultadSeleccionada(e.target.value as any)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
           >
             <option value="principiante">🟢 Principiante</option>
             <option value="intermedio">🟡 Intermedio</option>
@@ -987,9 +987,9 @@ export function DetalleClaseModal({
 
         {/* Participantes - CON BÚSQUEDA COMO EN NUEVO TURNO */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Users className="w-4 h-4 text-gray-500" />
-            <span className="font-medium text-gray-700">
+          <div className="flex items-center gap-2 mb-2 md:mb-3">
+            <Users className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+            <span className="text-xs md:text-sm font-medium text-gray-700">
               Participantes ({pacientesSeleccionados.length}/4)
             </span>
           </div>
@@ -1002,8 +1002,8 @@ export function DetalleClaseModal({
                 if (!paciente) return null;
                 
                 return (
-                  <div key={pacienteId} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <span className="text-sm font-medium text-green-800">
+                  <div key={pacienteId} className="flex items-center justify-between p-2 md:p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <span className="text-xs md:text-sm font-medium text-green-800">
                       {paciente.nombre} {paciente.apellido}
                     </span>
                     <button
@@ -1011,7 +1011,7 @@ export function DetalleClaseModal({
                       className="text-red-500 hover:text-red-700 transition-colors"
                       title="Eliminar participante"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                     </button>
                   </div>
                 );
@@ -1022,8 +1022,8 @@ export function DetalleClaseModal({
           {pacientesSeleccionados.length < 4 && (
             <div className="relative">
               <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Agregar participante</span>
+                <Plus className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+                <span className="text-xs md:text-sm font-medium text-gray-700">Agregar participante</span>
               </div>
               
               <input
@@ -1032,7 +1032,7 @@ export function DetalleClaseModal({
                 value={busquedaPaciente}
                 onChange={handleBusquedaPacienteChange}
                 onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                className="w-full mt-2 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 placeholder="Buscar por nombre, DNI..."
                 autoComplete="off"
               />
@@ -1041,7 +1041,7 @@ export function DetalleClaseModal({
               {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
                 <div 
                   ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
                 >
                   {pacientesFiltrados
                     .filter(paciente => !pacientesSeleccionados.includes(paciente.id_paciente))
@@ -1049,12 +1049,12 @@ export function DetalleClaseModal({
                     <div
                       key={paciente.id_paciente}
                       onClick={() => agregarPaciente(paciente)}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      className="px-2 md:px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                     >
-                      <div className="font-medium">
+                      <div className="text-sm font-medium">
                         {paciente.nombre} {paciente.apellido}
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs text-gray-500">
                         DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
                       </div>
                     </div>
@@ -1062,7 +1062,7 @@ export function DetalleClaseModal({
                   
                   {/* Mostrar mensaje cuando todos los resultados ya están agregados */}
                   {pacientesFiltrados.every(p => pacientesSeleccionados.includes(p.id_paciente)) && (
-                    <div className="px-3 py-2 text-center text-gray-500 text-sm">
+                    <div className="px-2 md:px-3 py-2 text-center text-gray-500 text-xs md:text-sm">
                       Todos los pacientes encontrados ya están en la clase
                     </div>
                   )}
@@ -1073,7 +1073,7 @@ export function DetalleClaseModal({
               {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
                 <div 
                   ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 md:p-3 text-center text-gray-500 text-xs md:text-sm"
                 >
                   No se encontraron pacientes
                 </div>
@@ -1089,30 +1089,32 @@ export function DetalleClaseModal({
         </div>
 
         {/* Botones de acción */}
-        <div className="flex gap-2 pt-4 border-t">
+        <div className="flex flex-col md:flex-row gap-2 pt-3 md:pt-4 border-t">
           <button
             onClick={() => setMostrarConfirmacionEliminar(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors"
           >
-            <Trash2 className="w-4 h-4" />
-            Eliminar clase
+            <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
+            <span className="hidden md:inline">Eliminar clase</span>
+            <span className="md:hidden">Eliminar</span>
           </button>
           
           <button
             onClick={() => setMostrarModalRepetir(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 transition-colors"
           >
-            <Repeat className="w-4 h-4" />
-            Repetir clase
+            <Repeat className="w-3 h-3 md:w-4 md:h-4" />
+            <span className="hidden md:inline">Repetir clase</span>
+            <span className="md:hidden">Repetir</span>
           </button>
           
-          <div className="flex-1"></div>
+          <div className="flex-1 hidden md:block"></div>
           
           {cambiosPendientes && (
             <button
               onClick={handleGuardarCambios}
               disabled={isSubmitting}
-              className="px-6 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors font-medium"
+              className="px-4 md:px-6 py-2 text-sm bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors font-medium"
             >
               {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
             </button>
