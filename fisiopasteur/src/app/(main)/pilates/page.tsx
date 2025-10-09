@@ -1,45 +1,56 @@
 'use client'
-
 import { useState, useEffect } from "react";
-import BaseDialog from "@/componentes/dialog/base-dialog";
-import Button from "@/componentes/boton";
-import { crearTurno, obtenerTurnosConFiltros, obtenerPacientes, obtenerEspecialistas } from "@/lib/actions/turno.action";
+import PilatesCalendarioSemanal from "@/componentes/pilates/componenteSemanal";
+import { NuevoTurnoPilatesModal } from "@/componentes/pilates/nuevoTurnoPilatesDialog";
+import { DetalleClaseModal } from "@/componentes/pilates/detalleClaseModal";
+import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerPacientes } from "@/lib/actions/turno.action";
 import { addDays, format, startOfWeek } from "date-fns";
-import { es } from "date-fns/locale";
+import { useToastStore } from '@/stores/toast-store';
 
-const horariosDisponibles = [
-  '8:00', '9:00', '10:00', '11:00', 
-  '14:30', '15:30', '16:30', '17:30', 
-  '18:30', '19:30', '20:30', '21:30'
-];
-
-function getWeekDays(fecha: Date) {
-  const start = startOfWeek(fecha, { weekStartsOn: 1 }); // Lunes
-  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+// ============= DEFINIR TIPOS COMPARTIDOS =============
+interface SlotInfo {
+  disponible: boolean;
+  razon: string;
+  tipo: 'libre' | 'existente' | 'completa';
+  especialistaAsignado?: string;
+  participantes?: number;
 }
 
 export default function PilatesPage() {
+  // ============= ESTADOS PARA CREAR NUEVOS TURNOS =============
   const [showDialog, setShowDialog] = useState(false);
   const [horarioSeleccionado, setHorarioSeleccionado] = useState<string | null>(null);
   const [diaSeleccionado, setDiaSeleccionado] = useState<Date | null>(null);
 
-  const [turnos, setTurnos] = useState<any[]>([]);
-  const [semanaBase, setSemanaBase] = useState<Date>(new Date);
+  // ============= ESTADOS PARA VER DETALLES DE CLASES EXISTENTES =============
+  const [showDetalleDialog, setShowDetalleDialog] = useState(false);
+  const [turnosSeleccionados, setTurnosSeleccionados] = useState<any[]>([]);
 
-  // Especialistas y pacientes
+  // ============= ESTADOS GENERALES =============
+  const [turnos, setTurnos] = useState<any[]>([]);
+  const [semanaBase, setSemanaBase] = useState<Date>(new Date());
   const [especialistas, setEspecialistas] = useState<any[]>([]);
   const [pacientes, setPacientes] = useState<any[]>([]);
-  const [especialistaId, setEspecialistaId] = useState<string>('');
-  const [pacientesSeleccionados, setPacientesSeleccionados] = useState<number[]>([]);
-  const [observaciones, setObservaciones] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState(1); // CAMBIO TEMPORAL PARA PROBAR COMO ADMIN
 
-  useEffect(() => {
-    // Traer turnos de la semana
+  // ============= TOAST PARA MENSAJES =============
+  const { addToast } = useToastStore();
+
+  // ============= FUNCIÓN PARA CARGAR TURNOS =============
+  const cargarTurnos = async () => {
     const desde = format(startOfWeek(semanaBase, { weekStartsOn: 1 }), "yyyy-MM-dd");
     const hasta = format(addDays(startOfWeek(semanaBase, { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
-    obtenerTurnosConFiltros({ fecha_desde: desde, fecha_hasta: hasta }).then((res: any) => {
+    
+    try {
+      const res = await obtenerTurnosConFiltros({ 
+        fecha_desde: desde, 
+        fecha_hasta: hasta,
+        especialidad_id: 4 // Filtrar solo turnos de Pilates
+      });
+      
       if (res.success && Array.isArray(res.data)) {
-        // Mapeo para agregar color del especialista
+        
         const turnosConColor = res.data.map((t: any) => {
           const especialista = especialistas.find(e => String(e.id_usuario) === String(t.id_especialista));
           return {
@@ -48,40 +59,120 @@ export default function PilatesPage() {
           };
         });
         setTurnos(turnosConColor);
+      } else {
+        console.error('❌ Error en respuesta de turnos:', res.error);
+        setTurnos([]);
       }
-    });
+    } catch (error) {
+      console.error('💥 Error cargando turnos de Pilates:', error);
+      setTurnos([]);
+    }
+  };
+
+  // ============= CARGAR TURNOS CUANDO CAMBIA LA SEMANA O LOS ESPECIALISTAS =============
+  useEffect(() => {
+    if (especialistas.length > 0) {
+      cargarTurnos();
+    }
   }, [semanaBase, especialistas]);
 
+  // ============= CARGAR DATOS INICIALES =============
   useEffect(() => {
-    // Traer especialistas solo de pilates (id_especialidad === 4)
-    obtenerEspecialistas().then((res: any) => {
-      if (res.success && Array.isArray(res.data)) {
-        const pilates = res.data.filter((e: any) => {
-          const principal = e.especialidad?.id_especialidad === 4;
-          const adicional = Array.isArray(e.usuario_especialidad)
-            ? e.usuario_especialidad.some((ue: any) => ue.especialidad?.id_especialidad === 4)
-            : false;
-          return principal || adicional;
-        });
-        setEspecialistas(pilates);
+    const cargarDatos = async () => {
+      setLoading(true);
+      try {
+        // Cargar especialistas de Pilates
+        const resEspecialistas = await obtenerEspecialistas();
+        if (resEspecialistas.success && Array.isArray(resEspecialistas.data)) {
+          const pilates = resEspecialistas.data.filter((e: any) => {
+            const principal = e.especialidad?.id_especialidad === 4;
+            const adicional = Array.isArray(e.usuario_especialidad)
+              ? e.usuario_especialidad.some((ue: any) => ue.especialidad?.id_especialidad === 4)
+              : false;
+            return principal || adicional;
+          });
+          
+          console.log('👨‍⚕️ Especialistas de Pilates encontrados:', pilates.length);
+          setEspecialistas(pilates);
+        }
+
+        // Cargar pacientes
+        const resPacientes = await obtenerPacientes();
+        if (resPacientes.success && Array.isArray(resPacientes.data)) {
+          console.log('👥 Pacientes encontrados:', resPacientes.data.length);
+          setPacientes(resPacientes.data);
+        }
+      } catch (error) {
+        console.error('Error cargando datos:', error);
+      } finally {
+        setLoading(false);
       }
-    });
-    // Traer pacientes
-    obtenerPacientes().then((res: any) => {
-      if (res.success && Array.isArray(res.data)) {
-        const lista = res.data.map((p: any) => ({
-          id_paciente: p.id_paciente,
-          nombre: p.nombre,
-          apellido: p.apellido,
-        }));
-        setPacientes(lista);
-      }
-    });
+    };
+
+    cargarDatos();
   }, []);
 
-  const weekDays = getWeekDays(semanaBase);
+  // ============= FUNCIÓN PARA VERIFICAR SI SLOT ESTÁ DISPONIBLE PARA NUEVOS TURNOS =============
+  const verificarDisponibilidadSlot = (dia: Date, horario: string): SlotInfo => {
+    const fechaStr = format(dia, "yyyy-MM-dd");
+    const turnosEnSlot = turnos.filter(turno => 
+      turno.fecha === fechaStr && 
+      turno.hora?.substring(0, 5) === horario
+    );
 
+    // Verificar si ya está completa (4 participantes)
+    if (turnosEnSlot.length >= 4) {
+      return {
+        disponible: false,
+        razon: 'La clase está completa (4/4 participantes)',
+        tipo: 'completa' as const
+      };
+    }
+
+    // Verificar si ya hay un especialista asignado (solo admin puede crear con otro especialista)
+    if (turnosEnSlot.length > 0) {
+      const especialistaExistente = turnosEnSlot[0].especialista;
+      return {
+        disponible: true,
+        razon: `Clase existente con ${especialistaExistente?.nombre} ${especialistaExistente?.apellido}`,
+        tipo: 'existente' as const,
+        especialistaAsignado: turnosEnSlot[0].id_especialista,
+        participantes: turnosEnSlot.length
+      };
+    }
+
+    // Slot completamente libre
+    return {
+      disponible: true,
+      razon: 'Slot disponible para nueva clase',
+      tipo: 'libre' as const
+    };
+  };
+
+  // ============= HANDLERS PARA CREAR NUEVOS TURNOS =============
   const handleAgregarTurno = (dia: Date, horario: string) => {
+    console.log('🆕 Intentando agregar nuevo turno para:', dia, horario);
+    
+    const disponibilidad = verificarDisponibilidadSlot(dia, horario);
+    
+    if (!disponibilidad.disponible) {
+      addToast({
+        variant: 'warning',
+        message: 'Slot no disponible',
+        description: disponibilidad.razon,
+      });
+      return;
+    }
+
+    // Si hay una clase existente, verificar permisos para cambiar especialista
+    if (disponibilidad.tipo === 'existente' && userRole !== 1) {
+      addToast({
+        variant: 'info',
+        message: 'Clase existente',
+        description: `${disponibilidad.razon}. Solo puedes agregar participantes con el mismo especialista.`,
+      });
+    }
+
     setDiaSeleccionado(dia);
     setHorarioSeleccionado(horario);
     setShowDialog(true);
@@ -91,218 +182,125 @@ export default function PilatesPage() {
     setShowDialog(false);
     setHorarioSeleccionado(null);
     setDiaSeleccionado(null);
-    setEspecialistaId('');
-    setPacientesSeleccionados([]);
-    setObservaciones("");
   };
 
-  const handlePacienteClick = (pacienteId: number) => {
-    setPacientesSeleccionados(prev => {
-      if (prev.includes(pacienteId)) {
-        return prev.filter(pid => pid !== pacienteId);
-      } else if (prev.length < 4) {
-        return [...prev, pacienteId];
-      } else {
-        return prev;
+  // ============= HANDLERS PARA VER DETALLES DE CLASES EXISTENTES =============
+  const handleVerTurno = (turnos: any[]) => {
+    console.log('👁️ Viendo detalles de turnos:', turnos);
+    
+    // Verificar que todos los turnos sean del mismo especialista (validación extra)
+    const especialistasUnicos = [...new Set(turnos.map(t => t.id_especialista))];
+    
+    if (especialistasUnicos.length > 1) {
+      console.warn('⚠️ Detectado conflicto de especialistas:', especialistasUnicos);
+      
+      // Solo bloquear si NO es administrador
+      if (userRole !== 1) {
+        addToast({
+          variant: 'error',
+          message: 'Conflicto detectado',
+          description: 'Esta clase tiene múltiples especialistas. Contacta al administrador.',
+        });
+        return;
       }
-    });
-  };
-
-  const handleGuardarTurno = async () => {
-    if (
-      !diaSeleccionado ||
-      !horarioSeleccionado ||
-      !especialistaId ||
-      pacientesSeleccionados.length === 0
-    ) {
-      return;
-    }
-
-    const fecha = format(diaSeleccionado, "yyyy-MM-dd");
-    const hora = horarioSeleccionado;
-    const especialidad_id = 4; // Pilates
-    const plan = "particular";
-
-    for (const paciente_id of pacientesSeleccionados) { 
-      await crearTurno({
-        fecha,
-        hora,
-        id_especialista: especialistaId, 
-        id_especialidad: especialidad_id, 
-        id_paciente: paciente_id,         
-        estado: "pendiente",              
-        observaciones,
+      
+      // Si es administrador, permitir acceso con advertencia
+      addToast({
+        variant: 'warning',
+        message: 'Conflicto de especialistas detectado',
+        description: 'Como administrador puedes resolver este conflicto desde el modal.',
       });
     }
 
-    // Refrescar turnos (el mapeo de color se hace en el useEffect de arriba)
-    const desde = format(startOfWeek(semanaBase, { weekStartsOn: 1 }), "yyyy-MM-dd");
-    const hasta = format(addDays(startOfWeek(semanaBase, { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
-    obtenerTurnosConFiltros({ fecha_desde: desde, fecha_hasta: hasta }).then((res: any) => {
-      if (res.success && Array.isArray(res.data)) {
-        const turnosConColor = res.data.map((t: any) => {
-          const especialista = especialistas.find(e => String(e.id_usuario) === String(t.id_especialista));
-          return {
-            ...t,
-            especialista_color: especialista?.color || "#e0e7ff"
-          };
-        });
-        setTurnos(turnosConColor);
-      }
-    });
-
-    handleCloseDialog();
+    setTurnosSeleccionados(turnos);
+    setShowDetalleDialog(true);
   };
 
+  // ============= HANDLER PARA CERRAR MODAL DE DETALLES (ESTA FUNCIÓN FALTABA) =============
+  const handleCloseDetalleDialog = () => {
+    setShowDetalleDialog(false);
+    setTurnosSeleccionados([]);
+  };
+
+  // ============= HANDLER PARA REFRESCAR DATOS DESPUÉS DE CAMBIOS =============
+  const handleTurnoCreated = async () => {
+  console.log('🔄 Recargando turnos después de cambios...');
+  
+  try {
+    // Esperar un poco más para asegurar que la BD esté actualizada
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    await cargarTurnos();
+    
+    console.log('✅ Turnos recargados exitosamente');
+  } catch (error) {
+    console.error('❌ Error recargando turnos:', error);
+    addToast({
+      variant: 'error',
+      message: 'Error actualizando datos',
+      description: 'No se pudieron recargar los turnos automáticamente. Recarga la página.',
+    });
+  }
+};
+
+  // ============= OBTENER INFORMACIÓN DE SLOT PARA PASAR AL MODAL =============
+  const getSlotInfo = (): SlotInfo | null => {
+    if (!diaSeleccionado || !horarioSeleccionado) return null;
+    
+    return verificarDisponibilidadSlot(diaSeleccionado, horarioSeleccionado);
+  };
+
+  // ============= LOADING STATE =============
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#9C1838] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando datos de Pilates...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ============= RENDER PRINCIPAL =============
   return (
-    <div className="min-h-screen text-black">
-      <h1 className="text-3xl font-bold mb-4">Turnos de Pilates</h1>
-      {/* Navegación de semana */}
-      <div className="flex items-center gap-4 mb-4">
-        <Button variant="secondary" onClick={() => setSemanaBase(addDays(semanaBase, -7))}>Anterior</Button>
-        <span className="font-semibold text-lg">
-          {format(weekDays[0], "d MMM", { locale: es })} - {format(weekDays[6], "d MMM yyyy", { locale: es })}
-        </span>
-        <Button variant="secondary" onClick={() => setSemanaBase(addDays(semanaBase, 7))}>Siguiente</Button>
-      </div>
-      {/* Calendario semanal */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full border">
-          <thead>
-            <tr>
-              <th className="border px-2 py-1 bg-gray-50">Horario</th>
-              {weekDays.map((dia) => (
-                <th key={dia.toISOString()} className="border px-2 py-1 bg-gray-50">
-                  {format(dia, "EEE dd/MM", { locale: es })}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {horariosDisponibles.map((horario) => (
-              <tr key={horario}>
-                <td className="border px-2 py-1 font-semibold">{horario}</td>
-                {weekDays.map((dia) => {
-                  const fechaStr = format(dia, "yyyy-MM-dd");
-                  const turno = turnos.find(
-                    (t: any) => t.fecha === fechaStr && t.hora === horario
-                  );
-                  return (
-                    <td
-                      key={fechaStr + horario}
-                      className="border px-1 py-0.5 align-top group relative"
-                      style={{ minWidth: "90px", height: "28px", verticalAlign: "top" }}
-                    >
-                      {turno ? (
-                        <div
-                          className="flex flex-col items-start gap-0.5 mb-1 px-1 py-0.5 rounded"
-                          style={{
-                            background: "#fff",
-                            border: "1px solid #eee",
-                            fontSize: "0.90em",
-                            minHeight: "18px",
-                            maxHeight: "22px",
-                            lineHeight: "1.1"
-                          }}
-                        >
-                          <span className="truncate font-semibold">{turno.paciente_nombre}</span>
-                          <span className="truncate text-xs text-gray-600">{turno.especialista_nombre}</span>
-                        </div>
-                      ) : null}
-                      {/* Botón "+" solo visible en hover */}
-                      <button
-                        className="absolute top-1 right-1 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Agregar turno"
-                        onClick={() => handleAgregarTurno(dia, horario)}
-                        style={{ zIndex: 10 }}
-                      >
-                        +
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {/* Diálogo para agregar turno */}
-      {showDialog && (
-        <BaseDialog
-          type="info"
-          size="md"
-          title="Agregar Turno de Pilates"
-          message={
-            <div>
-              <p>
-                Día: <b>{diaSeleccionado ? format(diaSeleccionado, "EEEE dd/MM", { locale: es }) : ""}</b>
-                <br />
-                Horario: <b>{horarioSeleccionado}</b>
-              </p>
-              {/* Selección de especialista */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Especialista*</label>
-                <select
-                  className="w-full border rounded px-3 py-2 mb-2"
-                  value={especialistaId}
-                  onChange={e => setEspecialistaId(e.target.value)}
-                >
-                  <option value="">Seleccionar especialista</option>
-                  {especialistas.map(e => (
-                    <option key={e.id_usuario} value={String(e.id_usuario)}>
-                      {e.nombre} {e.apellido}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {/* Selección de pacientes */}
-              <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Pacientes (máx. 4)</label>
-                <div className="max-h-60 overflow-y-auto border rounded">
-                  {pacientes.map(p => (
-                    <label key={p.id_paciente} className="flex items-center gap-2 cursor-pointer px-2 py-1">
-                      <input
-                        type="checkbox"
-                        checked={pacientesSeleccionados.includes(p.id_paciente)}
-                        onChange={() => handlePacienteClick(p.id_paciente)}
-                        disabled={
-                          !pacientesSeleccionados.includes(p.id_paciente) &&
-                          pacientesSeleccionados.length >= 4
-                        }
-                      />
-                      <span>{p.nombre} {p.apellido}</span>
-                    </label>
-                  ))}
-                </div>
-                {pacientesSeleccionados.length === 4 && (
-                  <p className="text-xs text-red-500 mt-1">Máximo 4 pacientes por turno.</p>
-                )}
-              </div>
-              {/* Observaciones */}
-              <div className="mt-4">
-                <input
-                  type="text"
-                  placeholder="Observaciones"
-                  className="w-full border rounded px-3 py-2"
-                  value={observaciones}
-                  onChange={e => setObservaciones(e.target.value)}
-                />
-              </div>
-            </div>
-          }
-          primaryButton={{
-            text: "Guardar Turno",
-            onClick: handleGuardarTurno
-          }}
-          secondaryButton={{
-            text: "Cancelar",
-            onClick: handleCloseDialog
-          }}
-          onClose={handleCloseDialog}
-          showCloseButton
-          isOpen={showDialog}
-        />
-      )}
+    <div className="min-h-screen bg-gray-50 p-4">
+      {/* ============= CALENDARIO PRINCIPAL ============= */}
+      <PilatesCalendarioSemanal
+        turnos={turnos}
+        semanaBase={semanaBase}
+        onSemanaChange={setSemanaBase}
+        onAgregarTurno={handleAgregarTurno}     // ← Para crear nuevos turnos (con validaciones)
+        onVerTurno={handleVerTurno}             // ← Para ver detalles de clases existentes
+        especialistas={especialistas}
+      />
+      
+      {/* ============= MODAL PARA CREAR NUEVOS TURNOS ============= */}
+      <NuevoTurnoPilatesModal
+        isOpen={showDialog}
+        onClose={handleCloseDialog}
+        onTurnoCreated={handleTurnoCreated}
+        fechaSeleccionada={diaSeleccionado}
+        horaSeleccionada={horarioSeleccionado}
+        especialistas={especialistas}
+        pacientes={pacientes}
+        slotInfo={getSlotInfo()} // ← Pasar información del slot para restricciones
+        userRole={userRole}      // ← Pasar rol del usuario para permisos
+      />
+
+      {/* ============= MODAL PARA VER/EDITAR DETALLES DE CLASES EXISTENTES ============= */}
+      <DetalleClaseModal
+        isOpen={showDetalleDialog}
+        onClose={() => setShowDetalleDialog(false)}
+        onTurnosActualizados={async () => {
+          console.log('🔄 Recargando datos de la página principal...');
+          await cargarTurnos(); // ← Hacer esta función async si no lo es
+        }}
+        turnos={turnosSeleccionados}
+        especialistas={especialistas}
+        pacientes={pacientes}
+        userRole={userRole}
+      />
     </div>
   );
 }
