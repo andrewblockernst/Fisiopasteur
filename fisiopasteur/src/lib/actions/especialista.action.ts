@@ -278,10 +278,37 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
 
     // Solo actualizar contraseña si se proporciona
     const contraseña = formData.get("contraseña") as string;
-    // Si viene una nueva contraseña, combinarla en el payload usando la clave correcta
     const passwordPatch = contraseña && contraseña.trim() !== "" ? { contraseña } : {};
 
-    // Actualizar el usuario
+    // Si se proporciona una nueva contraseña, actualizarla en Supabase Auth primero
+    if (contraseña && contraseña.trim() !== "") {
+      // Verificar si el usuario existe en Auth
+      const { data: authUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(id);
+      
+      if (getUserError || !authUser) {
+        console.error("Usuario no encontrado en Auth:", getUserError);
+        // El usuario no existe en Auth, pero continuamos actualizando solo en la tabla
+        console.log("Continuando con actualización solo en tabla usuario (usuario no existe en Auth)");
+      } else {
+        // Usuario existe en Auth, actualizar contraseña
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+          id,
+          { password: contraseña }
+        );
+
+        if (authError) {
+          console.error("Error updating password in Auth:", authError);
+          return {
+            success: false,
+            message: 'Error al actualizar contraseña',
+            toastType: 'error',
+            description: 'No se pudo actualizar la contraseña en el sistema de autenticación'
+          };
+        }
+      }
+    }
+
+    // Actualizar el usuario en la tabla
     const { error: errorUsuario } = await supabase
       .from("usuario")
       .update({ ...updateData, ...passwordPatch })
@@ -336,6 +363,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       }
     }
 
+    revalidatePath("/especialistas");
     revalidatePath("/especialista");
     
     return {
