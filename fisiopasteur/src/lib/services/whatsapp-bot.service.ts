@@ -43,7 +43,6 @@ async function realizarPeticionBot(endpoint: string, data: any): Promise<BotResp
     });
 
     if (!response.ok) {
-      // Intentar obtener más detalles del error
       let errorMessage = `HTTP Error: ${response.status}`;
       try {
         const errorData = await response.json();
@@ -62,7 +61,6 @@ async function realizarPeticionBot(endpoint: string, data: any): Promise<BotResp
   } catch (error) {
     console.error(`Error en petición al bot (${endpoint}):`, error);
     
-    // Manejo específico de errores comunes
     if (error instanceof Error) {
       if (error.message.includes('fetch')) {
         return {
@@ -228,19 +226,30 @@ export async function verificarEstadoBot(): Promise<boolean> {
 }
 
 /**
- * Analizar patrones de turnos para crear mensaje inteligente
+ * ✅ ÚNICA FUNCIÓN QUE ANALIZA PATRONES DE TURNOS
+ * Si quieres cambiar la lógica de análisis, solo modifica AQUÍ
  */
 function analizarPatronesTurnos(turnos: any[]) {
-  const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const diasSemanaPorId: Record<number, string> = {
+    0: 'domingo',
+    1: 'lunes',
+    2: 'martes',
+    3: 'miércoles',
+    4: 'jueves',
+    5: 'viernes',
+    6: 'sábado'
+  };
   
-  // Agrupar turnos por día de la semana y horario
   const patronesPorDiaYHora: Record<string, Set<string>> = {};
   
   turnos.forEach(turno => {
-    const fecha = new Date(turno.fecha);
-    const diaSemana = diasSemana[fecha.getDay()];
+    const [year, month, day] = turno.fecha.split('-').map(Number);
+    const fecha = new Date(year, month - 1, day);
+    const diaNumero = fecha.getDay();
+    const diaSemana = diasSemanaPorId[diaNumero] || 'desconocido';
+    
     const hora = turno.hora || turno.hora_inicio;
-    const horaFormateada = hora.substring(0, 5); // "09:00:00" -> "09:00"
+    const horaFormateada = hora.substring(0, 5);
     
     const key = `${diaSemana}_${horaFormateada}`;
     if (!patronesPorDiaYHora[key]) {
@@ -249,25 +258,41 @@ function analizarPatronesTurnos(turnos: any[]) {
     patronesPorDiaYHora[key].add(turno.fecha);
   });
 
-  // Convertir a formato legible
   const patronesTexto: string[] = [];
   Object.keys(patronesPorDiaYHora).forEach(key => {
     const [dia, hora] = key.split('_');
-    const cantidadTurnos = patronesPorDiaYHora[key].size;
-    // Plural correcto para días de la semana
-    const diaPlural = dia === 'miércoles' ? 'miércoles' : `${dia}s`;
+    
+    const plurales: Record<string, string> = {
+      'domingo': 'domingos',
+      'lunes': 'lunes',
+      'martes': 'martes', 
+      'miércoles': 'miércoles',
+      'jueves': 'jueves',
+      'viernes': 'viernes',
+      'sábado': 'sábados'
+    };
+    
+    const diaPlural = plurales[dia] || dia;
     patronesTexto.push(`${diaPlural} a las ${hora}`);
   });
+
+  // Obtener fecha del último turno
+  const fechas = turnos.map(t => {
+    const [year, month, day] = t.fecha.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }).sort((a, b) => b.getTime() - a.getTime());
+  const ultimaFecha = fechas[0];
 
   return {
     patronesTexto,
     totalTurnos: turnos.length,
-    diasUnicos: Object.keys(patronesPorDiaYHora).length
+    ultimaFecha
   };
 }
 
 /**
- * Enviar notificación agrupada para múltiples turnos del mismo paciente
+ * ✅ ÚNICA FUNCIÓN QUE GENERA MENSAJES AGRUPADOS
+ * Si quieres cambiar el texto del mensaje, solo modifica AQUÍ
  */
 export async function enviarNotificacionGrupal(
   telefono: string,
@@ -284,43 +309,29 @@ export async function enviarNotificacionGrupal(
   }
 
   try {
-    // Analizar patrones de turnos
+    // Analizar patrones
     const analisis = analizarPatronesTurnos(turnos);
     
-    // Crear mensaje inteligente basado en patrones
-    let mensaje: string;
-    
-    if (analisis.totalTurnos <= 5) {
-      // Para pocos turnos, mostrar fechas específicas
-      const fechasYHoras = turnos.map(turno => {
-        const fecha = new Date(turno.fecha).toLocaleDateString('es-AR');
-        const hora = (turno.hora || turno.hora_inicio).substring(0, 5);
-        return `• ${fecha} a las ${hora}`;
-      });
-      
-      mensaje = `¡Hola ${nombrePaciente}! 🌟
+    const ultimaFechaFormateada = analisis.ultimaFecha.toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
 
-Se han confirmado ${analisis.totalTurnos} turnos para ti:
-
-${fechasYHoras.join('\n')}
-
-Te esperamos en Fisiopasteur. ¡Nos vemos pronto! 💪`;
-    } else {
-      // Para muchos turnos, mostrar patrón de días
-      mensaje = `¡Hola ${nombrePaciente}! 🌟
+    // ✅ MENSAJE ÚNICO - Para cambiar el texto, SOLO edita aquí
+    const mensaje = `¡Hola ${nombrePaciente}! 🌟
 
 Se han confirmado tus turnos de Pilates:
 
 ${analisis.patronesTexto.map(p => `• ${p}`).join('\n')}
 
-Total: ${analisis.totalTurnos} clases programadas
-
 Te esperamos en Fisiopasteur. ¡Nos vemos pronto! 💪
 
 _Recibirás recordatorios antes de cada clase._`;
-    }
 
-    // Enviar mensaje personalizado
+    console.log('📱 [WhatsApp Bot] Mensaje generado:', mensaje);
+
+    // Enviar mensaje
     const resultado = await enviarMensajePersonalizado(telefono, mensaje);
     
     if (resultado.status === 'success') {
@@ -338,4 +349,3 @@ _Recibirás recordatorios antes de cada clase._`;
     };
   }
 }
-
