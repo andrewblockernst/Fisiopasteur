@@ -103,7 +103,6 @@ function EspecialistaEditFormForDialog({
     if (!formData.get("nombre")) newErrors.nombre = "El nombre es requerido";
     if (!formData.get("apellido")) newErrors.apellido = "El apellido es requerido";
     if (!formData.get("email")) newErrors.email = "El email es requerido";
-    if (!formData.get("usuario")) newErrors.usuario = "El usuario es requerido";
 
     const email = formData.get("email") as string;
     if (email && !/\S+@\S+\.\S+/.test(email)) {
@@ -117,33 +116,53 @@ function EspecialistaEditFormForDialog({
   const handleSubmit = async (formData: FormData) => {
     if (!validateForm(formData)) return;
 
+    setIsSubmitting(true);
+
+    // Agregar especialidades seleccionadas al FormData
     selectedEspecialidades.forEach((especialidadId, index) => {
       formData.append(`especialidades[${index}]`, especialidadId.toString());
     });
 
+    // Agregar color seleccionado
     formData.set("color", selectedColor);
 
+    console.log('Enviando datos:', {
+      nombre: formData.get('nombre'),
+      apellido: formData.get('apellido'),
+      email: formData.get('email'),
+      telefono: formData.get('telefono'),
+      color: formData.get('color'),
+      especialidades: selectedEspecialidades
+    });
+
     try {
-      setIsSubmitting(true);
       const result = await updateEspecialista(especialista.id_usuario, formData);
+      
+      console.log('Resultado de actualización:', result);
+      
       showServerActionResponse(result);
       
       if (result.success) {
-        onSuccess(); // Cerrar el dialog después del éxito
+        // Esperar un momento antes de cerrar para que el usuario vea el mensaje
+        setTimeout(() => {
+          onSuccess(); // Cerrar el dialog y refrescar la lista
+        }, 500);
       } else {
         setIsSubmitting(false);
       }
     } catch (error: any) {
+      console.error("Error al actualizar:", error);
+      
       if (error?.digest?.includes('NEXT_REDIRECT')) {
         onSuccess(); // También cerrar en caso de redirect exitoso
         return;
       }
       
-      console.error("Error:", error);
       showServerActionResponse({
         success: false,
         message: "Error al actualizar especialista",
-        toastType: "error"
+        toastType: "error",
+        description: error?.message || "Ocurrió un error inesperado"
       });
       setIsSubmitting(false);
     }

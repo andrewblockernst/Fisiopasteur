@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Plus, 
   X,
@@ -13,11 +13,13 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
+import { useAuth } from '@/hooks/usePerfil';
 
 interface MenuOption {
   icon: React.ReactNode;
   label: string;
   route: string;
+  requiresAdmin?: boolean; // Nueva propiedad para indicar si requiere permisos de admin
 }
 
 const AgregarBoton = () => {
@@ -25,24 +27,42 @@ const AgregarBoton = () => {
   const [showNuevoTurnoModal, setShowNuevoTurnoModal] = useState(false);
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
+  const { user, loading } = useAuth();
 
-  const menuOptions: MenuOption[] = [
+  // Definir todas las opciones posibles
+  const allMenuOptions: MenuOption[] = [
     {
       icon: <CalendarDays size={28} />,
       label: 'Turnos',
-      route: '/turnos' // Identificador especial para abrir modal
+      route: '/turnos',
+      requiresAdmin: false // Todos pueden agregar turnos
     },
     {
       icon: <Accessibility size={28} />,
       label: 'Pacientes',
-      route: '/pacientes?nuevo=true'
+      route: '/pacientes?nuevo=true',
+      requiresAdmin: false // Todos pueden agregar pacientes
     },
     {
       icon: <ClipboardList size={28} />,
       label: 'Especialistas',
-      route: '/especialistas?nuevo=true'
+      route: '/especialistas?nuevo=true',
+      requiresAdmin: true // Solo admin puede agregar especialistas
     }
-  ];  const toggleMenu = () => {
+  ];
+
+  // Filtrar opciones según el rol del usuario
+  const menuOptions = useMemo(() => {
+    if (loading || !user) return [];
+    
+    // Si es admin, mostrar todas las opciones
+    if (user.esAdmin) {
+      return allMenuOptions;
+    }
+    
+    // Si es especialista, filtrar solo las opciones que no requieren admin
+    return allMenuOptions.filter(option => !option.requiresAdmin);
+  }, [user, loading]);  const toggleMenu = () => {
     setIsOpen(!isOpen);
   };
 
@@ -75,6 +95,11 @@ const AgregarBoton = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // No mostrar el botón si está cargando o no hay opciones disponibles
+  if (loading || menuOptions.length === 0) {
+    return null;
+  }
 
   return (
     <div className="relative" ref={menuRef}>

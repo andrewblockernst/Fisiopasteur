@@ -20,90 +20,179 @@ interface TurnoData {
     centroMedico?: string
 }
 
-// Flow de bienvenida general
-const welcomeFlow = addKeyword<Provider, Database>(['hola', 'hi', 'hello', 'buenos dias', 'buenas tardes'])
-    .addAnswer('👋 ¡Hola! Soy el asistente virtual de *Fisiopasteur*')
+// Flow de bienvenida general  
+const welcomeFlow = addKeyword<Provider, Database>(['hola', 'hi', 'hello', 'buenos dias', 'buenas tardes', 'buenas noches', 'buenas', 'como te va', 'que tal', 'saludos', 'buen dia', 'saludos', 'que onda'])
+    .addAnswer('👋 ¡Hola! Bienvenido/a a *Fisiopasteur*')
     .addAnswer([
-        '🏥 Te ayudo con información sobre tus turnos de kinesiología.',
+        '💪 Estoy acá para asistirte con información sobre tus turnos.',
         '',
-        'Puedes escribir:',
-        '• *confirmar* - Para confirmar tu próximo turno',
-        '• *cancelar* - Para cancelar un turno',
-        '• *info* - Para información del centro',
-        '• *ayuda* - Para ver todas las opciones'
-    ].join('\n'))
+        'Podés consultar esribiendo:',
+        '• *Próximo turno* - Ver tu próximo turno',
+        '• *Especialista* - Información de tu especialista',
+        '• *Info* - Información del centro'
+    ])
+    .addAnswer('📌 *Importante:* Este es un medio de comunicación automático. Para gestiones administrativas (agendar, cancelar o reprogramar turnos) u otro tipos de consultas particulares, por favor comunicate con tu especialista o directamente al *+54 9 3435 03-4865*.')
 
-// Flow para confirmación de asistencia
-const confirmarFlow = addKeyword<Provider, Database>(['confirmar', 'confirmo', 'si voy', 'asistiré'])
-    .addAnswer('✅ ¡Perfecto! He registrado tu confirmación de asistencia.')
-    .addAnswer([
-        '📋 *Recordatorios importantes:*',
-        '• Llega 10 minutos antes de tu cita',
-        '• Trae ropa cómoda para la sesión',
-        '• Si necesitas cancelar, hazlo con 24hs de anticipación'
-    ].join('\n'))
-
-// Flow para cancelación
-const cancelarFlow = addKeyword<Provider, Database>(['cancelar', 'no puedo ir', 'reprogramar'])
-    .addAnswer('❌ Entiendo que necesitas cancelar tu turno.')
-    .addAnswer(
-        '¿Estás seguro que deseas cancelar? Responde *SI* para confirmar o *NO* para mantener el turno.',
-        { capture: true },
-        async (ctx, { flowDynamic, state }) => {
-            const response = ctx.body.toLowerCase()
-            if (response.includes('si') || response.includes('sí')) {
-                await flowDynamic('🗓️ Tu turno ha sido cancelado. Te enviaremos información para reprogramar pronto.')
-                // Aquí se podría integrar con la API para cancelar el turno
-            } else {
-                await flowDynamic('👍 Perfecto, tu turno se mantiene confirmado.')
+// Flow para consultar próximo turno
+const proximoTurnoFlow = addKeyword<Provider, Database>([
+    'proximo turno', 
+    'próximo turno',
+    'mi turno',
+    'cuando es mi turno',
+    'turno',
+    'consultar turno',
+    'ver turno',
+    'cual es mi turno',
+    'cuando tengo turno',
+    'cuando',
+    'cuando es mi proximo turno',
+    'cual es mi proximo turno',
+])
+    .addAnswer('🔍 Consultando tu próximo turno...')
+    .addAction(async (ctx, { flowDynamic }) => {
+        try {
+            const telefono = ctx.from;
+            const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app';
+            
+            console.log(`📱 Consultando próximo turno para: ${telefono}`);
+            
+            const response = await fetch(`${FISIOPASTEUR_URL}/api/paciente/proximo-turno?telefono=${telefono}`);
+            const resultado = await response.json();
+            
+            if (!resultado.success) {
+                await flowDynamic('😵‍💫 Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
+                return;
             }
+            
+            if (!resultado.hasTurno) {
+                await flowDynamic([
+                    'ℹ️ No tenés turnos próximos programados en este momento.',
+                    '',
+                    '💡 Para agendar un turno, comunicate al:',
+                    '📞 *+54 9 3435 03-4865*'
+                ].join('\n'));
+                return;
+            }
+            
+            const turno = resultado.turno;
+            
+            // Formatear fecha en español
+            const [year, month, day] = turno.fecha.split('-');
+            const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            
+            const diaSemana = diasSemana[fecha.getDay()];
+            const nombreMes = meses[fecha.getMonth()];
+            const fechaFormateada = `${diaSemana} ${day} de ${nombreMes} de ${year}`;
+            
+            const mensaje = `📋 Tu próximo turno es el ${fechaFormateada} a las ${turno.hora.substring(0, 5)} con ${turno.especialista.nombre} ${turno.especialista.apellido} para ${turno.especialidad.nombre}.`;
+            
+            await flowDynamic(mensaje);
+            
+        } catch (error) {
+            console.error('❌ Error consultando próximo turno:', error);
+            await flowDynamic('😵‍💫 Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
         }
-    )
+    })
+
+// Flow para contacto de especialista
+const contactoEspecialistaFlow = addKeyword<Provider, Database>([
+    'especialista',
+    'contacto especialista',
+    'telefono especialista',
+    'teléfono especialista',
+    'contacto profesional',
+    'hablar con especialista',
+    'con quien tengo turno',
+    'hablar con especialista',
+    'con quien tengo el proximo turno',
+    'con quien tengo el turno',
+    'con quien me atiendo',
+    'quien me atiende',
+])
+    .addAnswer('🔍 Consultando información de tu especialista...')
+    .addAction(async (ctx, { flowDynamic }) => {
+        try {
+            const telefono = ctx.from;
+            const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app';
+            
+            console.log(`🔍 Consultando especialista del próximo turno para: ${telefono}`);
+            
+            const response = await fetch(`${FISIOPASTEUR_URL}/api/paciente/proximo-turno?telefono=${telefono}`);
+            const resultado = await response.json();
+            
+            if (!resultado.success) {
+                await flowDynamic('﹖ Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
+                return;
+            }
+            
+            if (!resultado.hasTurno) {
+                await flowDynamic([
+                    'ℹ️ No tenés turnos programados en este momento.',
+                    '',
+                    'Para agendar un turno, comunicate al:',
+                    '📞 *+54 9 3435 03-4865*'
+                ].join('\n'));
+                return;
+            }
+            
+            const turno = resultado.turno;
+            const especialista = turno.especialista;
+            
+            // Formatear fecha del turno
+            const [year, month, day] = turno.fecha.split('-');
+            const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            
+            const diaSemana = diasSemana[fecha.getDay()];
+            const nombreMes = meses[fecha.getMonth()];
+            const fechaFormateada = `${diaSemana} ${day} de ${nombreMes}`;
+            
+            const mensaje = [
+                `📋 *Tu próximo turno es con:*`, `${especialista.nombre} ${especialista.apellido}`,
+                '',
+                `El día ${fechaFormateada} a las ${turno.hora.substring(0, 5)} hs.`,
+                '',
+                '📌 Para consultas sobre tu tratamiento o turno, comunicate directamente con tu especialista.',
+                '',
+                '¡Te deseamos una pronta recuperación! 💪'
+            ].join('\n');
+            
+            await flowDynamic(mensaje);
+            
+        } catch (error) {
+            console.error('❌ Error consultando contacto de especialista:', error);
+            await flowDynamic('😔 Disculpá, hubo un error al consultar tu información. Por favor, intentá más tarde o comunicate al +54 9 3435 03-4865.');
+        }
+    })
 
 // Flow de información del centro
-const infoFlow = addKeyword<Provider, Database>(['info', 'información', 'direccion', 'horarios'])
+const infoFlow = addKeyword<Provider, Database>(['info', 'información', 'informacion', 'direccion', 'dirección', 'horarios', 'centro', 'donde', 'ubicacion', 'ubicación', 'telefono', 'teléfono', 'contacto', 'ayuda', 'help'])
     .addAnswer([
-        '🏥 *Información de Fisiopasteur*',
+        '📍 *Dirección:* Pasteur 206, Libertador San Martín, Entre Ríos.',
+        '🚗 Frente a Centro Vida Sana ó al lado del Pasaje Juan de Garay.',
         '',
-        '📍 **Dirección:** [Tu dirección aquí]',
-        '📞 **Teléfono:** [Tu teléfono aquí]',
-        '🕐 **Horarios:** Lun a Vie 8:00 - 20:00, Sáb 8:00 - 14:00',
+        '👤 *Contacto:* +54 9 3435 03-4865',
+        '🕐 *Horarios:* Lun a Vie 8:00 - 20:00',
+        '🤸 *Pilates: Lun a Vie 8:00 - 12:00 y 15:30 - 22:30 *',
         '',
-        '🚗 **Cómo llegar:** [Instrucciones de ubicación]'
-    ].join('\n'))
-
-// Flow de ayuda
-const ayudaFlow = addKeyword<Provider, Database>(['ayuda', 'help', 'opciones', 'menu'])
-    .addAnswer([
-        '🤖 *Menú de opciones:*',
-        '',
-        '• *confirmar* - Confirmar asistencia a tu turno',
-        '• *cancelar* - Cancelar o reprogramar turno',
-        '• *info* - Información del centro médico',
-        '• *contacto* - Hablar con recepción',
-        '',
-        '💡 También recibirás notificaciones automáticas sobre tus turnos.'
-    ].join('\n'))
-
-// Flow para contacto directo
-const contactoFlow = addKeyword<Provider, Database>(['contacto', 'recepcion', 'hablar', 'consulta'])
-    .addAnswer([
-        '👥 *Contacto directo:*',
-        '',
-        '📞 **Recepción:** [Número de teléfono]',
-        '📧 **Email:** [Email del centro]',
-        '🕐 **Horarios de atención:** Lun a Vie 8:00 - 20:00',
-        '',
-        'También puedes seguir escribiendo aquí y te ayudaré en lo que necesites.'
+        '💪 ¡Te esperamos!'
     ].join('\n'))
 
 // Flow para casos no entendidos
 const fallbackFlow = addKeyword<Provider, Database>(utils.setEvent('FALLBACK'))
     .addAnswer([
-        '🤔 No entendí tu mensaje.',
+        '😅 Disculpame, no pude comprender lo que necesitas.',
         '',
-        'Puedes escribir *ayuda* para ver las opciones disponibles',
-        'o *contacto* para hablar directamente con recepción.'
+        'Recordá que este es un medio de comunicación para informar.',
+        'Cualquier consulta hacela con tu especialista, o si no tenés uno, comunicate directamente al *+54 9 3435 03-4865*.',
+        '',
+        'Podés escribir:',
+        '• *próximo turno* - Para ver tu próximo turno',
+        '• *especialista* - Para información de tu especialista',
+        '• *info* - Para información del centro'
     ].join('\n'))
 
 // Función auxiliar para formatear mensajes de turno
@@ -111,22 +200,32 @@ const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recorda
     const emoji = tipo === 'confirmacion' ? '✅' : '⏰'
     const titulo = tipo === 'confirmacion' ? 'Confirmación de Turno' : 'Recordatorio de Turno'
     
-    return [
+    const mensajeBase = [
         `${emoji} *${titulo}*`,
         '',
-        `👤 **Paciente:** ${turno.pacienteNombre} ${turno.pacienteApellido}`,
-        `📅 **Fecha:** ${turno.fecha}`,
-        `🕐 **Hora:** ${turno.hora}`,
-        `👩‍⚕️ **Profesional:** ${turno.profesional}`,
-        `🏥 **Especialidad:** ${turno.especialidad}`,
-        turno.centroMedico ? `🏢 **Centro:** ${turno.centroMedico}` : '',
         '',
-        tipo === 'confirmacion' ? 
-            'Responde *confirmar* para confirmar tu asistencia o *cancelar* si no puedes asistir.' :
-            '⚠️ Tu turno es en las próximas horas. Responde *confirmar* si vas a asistir.',
+        `Paciente: ${turno.pacienteNombre} ${turno.pacienteApellido}`,
+        `Fecha: ${turno.fecha}`,
+        `Hora: ${turno.hora}`,
+        `Profesional: ${turno.profesional}`,
+        `Especialidad: ${turno.especialidad}`,
+        ''
+    ].filter(line => line !== '');
+    
+    const mensajeFinal = [
+        ...mensajeBase,
         '',
-        '📱 Para más información escribe *info*'
-    ].filter(line => line !== '').join('\n')
+        '✔️ *Recomendaciones para tu turno:*',
+        '• Llegá 10 minutos antes',
+        '• Traé ropa cómoda',
+        '',
+        '📍 Pasteur 206, Libertador San Martín',
+        'Ante cualquier consulta, comuniquese directamente con su especialista.',
+        '',
+        '💪 ¡Te esperamos!'
+    ];
+
+    return mensajeFinal.join('\n');
 }
 
 // Función auxiliar para validar número de teléfono
@@ -161,11 +260,9 @@ const main = async () => {
     // Configurar flows del bot
     const adapterFlow = createFlow([
         welcomeFlow,
-        confirmarFlow,
-        cancelarFlow,
+        proximoTurnoFlow,
+        contactoEspecialistaFlow,
         infoFlow,
-        ayudaFlow,
-        contactoFlow,
         fallbackFlow
     ])
     
@@ -284,6 +381,27 @@ const main = async () => {
         }
     }
     
+    // Función helper para fetch con timeout
+    const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 25000) => {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), timeoutMs)
+        
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            })
+            clearTimeout(timeout)
+            return response
+        } catch (error: any) {
+            clearTimeout(timeout)
+            if (error.name === 'AbortError') {
+                throw new Error(`Timeout después de ${timeoutMs}ms`)
+            }
+            throw error
+        }
+    }
+
     // Escuchar cuando el bot se conecta para iniciar recordatorios
     adapterProvider.on('ready', () => {
         console.log('🤖 Bot conectado y listo')
@@ -293,40 +411,52 @@ const main = async () => {
         
         const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app'
         
-        // Función para procesar recordatorios llamando al endpoint de Vercel
+        // Función para procesar recordatorios llamando al endpoint de Vercel con timeout
         const procesarRecordatoriosViaAPI = async () => {
             try {
-                console.log('🔄 Llamando al endpoint de recordatorios...')
-                const response = await fetch(`${FISIOPASTEUR_URL}/api/cron/recordatorios`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
+                const startTime = Date.now()
+                console.log(`🔄 [${new Date().toISOString()}] Llamando al endpoint de recordatorios...`)
+                
+                const response = await fetchWithTimeout(
+                    `${FISIOPASTEUR_URL}/api/cron/recordatorios`,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
                     },
-                })
+                    25000 // Timeout de 25 segundos (menos que el límite de Heroku de 30s)
+                )
+                
+                const duration = Date.now() - startTime
                 
                 if (!response.ok) {
-                    console.error(`❌ Error en llamada API: ${response.status}`)
+                    console.error(`❌ Error en llamada API: ${response.status} (${duration}ms)`)
                     return
                 }
                 
                 const resultado = await response.json()
                 if (resultado.success) {
-                    console.log(`✅ Recordatorios procesados vía API: ${JSON.stringify(resultado.data)}`)
+                    console.log(`✅ Recordatorios procesados vía API en ${duration}ms: ${JSON.stringify(resultado.data)}`)
                 } else {
-                    console.error(`❌ Error en API de recordatorios: ${resultado.message}`)
+                    console.error(`❌ Error en API de recordatorios (${duration}ms): ${resultado.message}`)
                 }
-            } catch (error) {
-                console.error('❌ Error llamando al endpoint de recordatorios:', error)
+            } catch (error: any) {
+                if (error.message.includes('Timeout')) {
+                    console.error(`⏱️ Timeout al llamar al endpoint de recordatorios (>25s)`)
+                } else {
+                    console.error('❌ Error llamando al endpoint de recordatorios:', error.message)
+                }
             }
         }
         
         // Ejecutar inmediatamente
         procesarRecordatoriosViaAPI()
         
-        // Ejecutar cada 60 segundos
-        recordatoriosInterval = setInterval(procesarRecordatoriosViaAPI, 60000)
+        // Ejecutar cada 2 minutos (reducido de 60s para evitar sobrecarga)
+        recordatoriosInterval = setInterval(procesarRecordatoriosViaAPI, 120000)
         
-        console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 60 segundos)')
+        console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 2 minutos)')
     })
     
     // Escuchar cuando el bot se desconecta para detener recordatorios
@@ -752,22 +882,53 @@ const main = async () => {
         })
     )
 
-    // Endpoint de estado/health check
-    adapterProvider.server.get('/api/health', (req, res) => {
+    // Endpoint de health check simple y rápido (para monitoring)
+    // Soporta tanto GET como HEAD (requerido por UptimeRobot)
+    const healthHandler = (req: any, res: any) => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ 
             status: 'ok',
-            timestamp: new Date().toISOString(),
-            service: 'Fisiopasteur WhatsApp Bot'
+            uptime: Math.floor(process.uptime()),
+            timestamp: new Date().toISOString()
         }))
-    })
+    }
+    
+    adapterProvider.server.get('/health', healthHandler)
+    adapterProvider.server.head('/health', healthHandler)
+    
+    // Endpoint de estado/health check detallado
+    // Soporta tanto GET como HEAD (requerido por UptimeRobot)
+    const apiHealthHandler = (req: any, res: any) => {
+        const uptime = Math.floor(process.uptime())
+        const hours = Math.floor(uptime / 3600)
+        const minutes = Math.floor((uptime % 3600) / 60)
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        return res.end(JSON.stringify({ 
+            status: 'ok',
+            uptime: `${hours}h ${minutes}m`,
+            uptimeSeconds: uptime,
+            timestamp: new Date().toISOString(),
+            service: 'Fisiopasteur WhatsApp Bot',
+            memory: {
+                rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
+                heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+            }
+        }))
+    }
+    
+    adapterProvider.server.get('/api/health', apiHealthHandler)
+    adapterProvider.server.head('/api/health', apiHealthHandler)
     
     // Endpoint para verificar si está autenticado
     adapterProvider.server.get('/api/status', (req, res) => {
         const isAuthenticated = adapterProvider.vendor?.authState?.creds ? true : false
+        const uptime = Math.floor(process.uptime())
+        
         res.writeHead(200, { 'Content-Type': 'application/json' })
         return res.end(JSON.stringify({ 
             authenticated: isAuthenticated,
+            uptime: uptime,
             timestamp: new Date().toISOString(),
             service: 'Fisiopasteur WhatsApp Bot'
         }))

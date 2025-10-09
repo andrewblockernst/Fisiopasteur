@@ -24,8 +24,6 @@ export function DayViewModal({
   onClose,
   fecha,
   turnos,
-  onEditTurno,
-  onDeleteTurno
 }: DayViewModalProps) {
   const { addToast } = useToastStore();
   const { deleteTurno, updateTurno } = useTurnoStore();

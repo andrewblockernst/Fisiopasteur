@@ -160,20 +160,22 @@ export function NuevoTurnoModal({
   // Establecer fecha y hora seleccionadas cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
+      // Construir el nuevo estado en un solo paso
+      const updates: Partial<typeof formData> = {};
+      
       if (fechaSeleccionada) {
-        setFormData(prev => ({
-          ...prev,
-          fecha: fechaSeleccionada.toISOString().split('T')[0]
-        }));
+        updates.fecha = fechaSeleccionada.toISOString().split('T')[0];
       }
       
       // Precargar la hora si viene especificada
       if (horaSeleccionada) {
         console.log('Precargando hora:', horaSeleccionada); // Debug
-        setFormData(prev => ({
-          ...prev,
-          hora: horaSeleccionada
-        }));
+        updates.hora = horaSeleccionada;
+      }
+      
+      // Aplicar todas las actualizaciones juntas
+      if (Object.keys(updates).length > 0) {
+        setFormData(prev => ({ ...prev, ...updates }));
       }
     }
   }, [fechaSeleccionada, horaSeleccionada, isOpen]);
@@ -324,26 +326,31 @@ export function NuevoTurnoModal({
     verificarBoxesDisponibles();
   }, [formData.fecha, formData.hora, boxes]);
 
-  // Limpiar campos al cerrar
+  // Limpiar campos al cerrar (excepto fecha y hora que se resetean en el padre)
   useEffect(() => {
     if (!isOpen) {
-      setFormData({
-        fecha: '',
-        hora: '',
-        id_especialista: '',
-        id_especialidad: '',
-        tipo_plan: 'particular',
-        id_paciente: '',
-        id_box: '',
-        observaciones: '',
-        precio: '',
-        recordatorios: ['1d', '2h'] as TipoRecordatorio[]
-      });
-      setEspecialidadesDisponibles([]);
-      setBoxesDisponibles([]);
-      setBusquedaPaciente('');
-      setPacienteSeleccionado(null);
-      setMostrarListaPacientes(false);
+      // Usar un timeout para asegurar que la limpieza ocurra después del cierre
+      const timer = setTimeout(() => {
+        setFormData({
+          fecha: '',
+          hora: '',
+          id_especialista: '',
+          id_especialidad: '',
+          tipo_plan: 'particular',
+          id_paciente: '',
+          id_box: '',
+          observaciones: '',
+          precio: '',
+          recordatorios: ['1d', '2h'] as TipoRecordatorio[]
+        });
+        setEspecialidadesDisponibles([]);
+        setBoxesDisponibles([]);
+        setBusquedaPaciente('');
+        setPacienteSeleccionado(null);
+        setMostrarListaPacientes(false);
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

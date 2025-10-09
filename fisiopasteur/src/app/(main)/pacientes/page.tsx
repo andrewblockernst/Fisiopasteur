@@ -33,7 +33,7 @@ export default function PacientePage() {
                 console.error("Error al cargar los pacientes:", error);
             } 
             finally {
-                setTimeout(() => setLoading(false), 300);
+                setLoading(false);
             }
         }
 
