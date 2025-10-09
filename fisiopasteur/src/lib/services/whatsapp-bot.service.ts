@@ -43,7 +43,6 @@ async function realizarPeticionBot(endpoint: string, data: any): Promise<BotResp
     });
 
     if (!response.ok) {
-      // Intentar obtener más detalles del error
       let errorMessage = `HTTP Error: ${response.status}`;
       try {
         const errorData = await response.json();
@@ -62,7 +61,6 @@ async function realizarPeticionBot(endpoint: string, data: any): Promise<BotResp
   } catch (error) {
     console.error(`Error en petición al bot (${endpoint}):`, error);
     
-    // Manejo específico de errores comunes
     if (error instanceof Error) {
       if (error.message.includes('fetch')) {
         return {
@@ -96,7 +94,50 @@ async function realizarPeticionBot(endpoint: string, data: any): Promise<BotResp
 /**
  * Enviar confirmación de turno por WhatsApp
  */
-export async function enviarConfirmacionTurno(turno: TurnoWithRelations): Promise<BotResponse> {
+export async function enviarConfirmacionTurno(
+  turnoOrTelefono: TurnoWithRelations | string,
+  nombrePaciente?: string,
+  nombreEspecialista?: string,
+  fecha?: string,
+  hora?: string
+): Promise<BotResponse> {
+  // Si el primer parámetro es un string, es la sobrecarga simple
+  if (typeof turnoOrTelefono === 'string') {
+    console.log('📱 Enviando confirmación individual por WhatsApp...');
+    
+    const telefono = turnoOrTelefono;
+    if (!telefono || !nombrePaciente || !nombreEspecialista || !fecha || !hora) {
+      return {
+        status: 'error',
+        message: 'Faltan datos requeridos para enviar la confirmación'
+      };
+    }
+
+    const datosBot = {
+      pacienteNombre: nombrePaciente.split(' ')[0] || nombrePaciente,
+      pacienteApellido: nombrePaciente.split(' ').slice(1).join(' ') || '',
+      telefono,
+      fecha,
+      hora,
+      profesional: nombreEspecialista,
+      especialidad: 'Fisioterapia',
+      turnoId: `temp_${Date.now()}`,
+      centroMedico: 'Fisiopasteur'
+    };
+
+    const resultado = await realizarPeticionBot('/api/turno/confirmar', datosBot);
+    
+    if (resultado.status === 'success') {
+      console.log(`✅ Confirmación individual enviada a ${telefono}`);
+    } else {
+      console.error(`❌ Error enviando confirmación individual: ${resultado.message}`);
+    }
+    
+    return resultado;
+  }
+
+  // Si es un objeto TurnoWithRelations, usar la función original
+  const turno = turnoOrTelefono;
   console.log('📱 Enviando confirmación de turno por WhatsApp...');
   
   // Validar datos básicos
@@ -184,3 +225,127 @@ export async function verificarEstadoBot(): Promise<boolean> {
   }
 }
 
+/**
+ * ✅ ÚNICA FUNCIÓN QUE ANALIZA PATRONES DE TURNOS
+ * Si quieres cambiar la lógica de análisis, solo modifica AQUÍ
+ */
+function analizarPatronesTurnos(turnos: any[]) {
+  const diasSemanaPorId: Record<number, string> = {
+    0: 'domingo',
+    1: 'lunes',
+    2: 'martes',
+    3: 'miércoles',
+    4: 'jueves',
+    5: 'viernes',
+    6: 'sábado'
+  };
+  
+  const patronesPorDiaYHora: Record<string, Set<string>> = {};
+  
+  turnos.forEach(turno => {
+    const [year, month, day] = turno.fecha.split('-').map(Number);
+    const fecha = new Date(year, month - 1, day);
+    const diaNumero = fecha.getDay();
+    const diaSemana = diasSemanaPorId[diaNumero] || 'desconocido';
+    
+    const hora = turno.hora || turno.hora_inicio;
+    const horaFormateada = hora.substring(0, 5);
+    
+    const key = `${diaSemana}_${horaFormateada}`;
+    if (!patronesPorDiaYHora[key]) {
+      patronesPorDiaYHora[key] = new Set();
+    }
+    patronesPorDiaYHora[key].add(turno.fecha);
+  });
+
+  const patronesTexto: string[] = [];
+  Object.keys(patronesPorDiaYHora).forEach(key => {
+    const [dia, hora] = key.split('_');
+    
+    const plurales: Record<string, string> = {
+      'domingo': 'domingos',
+      'lunes': 'lunes',
+      'martes': 'martes', 
+      'miércoles': 'miércoles',
+      'jueves': 'jueves',
+      'viernes': 'viernes',
+      'sábado': 'sábados'
+    };
+    
+    const diaPlural = plurales[dia] || dia;
+    patronesTexto.push(`${diaPlural} a las ${hora}`);
+  });
+
+  // Obtener fecha del último turno
+  const fechas = turnos.map(t => {
+    const [year, month, day] = t.fecha.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }).sort((a, b) => b.getTime() - a.getTime());
+  const ultimaFecha = fechas[0];
+
+  return {
+    patronesTexto,
+    totalTurnos: turnos.length,
+    ultimaFecha
+  };
+}
+
+/**
+ * ✅ ÚNICA FUNCIÓN QUE GENERA MENSAJES AGRUPADOS
+ * Si quieres cambiar el texto del mensaje, solo modifica AQUÍ
+ */
+export async function enviarNotificacionGrupal(
+  telefono: string,
+  nombrePaciente: string,
+  turnos: any[]
+): Promise<BotResponse> {
+  console.log('📱 Enviando notificación agrupada por WhatsApp...');
+  
+  if (!telefono || !nombrePaciente || !turnos || turnos.length === 0) {
+    return {
+      status: 'error',
+      message: 'Faltan datos requeridos para enviar la notificación agrupada'
+    };
+  }
+
+  try {
+    // Analizar patrones
+    const analisis = analizarPatronesTurnos(turnos);
+    
+    const ultimaFechaFormateada = analisis.ultimaFecha.toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+
+    // ✅ MENSAJE ÚNICO - Para cambiar el texto, SOLO edita aquí
+    const mensaje = `¡Hola ${nombrePaciente}! 🌟
+
+Se han confirmado tus turnos de Pilates:
+
+${analisis.patronesTexto.map(p => `• ${p}`).join('\n')}
+
+Te esperamos en Fisiopasteur. ¡Nos vemos pronto! 💪
+
+_Recibirás recordatorios antes de cada clase._`;
+
+    console.log('📱 [WhatsApp Bot] Mensaje generado:', mensaje);
+
+    // Enviar mensaje
+    const resultado = await enviarMensajePersonalizado(telefono, mensaje);
+    
+    if (resultado.status === 'success') {
+      console.log(`✅ Notificación agrupada enviada a ${telefono} para ${turnos.length} turnos`);
+    } else {
+      console.error(`❌ Error enviando notificación agrupada: ${resultado.message}`);
+    }
+    
+    return resultado;
+  } catch (error) {
+    console.error('Error preparando notificación agrupada:', error);
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
