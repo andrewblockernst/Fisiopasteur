@@ -291,7 +291,7 @@ function analizarPatronesTurnos(turnos: any[]) {
 }
 
 /**
- * ✅ ÚNICA FUNCIÓN QUE GENERA MENSAJES AGRUPADOS
+ * ✅ ÚNICA FUNCIÓN QUE GENERA MENSAJES AGRUPADOS PARA PILATES
  * Si quieres cambiar el texto del mensaje, solo modifica AQUÍ
  */
 export async function enviarNotificacionGrupal(
@@ -312,16 +312,16 @@ export async function enviarNotificacionGrupal(
     // Analizar patrones
     const analisis = analizarPatronesTurnos(turnos);
     
-    const ultimaFechaFormateada = analisis.ultimaFecha.toLocaleDateString('es-AR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    // Obtener el mes de los turnos (usar el primer turno)
+    const [year, month, day] = turnos[0].fecha.split('-').map(Number);
+    const primerTurno = new Date(year, month - 1, day);
+    const nombreMes = primerTurno.toLocaleDateString('es-AR', { month: 'long' });
+    const nombreMesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
 
-    // ✅ MENSAJE ÚNICO - Para cambiar el texto, SOLO edita aquí
+    // ✅ MENSAJE FORMATO CLIENTE - Con mes especificado
     const mensaje = `¡Hola ${nombrePaciente}! 🌟
 
-Se han confirmado tus turnos de Pilates:
+Se han confirmado tus turnos de Pilates por el mes de ${nombreMesCapitalizado}:
 
 ${analisis.patronesTexto.map(p => `• ${p}`).join('\n')}
 
@@ -343,6 +343,90 @@ _Recibirás recordatorios antes de cada clase._`;
     return resultado;
   } catch (error) {
     console.error('Error preparando notificación agrupada:', error);
+    return {
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
+
+/**
+ * ✅ FUNCIÓN PARA ENVIAR NOTIFICACIÓN AGRUPADA DE TURNOS NORMALES (NO PILATES)
+ * Envía un mensaje con el listado de fechas y horarios
+ */
+export async function enviarNotificacionGrupalTurnos(
+  telefono: string,
+  nombrePaciente: string,
+  turnos: any[],
+  nombreEspecialista?: string
+): Promise<BotResponse> {
+  console.log('📱 Enviando notificación agrupada de turnos por WhatsApp...');
+  
+  if (!telefono || !nombrePaciente || !turnos || turnos.length === 0) {
+    return {
+      status: 'error',
+      message: 'Faltan datos requeridos para enviar la notificación agrupada'
+    };
+  }
+
+  try {
+    // Ordenar turnos por fecha y hora
+    const turnosOrdenados = [...turnos].sort((a, b) => {
+      const fechaA = new Date(a.fecha + ' ' + a.hora);
+      const fechaB = new Date(b.fecha + ' ' + b.hora);
+      return fechaA.getTime() - fechaB.getTime();
+    });
+
+    // Formatear cada turno con día, fecha DD/MM y hora en formato 24h
+    const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    
+    const listaTurnos = turnosOrdenados.map(turno => {
+      const [year, month, day] = turno.fecha.split('-').map(Number);
+      const fecha = new Date(year, month - 1, day);
+      
+      // Obtener diminutivo del día
+      const diaSemana = diasSemana[fecha.getDay()];
+      
+      const fechaFormateada = fecha.toLocaleDateString('es-AR', {
+        day: '2-digit',
+        month: '2-digit'
+      });
+      
+      // Extraer hora en formato 24h (HH:MM)
+      const hora = turno.hora?.substring(0, 5) || turno.hora_inicio?.substring(0, 5) || '';
+      
+      return `• ${diaSemana} ${fechaFormateada} a las ${hora}hs`;
+    }).join('\n');
+
+    // Obtener nombre de especialidad si existe
+    const especialidadNombre = turnos[0]?.especialidad?.nombre || 'Fisioterapia';
+
+    // Construir mensaje
+    const mensaje = `¡Hola ${nombrePaciente}! 👋
+
+Se han confirmado tus ${turnos.length} turno${turnos.length > 1 ? 's' : ''} de ${especialidadNombre}${nombreEspecialista ? ` con ${nombreEspecialista}` : ''}:
+
+${listaTurnos}
+
+📍 Fisiopasteur
+⏰ Te enviaremos recordatorios antes de cada turno.
+
+¡Nos vemos pronto!`;
+
+    console.log('📱 [WhatsApp Bot] Mensaje de turnos generado:', mensaje);
+
+    // Enviar mensaje
+    const resultado = await enviarMensajePersonalizado(telefono, mensaje);
+    
+    if (resultado.status === 'success') {
+      console.log(`✅ Notificación agrupada de turnos enviada a ${telefono} para ${turnos.length} turnos`);
+    } else {
+      console.error(`❌ Error enviando notificación agrupada de turnos: ${resultado.message}`);
+    }
+    
+    return resultado;
+  } catch (error) {
+    console.error('Error preparando notificación agrupada de turnos:', error);
     return {
       status: 'error',
       message: error instanceof Error ? error.message : 'Error desconocido'
