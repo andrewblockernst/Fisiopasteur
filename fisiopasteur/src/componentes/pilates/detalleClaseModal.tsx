@@ -60,6 +60,9 @@ export function DetalleClaseModal({
   const [mostrarModalRepetir, setMostrarModalRepetir] = useState(false);
   const [diasSeleccionados, setDiasSeleccionados] = useState<number[]>([]);
   const [semanas, setSemanas] = useState<number>(4);
+  const [validandoDisponibilidad, setValidandoDisponibilidad] = useState(false);
+  const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
+  const [hayConflictos, setHayConflictos] = useState(false);
 
   // ============= SINCRONIZAR CON PROPS CUANDO CAMBIAN =============
   useEffect(() => {
@@ -261,6 +264,74 @@ export function DetalleClaseModal({
     );
   };
 
+  // ============= VALIDACIÓN EN TIEMPO REAL DE DISPONIBILIDAD (REPETIR CLASE) =============
+  useEffect(() => {
+    const validarDisponibilidad = async () => {
+      if (!mostrarModalRepetir || diasSeleccionados.length === 0 || !fechaClase || !horaClase) {
+        setHorariosOcupados([]);
+        setHayConflictos(false);
+        return;
+      }
+
+      setValidandoDisponibilidad(true);
+
+      try {
+        const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
+        const [year, month, day] = fechaClase.split('-').map(Number);
+        const fechaBase = new Date(year, month - 1, day);
+        const diaBaseNumeroJS = fechaBase.getDay();
+        const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
+        const ahora = new Date();
+        const ocupados: string[] = [];
+
+        for (let semana = 0; semana < semanas + 1; semana++) {
+          for (const diaSeleccionado of diasSeleccionados) {
+            let diferenciaDias = diaSeleccionado - diaBaseNumero;
+            if (diferenciaDias < 0) diferenciaDias += 7;
+
+            const fechaTurno = new Date(fechaBase);
+            fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
+            const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+
+            const esMismaFecha = fechaFormateada === fechaClase;
+            const [hours, minutes] = horaClase.split(':').map(Number);
+            const fechaHoraTurno = new Date(fechaTurno);
+            fechaHoraTurno.setHours(hours, minutes, 0, 0);
+            const esPasado = fechaHoraTurno < ahora;
+
+            const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
+            const weeksDiff = Math.floor(diasDiferencia / 7);
+
+            if (!esMismaFecha && !esPasado && weeksDiff < semanas) {
+              const disponibilidad = await verificarDisponibilidadPilates(
+                fechaFormateada,
+                horaClase + ':00'
+              );
+
+              if (!disponibilidad.success || !disponibilidad.disponible) {
+                const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
+                ocupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")}`);
+              }
+            }
+          }
+        }
+
+        setHorariosOcupados(ocupados);
+        setHayConflictos(ocupados.length > 0);
+      } catch (error) {
+        console.error('Error validando disponibilidad:', error);
+      } finally {
+        setValidandoDisponibilidad(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      validarDisponibilidad();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [mostrarModalRepetir, diasSeleccionados, semanas, fechaClase, horaClase]);
+
   // ============= RESOLVER CONFLICTO =============
   const handleResolverConflicto = async () => {
     if (!especialistaSeleccionado) {
@@ -449,7 +520,7 @@ export function DetalleClaseModal({
     }
   };
 
-  // ============= FUNCIÓN PARA REPETIR CLASE (CORREGIDA) =============
+  // ============= FUNCIÓN PARA REPETIR CLASE (SIMPLIFICADA) =============
   const handleRepetirClase = async () => {
     if (diasSeleccionados.length === 0) {
       addToast({
@@ -469,30 +540,83 @@ export function DetalleClaseModal({
       return;
     }
 
+    // ✅ BLOQUEAR si hay conflictos detectados
+    if (hayConflictos) {
+      addToast({
+        variant: 'error',
+        message: 'Horarios ocupados',
+        description: 'Hay conflictos con los horarios seleccionados. Por favor ajusta los días o la cantidad de semanas.',
+        duration: 5000,
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // ✅ CORRECCIÓN: Parsear correctamente la fecha desde string (formato: "2025-10-19")
       const [year, month, day] = fechaClase!.split('-').map(Number);
-      const fechaBase = new Date(year, month - 1, day); // month es 0-indexed
-      
-      // ✅ CORRECCIÓN: Usar getDay() nativo de JavaScript
-      const diaBaseNumeroJS = fechaBase.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
-      const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS; // Convertir: 1=Lunes, ..., 7=Domingo
-      
+      const fechaBase = new Date(year, month - 1, day);
+      const diaBaseNumeroJS = fechaBase.getDay();
+      const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
       const ahora = new Date();
       
-      console.log('🔄 Repitiendo clase con configuración actual...');
-      console.log('📅 Fecha original (string):', fechaClase);
-      console.log('📅 Fecha parseada:', fechaBase.toISOString());
-      console.log('📅 Día de la semana (nombre):', fechaBase.toLocaleDateString('es', { weekday: 'long' }));
-      console.log('📅 Día JS (0-6):', diaBaseNumeroJS);
-      console.log('📅 Día normalizado (1-7):', diaBaseNumero);
-      console.log('📋 Días seleccionados:', diasSeleccionados);
-      console.log('📆 Semanas:', semanas);
-      console.log('👥 Participantes:', pacientesSeleccionados);
-      console.log('👨‍⚕️ Especialista:', especialistaSeleccionado);
-      console.log('📊 Dificultad:', dificultadSeleccionada);
+      console.log('✅ Todos los horarios validados - procediendo a crear turnos...');
+
+      // ============= 🚨 VALIDACIÓN PREVIA DE DISPONIBILIDAD =============
+      console.log('🔍 Validando disponibilidad ANTES de crear turnos...');
+      const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
+      const horariosOcupados: string[] = [];
+
+      // Verificar cada combinación de día seleccionado
+      for (let semana = 0; semana < semanas + 1; semana++) {
+        for (const diaSeleccionado of diasSeleccionados) {
+          let diferenciaDias = diaSeleccionado - diaBaseNumero;
+          if (diferenciaDias < 0) {
+            diferenciaDias += 7;
+          }
+
+          const fechaTurno = new Date(fechaBase);
+          fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
+          const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+
+          // Saltar fecha original y fechas pasadas
+          const esMismaFecha = fechaFormateada === fechaClase;
+          const [hours, minutes] = horaClase!.split(':').map(Number);
+          const fechaHoraTurno = new Date(fechaTurno);
+          fechaHoraTurno.setHours(hours, minutes, 0, 0);
+          const esPasado = fechaHoraTurno < ahora;
+
+          const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
+          const weeksDiff = Math.floor(diasDiferencia / 7);
+
+          if (!esMismaFecha && !esPasado && weeksDiff < semanas) {
+            // Verificar disponibilidad
+            const disponibilidad = await verificarDisponibilidadPilates(
+              fechaFormateada,
+              horaClase + ':00'
+            );
+
+            if (!disponibilidad.success || !disponibilidad.disponible) {
+              const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
+              horariosOcupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")} a las ${horaClase}hs`);
+            }
+          }
+        }
+      }
+
+      // 🚫 Si hay horarios ocupados, BLOQUEAR creación
+      if (horariosOcupados.length > 0) {
+        setIsSubmitting(false);
+        addToast({
+          variant: 'error',
+          message: '⚠️ Horarios no disponibles',
+          description: `Ya existen clases en: ${horariosOcupados.slice(0, 3).join(', ')}${horariosOcupados.length > 3 ? ` y ${horariosOcupados.length - 3} más` : ''}. Por favor selecciona otros días.`,
+          duration: 8000,
+        });
+        return;
+      }
+
+      console.log('✅ Todos los horarios están disponibles, procediendo a crear...');
 
       const turnosParaLote = [];
 
@@ -624,50 +748,50 @@ export function DetalleClaseModal({
     if (!mostrarModalRepetir) return null;
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         <div className="text-center">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-2">
             🔄 Repetir Clase de Pilates
           </h3>
-          <p className="text-gray-600 text-sm">
+          <p className="text-gray-600 text-xs md:text-sm">
             Esta clase se repetirá con la misma configuración actual
           </p>
         </div>
 
         {/* Información de la clase que se repetirá */}
-        <div className="bg-blue-50 p-4 rounded-lg space-y-2">
-          <p className="text-sm text-blue-800">
+        <div className="bg-blue-50 p-2 md:p-4 rounded-lg space-y-2">
+          <p className="text-xs md:text-sm text-blue-800">
             <strong>📅 Clase base:</strong> {fechaClaseDate ? format(fechaClaseDate, "EEEE dd/MM/yyyy", { locale: es }) : ''} a las {horaClase}
           </p>
-          <p className="text-sm text-blue-800">
+          <p className="text-xs md:text-sm text-blue-800">
             <strong>👥 Participantes:</strong> {pacientesSeleccionados.length}
-            <span className="text-xs text-blue-600 ml-2">
+            <span className="text-xs text-blue-600 ml-2 block md:inline">
               ({pacientesSeleccionados.map(id => {
                 const p = pacientes.find(pac => pac.id_paciente === id);
                 return p ? `${p.nombre} ${p.apellido}` : '';
               }).filter(Boolean).join(', ')})
             </span>
           </p>
-          <p className="text-sm text-blue-800">
+          <p className="text-xs md:text-sm text-blue-800">
             <strong>👨‍⚕️ Especialista:</strong> {especialistas.find(e => e.id_usuario === especialistaSeleccionado)?.nombre} {especialistas.find(e => e.id_usuario === especialistaSeleccionado)?.apellido}
           </p>
-          <p className="text-sm text-blue-800">
+          <p className="text-xs md:text-sm text-blue-800">
             <strong>📊 Nivel:</strong> {dificultadSeleccionada === 'principiante' ? '🟢 Principiante' : dificultadSeleccionada === 'intermedio' ? '🟡 Intermedio' : '🔴 Avanzado'}
           </p>
         </div>
 
         {/* Selección de días (Lunes a Viernes) */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
             Seleccionar días (Lunes a Viernes)
           </label>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1 md:gap-2 flex-wrap">
             {DIAS_SEMANA.map((dia) => (
               <button
                 key={dia.id}
                 type="button"
                 onClick={() => toggleDia(dia.id)}
-                className={`w-10 h-10 rounded-lg font-medium transition-colors ${
+                className={`w-8 h-8 md:w-10 md:h-10 rounded-lg text-xs md:text-sm font-medium transition-colors ${
                   diasSeleccionados.includes(dia.id)
                     ? 'bg-[#9C1838] text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -681,7 +805,7 @@ export function DetalleClaseModal({
 
         {/* Número de semanas */}
         <div>
-          <label htmlFor="semanas" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="semanas" className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
             Cantidad de semanas
           </label>
           <input
@@ -691,22 +815,66 @@ export function DetalleClaseModal({
             max="12"
             value={semanas}
             onChange={(e) => setSemanas(parseInt(e.target.value) || 1)}
-            className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            className="w-20 md:w-24 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
           />
         </div>
 
-        {/* Preview */}
-        {diasSeleccionados.length > 0 && pacientesSeleccionados.length > 0 && (
-          <div className="text-sm bg-green-50 border border-green-200 text-green-800 p-4 rounded-lg">
-            <strong>✅ Se crearán hasta {diasSeleccionados.length * semanas * pacientesSeleccionados.length} turnos</strong>
-            <div className="text-xs mt-2 text-green-600">
-              {pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
+        {/* ⚠️ ALERTA DE CONFLICTOS EN TIEMPO REAL */}
+        {validandoDisponibilidad && diasSeleccionados.length > 0 && (
+          <div className="text-xs md:text-sm bg-gray-50 border border-gray-200 text-gray-600 p-2 md:p-3 rounded-lg animate-pulse">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+              Verificando disponibilidad...
             </div>
-            <div className="text-xs mt-1 text-green-700">
-              📌 Las clases mantendrán: mismos participantes, mismo especialista y mismo nivel de dificultad
+          </div>
+        )}
+
+        {!validandoDisponibilidad && hayConflictos && horariosOcupados.length > 0 && (
+          <div className="text-xs md:text-sm bg-red-50 border-2 border-red-300 text-red-800 p-2 md:p-3 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <strong className="block mb-1">⚠️ Horarios no disponibles</strong>
+                <p className="text-xs text-red-700 mb-2">
+                  Ya existen clases de Pilates en los siguientes horarios:
+                </p>
+                <div className="max-h-20 overflow-y-auto bg-red-100 p-2 rounded space-y-1">
+                  {horariosOcupados.slice(0, 10).map((horario, idx) => (
+                    <div key={idx} className="text-xs text-red-900">
+                      • {horario} a las {horaClase}hs
+                    </div>
+                  ))}
+                  {horariosOcupados.length > 10 && (
+                    <div className="text-xs text-red-700 font-medium pt-1 border-t border-red-200">
+                      ... y {horariosOcupados.length - 10} más
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-red-700 mt-2 font-medium">
+                  💡 Cambia los días seleccionados o reduce las semanas
+                </p>
+              </div>
             </div>
-            <div className="text-xs mt-1 text-green-700">
-              ⏰ Solo se crearán turnos en horarios futuros
+          </div>
+        )}
+
+        {/* Preview (solo si NO hay conflictos) */}
+        {!validandoDisponibilidad && !hayConflictos && diasSeleccionados.length > 0 && pacientesSeleccionados.length > 0 && (
+          <div className="text-xs md:text-sm bg-green-50 border border-green-200 text-green-800 p-2 md:p-4 rounded-lg">
+            <div className="flex items-start gap-2">
+              <div className="text-lg">✅</div>
+              <div>
+                <strong className="block">Todos los horarios disponibles</strong>
+                <div className="text-xs mt-1 text-green-700">
+                  Se crearán {diasSeleccionados.length * semanas * pacientesSeleccionados.length} turnos
+                </div>
+                <div className="text-xs mt-0.5 text-green-600">
+                  {pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
+                </div>
+                <div className="text-xs mt-1 text-green-700">
+                  📌 Mismos participantes, especialista y nivel de dificultad
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -722,10 +890,16 @@ export function DetalleClaseModal({
           </button>
           <button
             onClick={handleRepetirClase}
-            disabled={isSubmitting || diasSeleccionados.length === 0}
+            disabled={isSubmitting || diasSeleccionados.length === 0 || hayConflictos || validandoDisponibilidad}
             className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors"
           >
-            {isSubmitting ? 'Creando clases...' : 'Repetir clase'}
+            {isSubmitting 
+              ? 'Creando clases...' 
+              : hayConflictos 
+                ? '⚠️ Horarios ocupados'
+                : validandoDisponibilidad
+                  ? 'Validando...'
+                  : 'Repetir clase'}
           </button>
         </div>
       </div>
@@ -901,22 +1075,22 @@ export function DetalleClaseModal({
     const especialistaActual = especialistas.find(e => String(e.id_usuario) === String(primeraClase?.id_especialista));
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6 max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1">
         {/* Información de la clase */}
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <div className="flex items-center gap-2 mb-3">
-            <Calendar className="w-4 h-4 text-blue-600" />
-            <span className="font-medium text-blue-800">Información de la clase</span>
+        <div className="bg-blue-50 p-3 md:p-4 rounded-lg">
+          <div className="flex items-center gap-2 mb-2 md:mb-3">
+            <Calendar className="w-3 h-3 md:w-4 md:h-4 text-blue-600" />
+            <span className="text-xs md:text-sm font-medium text-blue-800">Información de la clase</span>
           </div>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 text-xs md:text-sm">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-500" />
+              <Clock className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
               <span>
                 {fechaClaseDate ? format(fechaClaseDate, "EEEE dd/MM", { locale: es }) : ''} - {horaClase}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-gray-500" />
+              <Users className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
               <span>{pacientesSeleccionados.length}/4 participantes</span>
             </div>
           </div>
@@ -924,10 +1098,10 @@ export function DetalleClaseModal({
 
         {/* Especialista - EDITABLE PARA ADMIN */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2 md:mb-3">
             <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-gray-500" />
-              <span className="font-medium text-gray-700">Especialista</span>
+              <User className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+              <span className="text-xs md:text-sm font-medium text-gray-700">Especialista</span>
             </div>
             {userRole === 1 && (
               <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">
@@ -940,7 +1114,7 @@ export function DetalleClaseModal({
             <select
               value={especialistaSeleccionado}
               onChange={(e) => setEspecialistaSeleccionado(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
             >
               {especialistas.map(esp => (
                 <option key={esp.id_usuario} value={esp.id_usuario}>
@@ -949,12 +1123,12 @@ export function DetalleClaseModal({
               ))}
             </select>
           ) : (
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-gray-50 rounded-lg">
               <div
-                className="w-4 h-4 rounded-full"
+                className="w-3 h-3 md:w-4 md:h-4 rounded-full flex-shrink-0"
                 style={{ backgroundColor: especialistaActual?.color || '#e0e7ff' }}
               />
-              <span className="font-medium">
+              <span className="text-xs md:text-sm font-medium">
                 {especialistaActual?.nombre} {especialistaActual?.apellido}
               </span>
             </div>
@@ -963,15 +1137,15 @@ export function DetalleClaseModal({
 
         {/* Nivel de Dificultad - SIEMPRE EDITABLE */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Settings className="w-4 h-4 text-gray-500" />
-            <span className="font-medium text-gray-700">Nivel de Dificultad</span>
+          <div className="flex items-center gap-2 mb-2 md:mb-3">
+            <Settings className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+            <span className="text-xs md:text-sm font-medium text-gray-700">Nivel de Dificultad</span>
           </div>
 
           <select
             value={dificultadSeleccionada}
             onChange={(e) => setDificultadSeleccionada(e.target.value as any)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
           >
             <option value="principiante">🟢 Principiante</option>
             <option value="intermedio">🟡 Intermedio</option>
@@ -987,9 +1161,9 @@ export function DetalleClaseModal({
 
         {/* Participantes - CON BÚSQUEDA COMO EN NUEVO TURNO */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Users className="w-4 h-4 text-gray-500" />
-            <span className="font-medium text-gray-700">
+          <div className="flex items-center gap-2 mb-2 md:mb-3">
+            <Users className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+            <span className="text-xs md:text-sm font-medium text-gray-700">
               Participantes ({pacientesSeleccionados.length}/4)
             </span>
           </div>
@@ -1002,8 +1176,8 @@ export function DetalleClaseModal({
                 if (!paciente) return null;
                 
                 return (
-                  <div key={pacienteId} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <span className="text-sm font-medium text-green-800">
+                  <div key={pacienteId} className="flex items-center justify-between p-2 md:p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <span className="text-xs md:text-sm font-medium text-green-800">
                       {paciente.nombre} {paciente.apellido}
                     </span>
                     <button
@@ -1011,7 +1185,7 @@ export function DetalleClaseModal({
                       className="text-red-500 hover:text-red-700 transition-colors"
                       title="Eliminar participante"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                     </button>
                   </div>
                 );
@@ -1022,8 +1196,8 @@ export function DetalleClaseModal({
           {pacientesSeleccionados.length < 4 && (
             <div className="relative">
               <div className="flex items-center gap-2">
-                <Plus className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Agregar participante</span>
+                <Plus className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+                <span className="text-xs md:text-sm font-medium text-gray-700">Agregar participante</span>
               </div>
               
               <input
@@ -1032,7 +1206,7 @@ export function DetalleClaseModal({
                 value={busquedaPaciente}
                 onChange={handleBusquedaPacienteChange}
                 onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                className="w-full mt-2 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 placeholder="Buscar por nombre, DNI..."
                 autoComplete="off"
               />
@@ -1041,7 +1215,7 @@ export function DetalleClaseModal({
               {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
                 <div 
                   ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
                 >
                   {pacientesFiltrados
                     .filter(paciente => !pacientesSeleccionados.includes(paciente.id_paciente))
@@ -1049,12 +1223,12 @@ export function DetalleClaseModal({
                     <div
                       key={paciente.id_paciente}
                       onClick={() => agregarPaciente(paciente)}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                      className="px-2 md:px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                     >
-                      <div className="font-medium">
+                      <div className="text-sm font-medium">
                         {paciente.nombre} {paciente.apellido}
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs text-gray-500">
                         DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
                       </div>
                     </div>
@@ -1062,7 +1236,7 @@ export function DetalleClaseModal({
                   
                   {/* Mostrar mensaje cuando todos los resultados ya están agregados */}
                   {pacientesFiltrados.every(p => pacientesSeleccionados.includes(p.id_paciente)) && (
-                    <div className="px-3 py-2 text-center text-gray-500 text-sm">
+                    <div className="px-2 md:px-3 py-2 text-center text-gray-500 text-xs md:text-sm">
                       Todos los pacientes encontrados ya están en la clase
                     </div>
                   )}
@@ -1073,7 +1247,7 @@ export function DetalleClaseModal({
               {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
                 <div 
                   ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
+                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 md:p-3 text-center text-gray-500 text-xs md:text-sm"
                 >
                   No se encontraron pacientes
                 </div>
@@ -1089,30 +1263,32 @@ export function DetalleClaseModal({
         </div>
 
         {/* Botones de acción */}
-        <div className="flex gap-2 pt-4 border-t">
+        <div className="flex flex-col md:flex-row gap-2 pt-3 md:pt-4 border-t">
           <button
             onClick={() => setMostrarConfirmacionEliminar(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors"
           >
-            <Trash2 className="w-4 h-4" />
-            Eliminar clase
+            <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
+            <span className="hidden md:inline">Eliminar clase</span>
+            <span className="md:hidden">Eliminar</span>
           </button>
           
           <button
             onClick={() => setMostrarModalRepetir(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 transition-colors"
           >
-            <Repeat className="w-4 h-4" />
-            Repetir clase
+            <Repeat className="w-3 h-3 md:w-4 md:h-4" />
+            <span className="hidden md:inline">Repetir clase</span>
+            <span className="md:hidden">Repetir</span>
           </button>
           
-          <div className="flex-1"></div>
+          <div className="flex-1 hidden md:block"></div>
           
           {cambiosPendientes && (
             <button
               onClick={handleGuardarCambios}
               disabled={isSubmitting}
-              className="px-6 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors font-medium"
+              className="px-4 md:px-6 py-2 text-sm bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors font-medium"
             >
               {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
             </button>

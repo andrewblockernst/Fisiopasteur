@@ -40,7 +40,7 @@ export function DayViewModal({
   if (!isOpen || !fecha) return null;
 
   const formatearFecha = (fecha: Date) => {
-    return fecha.toLocaleDateString('es-ES', {
+    return fecha.toLocaleDateString('es-AR', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',

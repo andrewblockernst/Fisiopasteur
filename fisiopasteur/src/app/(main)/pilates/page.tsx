@@ -253,10 +253,10 @@ export default function PilatesPage() {
   // ============= LOADING STATE =============
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#9C1838] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando datos de Pilates...</p>
+          <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-b-2 border-[#9C1838] mx-auto"></div>
+          <p className="mt-4 text-sm md:text-base text-gray-600">Cargando datos de Pilates...</p>
         </div>
       </div>
     );
@@ -264,7 +264,7 @@ export default function PilatesPage() {
 
   // ============= RENDER PRINCIPAL =============
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gray-50 p-2 md:p-4">
       {/* ============= CALENDARIO PRINCIPAL ============= */}
       <PilatesCalendarioSemanal
         turnos={turnos}
