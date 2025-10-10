@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerAgendaEspecialista, obtenerTurnos } from "@/lib/actions/turno.action";
+import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerAgendaEspecialista, obtenerTurnos, verificarDisponibilidad } from "@/lib/actions/turno.action";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
 import SelectorRecordatorios from "@/componentes/turnos/selector-recordatorios";
 import Image from "next/image";
@@ -119,6 +119,10 @@ export function NuevoTurnoModal({
   });
   const [horariosDisponiblesPorDia, setHorariosDisponiblesPorDia] = useState<Record<number, string[]>>({});
   const [cargandoHorarios, setCargandoHorarios] = useState(false);
+  // ✅ NUEVOS ESTADOS PARA VALIDACIÓN EN TIEMPO REAL
+  const [validandoDisponibilidad, setValidandoDisponibilidad] = useState(false);
+  const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
+  const [hayConflictos, setHayConflictos] = useState(false);
 
   // Dialog para mensajes
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
@@ -384,6 +388,72 @@ export function NuevoTurnoModal({
 
     cargarHorariosDisponibles();
   }, [mantenerHorario, diasSeleccionados, formData.id_especialista, formData.fecha]);
+
+  // ✅ VALIDACIÓN EN TIEMPO REAL - Verificar disponibilidad de todos los turnos
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const validarDisponibilidadTurnos = async () => {
+      // Solo validar si hay repetición activa y días seleccionados
+      if (!mostrarRepeticion || diasSeleccionados.length === 0 || numeroSesiones <= 0 || !formData.id_especialista || !formData.fecha) {
+        setHorariosOcupados([]);
+        setHayConflictos(false);
+        return;
+      }
+
+      setValidandoDisponibilidad(true);
+      setHorariosOcupados([]);
+      setHayConflictos(false);
+
+      try {
+        const ocupados: string[] = [];
+        const [year, month, day] = formData.fecha.split('-').map(Number);
+        const fechaBase = new Date(year, month - 1, day);
+
+        // Iterar sobre cada semana
+        for (let semana = 0; semana < numeroSesiones; semana++) {
+          // Iterar sobre cada día seleccionado
+          for (const diaId of diasSeleccionados) {
+            const diaBaseNumero = fechaBase.getDay() === 0 ? 7 : fechaBase.getDay();
+            let diferenciaDias = diaId - diaBaseNumero;
+            if (diferenciaDias < 0) diferenciaDias += 7;
+
+            const fechaTurno = new Date(fechaBase);
+            fechaTurno.setDate(fechaTurno.getDate() + diferenciaDias + (semana * 7));
+
+            const fechaFormateada = format(fechaTurno, 'yyyy-MM-dd');
+            const horaSeleccionada = mantenerHorario ? formData.hora : (horariosPorDia[diaId] || '09:00');
+
+            // ✅ Verificar disponibilidad para este especialista en esta fecha/hora
+            const resultado = await verificarDisponibilidad(
+              fechaFormateada,
+              horaSeleccionada,
+              formData.id_especialista
+            );
+
+            if (!resultado.disponible) {
+              const diaNombre = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][diaId - 1];
+              ocupados.push(`${diaNombre} ${format(fechaTurno, 'dd/MM')} a las ${horaSeleccionada}`);
+            }
+          }
+        }
+
+        setHorariosOcupados(ocupados);
+        setHayConflictos(ocupados.length > 0);
+      } catch (error) {
+        console.error('Error validando disponibilidad:', error);
+      } finally {
+        setValidandoDisponibilidad(false);
+      }
+    };
+
+    // Debounce de 500ms para evitar llamadas excesivas
+    timeoutId = setTimeout(() => {
+      validarDisponibilidadTurnos();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [diasSeleccionados, numeroSesiones, mantenerHorario, horariosPorDia, formData.id_especialista, formData.fecha, formData.hora, mostrarRepeticion]);
 
   // Verificar boxes disponibles
   useEffect(() => {
@@ -1233,6 +1303,56 @@ export function NuevoTurnoModal({
               </div>
             )}
 
+            {/* ✅ ADVERTENCIAS DE VALIDACIÓN EN TIEMPO REAL */}
+            {mostrarRepeticion && diasSeleccionados.length > 0 && (
+              <div className="space-y-2">
+                {/* Spinner de validación */}
+                {validandoDisponibilidad && (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm md:text-base">
+                    <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-blue-700">Validando disponibilidad de horarios...</span>
+                  </div>
+                )}
+
+                {/* Conflictos detectados */}
+                {!validandoDisponibilidad && hayConflictos && (
+                  <div className="p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg md:text-xl">⚠️</span>
+                      <div className="flex-1">
+                        <p className="font-medium text-red-800 text-sm md:text-base mb-2">
+                          Horarios ocupados ({horariosOcupados.length})
+                        </p>
+                        <div className="max-h-32 md:max-h-40 overflow-y-auto">
+                          <ul className="space-y-1 text-xs md:text-sm text-red-700">
+                            {horariosOcupados.map((horario, index) => (
+                              <li key={index} className="flex items-center gap-1">
+                                <span className="w-1 h-1 bg-red-500 rounded-full flex-shrink-0"></span>
+                                {horario}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <p className="text-xs md:text-sm text-red-600 mt-2">
+                          Por favor, selecciona otros días/horarios o reduce el número de sesiones
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Confirmación: todos los horarios disponibles */}
+                {!validandoDisponibilidad && !hayConflictos && diasSeleccionados.length > 0 && numeroSesiones > 0 && formData.id_especialista && formData.fecha && (mantenerHorario ? formData.hora : Object.keys(horariosPorDia).length > 0) && (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm md:text-base">
+                    <span className="text-lg md:text-xl">✓</span>
+                    <span className="text-green-700">
+                      Todos los horarios están disponibles ({diasSeleccionados.length} días × {numeroSesiones} semanas = {diasSeleccionados.length * numeroSesiones} turnos)
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Recordatorios WhatsApp */}
             <div>
               <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
@@ -1265,11 +1385,15 @@ export function NuevoTurnoModal({
         primaryButton={{
           text: isSubmitting 
             ? "Creando..." 
-            : mostrarRepeticion && diasSeleccionados.length > 0
-              ? `Crear ${numeroSesiones} Sesiones`
-              : "Crear Turno",
+            : validandoDisponibilidad
+              ? "Validando..."
+              : hayConflictos
+                ? "⚠️ Horarios ocupados"
+                : mostrarRepeticion && diasSeleccionados.length > 0
+                  ? `Crear ${numeroSesiones} Sesiones`
+                  : "Crear Turno",
           onClick: handleSubmit,
-          disabled: isSubmitting || !esHoraDisponible(formData.hora) || esHoraPasada,
+          disabled: isSubmitting || !esHoraDisponible(formData.hora) || esHoraPasada || validandoDisponibilidad || hayConflictos,
         }}
         secondaryButton={{
           text: "Cancelar",
