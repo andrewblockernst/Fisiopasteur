@@ -60,6 +60,9 @@ export function DetalleClaseModal({
   const [mostrarModalRepetir, setMostrarModalRepetir] = useState(false);
   const [diasSeleccionados, setDiasSeleccionados] = useState<number[]>([]);
   const [semanas, setSemanas] = useState<number>(4);
+  const [validandoDisponibilidad, setValidandoDisponibilidad] = useState(false);
+  const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
+  const [hayConflictos, setHayConflictos] = useState(false);
 
   // ============= SINCRONIZAR CON PROPS CUANDO CAMBIAN =============
   useEffect(() => {
@@ -261,6 +264,74 @@ export function DetalleClaseModal({
     );
   };
 
+  // ============= VALIDACIÓN EN TIEMPO REAL DE DISPONIBILIDAD (REPETIR CLASE) =============
+  useEffect(() => {
+    const validarDisponibilidad = async () => {
+      if (!mostrarModalRepetir || diasSeleccionados.length === 0 || !fechaClase || !horaClase) {
+        setHorariosOcupados([]);
+        setHayConflictos(false);
+        return;
+      }
+
+      setValidandoDisponibilidad(true);
+
+      try {
+        const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
+        const [year, month, day] = fechaClase.split('-').map(Number);
+        const fechaBase = new Date(year, month - 1, day);
+        const diaBaseNumeroJS = fechaBase.getDay();
+        const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
+        const ahora = new Date();
+        const ocupados: string[] = [];
+
+        for (let semana = 0; semana < semanas + 1; semana++) {
+          for (const diaSeleccionado of diasSeleccionados) {
+            let diferenciaDias = diaSeleccionado - diaBaseNumero;
+            if (diferenciaDias < 0) diferenciaDias += 7;
+
+            const fechaTurno = new Date(fechaBase);
+            fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
+            const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+
+            const esMismaFecha = fechaFormateada === fechaClase;
+            const [hours, minutes] = horaClase.split(':').map(Number);
+            const fechaHoraTurno = new Date(fechaTurno);
+            fechaHoraTurno.setHours(hours, minutes, 0, 0);
+            const esPasado = fechaHoraTurno < ahora;
+
+            const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
+            const weeksDiff = Math.floor(diasDiferencia / 7);
+
+            if (!esMismaFecha && !esPasado && weeksDiff < semanas) {
+              const disponibilidad = await verificarDisponibilidadPilates(
+                fechaFormateada,
+                horaClase + ':00'
+              );
+
+              if (!disponibilidad.success || !disponibilidad.disponible) {
+                const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
+                ocupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")}`);
+              }
+            }
+          }
+        }
+
+        setHorariosOcupados(ocupados);
+        setHayConflictos(ocupados.length > 0);
+      } catch (error) {
+        console.error('Error validando disponibilidad:', error);
+      } finally {
+        setValidandoDisponibilidad(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      validarDisponibilidad();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [mostrarModalRepetir, diasSeleccionados, semanas, fechaClase, horaClase]);
+
   // ============= RESOLVER CONFLICTO =============
   const handleResolverConflicto = async () => {
     if (!especialistaSeleccionado) {
@@ -449,7 +520,7 @@ export function DetalleClaseModal({
     }
   };
 
-  // ============= FUNCIÓN PARA REPETIR CLASE (CORREGIDA) =============
+  // ============= FUNCIÓN PARA REPETIR CLASE (SIMPLIFICADA) =============
   const handleRepetirClase = async () => {
     if (diasSeleccionados.length === 0) {
       addToast({
@@ -469,30 +540,83 @@ export function DetalleClaseModal({
       return;
     }
 
+    // ✅ BLOQUEAR si hay conflictos detectados
+    if (hayConflictos) {
+      addToast({
+        variant: 'error',
+        message: 'Horarios ocupados',
+        description: 'Hay conflictos con los horarios seleccionados. Por favor ajusta los días o la cantidad de semanas.',
+        duration: 5000,
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // ✅ CORRECCIÓN: Parsear correctamente la fecha desde string (formato: "2025-10-19")
       const [year, month, day] = fechaClase!.split('-').map(Number);
-      const fechaBase = new Date(year, month - 1, day); // month es 0-indexed
-      
-      // ✅ CORRECCIÓN: Usar getDay() nativo de JavaScript
-      const diaBaseNumeroJS = fechaBase.getDay(); // 0=Domingo, 1=Lunes, ..., 6=Sábado
-      const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS; // Convertir: 1=Lunes, ..., 7=Domingo
-      
+      const fechaBase = new Date(year, month - 1, day);
+      const diaBaseNumeroJS = fechaBase.getDay();
+      const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
       const ahora = new Date();
       
-      console.log('🔄 Repitiendo clase con configuración actual...');
-      console.log('📅 Fecha original (string):', fechaClase);
-      console.log('📅 Fecha parseada:', fechaBase.toISOString());
-      console.log('📅 Día de la semana (nombre):', fechaBase.toLocaleDateString('es', { weekday: 'long' }));
-      console.log('📅 Día JS (0-6):', diaBaseNumeroJS);
-      console.log('📅 Día normalizado (1-7):', diaBaseNumero);
-      console.log('📋 Días seleccionados:', diasSeleccionados);
-      console.log('📆 Semanas:', semanas);
-      console.log('👥 Participantes:', pacientesSeleccionados);
-      console.log('👨‍⚕️ Especialista:', especialistaSeleccionado);
-      console.log('📊 Dificultad:', dificultadSeleccionada);
+      console.log('✅ Todos los horarios validados - procediendo a crear turnos...');
+
+      // ============= 🚨 VALIDACIÓN PREVIA DE DISPONIBILIDAD =============
+      console.log('🔍 Validando disponibilidad ANTES de crear turnos...');
+      const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
+      const horariosOcupados: string[] = [];
+
+      // Verificar cada combinación de día seleccionado
+      for (let semana = 0; semana < semanas + 1; semana++) {
+        for (const diaSeleccionado of diasSeleccionados) {
+          let diferenciaDias = diaSeleccionado - diaBaseNumero;
+          if (diferenciaDias < 0) {
+            diferenciaDias += 7;
+          }
+
+          const fechaTurno = new Date(fechaBase);
+          fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
+          const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+
+          // Saltar fecha original y fechas pasadas
+          const esMismaFecha = fechaFormateada === fechaClase;
+          const [hours, minutes] = horaClase!.split(':').map(Number);
+          const fechaHoraTurno = new Date(fechaTurno);
+          fechaHoraTurno.setHours(hours, minutes, 0, 0);
+          const esPasado = fechaHoraTurno < ahora;
+
+          const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
+          const weeksDiff = Math.floor(diasDiferencia / 7);
+
+          if (!esMismaFecha && !esPasado && weeksDiff < semanas) {
+            // Verificar disponibilidad
+            const disponibilidad = await verificarDisponibilidadPilates(
+              fechaFormateada,
+              horaClase + ':00'
+            );
+
+            if (!disponibilidad.success || !disponibilidad.disponible) {
+              const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
+              horariosOcupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")} a las ${horaClase}hs`);
+            }
+          }
+        }
+      }
+
+      // 🚫 Si hay horarios ocupados, BLOQUEAR creación
+      if (horariosOcupados.length > 0) {
+        setIsSubmitting(false);
+        addToast({
+          variant: 'error',
+          message: '⚠️ Horarios no disponibles',
+          description: `Ya existen clases en: ${horariosOcupados.slice(0, 3).join(', ')}${horariosOcupados.length > 3 ? ` y ${horariosOcupados.length - 3} más` : ''}. Por favor selecciona otros días.`,
+          duration: 8000,
+        });
+        return;
+      }
+
+      console.log('✅ Todos los horarios están disponibles, procediendo a crear...');
 
       const turnosParaLote = [];
 
@@ -695,18 +819,62 @@ export function DetalleClaseModal({
           />
         </div>
 
-        {/* Preview */}
-        {diasSeleccionados.length > 0 && pacientesSeleccionados.length > 0 && (
+        {/* ⚠️ ALERTA DE CONFLICTOS EN TIEMPO REAL */}
+        {validandoDisponibilidad && diasSeleccionados.length > 0 && (
+          <div className="text-xs md:text-sm bg-gray-50 border border-gray-200 text-gray-600 p-2 md:p-3 rounded-lg animate-pulse">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+              Verificando disponibilidad...
+            </div>
+          </div>
+        )}
+
+        {!validandoDisponibilidad && hayConflictos && horariosOcupados.length > 0 && (
+          <div className="text-xs md:text-sm bg-red-50 border-2 border-red-300 text-red-800 p-2 md:p-3 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <strong className="block mb-1">⚠️ Horarios no disponibles</strong>
+                <p className="text-xs text-red-700 mb-2">
+                  Ya existen clases de Pilates en los siguientes horarios:
+                </p>
+                <div className="max-h-20 overflow-y-auto bg-red-100 p-2 rounded space-y-1">
+                  {horariosOcupados.slice(0, 10).map((horario, idx) => (
+                    <div key={idx} className="text-xs text-red-900">
+                      • {horario} a las {horaClase}hs
+                    </div>
+                  ))}
+                  {horariosOcupados.length > 10 && (
+                    <div className="text-xs text-red-700 font-medium pt-1 border-t border-red-200">
+                      ... y {horariosOcupados.length - 10} más
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-red-700 mt-2 font-medium">
+                  💡 Cambia los días seleccionados o reduce las semanas
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Preview (solo si NO hay conflictos) */}
+        {!validandoDisponibilidad && !hayConflictos && diasSeleccionados.length > 0 && pacientesSeleccionados.length > 0 && (
           <div className="text-xs md:text-sm bg-green-50 border border-green-200 text-green-800 p-2 md:p-4 rounded-lg">
-            <strong>✅ Se crearán hasta {diasSeleccionados.length * semanas * pacientesSeleccionados.length} turnos</strong>
-            <div className="text-xs mt-2 text-green-600">
-              {pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
-            </div>
-            <div className="text-xs mt-1 text-green-700">
-              📌 Las clases mantendrán: mismos participantes, mismo especialista y mismo nivel de dificultad
-            </div>
-            <div className="text-xs mt-1 text-green-700">
-              ⏰ Solo se crearán turnos en horarios futuros
+            <div className="flex items-start gap-2">
+              <div className="text-lg">✅</div>
+              <div>
+                <strong className="block">Todos los horarios disponibles</strong>
+                <div className="text-xs mt-1 text-green-700">
+                  Se crearán {diasSeleccionados.length * semanas * pacientesSeleccionados.length} turnos
+                </div>
+                <div className="text-xs mt-0.5 text-green-600">
+                  {pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
+                </div>
+                <div className="text-xs mt-1 text-green-700">
+                  📌 Mismos participantes, especialista y nivel de dificultad
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -722,10 +890,16 @@ export function DetalleClaseModal({
           </button>
           <button
             onClick={handleRepetirClase}
-            disabled={isSubmitting || diasSeleccionados.length === 0}
+            disabled={isSubmitting || diasSeleccionados.length === 0 || hayConflictos || validandoDisponibilidad}
             className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors"
           >
-            {isSubmitting ? 'Creando clases...' : 'Repetir clase'}
+            {isSubmitting 
+              ? 'Creando clases...' 
+              : hayConflictos 
+                ? '⚠️ Horarios ocupados'
+                : validandoDisponibilidad
+                  ? 'Validando...'
+                  : 'Repetir clase'}
           </button>
         </div>
       </div>

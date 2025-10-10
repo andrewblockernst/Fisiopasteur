@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { crearTurno } from "@/lib/actions/turno.action";
 import { crearTurnosEnLote } from "@/lib/actions/turno.action";
-import { format, addWeeks, getDay, isPast, isToday, parse } from "date-fns";
+import { format, addWeeks, addDays, getDay, isPast, isToday, parse } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToastStore } from '@/stores/toast-store';
 import { AlertTriangle, Users, Clock, Info, Plus, Trash2, CalendarDays } from "lucide-react"; 
@@ -88,6 +88,9 @@ export function NuevoTurnoPilatesModal({
   const [mostrarRepeticion, setMostrarRepeticion] = useState(false);
   const [diasSeleccionados, setDiasSeleccionados] = useState<number[]>([]);
   const [semanas, setSemanas] = useState<number>(4);
+  const [validandoDisponibilidad, setValidandoDisponibilidad] = useState(false);
+  const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
+  const [hayConflictos, setHayConflictos] = useState(false);
 
   // ✅ VALIDAR SI LA FECHA Y HORA SELECCIONADAS ESTÁN EN EL PASADO
   const esHoraPasada = fechaSeleccionada && horaSeleccionada 
@@ -213,6 +216,61 @@ export function NuevoTurnoPilatesModal({
     );
   };
 
+  // ============= VALIDACIÓN EN TIEMPO REAL DE DISPONIBILIDAD =============
+  useEffect(() => {
+    const validarDisponibilidad = async () => {
+      // Solo validar si está activa la repetición y hay días seleccionados
+      if (!mostrarRepeticion || diasSeleccionados.length === 0 || !fechaSeleccionada || !horaSeleccionada) {
+        setHorariosOcupados([]);
+        setHayConflictos(false);
+        return;
+      }
+
+      setValidandoDisponibilidad(true);
+
+      try {
+        const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
+        const diaBaseNumero = getDay(fechaSeleccionada);
+        const ahora = new Date();
+        const ocupados: string[] = [];
+
+        // Verificar cada combinación de fecha/hora
+        for (let semana = 0; semana < semanas; semana++) {
+          for (const diaSeleccionado of diasSeleccionados) {
+            const diasDiferencia = (diaSeleccionado - diaBaseNumero + 7) % 7;
+            const fechaTurno = addDays(fechaSeleccionada, diasDiferencia + (semana * 7));
+            
+            if (fechaTurno < ahora) continue;
+            
+            const fechaStr = format(fechaTurno, "yyyy-MM-dd");
+            const horaStr = horaSeleccionada + ':00';
+            
+            const disponibilidad = await verificarDisponibilidadPilates(fechaStr, horaStr);
+            
+            if (!disponibilidad.success || !disponibilidad.disponible) {
+              const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
+              ocupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")}`);
+            }
+          }
+        }
+
+        setHorariosOcupados(ocupados);
+        setHayConflictos(ocupados.length > 0);
+      } catch (error) {
+        console.error('Error validando disponibilidad:', error);
+      } finally {
+        setValidandoDisponibilidad(false);
+      }
+    };
+
+    // Debounce para evitar múltiples llamadas
+    const timeoutId = setTimeout(() => {
+      validarDisponibilidad();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [mostrarRepeticion, diasSeleccionados, semanas, fechaSeleccionada, horaSeleccionada]);
+
   const handleSubmit = async () => {
     // ✅ VALIDACIÓN: Bloquear si la fecha/hora ya pasaron
     if (esHoraPasada) {
@@ -229,6 +287,17 @@ export function NuevoTurnoPilatesModal({
         variant: 'error',
         message: 'Campos requeridos',
         description: 'Por favor completa todos los campos requeridos',
+      });
+      return;
+    }
+
+    // ✅ BLOQUEAR si hay conflictos detectados
+    if (mostrarRepeticion && hayConflictos) {
+      addToast({
+        variant: 'error',
+        message: 'Horarios ocupados',
+        description: 'Hay conflictos con los horarios seleccionados. Por favor ajusta los días o la cantidad de semanas.',
+        duration: 5000,
       });
       return;
     }
@@ -673,15 +742,59 @@ export function NuevoTurnoPilatesModal({
                     />
                   </div>
 
-                  {/* Preview */}
-                  {diasSeleccionados.length > 0 && formData.pacientesSeleccionados.length > 0 && (
-                    <div className="text-xs md:text-sm bg-blue-50 border border-blue-200 text-blue-800 p-2 md:p-3 rounded-lg">
-                      <strong>Se crearán hasta {diasSeleccionados.length * semanas * formData.pacientesSeleccionados.length} turnos</strong>
-                      <div className="text-xs mt-1 text-blue-600">
-                        {formData.pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
+                  {/* ⚠️ ALERTA DE CONFLICTOS EN TIEMPO REAL */}
+                  {validandoDisponibilidad && diasSeleccionados.length > 0 && (
+                    <div className="text-xs md:text-sm bg-gray-50 border border-gray-200 text-gray-600 p-2 md:p-3 rounded-lg animate-pulse">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                        Verificando disponibilidad...
                       </div>
-                      <div className="text-xs mt-1 text-blue-700">
-                        ⏰ Solo se crearán turnos en horarios futuros
+                    </div>
+                  )}
+
+                  {!validandoDisponibilidad && hayConflictos && horariosOcupados.length > 0 && (
+                    <div className="text-xs md:text-sm bg-red-50 border-2 border-red-300 text-red-800 p-2 md:p-3 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block mb-1">⚠️ Horarios no disponibles</strong>
+                          <p className="text-xs text-red-700 mb-2">
+                            Ya existen clases de Pilates en los siguientes horarios:
+                          </p>
+                          <div className="max-h-20 overflow-y-auto bg-red-100 p-2 rounded space-y-1">
+                            {horariosOcupados.slice(0, 10).map((horario, idx) => (
+                              <div key={idx} className="text-xs text-red-900">
+                                • {horario} a las {horaSeleccionada}hs
+                              </div>
+                            ))}
+                            {horariosOcupados.length > 10 && (
+                              <div className="text-xs text-red-700 font-medium pt-1 border-t border-red-200">
+                                ... y {horariosOcupados.length - 10} más
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-xs text-red-700 mt-2 font-medium">
+                            💡 Cambia los días seleccionados o reduce las semanas
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview (solo si NO hay conflictos) */}
+                  {!validandoDisponibilidad && !hayConflictos && diasSeleccionados.length > 0 && formData.pacientesSeleccionados.length > 0 && (
+                    <div className="text-xs md:text-sm bg-green-50 border border-green-200 text-green-800 p-2 md:p-3 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <div className="text-lg">✅</div>
+                        <div>
+                          <strong className="block">Todos los horarios disponibles</strong>
+                          <div className="text-xs mt-1 text-green-700">
+                            Se crearán {diasSeleccionados.length * semanas * formData.pacientesSeleccionados.length} turnos
+                          </div>
+                          <div className="text-xs mt-0.5 text-green-600">
+                            {formData.pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -708,13 +821,15 @@ export function NuevoTurnoPilatesModal({
       primaryButton={{
         text: isSubmitting 
           ? "Procesando..." 
-          : mostrarRepeticion && diasSeleccionados.length > 0
-            ? `Crear Turnos`
-            : slotInfo?.tipo === 'existente' 
-              ? "Agregar Participantes" 
-              : "Crear Clase",
+          : hayConflictos && mostrarRepeticion
+            ? "⚠️ Horarios ocupados"
+            : mostrarRepeticion && diasSeleccionados.length > 0
+              ? `Crear Turnos`
+              : slotInfo?.tipo === 'existente' 
+                ? "Agregar Participantes" 
+                : "Crear Clase",
         onClick: handleSubmit,
-        disabled: isSubmitting || esHoraPasada,
+        disabled: isSubmitting || esHoraPasada || (mostrarRepeticion && hayConflictos) || validandoDisponibilidad,
       }}
       secondaryButton={{
         text: "Cancelar",
