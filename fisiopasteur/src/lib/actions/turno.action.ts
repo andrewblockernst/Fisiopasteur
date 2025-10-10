@@ -77,6 +77,9 @@ export async function obtenerTurnos(filtros?: {
       query = query.eq("estado", filtros.estado);
     }
 
+    // Siempre excluir turnos de Pilates (id_especialidad = 4)
+    query = query.neq("id_especialidad", 4);
+
     const { data, error } = await query;
 
     if (error) {
@@ -144,6 +147,10 @@ export async function obtenerTurnosConFiltros(filtros?: {
     if (filtros?.especialidad_id) {
       query = query.eq("id_especialidad", filtros.especialidad_id);
       console.log('🏥 Filtro especialidad aplicado:', filtros.especialidad_id);
+    } else {
+      // Si NO se especifica especialidad, EXCLUIR Pilates (id_especialidad = 4)
+      query = query.neq("id_especialidad", 4);
+      console.log('🚫 Turnos de Pilates excluidos del calendario');
     }
     
     // Filtros de horario
@@ -566,6 +573,7 @@ export async function obtenerAgendaEspecialista(
       .eq("id_especialista", especialista_id!)
       .eq("fecha", fecha)
       .neq("estado", "cancelado")
+      .neq("id_especialidad", 4) // Excluir turnos de Pilates
       .order("hora", { ascending: true });
 
     if (error) {
