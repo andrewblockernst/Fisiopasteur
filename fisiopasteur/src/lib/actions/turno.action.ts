@@ -185,7 +185,8 @@ export async function obtenerTurnosConFiltros(filtros?: {
 // Crear un nuevo turno
 export async function crearTurno(
   datos: TurnoInsert, 
-  recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[]
+  recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
+  enviarNotificacion: boolean = true // ✅ Nuevo parámetro para controlar notificaciones
 ) {
   const supabase = await createClient();
   
@@ -238,7 +239,9 @@ export async function crearTurno(
     
 
     // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
-    try {
+    // ✅ Solo enviar notificaciones si enviarNotificacion === true
+    if (enviarNotificacion) {
+      try {
       // Importar servicios de WhatsApp (solo si el turno se creó correctamente)
       const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
       const { 
@@ -356,9 +359,12 @@ export async function crearTurno(
       } else {
         console.log(`⚠️ Turno ${data.id_turno} creado sin teléfono - no se enviarán notificaciones WhatsApp`);
       }
-    } catch (botError) {
-      // Si falla la integración con WhatsApp, no afectar la creación del turno
-      console.error("Error en integración WhatsApp (turno creado exitosamente):", botError);
+      } catch (botError) {
+        // Si falla la integración con WhatsApp, no afectar la creación del turno
+        console.error("Error en integración WhatsApp (turno creado exitosamente):", botError);
+      }
+    } else {
+      console.log(`📭 Notificaciones deshabilitadas para este turno (creación en lote)`);
     }
 
     revalidatePath("/turnos");

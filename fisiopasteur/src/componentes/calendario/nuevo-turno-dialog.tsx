@@ -57,6 +57,20 @@ export function NuevoTurnoModal({
   especialistas: especialistasProp = [],
   pacientes: pacientesProp = []
 }: NuevoTurnoModalProps) {
+  // 🔍 LOG DE DEBUGGING - Ver qué datos recibe el modal
+  useEffect(() => {
+    if (isOpen) {
+      console.log('🔍 ===== MODAL NUEVO TURNO ABIERTO =====');
+      console.log('📅 Fecha seleccionada:', fechaSeleccionada);
+      console.log('⏰ Hora seleccionada:', horaSeleccionada);
+      console.log('👨‍⚕️ Especialistas recibidos (props):', especialistasProp);
+      console.log('👥 Pacientes recibidos (props):', pacientesProp);
+      console.log('📊 Cantidad de especialistas:', especialistasProp?.length || 0);
+      console.log('📊 Cantidad de pacientes:', pacientesProp?.length || 0);
+      console.log('=======================================');
+    }
+  }, [isOpen, fechaSeleccionada, horaSeleccionada, especialistasProp, pacientesProp]);
+
   const { user, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
     fecha: '',
@@ -636,8 +650,10 @@ export function NuevoTurnoModal({
 
           const fechaTurno = new Date(fechaBaseParsed);
           
-          // ✅ CLAVE: Si es el mismo día (diferenciaDias === 0) y es la primera semana, no sumar nada
-          if (diferenciaDias === 0 && semanaActual === 0) {
+          // ✅ Determinar si es el primer turno (mismo día y semana que la fecha base)
+          const esPrimerTurno = diferenciaDias === 0 && semanaActual === 0;
+          
+          if (esPrimerTurno) {
             // Es HOY, mantener fechaBaseParsed
           } else {
             fechaTurno.setDate(fechaTurno.getDate() + (semanaActual * 7) + diferenciaDias);
@@ -645,10 +661,21 @@ export function NuevoTurnoModal({
 
           const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
           
-          // ✅ Determinar horario según configuración
+          // ✅ CORRECCIÓN: Determinar horario según configuración Y si es el primer turno
           let horarioTurno = formData.hora;
-          if (!mantenerHorario) {
-            horarioTurno = horariosPorDia[diaSeleccionado] || '09:00';
+          
+          if (mantenerHorario) {
+            // Si mantiene horario, TODOS usan el mismo horario (incluso el primero)
+            horarioTurno = formData.hora;
+          } else {
+            // Si NO mantiene horario, usar horarios personalizados
+            if (esPrimerTurno) {
+              // El primer turno SIEMPRE usa el horario seleccionado originalmente
+              horarioTurno = formData.hora;
+            } else {
+              // Los demás usan el horario configurado para ese día
+              horarioTurno = horariosPorDia[diaSeleccionado] || '09:00';
+            }
           }
 
           const esPasado = esFechaHoraPasada(fechaFormateada, horarioTurno);
@@ -685,7 +712,9 @@ export function NuevoTurnoModal({
 
       let exitosos = 0;
       let fallidos = 0;
+      const turnosCreados: any[] = [];
 
+      // ✅ CREAR TURNOS SIN NOTIFICACIONES INDIVIDUALES
       for (const turnoData of turnosParaCrear) {
         try {
           const datosBaseTurno = {
@@ -700,10 +729,12 @@ export function NuevoTurnoModal({
             tipo_plan: formData.tipo_plan,
           };
 
-          const resultado = await crearTurno(datosBaseTurno, formData.recordatorios);
+          // ✅ PASAR false PARA NO ENVIAR NOTIFICACIONES INDIVIDUALES
+          const resultado = await crearTurno(datosBaseTurno, [], false);
 
-          if (resultado.success) {
+          if (resultado.success && resultado.data) {
             exitosos++;
+            turnosCreados.push(resultado.data);
           } else {
             fallidos++;
             console.error('Error creando turno:', resultado.error);
@@ -711,6 +742,32 @@ export function NuevoTurnoModal({
         } catch (error) {
           fallidos++;
           console.error('Error en creación de turno:', error);
+        }
+      }
+
+      // ✅ ENVIAR UNA SOLA NOTIFICACIÓN AGRUPADA CON TODOS LOS TURNOS
+      if (turnosCreados.length > 0) {
+        try {
+          console.log('📱 Enviando notificación agrupada para', turnosCreados.length, 'turnos');
+          
+          // Importar el servicio de WhatsApp
+          const { enviarNotificacionGrupalTurnos } = await import('@/lib/services/whatsapp-bot.service');
+          
+          // Obtener datos del paciente
+          const paciente = pacientes.find(p => p.id_paciente === parseInt(formData.id_paciente));
+          const especialista = especialistas.find(e => String(e.id_usuario) === String(formData.id_especialista));
+          
+          if (paciente && especialista && paciente.telefono) {
+            await enviarNotificacionGrupalTurnos(
+              paciente.telefono,
+              paciente.nombre,
+              turnosCreados,
+              especialista.nombre
+            );
+          }
+        } catch (error) {
+          console.error('Error enviando notificación agrupada:', error);
+          // No fallar todo el proceso por error de notificación
         }
       }
 
