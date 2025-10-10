@@ -46,27 +46,86 @@ export function formatoNumeroTelefono(phone: string | null ): string {
   
   //LIMPIA CARACTERES QUE NO SON NUMERICOS
   const caracteres = phone.replace(/\D/g, '');
-  // SI NO ES DE OTRO PAIS, ES NUMERO ARGENTINO
-  const codigoPais = caracteres.startsWith('54') ? caracteres : `54${caracteres}`;
-
-  //NUMEROS MINIMOS REQUERIDOS
-  if (codigoPais.length < 12) return phone; 
-
-  //PARTES DEL FORMATO DE NUMERO TELEFONICO
-  const codigoPaisFormateado = `+${codigoPais.slice(0, 2)}`; // +54
-  const numeroPrincipal = codigoPais.slice(2); // NUMERO LOCAL 
-
-  if(numeroPrincipal.startsWith('9') && numeroPrincipal.length >= 11) {
-    //CELULAR
-    const prefijoCelular = numeroPrincipal.slice(0, 1) // 9
-    const codigoArea = numeroPrincipal.slice(1, 3); 
-    const numero = numeroPrincipal.slice(3);
-    return `${codigoPaisFormateado} ${prefijoCelular} ${codigoArea} ${numero.slice(0, 4)}-${numero.slice(4)}`;
-  } else {
-    //FIJO
-    const codigoArea = numeroPrincipal.slice(0, 2); 
+  
+  // Detectar código de país automáticamente
+  let codigoPais = '';
+  let numeroPrincipal = '';
+  
+  if (caracteres.startsWith('54')) {
+    // Argentina (+54)
+    codigoPais = '54';
+    numeroPrincipal = caracteres.slice(2);
+    
+    // NUMEROS MINIMOS REQUERIDOS para Argentina
+    if (caracteres.length < 12) return phone;
+    
+    const codigoPaisFormateado = `+${codigoPais}`;
+    
+    if(numeroPrincipal.startsWith('9') && numeroPrincipal.length >= 11) {
+      //CELULAR
+      const prefijoCelular = numeroPrincipal.slice(0, 1) // 9
+      const codigoArea = numeroPrincipal.slice(1, 3); 
+      const numero = numeroPrincipal.slice(3);
+      return `${codigoPaisFormateado} ${prefijoCelular} ${codigoArea} ${numero.slice(0, 4)}-${numero.slice(4)}`;
+    } else {
+      //FIJO
+      const codigoArea = numeroPrincipal.slice(0, 2); 
+      const numero = numeroPrincipal.slice(2);
+      return `${codigoPaisFormateado} ${codigoArea} ${numero.slice(0, 4)}-${numero.slice(4)}`;
+    }
+  } else if (caracteres.startsWith('55')) {
+    // Brasil (+55)
+    codigoPais = '55';
+    numeroPrincipal = caracteres.slice(2);
+    
+    // Formato Brasil: +55 (XX) XXXXX-XXXX (celular) o +55 (XX) XXXX-XXXX (fijo)
+    if (caracteres.length < 12) return phone;
+    
+    const codigoPaisFormateado = `+${codigoPais}`;
+    const codigoArea = numeroPrincipal.slice(0, 2); // DDD (código de área)
     const numero = numeroPrincipal.slice(2);
-    return `${codigoPaisFormateado} ${codigoArea} ${numero.slice(0, 4)}-${numero.slice(4)}`;
+    
+    if (numero.length === 9) {
+      // Celular: 9XXXX-XXXX
+      return `${codigoPaisFormateado} (${codigoArea}) ${numero.slice(0, 5)}-${numero.slice(5)}`;
+    } else if (numero.length === 8) {
+      // Fijo: XXXX-XXXX
+      return `${codigoPaisFormateado} (${codigoArea}) ${numero.slice(0, 4)}-${numero.slice(4)}`;
+    }
+    
+    return phone;
+  } else if (caracteres.startsWith('1')) {
+    // USA/Canadá (+1)
+    if (caracteres.length === 11) {
+      codigoPais = '1';
+      numeroPrincipal = caracteres.slice(1);
+      const codigoArea = numeroPrincipal.slice(0, 3);
+      const numero = numeroPrincipal.slice(3);
+      return `+${codigoPais} (${codigoArea}) ${numero.slice(0, 3)}-${numero.slice(3)}`;
+    }
+    return phone;
+  } else {
+    // Si no tiene código de país reconocido, asumir Argentina por defecto
+    codigoPais = '54';
+    numeroPrincipal = caracteres;
+    
+    // NUMEROS MINIMOS REQUERIDOS
+    if (caracteres.length < 10) return phone;
+    
+    const codigoPaisFormateado = `+${codigoPais}`;
+    
+    if(numeroPrincipal.startsWith('9') && numeroPrincipal.length >= 11) {
+      //CELULAR
+      const prefijoCelular = numeroPrincipal.slice(0, 1) // 9
+      const codigoArea = numeroPrincipal.slice(1, 3); 
+      const numero = numeroPrincipal.slice(3);
+      return `${codigoPaisFormateado} ${prefijoCelular} ${codigoArea} ${numero.slice(0, 4)}-${numero.slice(4)}`;
+    } else {
+      //FIJO O CELULAR SIN 9
+      const codigoArea = numeroPrincipal.slice(0, 2); 
+      const numero = numeroPrincipal.slice(2);
+      return `${codigoPaisFormateado} ${codigoArea} ${numero.slice(0, 4)}-${numero.slice(4)}`;
+    }
   }
 }
 
