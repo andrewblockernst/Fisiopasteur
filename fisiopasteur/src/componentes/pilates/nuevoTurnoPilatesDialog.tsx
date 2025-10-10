@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { crearTurno } from "@/lib/actions/turno.action";
 import { crearTurnosEnLote } from "@/lib/actions/turno.action";
-import { format, addWeeks, getDay, isPast, isToday, parse } from "date-fns";
+import { format, addWeeks, addDays, getDay, isPast, isToday, parse } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToastStore } from '@/stores/toast-store';
 import { AlertTriangle, Users, Clock, Info, Plus, Trash2, CalendarDays } from "lucide-react"; 
@@ -88,6 +88,9 @@ export function NuevoTurnoPilatesModal({
   const [mostrarRepeticion, setMostrarRepeticion] = useState(false);
   const [diasSeleccionados, setDiasSeleccionados] = useState<number[]>([]);
   const [semanas, setSemanas] = useState<number>(4);
+  const [validandoDisponibilidad, setValidandoDisponibilidad] = useState(false);
+  const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
+  const [hayConflictos, setHayConflictos] = useState(false);
 
   // ✅ VALIDAR SI LA FECHA Y HORA SELECCIONADAS ESTÁN EN EL PASADO
   const esHoraPasada = fechaSeleccionada && horaSeleccionada 
@@ -213,6 +216,61 @@ export function NuevoTurnoPilatesModal({
     );
   };
 
+  // ============= VALIDACIÓN EN TIEMPO REAL DE DISPONIBILIDAD =============
+  useEffect(() => {
+    const validarDisponibilidad = async () => {
+      // Solo validar si está activa la repetición y hay días seleccionados
+      if (!mostrarRepeticion || diasSeleccionados.length === 0 || !fechaSeleccionada || !horaSeleccionada) {
+        setHorariosOcupados([]);
+        setHayConflictos(false);
+        return;
+      }
+
+      setValidandoDisponibilidad(true);
+
+      try {
+        const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
+        const diaBaseNumero = getDay(fechaSeleccionada);
+        const ahora = new Date();
+        const ocupados: string[] = [];
+
+        // Verificar cada combinación de fecha/hora
+        for (let semana = 0; semana < semanas; semana++) {
+          for (const diaSeleccionado of diasSeleccionados) {
+            const diasDiferencia = (diaSeleccionado - diaBaseNumero + 7) % 7;
+            const fechaTurno = addDays(fechaSeleccionada, diasDiferencia + (semana * 7));
+            
+            if (fechaTurno < ahora) continue;
+            
+            const fechaStr = format(fechaTurno, "yyyy-MM-dd");
+            const horaStr = horaSeleccionada + ':00';
+            
+            const disponibilidad = await verificarDisponibilidadPilates(fechaStr, horaStr);
+            
+            if (!disponibilidad.success || !disponibilidad.disponible) {
+              const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
+              ocupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")}`);
+            }
+          }
+        }
+
+        setHorariosOcupados(ocupados);
+        setHayConflictos(ocupados.length > 0);
+      } catch (error) {
+        console.error('Error validando disponibilidad:', error);
+      } finally {
+        setValidandoDisponibilidad(false);
+      }
+    };
+
+    // Debounce para evitar múltiples llamadas
+    const timeoutId = setTimeout(() => {
+      validarDisponibilidad();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [mostrarRepeticion, diasSeleccionados, semanas, fechaSeleccionada, horaSeleccionada]);
+
   const handleSubmit = async () => {
     // ✅ VALIDACIÓN: Bloquear si la fecha/hora ya pasaron
     if (esHoraPasada) {
@@ -229,6 +287,17 @@ export function NuevoTurnoPilatesModal({
         variant: 'error',
         message: 'Campos requeridos',
         description: 'Por favor completa todos los campos requeridos',
+      });
+      return;
+    }
+
+    // ✅ BLOQUEAR si hay conflictos detectados
+    if (mostrarRepeticion && hayConflictos) {
+      addToast({
+        variant: 'error',
+        message: 'Horarios ocupados',
+        description: 'Hay conflictos con los horarios seleccionados. Por favor ajusta los días o la cantidad de semanas.',
+        duration: 5000,
       });
       return;
     }
@@ -409,10 +478,10 @@ export function NuevoTurnoPilatesModal({
       return (
         <div className="p-3 rounded-lg border bg-red-50 border-red-200 text-red-800 mb-4">
           <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="w-4 h-4" />
-            <span className="font-medium">Horario no disponible</span>
+            <AlertTriangle className="w-3 h-3 md:w-4 md:h-4" />
+            <span className="text-xs md:text-sm font-medium">Horario no disponible</span>
           </div>
-          <p className="text-sm">Este horario ya pasó. No se pueden crear turnos en el pasado.</p>
+          <p className="text-xs md:text-sm">Este horario ya pasó. No se pueden crear turnos en el pasado.</p>
         </div>
       );
     }
@@ -420,29 +489,29 @@ export function NuevoTurnoPilatesModal({
     const getIconAndColor = () => {
       switch (slotInfo.tipo) {
         case 'libre':
-          return { icon: <Clock className="w-4 h-4" />, color: 'bg-green-50 border-green-200 text-green-800' };
+          return { icon: <Clock className="w-3 h-3 md:w-4 md:h-4" />, color: 'bg-green-50 border-green-200 text-green-800' };
         case 'existente':
-          return { icon: <Users className="w-4 h-4" />, color: 'bg-blue-50 border-blue-200 text-blue-800' };
+          return { icon: <Users className="w-3 h-3 md:w-4 md:h-4" />, color: 'bg-blue-50 border-blue-200 text-blue-800' };
         case 'completa':
-          return { icon: <AlertTriangle className="w-4 h-4" />, color: 'bg-red-50 border-red-200 text-red-800' };
+          return { icon: <AlertTriangle className="w-3 h-3 md:w-4 md:h-4" />, color: 'bg-red-50 border-red-200 text-red-800' };
         default:
-          return { icon: <Info className="w-4 h-4" />, color: 'bg-gray-50 border-gray-200 text-gray-800' };
+          return { icon: <Info className="w-3 h-3 md:w-4 md:h-4" />, color: 'bg-gray-50 border-gray-200 text-gray-800' };
       }
     };
 
     const { icon, color } = getIconAndColor();
 
     return (
-      <div className={`p-3 rounded-lg border ${color} mb-4`}>
+      <div className={`p-2 md:p-3 rounded-lg border ${color} mb-4`}>
         <div className="flex items-center gap-2 mb-2">
           {icon}
-          <span className="font-medium">
+          <span className="text-xs md:text-sm font-medium">
             {slotInfo.tipo === 'libre' && 'Nuevo horario disponible'}
             {slotInfo.tipo === 'existente' && 'Agregar a clase existente'}
             {slotInfo.tipo === 'completa' && 'Horario completo'}
           </span>
         </div>
-        <p className="text-sm">{slotInfo.razon}</p>
+        <p className="text-xs md:text-sm">{slotInfo.razon}</p>
         {slotInfo.tipo === 'existente' && (
           <p className="text-xs mt-1">
             Participantes actuales: {slotInfo.participantes}/4
@@ -475,12 +544,12 @@ export function NuevoTurnoPilatesModal({
       showCloseButton
       customColor="#9C1838"
       message={
-        <div className="space-y-4 text-left">
+        <div className="space-y-3 md:space-y-4 text-left max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1">
           {renderSlotInfo()}
 
           {/* Información básica del turno */}
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm">
+          <div className="p-2 md:p-3 bg-gray-50 rounded-lg">
+            <p className="text-xs md:text-sm">
               <span className="font-medium text-gray-700">Día:</span> {fechaSeleccionada ? format(fechaSeleccionada, "EEEE dd/MM", { locale: es }) : ""}
               <br />
               <span className="font-medium text-gray-700">Horario:</span> {horaSeleccionada}
@@ -492,16 +561,16 @@ export function NuevoTurnoPilatesModal({
 
           {/* Selección de especialista */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
               Especialista*
               {slotInfo?.tipo === 'existente' && userRole !== 1 && (
-                <span className="text-xs text-gray-500 ml-2">(Preseleccionado por clase existente)</span>
+                <span className="block md:inline text-xs text-gray-500 md:ml-2">(Preseleccionado)</span>
               )}
             </label>
             <select
               value={formData.especialistaId}
               onChange={(e) => setFormData(prev => ({ ...prev, especialistaId: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
               disabled={slotInfo?.tipo === 'existente' && userRole !== 1}
               required
             >
@@ -516,13 +585,13 @@ export function NuevoTurnoPilatesModal({
 
           {/* Selección de dificultad */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
               Nivel de Dificultad*
             </label>
             <select
               value={formData.dificultad}
               onChange={(e) => setFormData(prev => ({ ...prev, dificultad: e.target.value as any }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
               required
             >
               <option value="principiante">🟢 Principiante</option>
@@ -533,7 +602,7 @@ export function NuevoTurnoPilatesModal({
 
           {/* Selección de pacientes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
               Participantes ({formData.pacientesSeleccionados.length}/{espaciosDisponibles})*
             </label>
 
@@ -544,8 +613,8 @@ export function NuevoTurnoPilatesModal({
                   if (!paciente) return null;
                   
                   return (
-                    <div key={pacienteId} className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <span className="text-sm font-medium text-green-800">
+                    <div key={pacienteId} className="flex items-center justify-between p-2 md:p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <span className="text-xs md:text-sm font-medium text-green-800">
                         {paciente.nombre} {paciente.apellido}
                       </span>
                       <button
@@ -553,7 +622,7 @@ export function NuevoTurnoPilatesModal({
                         className="text-red-500 hover:text-red-700 transition-colors"
                         title="Eliminar participante"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                       </button>
                     </div>
                   );
@@ -564,8 +633,8 @@ export function NuevoTurnoPilatesModal({
             {formData.pacientesSeleccionados.length < espaciosDisponibles && (
               <div className="relative">
                 <div className="flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">Agregar participante</span>
+                  <Plus className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+                  <span className="text-xs md:text-sm font-medium text-gray-700">Agregar participante</span>
                 </div>
                 
                 <input
@@ -574,7 +643,7 @@ export function NuevoTurnoPilatesModal({
                   value={busquedaPaciente}
                   onChange={handleBusquedaPacienteChange}
                   onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                  className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  className="w-full mt-2 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                   placeholder="Buscar por nombre, DNI..."
                   autoComplete="off"
                 />
@@ -582,7 +651,7 @@ export function NuevoTurnoPilatesModal({
                 {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
                   <div 
                     ref={listaPacientesRef}
-                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
                   >
                     {pacientesFiltrados
                       .filter(paciente => !formData.pacientesSeleccionados.includes(paciente.id_paciente))
@@ -590,12 +659,12 @@ export function NuevoTurnoPilatesModal({
                       <div
                         key={paciente.id_paciente}
                         onClick={() => agregarPaciente(paciente)}
-                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        className="px-2 md:px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
                       >
-                        <div className="font-medium">
+                        <div className="text-sm font-medium">
                           {paciente.nombre} {paciente.apellido}
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-xs text-gray-500">
                           DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
                         </div>
                       </div>
@@ -606,7 +675,7 @@ export function NuevoTurnoPilatesModal({
                 {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
                   <div 
                     ref={listaPacientesRef}
-                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500 text-xs md:text-sm"
                   >
                     No se encontraron pacientes
                   </div>
@@ -617,35 +686,35 @@ export function NuevoTurnoPilatesModal({
 
           {/* ============= SECCIÓN DE REPETICIÓN ============= */}
           {!esHoraPasada && (
-            <div className="border-t pt-4 space-y-3">
+            <div className="border-t pt-3 md:pt-4 space-y-2 md:space-y-3">
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   id="repetir"
                   checked={mostrarRepeticion}
                   onChange={(e) => setMostrarRepeticion(e.target.checked)}
-                  className="w-4 h-4 text-[#9C1838] border-gray-300 rounded focus:ring-[#9C1838]"
+                  className="w-3 h-3 md:w-4 md:h-4 text-[#9C1838] border-gray-300 rounded focus:ring-[#9C1838]"
                 />
-                <label htmlFor="repetir" className="text-sm font-medium text-gray-700 cursor-pointer flex items-center gap-2">
-                  <CalendarDays className="w-4 h-4" />
+                <label htmlFor="repetir" className="text-xs md:text-sm font-medium text-gray-700 cursor-pointer flex items-center gap-2">
+                  <CalendarDays className="w-3 h-3 md:w-4 md:h-4" />
                   Repetir en días específicos
                 </label>
               </div>
 
               {mostrarRepeticion && (
-                <div className="space-y-3 pl-6 border-l-2 border-[#9C1838]/20">
+                <div className="space-y-2 md:space-y-3 pl-3 md:pl-6 border-l-2 border-[#9C1838]/20">
                   {/* Selector de días */}
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700">
                       Seleccionar días (Lunes a Viernes)
                     </label>
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-1 md:gap-2 flex-wrap">
                       {DIAS_SEMANA.map((dia) => (
                         <button
                           key={dia.id}
                           type="button"
                           onClick={() => toggleDia(dia.id)}
-                          className={`w-10 h-10 rounded-lg font-medium transition-colors ${
+                          className={`w-8 h-8 md:w-10 md:h-10 rounded-lg text-xs md:text-sm font-medium transition-colors ${
                             diasSeleccionados.includes(dia.id)
                               ? 'bg-[#9C1838] text-white'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -659,7 +728,7 @@ export function NuevoTurnoPilatesModal({
 
                   {/* Número de semanas */}
                   <div className="space-y-2">
-                    <label htmlFor="semanas" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="semanas" className="block text-xs md:text-sm font-medium text-gray-700">
                       Cantidad de semanas
                     </label>
                     <input
@@ -669,19 +738,63 @@ export function NuevoTurnoPilatesModal({
                       max="12"
                       value={semanas}
                       onChange={(e) => setSemanas(parseInt(e.target.value) || 1)}
-                      className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                      className="w-20 md:w-24 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                     />
                   </div>
 
-                  {/* Preview */}
-                  {diasSeleccionados.length > 0 && formData.pacientesSeleccionados.length > 0 && (
-                    <div className="text-sm bg-blue-50 border border-blue-200 text-blue-800 p-3 rounded-lg">
-                      <strong>Se crearán hasta {diasSeleccionados.length * semanas * formData.pacientesSeleccionados.length} turnos</strong>
-                      <div className="text-xs mt-1 text-blue-600">
-                        {formData.pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
+                  {/* ⚠️ ALERTA DE CONFLICTOS EN TIEMPO REAL */}
+                  {validandoDisponibilidad && diasSeleccionados.length > 0 && (
+                    <div className="text-xs md:text-sm bg-gray-50 border border-gray-200 text-gray-600 p-2 md:p-3 rounded-lg animate-pulse">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                        Verificando disponibilidad...
                       </div>
-                      <div className="text-xs mt-1 text-blue-700">
-                        ⏰ Solo se crearán turnos en horarios futuros
+                    </div>
+                  )}
+
+                  {!validandoDisponibilidad && hayConflictos && horariosOcupados.length > 0 && (
+                    <div className="text-xs md:text-sm bg-red-50 border-2 border-red-300 text-red-800 p-2 md:p-3 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block mb-1">⚠️ Horarios no disponibles</strong>
+                          <p className="text-xs text-red-700 mb-2">
+                            Ya existen clases de Pilates en los siguientes horarios:
+                          </p>
+                          <div className="max-h-20 overflow-y-auto bg-red-100 p-2 rounded space-y-1">
+                            {horariosOcupados.slice(0, 10).map((horario, idx) => (
+                              <div key={idx} className="text-xs text-red-900">
+                                • {horario} a las {horaSeleccionada}hs
+                              </div>
+                            ))}
+                            {horariosOcupados.length > 10 && (
+                              <div className="text-xs text-red-700 font-medium pt-1 border-t border-red-200">
+                                ... y {horariosOcupados.length - 10} más
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-xs text-red-700 mt-2 font-medium">
+                            💡 Cambia los días seleccionados o reduce las semanas
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview (solo si NO hay conflictos) */}
+                  {!validandoDisponibilidad && !hayConflictos && diasSeleccionados.length > 0 && formData.pacientesSeleccionados.length > 0 && (
+                    <div className="text-xs md:text-sm bg-green-50 border border-green-200 text-green-800 p-2 md:p-3 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <div className="text-lg">✅</div>
+                        <div>
+                          <strong className="block">Todos los horarios disponibles</strong>
+                          <div className="text-xs mt-1 text-green-700">
+                            Se crearán {diasSeleccionados.length * semanas * formData.pacientesSeleccionados.length} turnos
+                          </div>
+                          <div className="text-xs mt-0.5 text-green-600">
+                            {formData.pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -692,13 +805,13 @@ export function NuevoTurnoPilatesModal({
 
           {/* Observaciones */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
               Observaciones
             </label>
             <textarea
               value={formData.observaciones}
               onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
               rows={3}
               placeholder="Información adicional sobre la clase..."
             />
@@ -708,13 +821,15 @@ export function NuevoTurnoPilatesModal({
       primaryButton={{
         text: isSubmitting 
           ? "Procesando..." 
-          : mostrarRepeticion && diasSeleccionados.length > 0
-            ? `Crear Turnos`
-            : slotInfo?.tipo === 'existente' 
-              ? "Agregar Participantes" 
-              : "Crear Clase",
+          : hayConflictos && mostrarRepeticion
+            ? "⚠️ Horarios ocupados"
+            : mostrarRepeticion && diasSeleccionados.length > 0
+              ? `Crear Turnos`
+              : slotInfo?.tipo === 'existente' 
+                ? "Agregar Participantes" 
+                : "Crear Clase",
         onClick: handleSubmit,
-        disabled: isSubmitting || esHoraPasada,
+        disabled: isSubmitting || esHoraPasada || (mostrarRepeticion && hayConflictos) || validandoDisponibilidad,
       }}
       secondaryButton={{
         text: "Cancelar",

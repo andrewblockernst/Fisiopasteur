@@ -190,7 +190,11 @@ export async function obtenerTurnosConFiltros(filtros?: {
 // =====================================
 
 // Crear un nuevo turno
-export async function crearTurno(datos: TurnoInsert) {
+export async function crearTurno(
+  datos: TurnoInsert, 
+  recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
+  enviarNotificacion: boolean = true // ✅ Nuevo parámetro para controlar notificaciones
+) {
   const supabase = await createClient();
   
   try {
@@ -220,16 +224,10 @@ export async function crearTurno(datos: TurnoInsert) {
       }
     }
 
-    // Extraer recordatorios antes del insert (no van a la BD)
-    const { recordatorios, ...datosLimpios } = datos as any;
-    
-    console.log('📝 Datos originales:', Object.keys(datos as any));
-    console.log('📝 Datos limpios para BD:', Object.keys(datosLimpios));
-    console.log('📝 Recordatorios extraídos:', recordatorios);
-
+    // ✅ AHORA datos es TurnoInsert puro, sin recordatorios
     const { data, error } = await supabase
       .from("turno")
-      .insert(datosLimpios)
+      .insert(datos)
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
@@ -248,7 +246,9 @@ export async function crearTurno(datos: TurnoInsert) {
     
 
     // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
-    try {
+    // ✅ Solo enviar notificaciones si enviarNotificacion === true
+    if (enviarNotificacion) {
+      try {
       // Importar servicios de WhatsApp (solo si el turno se creó correctamente)
       const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
       const { 
@@ -304,7 +304,7 @@ export async function crearTurno(datos: TurnoInsert) {
         const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
         const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
         
-        // Usar recordatorios especificados o los por defecto
+        // ✅ USAR recordatorios del parámetro o los por defecto
         const tiposRecordatorio = recordatorios || ['1d', '2h'];
         console.log(`🔍 Calculando recordatorios para turno ${data.id_turno}: tipos=[${tiposRecordatorio.join(', ')}], fecha=${data.fecha}, hora=${data.hora}`);
         
@@ -366,9 +366,12 @@ export async function crearTurno(datos: TurnoInsert) {
       } else {
         console.log(`⚠️ Turno ${data.id_turno} creado sin teléfono - no se enviarán notificaciones WhatsApp`);
       }
-    } catch (botError) {
-      // Si falla la integración con WhatsApp, no afectar la creación del turno
-      console.error("Error en integración WhatsApp (turno creado exitosamente):", botError);
+      } catch (botError) {
+        // Si falla la integración con WhatsApp, no afectar la creación del turno
+        console.error("Error en integración WhatsApp (turno creado exitosamente):", botError);
+      }
+    } else {
+      console.log(`📭 Notificaciones deshabilitadas para este turno (creación en lote)`);
     }
 
     revalidatePath("/turnos");
@@ -379,6 +382,7 @@ export async function crearTurno(datos: TurnoInsert) {
     return { success: false, error: "Error inesperado" };
   }
 }
+
 
 export async function actualizarTurno(id: number, datos: TurnoUpdate) {
   const supabase = await createClient();
@@ -591,6 +595,46 @@ export async function obtenerAgendaEspecialista(
 // =====================================
 // ✅ FUNCIONES DE DISPONIBILIDAD
 // =====================================
+
+/**
+ * ✅ VERIFICACIÓN ESPECIAL PARA PILATES
+ * En Pilates hay una sola sala, así que si cualquier especialista tiene clase a esa hora,
+ * el horario está ocupado (sin importar el especialista)
+ */
+export async function verificarDisponibilidadPilates(
+  fecha: string,
+  hora: string
+) {
+  const supabase = await createClient();
+  try {
+    // Buscar CUALQUIER turno de Pilates (especialidad_id = 4) en esa fecha y hora
+    const { data, error } = await supabase
+      .from("turno")
+      .select("id_turno, id_especialista, estado, hora")
+      .eq("fecha", fecha)
+      .eq("hora", hora)
+      .eq("id_especialidad", 4)
+      .neq("estado", "cancelado");
+
+    if (error) {
+      console.error("Error verificando disponibilidad Pilates:", error);
+      return { success: false, error: error.message };
+    }
+
+    // Si hay algún turno, el horario está ocupado
+    const ocupado = data.length > 0;
+
+    return { 
+      success: true, 
+      disponible: !ocupado,
+      conflictos: data.length,
+      turnosExistentes: data
+    };
+  } catch (error) {
+    console.error("Error inesperado:", error);
+    return { success: false, error: "Error inesperado" };
+  }
+}
 
 export async function verificarDisponibilidad(
   fecha: string,
@@ -1013,6 +1057,8 @@ export async function crearTurnosEnLote(turnos: Array<{
     // Crear turnos uno por uno
     for (const turnoData of turnos) {
       try {
+        // ✅ La validación de disponibilidad se hace ANTES en los modales
+        // Aquí solo insertamos, confiando en que ya se validó
         const { data: turno, error } = await supabase
           .from("turno")
           .insert({

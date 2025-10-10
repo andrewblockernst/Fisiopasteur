@@ -206,11 +206,12 @@ export default function PilatesCalendarioSemanal({
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Header del calendario */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold text-gray-900">
-              Pilates - Calendario Semanal
+      <div className="p-3 md:p-4 border-b border-gray-200">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          {/* Título y botón Hoy */}
+          <div className="flex items-center justify-between md:justify-start md:gap-4">
+            <h1 className="text-lg md:text-xl font-semibold text-gray-900">
+              Pilates - Calendario
             </h1>
             <button
               onClick={irSemanaActual}
@@ -220,7 +221,8 @@ export default function PilatesCalendarioSemanal({
             </button>
           </div>
           
-          <div className="flex items-center gap-2">
+          {/* Navegación de semanas */}
+          <div className="flex items-center justify-center gap-2">
             <button
               onClick={irSemanaAnterior}
               className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
@@ -228,7 +230,7 @@ export default function PilatesCalendarioSemanal({
               <ChevronLeft className="w-4 h-4" />
             </button>
             
-            <span className="text-sm font-medium text-gray-700 min-w-[200px] text-center">
+            <span className="text-sm font-medium text-gray-700 min-w-[160px] md:min-w-[200px] text-center">
               {format(diasSemana[0], "dd MMM", { locale: es })} - {format(diasSemana[4], "dd MMM yyyy", { locale: es })}
             </span>
             
@@ -242,8 +244,8 @@ export default function PilatesCalendarioSemanal({
         </div>
 
         {/* Leyenda de dificultades */}
-        <div className="mt-3 flex items-center gap-4 text-xs">
-          <span className="text-gray-600">Niveles de dificultad:</span>
+        <div className="mt-3 flex flex-wrap items-center gap-2 md:gap-4 text-xs">
+          <span className="text-gray-600 w-full md:w-auto">Niveles:</span>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-200 rounded"></div>
             <span className="text-gray-700">Principiante</span>
@@ -263,8 +265,8 @@ export default function PilatesCalendarioSemanal({
       <div className="overflow-x-auto">
         <div className="grid grid-cols-6 min-w-[800px]">
           {/* Header de columnas */}
-          <div className="p-2 border-b border-gray-200 bg-gray-50">
-            <div className="text-sm font-medium text-gray-700">Hora</div>
+          <div className="p-2 border-b border-gray-200 bg-gray-50 sticky left-0 z-10">
+            <div className="text-xs md:text-sm font-medium text-gray-700">Hora</div>
           </div>
           
           {diasSemana.map((dia, index) => (
