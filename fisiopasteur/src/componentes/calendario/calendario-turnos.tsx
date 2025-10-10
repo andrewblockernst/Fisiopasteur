@@ -81,7 +81,7 @@ export function CalendarioTurnos({
       
       return `${inicioSemana.getDate()} - ${finSemana.getDate()} ${MESES[fechaActual.getMonth()]} ${fechaActual.getFullYear()}`;
     } else {
-      return fechaActual.toLocaleDateString('es-ES', {
+      return fechaActual.toLocaleDateString('es-AR', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
@@ -445,7 +445,7 @@ export function CalendarioTurnos({
                     </button>
                     
                     <h3 className="text-xl font-bold text-gray-900 text-center flex-1">
-                        {fechaActual.toLocaleDateString('es-ES', {
+                        {fechaActual.toLocaleDateString('es-AR', {
                             weekday: 'long',
                             day: 'numeric',
                             month: 'long',
@@ -539,7 +539,7 @@ export function CalendarioTurnos({
                 <div className="p-4 border-b bg-gray-50">
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-semibold text-gray-900">
-                            {fechaActual.toLocaleDateString('es-ES', {
+                            {fechaActual.toLocaleDateString('es-AR', {
                                 weekday: 'long',
                                 year: 'numeric',
                                 month: 'long',

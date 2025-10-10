@@ -22,14 +22,15 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
   const [tipoFiltro, setTipoFiltro] = useState<string>("");
   const [valorFiltro, setValorFiltro] = useState<string>("");
   const [openNew, setOpenNew] = useState(false);
+  const [filtroInicialAplicado, setFiltroInicialAplicado] = useState(false); // ✅ Control de primera carga
 
   useEffect(() => setFilter(initial), [params]);
 
-  // Aplicar filtro automático para especialistas (incluyendo admins que son especialistas)
+  // Aplicar filtro automático SOLO en la primera carga
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && user && !filtroInicialAplicado) {
       const currentEspecialistaParam = params.get('especialista');
-      const verTodosParam = params.get('ver_todos'); // Nuevo parámetro
+      const verTodosParam = params.get('ver_todos');
       
       // Aplicar filtro automático si:
       // 1. No es admin, O
@@ -38,6 +39,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
       
       const debeAplicarFiltro = !user.esAdmin || (user.esAdmin && esEspecialistaActivo);
       
+      // ✅ SOLO aplicar si NO hay ningún parámetro en la URL (primera carga)
       if (debeAplicarFiltro && !currentEspecialistaParam && !verTodosParam && user.id_usuario) {
         const usp = new URLSearchParams(params.toString());
         usp.set('especialista', user.id_usuario);
@@ -45,8 +47,11 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
         // Redirigir con el filtro aplicado
         router.replace(`/turnos?${usp.toString()}`);
       }
+      
+      // ✅ Marcar que ya se aplicó el filtro inicial
+      setFiltroInicialAplicado(true);
     }
-  }, [user, loading, params, router]);
+  }, [user, loading, filtroInicialAplicado, params, router, especialistas]);
 
   // Función para formatear fecha como DD/MM/YYYY
   const formatearFecha = (fechaStr: string) => {
