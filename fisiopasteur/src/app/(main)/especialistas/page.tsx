@@ -6,7 +6,6 @@ import { EspecialistasTable } from "@/componentes/especialista/especialista-list
 import { NuevoEspecialistaDialog } from "@/componentes/especialista/nuevo-especialista-dialog";
 import { useState, useEffect } from "react";
 import type { Tables } from "@/types/database.types";
-import SkeletonLoader from "@/componentes/skeleton-loader";
 import { ArrowLeft, Plus, Search, Filter } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/usePerfil";
@@ -87,7 +86,122 @@ export default function EspecialistasPage() {
   });
 
   if (loading || authLoading) {
-    return <SkeletonLoader/>;
+    return (
+      <div className="min-h-screen text-black">
+        {/* Mobile Header Skeleton */}
+        <div className="sm:hidden bg-white border-b border-gray-200">
+          <div className="flex items-center px-4 py-3">
+            <div className="animate-pulse rounded-md bg-gray-300 h-6 w-6 mr-3"></div>
+            <div className="animate-pulse rounded-md bg-gray-300 h-6 w-32 flex-1 mr-9"></div>
+          </div>
+          <div className="px-4 pb-3">
+            <div className="animate-pulse rounded-lg bg-gray-100 h-10 w-full"></div>
+          </div>
+        </div>
+
+        {/* Contenido Principal Skeleton */}
+  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
+          {/* Desktop Header Skeleton */}
+          <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
+            <div className="animate-pulse rounded-md bg-gray-300 h-8 w-64"></div>
+          </div>
+
+          {/* Filtros y Búsqueda Skeleton - Solo Desktop */}
+          <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+            <div className="animate-pulse">
+              <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                  <div className="rounded-lg bg-gray-300 h-10 w-80"></div>
+                  <div className="flex items-center gap-2">
+                    <div className="rounded bg-gray-300 h-4 w-16"></div>
+                    <div className="rounded-lg bg-gray-300 h-10 w-32"></div>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-gray-300 h-10 w-40"></div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="rounded bg-gray-300 h-4 w-48"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Table Skeleton para Desktop */}
+          <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">
+            <div className="animate-pulse">
+              {/* Table Header */}
+              <div className="bg-gray-50 px-6 py-3 flex space-x-4">
+                <div className="h-4 bg-gray-300 rounded w-32"></div>
+                <div className="h-4 bg-gray-300 rounded w-40"></div>
+                <div className="h-4 bg-gray-300 rounded w-36"></div>
+                <div className="h-4 bg-gray-300 rounded w-24"></div>
+                <div className="h-4 bg-gray-300 rounded w-28"></div>
+                <div className="h-4 bg-gray-300 rounded w-24"></div>
+              </div>
+              
+              {/* Table Rows */}
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="border-t border-gray-200 px-6 py-4 flex items-center space-x-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="rounded-full bg-gray-300 h-10 w-10"></div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-gray-300 rounded w-32"></div>
+                      <div className="h-3 bg-gray-300 rounded w-24"></div>
+                    </div>
+                  </div>
+                  <div className="h-4 bg-gray-300 rounded w-40"></div>
+                  <div className="flex space-x-1">
+                    <div className="h-6 bg-gray-300 rounded-full w-20"></div>
+                    <div className="h-6 bg-gray-300 rounded-full w-16"></div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="h-6 w-6 bg-gray-300 rounded"></div>
+                    <div className="h-4 bg-gray-300 rounded w-16"></div>
+                  </div>
+                  <div className="h-4 bg-gray-300 rounded w-28"></div>
+                  <div className="flex space-x-2">
+                    <div className="h-8 bg-gray-300 rounded w-16"></div>
+                    <div className="h-8 bg-gray-300 rounded w-20"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Cards Skeleton para Mobile */}
+          <div className="md:hidden space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div className="animate-pulse">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="rounded-full bg-gray-300 h-12 w-12"></div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-gray-300 rounded w-32"></div>
+                      <div className="h-3 bg-gray-300 rounded w-24"></div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 mb-3">
+                    <div className="h-3 bg-gray-300 rounded w-40"></div>
+                    <div className="h-3 bg-gray-300 rounded w-28"></div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="flex space-x-1">
+                      <div className="h-6 bg-gray-300 rounded-full w-16"></div>
+                      <div className="h-6 bg-gray-300 rounded-full w-20"></div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <div className="h-8 bg-gray-300 rounded w-16"></div>
+                      <div className="h-8 bg-gray-300 rounded w-20"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -141,7 +255,7 @@ export default function EspecialistasPage() {
       </div>
 
       {/* Contenido Principal */}
-      <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
+  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
         {/* Desktop Header */}
         <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
           <h2 className="text-2xl sm:text-3xl font-bold">Especialistas</h2>

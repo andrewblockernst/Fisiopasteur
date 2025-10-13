@@ -32,6 +32,8 @@ export function CalendarioClient({
   const [selectedDayTurnos, setSelectedDayTurnos] = useState<TurnoConDetalles[]>([]);
   const [especialistaFiltro, setEspecialistaFiltro] = useState<string>("");
   const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
+  const [goToTodaySignal, setGoToTodaySignal] = useState(0);
+  const [vistaCalendario, setVistaCalendario] = useState<'mes' | 'semana' | 'dia'>('mes');
 
   const { 
     turnos, 
@@ -82,6 +84,14 @@ export function CalendarioClient({
     setIsCreateModalOpen(true);
   };
 
+  const handleGoToToday = () => {
+    setGoToTodaySignal(prev => prev + 1);
+  };
+
+  const handleVistaChange = (vista: 'mes' | 'semana' | 'dia') => {
+    setVistaCalendario(vista);
+  };
+
   const handleSuccessfulTurnoCreation = () => {
     setIsCreateModalOpen(false);
     showServerActionResponse({
@@ -119,35 +129,11 @@ export function CalendarioClient({
 
       {/* Desktop Header */}
       <div className="hidden sm:block">
-        <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
+  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
           <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 ">
             <h2 className="text-2xl sm:text-3xl font-bold">Calendario</h2>
             {/* Controles Desktop */}
-            <div className="flex items-center gap-4">
-              {/* Filtro por especialista */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={especialistaFiltro}
-                  onChange={(e) => setEspecialistaFiltro(e.target.value)}
-                  className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                >
-                  <option value="">Todos los especialistas</option>
-                  {especialistas.map((especialista) => (
-                    <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                      {especialista.nombre} {especialista.apellido}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Botón nuevo turno */}
-              <Button
-                onClick={handleCreateTurno}
-                variant="primary"
-              >
-                Nuevo Turno
-              </Button>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -171,7 +157,7 @@ export function CalendarioClient({
       </div>
 
       {/* Calendario principal */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-1 py-4 sm:py-0">
         <div className="rounded-lg">
           <CalendarioTurnos
             turnos={turnosFiltrados}

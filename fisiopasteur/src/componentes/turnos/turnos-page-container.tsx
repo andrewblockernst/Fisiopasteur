@@ -60,7 +60,7 @@ export default function TurnosPageContainer({
 
   // Vista desktop
   return (
-    <div className="sm:container sm:p-6 text-black">
+    <div className="sm:container sm:p-6 lg:px-1 lg:pt-0 text-black">
       <h1 className="text-2xl font-bold mb-4">Turnos</h1>
       <FiltrosTurnos
         especialistas={especialistas}

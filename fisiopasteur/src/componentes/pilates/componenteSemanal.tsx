@@ -204,14 +204,14 @@ export default function PilatesCalendarioSemanal({
     );
   };
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 md:p-4 overflow-hidden">
       {/* Header del calendario */}
       <div className="p-3 md:p-4 border-b border-gray-200">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           {/* Título y botón Hoy */}
           <div className="flex items-center justify-between md:justify-start md:gap-4">
             <h1 className="text-lg md:text-xl font-semibold text-gray-900">
-              Pilates - Calendario
+              Pilates
             </h1>
             <button
               onClick={irSemanaActual}
@@ -263,7 +263,7 @@ export default function PilatesCalendarioSemanal({
 
       {/* Grilla del calendario */}
       <div className="overflow-x-auto">
-        <div className="grid grid-cols-6 min-w-[800px]">
+  <div className="grid grid-cols-[90px_1fr_1fr_1fr_1fr_1fr] min-w-[760px]">
           {/* Header de columnas */}
           <div className="p-2 border-b border-gray-200 bg-gray-50 sticky left-0 z-10">
             <div className="text-xs md:text-sm font-medium text-gray-700">Hora</div>

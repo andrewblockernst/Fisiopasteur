@@ -229,7 +229,7 @@ export default function ConsultaEspecialistaMobile() {
             </header>
 
             { viewingEspecialista && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 container mx-auto px-4 py-6 lg:py-10">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-[1500px] mx-auto px-4 py-6 lg:py-10">
                 <div className="lg:col-span-7">
                     <div className="text-center mt-4">
                     <h2 className="text-[28px] leading-tight font-extrabold lg:text-[34px]">

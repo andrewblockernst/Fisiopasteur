@@ -5,7 +5,7 @@ import { PacientesTable } from "@/componentes/paciente/paciente-listado";
 import { activarPaciente, getPacientes } from "@/lib/actions/paciente.action";
 import type { Tables } from "@/types/database.types";
 import Button from "@/componentes/boton";
-import SkeletonLoader from "@/componentes/skeleton-loader";
+import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
 import { Search, Filter } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -75,7 +75,7 @@ export default function PacientePage() {
     }
 
     if (loading) {
-        return <SkeletonLoader />;
+        return <UnifiedSkeletonLoader type="table" />;
     }
 
     return (
@@ -133,7 +133,7 @@ export default function PacientePage() {
             </div>
 
             {/* Contenido Principal */}
-            <div className="sm:p-4 sm:p-6 lg:pr-6 lg:pt-8">
+            <div className="sm:p-6 lg:pr-6 lg:pt-8">
                 {/* Desktop Header */}
                 <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
                     <h2 className="text-2xl sm:text-3xl font-bold">Pacientes</h2>

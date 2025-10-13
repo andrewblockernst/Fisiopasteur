@@ -110,7 +110,7 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
       </header>
 
       {/* Contenido Principal */}
-      <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
+  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
         {/* Desktop Header */}
         <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
           <h2 className="text-2xl sm:text-3xl font-bold">Perfil</h2>
