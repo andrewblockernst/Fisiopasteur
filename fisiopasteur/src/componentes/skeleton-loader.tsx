@@ -2,7 +2,7 @@ import React from 'react';
 
 const SkeletonLoader = () => {
   return (
-    <div className="container mx-auto p-4 sm:p-6 lg:pr-6 lg:pt-8">
+  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
       {/* Header Skeleton */}
       <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
         <div className="animate-pulse rounded-md bg-gray-300 h-8 w-64"></div>

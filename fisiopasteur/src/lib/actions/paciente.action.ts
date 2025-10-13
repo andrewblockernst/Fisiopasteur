@@ -74,17 +74,13 @@ async function checkDocumentoExists(documento: string, excludeId?: number): Prom
 
 // Obtener todos los pacientes con paginación y filtros
 export async function getPacientes(options?: {
-  page?: number;
-  limit?: number;
   search?: string;
   orderBy?: keyof Paciente;
   orderDirection?: 'asc' | 'desc';
 }) {
   const supabase = await createClient();
   
-  const {
-    page = 1,
-    limit = 20,
+  const {  
     search = "",
     orderBy = "nombre",
     orderDirection = "asc"
@@ -102,10 +98,7 @@ export async function getPacientes(options?: {
   // Ordenamiento
   query = query.order(orderBy as string, { ascending: orderDirection === "asc" });
 
-  // Paginación
-  const from = (page - 1) * limit;
-  const to = from + limit - 1;
-  query = query.range(from, to);
+
 
   const { data, error, count } = await query;
 
@@ -118,9 +111,6 @@ export async function getPacientes(options?: {
   return {
     data: data || [],
     total: count || 0,
-    page,
-    limit,
-    totalPages: Math.ceil((count || 0) / limit)
   };
 }
 

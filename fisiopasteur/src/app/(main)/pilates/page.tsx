@@ -6,6 +6,7 @@ import { DetalleClaseModal } from "@/componentes/pilates/detalleClaseModal";
 import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerPacientes } from "@/lib/actions/turno.action";
 import { addDays, format, startOfWeek } from "date-fns";
 import { useToastStore } from '@/stores/toast-store';
+import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
 
 // ============= DEFINIR TIPOS COMPARTIDOS =============
 interface SlotInfo {
@@ -252,21 +253,20 @@ export default function PilatesPage() {
 
   // ============= LOADING STATE =============
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-b-2 border-[#9C1838] mx-auto"></div>
-          <p className="mt-4 text-sm md:text-base text-gray-600">Cargando datos de Pilates...</p>
+      return (
+        <div className="min-h-screen">
+          <UnifiedSkeletonLoader type="calendar" showHeader={false} showFilters={false} />
         </div>
-      </div>
-    );
+      );
   }
 
   // ============= RENDER PRINCIPAL =============
   return (
-    <div className="min-h-screen bg-gray-50 p-2 md:p-4">
-      {/* ============= CALENDARIO PRINCIPAL ============= */}
-      <PilatesCalendarioSemanal
+    <div className="min-h-screen">
+      <div className="max-w-[1500px] mx-auto p-6 sm:p-8 lg:px-6 lg:pt-8">
+    
+        {/* ============= CALENDARIO PRINCIPAL ============= */}
+        <PilatesCalendarioSemanal
         turnos={turnos}
         semanaBase={semanaBase}
         onSemanaChange={setSemanaBase}
@@ -301,6 +301,7 @@ export default function PilatesPage() {
         pacientes={pacientes}
         userRole={userRole}
       />
+      </div>
     </div>
   );
 }

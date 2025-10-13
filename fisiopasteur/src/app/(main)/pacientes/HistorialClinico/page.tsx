@@ -91,7 +91,7 @@ function HistorialClinicoContent() {
   };
 
   return (
-    <div className="container mx-auto px-2 sm:px-6 py-6 space-y-4">
+  <div className="max-w-[1500px] mx-auto px-2 sm:px-6 py-6 space-y-4">
       {/* Mobile Header - Solo móvil */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
         <div className="flex items-center justify-between">

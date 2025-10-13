@@ -1,6 +1,4 @@
 import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEspecialidades } from "@/lib/actions/turno.action";
-import FiltrosTurnos from "@/componentes/turnos/filtros-turnos";
-import TablaTurnos from "@/componentes/turnos/listado-turnos";
 import TurnosPageContainer from "@/componentes/turnos/turnos-page-container";
 
 export default async function TurnosPage({ searchParams }: { searchParams: Promise<any> }) {
