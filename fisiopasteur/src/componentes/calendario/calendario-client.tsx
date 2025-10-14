@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/usePerfil";
 import { Calendar, Users, Clock, ArrowLeft, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Button from "../boton";
+import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
 
 interface CalendarioClientProps {
   turnosIniciales: TurnoConDetalles[];
@@ -34,6 +35,7 @@ export function CalendarioClient({
   const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
   const [goToTodaySignal, setGoToTodaySignal] = useState(0);
   const [vistaCalendario, setVistaCalendario] = useState<'mes' | 'semana' | 'dia'>('mes');
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const { 
     turnos, 
@@ -51,6 +53,16 @@ export function CalendarioClient({
   useEffect(() => {
     setTurnos(turnosIniciales);
   }, [turnosIniciales, setTurnos]);
+
+  // Efecto para mostrar skeleton loader en la carga inicial
+  useEffect(() => {
+    // Mostrar skeleton por 400ms en la primera carga
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+    }, 400);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Aplicar filtro automático por especialista al cargar
   useEffect(() => {
@@ -101,6 +113,17 @@ export function CalendarioClient({
       description: 'El turno ha sido creado correctamente'
     });
   };
+
+  // Mostrar skeleton loader durante la carga inicial o mientras carga auth
+  if (loading || authLoading || isInitialLoad) {
+    return (
+      <UnifiedSkeletonLoader 
+        type="calendar" 
+        showHeader={true} 
+        showFilters={false}
+      />
+    );
+  }
 
   // Filtrar turnos por especialista
   const turnosFiltrados = especialistaFiltro 
