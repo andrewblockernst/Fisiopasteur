@@ -9,7 +9,7 @@ export default async function CalendarioPage() {
   const [resTurnos, resEspecialistas, resPacientes] = await Promise.all([
     obtenerTurnosConFiltros(),
     obtenerEspecialistas(),
-    getPacientes({ limit: 100 }) // Obtener más pacientes para el selector
+    getPacientes({}) // Obtener más pacientes para el selector
   ]);
 
   // Procesar resultados de las Server Actions y mapear a la estructura esperada

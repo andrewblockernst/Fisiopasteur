@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import FiltrosTurnos from './filtros-turnos';
 import TablaTurnos from './listado-turnos';
 import TurnosMobileList from './turnos-mobile-list';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
 import type { TurnoWithRelations, EspecialistaWithSpecialties, Tables } from "@/types/database.types";
 
 interface TurnosPageContainerProps {
@@ -13,6 +14,7 @@ interface TurnosPageContainerProps {
   especialistas: EspecialistaWithSpecialties[];
   especialidades: Tables<"especialidad">[];
   boxes: Tables<"box">[];
+  loading?: boolean;
   initialFilters: {
     fecha_desde: string;
     fecha_hasta: string;
@@ -27,11 +29,23 @@ export default function TurnosPageContainer({
   especialistas,
   especialidades,
   boxes,
+  loading = false,
   initialFilters
 }: TurnosPageContainerProps) {
   const router = useRouter();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [selectedDate, setSelectedDate] = useState(initialFilters.fecha_desde);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Efecto para mostrar skeleton loader en la carga inicial
+  useEffect(() => {
+    // Mostrar skeleton por 300ms en la primera carga
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
@@ -47,6 +61,20 @@ export default function TurnosPageContainer({
     router.refresh();
   };
 
+  // Mostrar skeleton loader durante la carga inicial o si loading está activo
+  if (loading || isInitialLoad) {
+    return (
+      <UnifiedSkeletonLoader
+        type={isMobile ? "list" : "table"}
+        rows={5}
+        columns={6}
+        showHeader={true}
+        showFilters={true}
+        showSearch={false}
+      />
+    );
+  }
+
   if (isMobile) {
     return (
       <TurnosMobileList 
@@ -60,15 +88,26 @@ export default function TurnosPageContainer({
 
   // Vista desktop
   return (
-    <div className="sm:container sm:p-6 lg:px-1 lg:pt-0 text-black">
-      <h1 className="text-2xl font-bold mb-4">Turnos</h1>
-      <FiltrosTurnos
-        especialistas={especialistas}
-        especialidades={especialidades}
-        boxes={boxes}
-        initial={initialFilters}
-      />
-      <TablaTurnos turnos={turnos} />
+    <div className="min-h-screen text-black">
+      {/* Contenido Principal */}
+      <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
+        {/* Desktop Header */}
+        <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
+          <h2 className="text-2xl sm:text-3xl font-bold">Turnos</h2>
+        </div>
+
+        {/* Filtros y Búsqueda - Solo Desktop */}
+        <div className="hidden sm:block rounded-lg">
+          <FiltrosTurnos
+            especialistas={especialistas}
+            especialidades={especialidades}
+            boxes={boxes}
+            initial={initialFilters}
+          />
+        </div>
+
+        <TablaTurnos turnos={turnos} />
+      </div>
     </div>
   );
 }

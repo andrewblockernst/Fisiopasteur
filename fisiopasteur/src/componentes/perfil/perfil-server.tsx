@@ -18,7 +18,7 @@ export default async function PerfilServidor() {
   }
 
   return (
-      <PerfilCliente perfil={perfil} />
+    <PerfilCliente perfil={perfil} />
   );
 }
 

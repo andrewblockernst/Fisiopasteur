@@ -37,7 +37,7 @@ export const useTurnoStore = create<TurnoStore>((set, get) => ({
   turnos: [],
   loading: true,
 
-  setTurnos: (turnos) => set({ turnos }),
+  setTurnos: (turnos) => set({ turnos, loading: false }),
   setLoading: (loading) => set({ loading }),
   
   addTurno: (turno) => set((state) => ({

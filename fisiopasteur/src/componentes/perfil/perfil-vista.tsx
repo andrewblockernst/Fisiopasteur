@@ -12,6 +12,7 @@ import Button from '../boton';
 import { handleCerrarSesion } from '@/lib/actions/logOut.action';
 import EditarPerfilDialog from './editarperfil-dialog';
 import { formatoNumeroTelefono, formatARS } from '@/lib/utils';
+import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
 
 interface PerfilClienteProps {
   perfil: PerfilCompleto;
@@ -82,6 +83,17 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
   const onCerrarSesion = () => {
     handleCerrarSesion(router);
   };
+
+  // Mostrar skeleton loader mientras cargan los precios
+  if (cargandoPrecios) {
+    return (
+      <UnifiedSkeletonLoader 
+        type="form" 
+        showHeader={true} 
+        showFilters={false}
+      />
+    );
+  }
 
   {/*VISTA PERFIL*/}
   return (
