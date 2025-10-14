@@ -11,6 +11,7 @@ import { Calendar, Users, Clock, ArrowLeft, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Button from "../boton";
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
+import { moverTurno } from "@/lib/actions/turno.action";
 
 interface CalendarioClientProps {
   turnosIniciales: TurnoConDetalles[];
@@ -114,6 +115,68 @@ export function CalendarioClient({
     });
   };
 
+  // Handler para mover turno (Drag and Drop) - Actualización Optimista
+  const handleMoverTurno = async (turnoId: number, nuevaFecha: string, nuevaHora: string) => {
+    // Guardar el estado anterior para rollback si falla
+    const turnoOriginal = turnos.find(t => t.id_turno === turnoId);
+    if (!turnoOriginal) return;
+    
+    // OPTIMISTIC UPDATE: Actualizar inmediatamente en el cliente
+    const turnosActualizados = turnos.map(t => 
+      t.id_turno === turnoId 
+        ? { ...t, fecha: nuevaFecha, hora: nuevaHora }
+        : t
+    );
+    setTurnos(turnosActualizados);
+    
+    // Luego validar en el servidor en segundo plano
+    try {
+      const resultado = await moverTurno(turnoId, nuevaFecha, nuevaHora);
+      
+      if (resultado.success) {
+        // Éxito - el cambio ya está aplicado visualmente
+        showServerActionResponse({
+          success: true,
+          message: 'Turno movido exitosamente',
+          toastType: 'success',
+          description: `Turno movido a ${nuevaFecha} a las ${nuevaHora}`
+        });
+      } else {
+        // Error - hacer rollback al estado original
+        const turnosRollback = turnos.map(t => 
+          t.id_turno === turnoId 
+            ? turnoOriginal
+            : t
+        );
+        setTurnos(turnosRollback);
+        
+        showServerActionResponse({
+          success: false,
+          message: 'Error al mover turno',
+          toastType: 'error',
+          description: resultado.error || 'No se pudo mover el turno'
+        });
+      }
+    } catch (error) {
+      console.error('Error al mover turno:', error);
+      
+      // Error - hacer rollback al estado original
+      const turnosRollback = turnos.map(t => 
+        t.id_turno === turnoId 
+          ? turnoOriginal
+          : t
+      );
+      setTurnos(turnosRollback);
+      
+      showServerActionResponse({
+        success: false,
+        message: 'Error inesperado',
+        toastType: 'error',
+        description: 'Ocurrió un error al mover el turno'
+      });
+    }
+  };
+
   // Mostrar skeleton loader durante la carga inicial o mientras carga auth
   if (loading || authLoading || isInitialLoad) {
     return (
@@ -152,7 +215,7 @@ export function CalendarioClient({
 
       {/* Desktop Header */}
       <div className="hidden sm:block">
-  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
+  <div className="max-w-[1800px] mx-auto p-4 sm:p-6 lg:px-8 lg:pt-8">
           <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 ">
             <h2 className="text-2xl sm:text-3xl font-bold">Calendario</h2>
             {/* Controles Desktop */}
@@ -180,7 +243,7 @@ export function CalendarioClient({
       </div>
 
       {/* Calendario principal */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-1 py-4 sm:py-0">
+      <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-0">
         <div className="rounded-lg">
           <CalendarioTurnos
             turnos={turnosFiltrados}
@@ -194,6 +257,7 @@ export function CalendarioClient({
               setHoraSeleccionada(hora || '');
               setIsCreateModalOpen(true);
             }}
+            onMoverTurno={handleMoverTurno}
             especialistas={especialistas}
             especialistaSeleccionado={especialistaFiltro}
             onEspecialistaChange={setEspecialistaFiltro}

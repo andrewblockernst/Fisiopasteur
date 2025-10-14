@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock } from
 import { useTurnoStore } from "@/stores/turno-store";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import Button from "../boton";
+import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 
 interface CalendarioTurnosProps {
   turnos: TurnoConDetalles[];
@@ -13,6 +14,7 @@ interface CalendarioTurnosProps {
   onEspecialistaChange: (especialistaId: string) => void;
   onDayClick: (date: Date, turnos: TurnoConDetalles[]) => void;
   onCreateTurno: (date: Date, hora?: string) => void;
+  onMoverTurno?: (turnoId: number, nuevaFecha: string, nuevaHora: string) => Promise<void>;
 }
 
 type VistaCalendario = 'mes' | 'semana' | 'dia';
@@ -41,6 +43,7 @@ export function CalendarioTurnos({
   onEspecialistaChange,
   onDayClick,
   onCreateTurno,
+  onMoverTurno,
   vistaProp,
   onVistaChange,
   goToTodaySignal,
@@ -51,6 +54,19 @@ export function CalendarioTurnos({
   const vista = vistaProp ?? vistaInternal;
   const [isMobile, setIsMobile] = useState(false);
   const { getTurnosByDate } = useTurnoStore();
+  
+  // Hook para drag and drop
+  const {
+    isDragging,
+    isValidating,
+    handleDragStart,
+    handleDragEnd,
+    handleDragOver,
+    handleDrop
+  } = useDragAndDrop();
+  
+  // Estado para trackear el turno que se acaba de mover (para animación)
+  const [recentlyMovedTurnoId, setRecentlyMovedTurnoId] = useState<number | null>(null);
 
   useEffect(() => {
     // Solo se ejecuta en el cliente
@@ -170,18 +186,36 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
             const turnosDelDia = getTurnosParaDia(fecha);
             const esHoy = esDiaActual(fecha);
             
+            const fechaStr = fecha.toISOString().split('T')[0];
+            
             return (
-              <div key={index} className="bg-white h-24 md:h-32 p-1 relative group">
+              <div 
+                key={index} 
+                className={`bg-white h-28 md:h-36 p-1 relative group transition-all ${
+                  isDragging ? 'ring-2 ring-[#9C1838]/20' : ''
+                }`}
+                onDragOver={handleDragOver}
+                onDrop={async (e) => {
+                  if (onMoverTurno) {
+                    await handleDrop(e, fechaStr, undefined, async (turnoId, fecha, hora) => {
+                      await onMoverTurno(turnoId, fecha, hora);
+                      // Marcar el turno como recién movido para animación
+                      setRecentlyMovedTurnoId(turnoId);
+                      setTimeout(() => setRecentlyMovedTurnoId(null), 2000);
+                    });
+                  }
+                }}
+              >
                 <div
                   className="w-full h-full rounded cursor-pointer transition-colors relative hover:bg-gray-50"
                   onClick={() => onDayClick(fecha, turnosDelDia)}
                 >
                   <div className="h-full flex flex-col">
                     {/* Número del día */}
-                    <div className="flex justify-between items-start p-1">
+                    <div className="flex justify-between items-start px-1 pt-0.5 pb-1">
                       <span className={`text-sm font-medium ${
                         esHoy 
-                          ? 'bg-[#9C1838] text-white w-6 h-6 rounded-2xl flex items-center justify-center' 
+                          ? 'bg-[#9C1838] text-white w-5 h-5 rounded-2xl flex items-center justify-center text-xs' 
                           : 'text-gray-900'
                       }`}>
                         {fecha.getDate()}
@@ -191,15 +225,27 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                     {/* Lista de turnos */}
                     <div className="flex-1 overflow-hidden">
                       {turnosDelDia.length > 0 ? (
-                        <div className="space-y-1">
-                          {turnosDelDia.slice(0, 3).map((turno) => (
+                        <div className="space-y-0.5">
+                          {turnosDelDia.slice(0, 4).map((turno) => {
+                            const isRecentlyMoved = recentlyMovedTurnoId === turno.id_turno;
+                            return (
                             <div
                               key={turno.id_turno}
-                              className="flex items-center gap-1 text-xs"
+                              draggable={!!onMoverTurno}
+                              onDragStart={(e) => {
+                                e.stopPropagation();
+                                handleDragStart(turno.id_turno, turno.fecha, turno.hora);
+                              }}
+                              onDragEnd={handleDragEnd}
+                              onClick={(e) => e.stopPropagation()}
+                              className={`flex items-center gap-1 text-xs px-1 py-0.5 rounded transition-all ${
+                                onMoverTurno ? 'cursor-move hover:bg-white hover:shadow-sm' : ''
+                              } ${isRecentlyMoved ? 'animate-pulse bg-green-50 ring-2 ring-green-400' : ''}`}
+                              title={onMoverTurno ? 'Arrastra para mover el turno' : ''}
                             >
                               {/* Indicador de color del especialista */}
                               <div 
-                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                className="w-2 h-2 rounded-full flex-shrink-0"
                                 style={{ 
                                   backgroundColor: turno.especialista?.color || '#9C1838' 
                                 }}
@@ -211,10 +257,10 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                                 </span>
                               </div>
                             </div>
-                          ))}
-                          {turnosDelDia.length > 3 && (
-                            <div className="text-xs text-gray-500">
-                              +{turnosDelDia.length - 3} más
+                          )})}
+                          {turnosDelDia.length > 4 && (
+                            <div className="text-xs text-gray-500 px-1">
+                              +{turnosDelDia.length - 4} más
                             </div>
                           )}
                         </div>
@@ -264,24 +310,26 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     };
 
     return (
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="max-h-[calc(100vh-100px)] overflow-auto">
           <div className="min-w-[820px]">
-            <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b sticky top-0 z-20 bg-gray-50">
-              <div className="p-3 border-r bg-gray-50" />
+            <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-gray-200 sticky top-0 z-20 bg-gradient-to-b from-gray-50 to-white">
+              <div className="p-3 border-r border-gray-200 bg-gray-50/50" />
               {diasSemana.map((fecha, index) => {
                 const esHoy = esDiaActual(fecha);
                 return (
                   <div
                     key={index}
-                    className={`p-3 text-center border-r last:border-r-0 ${
-                      esHoy ? 'bg-[#9C1838] text-white' : 'bg-gray-50'
+                    className={`p-3 text-center border-r border-gray-200 last:border-r-0 transition-colors ${
+                      esHoy 
+                        ? 'bg-[#9C1838] text-white shadow-inner' 
+                        : 'bg-gradient-to-b from-gray-50 to-white hover:bg-gray-50'
                     }`}
                   >
-                    <div className="text-sm font-medium">
+                    <div className="text-sm font-semibold">
                       {DIAS_SEMANA_COMPLETOS[fecha.getDay()]}
                     </div>
-                    <div className="text-xs mt-1">
+                    <div className={`text-xs mt-1 ${esHoy ? 'opacity-90' : 'text-gray-500'}`}>
                       {fecha.getDate()} {MESES[fecha.getMonth()]}
                     </div>
                   </div>
@@ -290,54 +338,89 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
             </div>
 
             <div>
-              {horas.map((hora) => (
-                <div key={hora} className="grid grid-cols-[80px_repeat(7,1fr)] border-b">
-                  <div className="w-20 p-2 text-sm text-gray-500 border-r bg-gray-50 font-mono flex items-center justify-center">
-                    {`${hora.toString().padStart(2, '0')}:00`}
+              {horas.map((hora, idx) => (
+                <div 
+                  key={hora} 
+                  className={`grid grid-cols-[80px_repeat(7,1fr)] border-b border-gray-100 hover:bg-gray-50/30 transition-colors ${
+                    idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                  }`}
+                >
+                  <div className="w-20 p-3 text-sm text-gray-600 border-r border-gray-200 bg-gray-50/50 font-mono flex items-center justify-center">
+                    <span className="text-xs font-medium">{`${hora.toString().padStart(2, '0')}:00`}</span>
                   </div>
 
                   {diasSemana.map((fecha, di) => {
                     const turnosEnHora = getTurnoEnHora(fecha, hora);
                     const turnosDelDiaCompleto = getTurnosParaDia(fecha);
+                    const fechaStr = fecha.toISOString().split('T')[0];
+                    const horaStr = `${hora.toString().padStart(2, '0')}:00`;
 
                     return (
-                      <div key={di} className="p-2 relative group min-h-[60px]">
+                      <div 
+                        key={di} 
+                        className={`p-2 relative group min-h-[70px] transition-all duration-200 border-r border-gray-100 last:border-r-0 ${
+                          isDragging 
+                            ? 'bg-blue-50/50 ring-1 ring-inset ring-blue-200' 
+                            : 'hover:bg-gray-50/50'
+                        }`}
+                        onDragOver={handleDragOver}
+                        onDrop={async (e) => {
+                          if (onMoverTurno) {
+                            await handleDrop(e, fechaStr, horaStr, async (turnoId, fecha, hora) => {
+                              await onMoverTurno(turnoId, fecha, hora);
+                              setRecentlyMovedTurnoId(turnoId);
+                              setTimeout(() => setRecentlyMovedTurnoId(null), 2000);
+                            });
+                          }
+                        }}
+                      >
                         {turnosEnHora.length > 0 && (
                           <div
-                            className={`grid gap-0.5 ${
+                            className={`grid gap-1 ${
                               turnosEnHora.length === 1 ? 'grid-cols-1' :
                               turnosEnHora.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
                             }`}
                           >
-                            {turnosEnHora.slice(0, 3).map((turno) => (
+                            {turnosEnHora.slice(0, 3).map((turno) => {
+                              const isRecentlyMoved = recentlyMovedTurnoId === turno.id_turno;
+                              return (
                               <div
                                 key={turno.id_turno}
-                                className="text-xs rounded cursor-pointer shadow-sm border overflow-hidden"
+                                draggable={!!onMoverTurno}
+                                onDragStart={(e) => {
+                                  e.stopPropagation();
+                                  handleDragStart(turno.id_turno, turno.fecha, turno.hora);
+                                }}
+                                onDragEnd={handleDragEnd}
+                                className={`text-xs rounded-lg shadow-sm border-l-2 overflow-hidden transition-all duration-200 hover:shadow-md hover:scale-[1.02] ${
+                                  onMoverTurno ? 'cursor-move' : 'cursor-pointer'
+                                } ${isRecentlyMoved ? 'animate-pulse ring-2 ring-green-400 shadow-lg' : ''}`}
                                 style={{
-                                  backgroundColor: (turno.especialista?.color || '#9C1838') + '20',
-                                  borderColor: turno.especialista?.color || '#9C1838',
+                                  backgroundColor: (turno.especialista?.color || '#9C1838') + '15',
+                                  borderLeftColor: turno.especialista?.color || '#9C1838',
                                 }}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onDayClick(fecha, turnosDelDiaCompleto);
                                 }}
+                                title={onMoverTurno ? 'Arrastra para mover el turno' : ''}
                               >
-                                <div className="p-1 h-full flex flex-col justify-center">
-                                  <div className="font-medium truncate text-xs text-black leading-tight">
+                                <div className="p-1.5 h-full flex flex-col justify-center">
+                                  <div className="font-semibold truncate text-xs text-gray-900 leading-tight">
                                     {turno.paciente?.nombre}
                                   </div>
-                                  <div className="text-xs opacity-75 truncate text-black leading-tight">
+                                  <div className="text-[10px] text-gray-600 truncate mt-0.5 leading-tight font-medium">
                                     {turno.hora.substring(0, 5)}
                                   </div>
                                 </div>
                               </div>
-                            ))}
+                            )})}
                           </div>
                         )}
 
                         {turnosEnHora.length > 3 && (
                           <div
-                            className="text-center text-xs text-gray-600 mt-1 cursor-pointer hover:text-[#9C1838] transition-colors"
+                            className="text-center text-xs text-gray-500 mt-1.5 cursor-pointer hover:text-[#9C1838] transition-all hover:font-semibold bg-gray-100/50 rounded px-2 py-0.5"
                             onClick={(e) => {
                               e.stopPropagation();
                               onDayClick(fecha, turnosDelDiaCompleto);
@@ -353,9 +436,9 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                             const horaString = `${hora.toString().padStart(2, '0')}:00`;
                             onCreateTurno(fecha, horaString);
                           }}
-                          className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-0.5 rounded-full"
+                          className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-[#9C1838] hover:bg-[#7D1329] text-white p-1 rounded-full shadow-md hover:shadow-lg hover:scale-110"
                         >
-                          <Plus className="w-2.5 h-2.5" />
+                          <Plus className="w-3 h-3" />
                         </button>
                       </div>
                     );
@@ -455,18 +538,44 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                                     </div>
                                     
                                     {/* Contenido de turnos */}
-                                    <div className="flex-1 p-3">
+                                    <div 
+                                        className={`flex-1 p-3 transition-colors ${
+                                          isDragging ? 'bg-blue-50' : ''
+                                        }`}
+                                        onDragOver={handleDragOver}
+                                        onDrop={async (e) => {
+                                          if (onMoverTurno) {
+                                            const fechaStr = fechaActual.toISOString().split('T')[0];
+                                            await handleDrop(e, fechaStr, horaStr, async (turnoId, fecha, hora) => {
+                                              await onMoverTurno(turnoId, fecha, hora);
+                                              setRecentlyMovedTurnoId(turnoId);
+                                              setTimeout(() => setRecentlyMovedTurnoId(null), 2000);
+                                            });
+                                          }
+                                        }}
+                                    >
                                         {turnosHora.length > 0 ? (
                                             <div className="space-y-2">
-                                                {turnosHora.map((turno) => (
+                                                {turnosHora.map((turno) => {
+                                                  const isRecentlyMoved = recentlyMovedTurnoId === turno.id_turno;
+                                                  return (
                                                     <div
                                                         key={turno.id_turno}
-                                                        className="border rounded-lg p-3 cursor-pointer active:scale-95 transition-transform"
+                                                        draggable={!!onMoverTurno}
+                                                        onDragStart={(e) => {
+                                                          e.stopPropagation();
+                                                          handleDragStart(turno.id_turno, turno.fecha, turno.hora);
+                                                        }}
+                                                        onDragEnd={handleDragEnd}
+                                                        className={`border rounded-lg p-3 active:scale-95 transition-all ${
+                                                          onMoverTurno ? 'cursor-move' : 'cursor-pointer'
+                                                        } ${isRecentlyMoved ? 'animate-pulse ring-2 ring-green-400' : ''}`}
                                                         style={{ 
                                                             borderColor: turno.especialista?.color || '#9C1838',
                                                             backgroundColor: (turno.especialista?.color || '#9C1838') + '15'
                                                         }}
                                                         onClick={() => onDayClick(fechaActual, [turno])}
+                                                        title={onMoverTurno ? 'Arrastra para mover el turno' : ''}
                                                     >
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="flex items-center gap-2">                                                  
@@ -492,7 +601,7 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                                                             )}
                                                         </div>
                                                     </div>
-                                                ))}
+                                                )})}
                                             </div>
                                         ) : (
                                             <div 
@@ -538,24 +647,50 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                     {Array.from({ length: 12 }, (_, i) => i + 8).map((hora) => {
                         const horaStr = `${hora.toString().padStart(2, '0')}:00`;
                         const turnosHora = turnosDelDia.filter(t => t.hora.startsWith(hora.toString().padStart(2, '0')));
+                        const fechaStr = fechaActual.toISOString().split('T')[0];
                         
                         return (
                             <div key={hora} className="border-b flex">
                                 <div className="w-16 p-3 text-sm text-gray-500 border-r">
                                     {horaStr}
                                 </div>
-                                <div className="flex-1 p-3 min-h-16">
-                                    {turnosHora.map((turno) => (
+                                <div 
+                                    className={`flex-1 p-3 min-h-16 transition-colors ${
+                                      isDragging ? 'bg-blue-50' : ''
+                                    }`}
+                                    onDragOver={handleDragOver}
+                                    onDrop={async (e) => {
+                                      if (onMoverTurno) {
+                                        await handleDrop(e, fechaStr, horaStr, async (turnoId, fecha, hora) => {
+                                          await onMoverTurno(turnoId, fecha, hora);
+                                          setRecentlyMovedTurnoId(turnoId);
+                                          setTimeout(() => setRecentlyMovedTurnoId(null), 2000);
+                                        });
+                                      }
+                                    }}
+                                >
+                                    {turnosHora.map((turno) => {
+                                      const isRecentlyMoved = recentlyMovedTurnoId === turno.id_turno;
+                                      return (
                                         <div
                                             key={turno.id_turno}
-                                            className="bg-blue-100 text-blue-800 p-2 rounded mb-1 cursor-pointer"
+                                            draggable={!!onMoverTurno}
+                                            onDragStart={(e) => {
+                                              e.stopPropagation();
+                                              handleDragStart(turno.id_turno, turno.fecha, turno.hora);
+                                            }}
+                                            onDragEnd={handleDragEnd}
+                                            className={`bg-blue-100 text-blue-800 p-2 rounded mb-1 transition-all ${
+                                              onMoverTurno ? 'cursor-move' : 'cursor-pointer'
+                                            } ${isRecentlyMoved ? 'animate-pulse ring-2 ring-green-400' : ''}`}
                                             style={{ backgroundColor: turno.especialista?.color + '20', color: turno.especialista?.color || '#9C1838' }}
                                             onClick={() => onDayClick(fechaActual, [turno])}
+                                            title={onMoverTurno ? 'Arrastra para mover el turno' : ''}
                                         >
                                             <div className="font-medium text-black">{turno.paciente?.nombre} {turno.paciente?.apellido}</div>
                                             <div className="text-xs text-black opacity-75">Dr. {turno.especialista?.nombre}</div>
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             </div>
                         );
