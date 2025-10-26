@@ -287,6 +287,32 @@ const main = async () => {
     adapterProvider.on('ready', async () => {
         console.log('✅ WhatsApp conectado exitosamente!')
         
+        // Si la sesión fue restaurada, enviar mensaje de confirmación
+        if (sessionRestored) {
+            console.log('📤 Enviando mensaje de confirmación de sesión restaurada...')
+            
+            // Esperar 3 segundos para asegurar que la conexión esté estable
+            setTimeout(async () => {
+                try {
+                    const adminNumber = process.env.PHONE_NUMBER || '5493434687043'
+                    const numeroFormateado = `${adminNumber}@s.whatsapp.net`
+                    
+                    const vendor = adapterProvider.getInstance() as any
+                    if (vendor && typeof vendor.sendMessage === 'function') {
+                        await vendor.sendMessage(numeroFormateado, {
+                            text: '✅ *Bot Fisiopasteur Reiniciado*\n\n' +
+                                  '🔐 Sesión restaurada exitosamente\n' +
+                                  '🤖 El bot está operativo y listo para responder\n' +
+                                  `⏰ ${new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}`
+                        })
+                        console.log('✅ Mensaje de confirmación enviado exitosamente')
+                    }
+                } catch (error) {
+                    console.error('❌ Error enviando mensaje de confirmación:', error)
+                }
+            }, 3000)
+        }
+        
         // Guardar sesión automáticamente después de conectar
         console.log('⏳ Esperando 5 segundos antes de guardar la sesión...')
         setTimeout(async () => {
