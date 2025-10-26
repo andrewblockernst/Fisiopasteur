@@ -10,6 +10,31 @@ Bot de WhatsApp integrado con el sistema de gestión de turnos de kinesiología 
 - **Información del centro**: Dirección, horarios, contacto
 - **Interacciones naturales**: Respuestas en español argentino
 - **API REST completa**: Endpoints para integración con el sistema principal
+- **Persistencia de sesión**: La sesión de WhatsApp se mantiene entre reinicios
+- **Notificación de reinicio**: Envía mensaje de confirmación cuando se restaura la sesión
+
+## 🔐 Persistencia de Sesión
+
+El bot mantiene la sesión de WhatsApp activa incluso después de reinicios:
+
+- ✅ **Sin QR en reinicios**: No necesitas escanear el código QR cada vez
+- ✅ **Restauración automática**: La sesión se restaura al iniciar el bot
+- ✅ **Notificación de reinicio**: Recibes un mensaje cuando el bot se reinicia exitosamente
+- ✅ **Guardado automático**: La sesión se guarda en Heroku config vars
+
+### Verificar Sesión Restaurada
+
+Después de reiniciar el bot, recibirás este mensaje en WhatsApp:
+
+```
+✅ Bot Fisiopasteur Reiniciado
+
+🔐 Sesión restaurada exitosamente
+🤖 El bot está operativo y listo para responder
+⏰ [Fecha y hora]
+```
+
+📖 **Documentación detallada**: Ver [SESSION-CONFIRMATION.md](./docs/SESSION-CONFIRMATION.md)
 
 ## 🛠 Instalación y Configuración
 
