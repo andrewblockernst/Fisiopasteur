@@ -289,6 +289,14 @@ const cleanWhatsAppSessions = async (): Promise<boolean> => {
 
 const ensureSessionCompatibility = async (): Promise<void> => {
     try {
+        // SIEMPRE limpiar sesiones al iniciar en Heroku para evitar errores 405
+        // Esto fuerza un QR fresco en cada deploy/restart
+        if (process.env.DYNO) {
+            console.log('🔄 Detectado entorno Heroku. Limpiando sesiones para generar QR fresco...')
+            await cleanWhatsAppSessions()
+            return
+        }
+
         const forceReset = process.env.RESET_WHATSAPP_SESSION === 'true'
         if (forceReset) {
             console.log('♻️ RESET_WHATSAPP_SESSION activo. Limpiando sesiones guardadas...')
