@@ -4,7 +4,6 @@ import { createBot, createProvider, createFlow, addKeyword, utils, EVENTS } from
 import { MemoryDB as Database } from '@builderbot/bot'
 import { BaileysProvider as Provider } from '@builderbot/provider-baileys'
 import { procesarRecordatoriosPendientes } from './recordatorios.service'
-import { SessionManager } from './sessionManager'
 
 const PORT = process.env.PORT ?? 3008
 
@@ -258,16 +257,6 @@ const formatearTelefono = (telefono: string): string => {
 }
 
 const main = async () => {
-    // ===== 🔐 RESTAURAR SESIÓN AL INICIAR =====
-    console.log('🔄 Intentando restaurar sesión de WhatsApp...')
-    const sessionRestored = await SessionManager.restoreFromEnv()
-    
-    if (sessionRestored) {
-        console.log('✅ Sesión restaurada desde variables de entorno')
-    } else {
-        console.log('ℹ️ No hay sesión guardada. Se generará un código QR')
-    }
-
     // Configurar flows del bot
     const adapterFlow = createFlow([
         welcomeFlow,
@@ -282,67 +271,9 @@ const main = async () => {
         writeMyself: 'none'
     })
 
-    // ===== 📡 EVENTOS DE CONEXIÓN =====
-    // Evento: Bot conectado exitosamente
-    adapterProvider.on('ready', async () => {
+    // Eventos mejorados para debugging del QR
+    adapterProvider.on('ready', () => {
         console.log('✅ WhatsApp conectado exitosamente!')
-        
-        // Si la sesión fue restaurada, enviar mensaje de confirmación
-        if (sessionRestored) {
-            console.log('📤 Enviando mensaje de confirmación de sesión restaurada...')
-            
-            // Esperar 3 segundos para asegurar que la conexión esté estable
-            setTimeout(async () => {
-                try {
-                    const adminNumber = process.env.PHONE_NUMBER || '5493434687043'
-                    const numeroFormateado = `${adminNumber}@s.whatsapp.net`
-                    
-                    const vendor = adapterProvider.getInstance() as any
-                    if (vendor && typeof vendor.sendMessage === 'function') {
-                        await vendor.sendMessage(numeroFormateado, {
-                            text: '✅ *Bot Fisiopasteur Reiniciado*\n\n' +
-                                  '🔐 Sesión restaurada exitosamente\n' +
-                                  '🤖 El bot está operativo y listo para responder\n' +
-                                  `⏰ ${new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}`
-                        })
-                        console.log('✅ Mensaje de confirmación enviado exitosamente')
-                    }
-                } catch (error) {
-                    console.error('❌ Error enviando mensaje de confirmación:', error)
-                }
-            }, 3000)
-        }
-        
-        // Guardar sesión automáticamente después de conectar
-        console.log('⏳ Esperando 5 segundos antes de guardar la sesión...')
-        setTimeout(async () => {
-            console.log('💾 Guardando sesión en Heroku...')
-            const saved = await SessionManager.saveToEnv()
-            if (saved) {
-                console.log('✅ Sesión guardada exitosamente en variables de entorno')
-            } else {
-                console.log('⚠️ No se pudo guardar la sesión automáticamente')
-            }
-        }, 5000)
-    })
-    
-    // Evento: Conexión cerrada o perdida
-    adapterProvider.on('connection.update', async (update: any) => {
-        const { connection, lastDisconnect } = update
-        
-        if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401
-            console.log('❌ Conexión cerrada. ¿Reconectar?', shouldReconnect)
-            
-            if (!shouldReconnect) {
-                console.log('🔐 Sesión inválida. Limpiando sesión guardada...')
-                await SessionManager.clearSession()
-            }
-        }
-        
-        if (connection === 'open') {
-            console.log('🌐 Conexión establecida con WhatsApp')
-        }
     })
     
     adapterProvider.on('qr', (qr) => {
@@ -1003,90 +934,6 @@ const main = async () => {
         }))
     })
 
-    // ===== 🔐 ENDPOINTS DE GESTIÓN DE SESIÓN =====
-    
-    // Endpoint para guardar la sesión manualmente
-    adapterProvider.server.post('/api/save-session', async (req, res) => {
-        try {
-            console.log('📥 Solicitud para guardar sesión recibida')
-            const saved = await SessionManager.saveToEnv()
-            
-            res.writeHead(saved ? 200 : 500, { 'Content-Type': 'application/json' })
-            return res.end(JSON.stringify({
-                success: saved,
-                message: saved ? 'Sesión guardada exitosamente' : 'Error guardando sesión',
-                timestamp: new Date().toISOString()
-            }))
-        } catch (error) {
-            console.error('❌ Error en endpoint save-session:', error)
-            res.writeHead(500, { 'Content-Type': 'application/json' })
-            return res.end(JSON.stringify({ 
-                success: false, 
-                error: error instanceof Error ? error.message : 'Error desconocido' 
-            }))
-        }
-    })
-
-    // Endpoint para restaurar la sesión manualmente
-    adapterProvider.server.post('/api/restore-session', async (req, res) => {
-        try {
-            console.log('📥 Solicitud para restaurar sesión recibida')
-            const restored = await SessionManager.restoreFromEnv()
-            
-            res.writeHead(200, { 'Content-Type': 'application/json' })
-            return res.end(JSON.stringify({
-                success: true,
-                message: restored 
-                    ? 'Sesión restaurada exitosamente. Reiniciando bot...' 
-                    : 'No hay sesión guardada para restaurar',
-                restored,
-                timestamp: new Date().toISOString()
-            }))
-        } catch (error) {
-            console.error('❌ Error en endpoint restore-session:', error)
-            res.writeHead(500, { 'Content-Type': 'application/json' })
-            return res.end(JSON.stringify({ 
-                success: false, 
-                error: error instanceof Error ? error.message : 'Error desconocido' 
-            }))
-        }
-    })
-
-    // Endpoint para limpiar la sesión
-    adapterProvider.server.post('/api/clear-session', async (req, res) => {
-        try {
-            console.log('🗑️ Solicitud para limpiar sesión recibida')
-            await SessionManager.clearSession()
-            
-            res.writeHead(200, { 'Content-Type': 'application/json' })
-            return res.end(JSON.stringify({
-                success: true,
-                message: 'Sesión eliminada exitosamente',
-                timestamp: new Date().toISOString()
-            }))
-        } catch (error) {
-            console.error('❌ Error en endpoint clear-session:', error)
-            res.writeHead(500, { 'Content-Type': 'application/json' })
-            return res.end(JSON.stringify({ 
-                success: false, 
-                error: error instanceof Error ? error.message : 'Error desconocido' 
-            }))
-        }
-    })
-
-    // Endpoint para verificar si hay sesión guardada
-    adapterProvider.server.get('/api/session-status', (req, res) => {
-        const hasSession = SessionManager.hasSession()
-        const hasEnvSession = !!process.env.WHATSAPP_SESSION
-        
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        return res.end(JSON.stringify({
-            hasLocalSession: hasSession,
-            hasEnvSession: hasEnvSession,
-            timestamp: new Date().toISOString()
-        }))
-    })
-
     console.log(`🤖 Bot de Fisiopasteur iniciado en puerto ${PORT}`)
     console.log(`📱 Endpoints disponibles:`)
     console.log(`   POST /api/turno/confirmar - Enviar confirmación de turno`)
@@ -1096,13 +943,8 @@ const main = async () => {
     console.log(`   POST /api/recordatorios/procesar - Procesar recordatorios manualmente`)
     console.log(`   GET /api/health - Estado del servicio`)
     console.log(`   GET /api/status - Estado de autenticación`)
-    console.log(`   🔐 POST /api/save-session - Guardar sesión manualmente`)
-    console.log(`   🔐 POST /api/restore-session - Restaurar sesión`)
-    console.log(`   � POST /api/clear-session - Limpiar sesión`)
-    console.log(`   🔐 GET /api/session-status - Estado de sesión`)
     console.log(``)
-    console.log(`�🕐 Sistema de recordatorios automáticos: ACTIVADO (cada 5 minutos)`)
-    console.log(`🔐 Sistema de persistencia de sesión: ACTIVADO`)
+    console.log(`🕐 Sistema de recordatorios automáticos: ACTIVADO (cada 5 minutos)`)
     
     httpServer(+PORT)
 }
