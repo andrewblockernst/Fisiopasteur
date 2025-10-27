@@ -1,7 +1,5 @@
 import 'dotenv/config'
 import { join } from 'path'
-import { existsSync } from 'fs'
-import { readdir, unlink } from 'fs/promises'
 import { createBot, createProvider, createFlow, addKeyword, utils, EVENTS } from '@builderbot/bot'
 import { MemoryDB as Database } from '@builderbot/bot'
 import { BaileysProvider as Provider } from '@builderbot/provider-baileys'
@@ -258,75 +256,7 @@ const formatearTelefono = (telefono: string): string => {
     return numeroFormateado
 }
 
-const SESSION_DIRECTORY = join(process.cwd(), 'bot_sessions')
-
-const cleanWhatsAppSessions = async (): Promise<boolean> => {
-    try {
-        if (!existsSync(SESSION_DIRECTORY)) {
-            return false
-        }
-
-        const entries = await readdir(SESSION_DIRECTORY)
-        if (!entries.length) {
-            return false
-        }
-
-        for (const file of entries) {
-            try {
-                await unlink(join(SESSION_DIRECTORY, file))
-            } catch (error) {
-                console.warn(`⚠️ No se pudo eliminar el archivo de sesión ${file}:`, error)
-            }
-        }
-
-        console.log('🧹 Sesiones antiguas de WhatsApp eliminadas. Se generará un nuevo QR.')
-        return true
-    } catch (error) {
-        console.error('❌ Error limpiando sesiones de WhatsApp:', error)
-        return false
-    }
-}
-
-const ensureSessionCompatibility = async (): Promise<void> => {
-    try {
-        // SIEMPRE limpiar sesiones al iniciar en Heroku para evitar errores 405
-        // Esto fuerza un QR fresco en cada deploy/restart
-        if (process.env.DYNO) {
-            console.log('🔄 Detectado entorno Heroku. Limpiando sesiones para generar QR fresco...')
-            await cleanWhatsAppSessions()
-            return
-        }
-
-        const forceReset = process.env.RESET_WHATSAPP_SESSION === 'true'
-        if (forceReset) {
-            console.log('♻️ RESET_WHATSAPP_SESSION activo. Limpiando sesiones guardadas...')
-            await cleanWhatsAppSessions()
-            return
-        }
-
-        if (!existsSync(SESSION_DIRECTORY)) {
-            return
-        }
-
-        const entries = await readdir(SESSION_DIRECTORY)
-        if (!entries.length) {
-            return
-        }
-
-        const hasLidMapping = entries.some((entry) => entry.startsWith('lid-mapping'))
-        const hasDeviceIndex = entries.some((entry) => entry.startsWith('device-index') || entry.startsWith('device-list'))
-
-        if (!hasLidMapping || !hasDeviceIndex) {
-            console.log('⚠️ Sesión de WhatsApp incompatible detectada. Limpiando para evitar errores 405.')
-            await cleanWhatsAppSessions()
-        }
-    } catch (error) {
-        console.error('❌ Error verificando compatibilidad de sesión de WhatsApp:', error)
-    }
-}
-
 const main = async () => {
-    await ensureSessionCompatibility()
     // Configurar flows del bot
     const adapterFlow = createFlow([
         welcomeFlow,
@@ -358,6 +288,10 @@ const main = async () => {
         console.log('   3. Toca "Vincular un dispositivo"')
         console.log('   4. Escanea el código QR de arriba')
         console.log('='.repeat(50) + '\n')
+    })
+    
+    adapterProvider.on('auth_failure', (error) => {
+        console.error('❌ Error de autenticación:', error)
     })
     
     adapterProvider.on('disconnected', (reason) => {
@@ -446,16 +380,6 @@ const main = async () => {
             console.log('⏹️ Servicio de recordatorios automáticos detenido')
         }
     }
-
-    adapterProvider.on('auth_failure', async (error) => {
-        console.error('❌ Error de autenticación:', error)
-        detenerProcesadorRecordatorios()
-        const cleaned = await cleanWhatsAppSessions()
-        if (cleaned) {
-            console.log('♻️ Sesión reiniciada. Reiniciando proceso para generar un nuevo QR...')
-            setTimeout(() => process.exit(1), 1500)
-        }
-    })
     
     // Función helper para fetch con timeout
     const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 25000) => {
