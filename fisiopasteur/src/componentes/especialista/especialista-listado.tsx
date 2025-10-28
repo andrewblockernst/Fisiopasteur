@@ -68,7 +68,10 @@ export function EspecialistasTable({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              {/* Solo mostrar columna de acciones si puede gestionar turnos */}
+              {user?.puedeGestionarTurnos && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -114,23 +117,26 @@ export function EspecialistasTable({
                     {especialista.activo ? "Activo" : "Inactivo"}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  <Button 
-                    variant="secondary" 
-                    className="text-xs"
-                    onClick={() => setEditingEspecialista(especialista)}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    variant={especialista.activo ? "danger" : "success"}
-                    className="text-xs"
-                    disabled={isPending}
-                    onClick={() => handleToggleActivo(especialista)}
-                  >
-                    {especialista.activo ? "Inactivar" : "Activar"}
-                  </Button>
-                </td>
+                {/* Solo mostrar acciones si puede gestionar turnos */}
+                {user?.puedeGestionarTurnos && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <Button 
+                      variant="secondary" 
+                      className="text-xs"
+                      onClick={() => setEditingEspecialista(especialista)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant={especialista.activo ? "danger" : "success"}
+                      className="text-xs"
+                      disabled={isPending}
+                      onClick={() => handleToggleActivo(especialista)}
+                    >
+                      {especialista.activo ? "Inactivar" : "Activar"}
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -226,8 +232,8 @@ export function EspecialistasTable({
           ))}
         </div>
 
-        {/* Boton flotante para agregar especialista - Solo Admin */}
-        {user?.esAdmin && (
+        {/* Boton flotante para agregar especialista - Solo Admin y Programadores */}
+        {user?.puedeGestionarTurnos && (
           <button
             onClick={() => setShowDialog(true)}
             className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"

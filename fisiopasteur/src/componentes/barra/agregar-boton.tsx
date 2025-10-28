@@ -55,8 +55,8 @@ const AgregarBoton = () => {
   const menuOptions = useMemo(() => {
     if (loading || !user) return [];
     
-    // Si es admin, mostrar todas las opciones
-    if (user.esAdmin) {
+    // Si puede gestionar el sistema (admin o programador), mostrar todas las opciones
+    if (user.puedeGestionarTurnos) {
       return allMenuOptions;
     }
     

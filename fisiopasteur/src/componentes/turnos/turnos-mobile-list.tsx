@@ -14,10 +14,10 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
-import type { TurnoWithRelations } from "@/types/database.types";
+import type { TurnoConDetalles } from "@/stores/turno-store";
 
 interface TurnosMobileListProps {
-  turnos: TurnoWithRelations[];
+  turnos: TurnoConDetalles[];
   fecha: string;
   onDateChange: (date: string) => void;
   onTurnoCreated?: () => void;
@@ -76,7 +76,7 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
     }
     groups[hora].push(turno);
     return groups;
-  }, {} as Record<string, TurnoWithRelations[]>);
+  }, {} as Record<string, TurnoConDetalles[]>);
 
   // Ordenar horas
   const horasOrdenadas = Object.keys(turnosAgrupados).sort();
@@ -295,9 +295,9 @@ function TurnoCard({
               </span>
             )}
           </div>
-          {turno.paciente?.dni && (
+          {/* {turno.paciente?.dni && (
             <p className="text-sm text-neutral-600">DNI: {turno.paciente.dni}</p>
-          )}
+          )} */}
         </div>
         <ChevronRight className="w-5 h-5 text-neutral-400 ml-2" />
       </div>
@@ -312,9 +312,9 @@ function TurnoCard({
           <span className="text-sm text-neutral-700">
             {turno.especialista.nombre} {turno.especialista.apellido}
           </span>
-          {turno.especialidad && (
+          {/* {turno.especialidad && (
             <span className="text-sm text-neutral-500">• {turno.especialidad.nombre}</span>
-          )}
+          )} */}
         </div>
       )}
 
