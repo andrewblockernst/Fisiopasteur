@@ -8,6 +8,7 @@ import BaseDialog from "@/componentes/dialog/base-dialog";
 import { Database } from "@/types/database.types";
 
 import { MoreVertical, Edit, X, Trash, CheckCircle, ChevronUp, EllipsisVertical, AlertTriangle } from "lucide-react";
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useToastStore } from "@/stores/toast-store";
 
 
@@ -31,7 +32,7 @@ type Props = {
 
 export default function AccionesTurno({ turno, onDone }: Props) {
   const [openEdit, setOpenEdit] = useState(false);
-  const [menuAbierto, setMenuAbierto] = useState(false);
+  // El menú ahora lo maneja Radix UI DropdownMenu
   const [isPending, startTransition] = useTransition();
   const { addToast } = useToastStore();
 
@@ -41,7 +42,6 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   const [modalAtendidoAbierto, setModalAtendidoAbierto] = useState(false);
 
   const onCancelar = () => {
-    setMenuAbierto(false);
     setModalCancelarAbierto(true);
   };
 
@@ -67,7 +67,6 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const onEliminar = () => {
-    setMenuAbierto(false);
     
     // Verificar si el turno ya pasó antes de mostrar confirmación
     if (esPasado) {
@@ -104,7 +103,6 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const onMarcarAtendido = () => {
-    setMenuAbierto(false);
     setModalAtendidoAbierto(true);
   };
 
@@ -130,7 +128,6 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const handleEditar = () => {
-    setMenuAbierto(false);
     // Verificar que el turno tenga todos los campos requeridos antes de editar
     if (!turno.id_paciente) {
       addToast({
@@ -154,114 +151,65 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   const esProgramado = turno.estado === 'programado';
 
   return (
-    <div className="relative">
-      {/* <button
-        onClick={() => setMenuAbierto(!menuAbierto)}
-        className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        title="Acciones"
-        disabled={isPending}
-      >
-        <MoreVertical size={18} className="text-gray-600" />
-      </button> */}
-      <button
-                                            onClick={() => setMenuAbierto(!menuAbierto)}
-                                            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center hover:bg-slate-50 transition-colors"
-                                        >   
-                                            <div className="relative w-5 h-5">
-                                                <ChevronUp 
-                                                    className={`absolute w-5 h-5 transition-all duration-300 ease-in-out ${
-                                                        menuAbierto
-                                                            ? 'opacity-100 rotate-0' 
-                                                            : 'opacity-0 rotate-180'
-                                                    }`}
-                                                />
-                                                <EllipsisVertical 
-                                                    className={`absolute w-5 h-5 transition-all duration-300 ease-in-out ${
-                                                        menuAbierto
-                                                            ? 'opacity-0 rotate-180' 
-                                                            : 'opacity-100 rotate-0'
-                                                    }`}
-                                                />
-                                            </div>
-                                        </button>
-
-      {menuAbierto && (
-        <>
-          {/* Overlay para cerrar el menú al hacer clic fuera */}
-          <div 
-            className="fixed inset-0 z-10" 
-            onClick={() => setMenuAbierto(false)}
-          />
-          
-          {/* Menú desplegable */}
-          <div className={`absolute right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[140px] 
-            ${turno.index >= turno.total - 2 ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
-            <div className="py-1">
-              <button
-                onClick={handleEditar}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-                disabled={!turno.id_paciente} // Deshabilitar si no hay paciente
-              >
-                <Edit size={14} />
-                Editar
-              </button>
-              
-              {/* Mostrar "Marcar Atendido" solo para turnos programados que ya pasaron */}
-              {esProgramado && esPasado && (
-                <button
-                  onClick={onMarcarAtendido}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-green-600"
-                >
-                  <CheckCircle size={14} />
-                  Marcar Atendido
-                </button>
-              )}
-              
-              {/* Cancelar solo para turnos futuros programados */}
-              {esProgramado && !esPasado && (
-                <button
-                  onClick={onCancelar}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-orange-600"
-                >
-                  <X size={14} />
-                  Cancelar
-                </button>
-              )}
-              
-              {/* Eliminar solo para turnos futuros */}
-              {!esPasado && (
-                <button
-                  onClick={onEliminar}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
-                >
-                  <Trash size={14} />
-                  Eliminar
-                </button>
-              )}
-
-              {/* Mostrar opción deshabilitada para turnos pasados con explicación */}
-              {esPasado && (
-                <button
-                  onClick={() => {
-                    setMenuAbierto(false);
-                    addToast({
-                      variant: 'error',
-                      message: 'No disponible',
-                      description: 'No se pueden eliminar turnos que ya pasaron.',
-                    });
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 text-gray-400 cursor-not-allowed"
-                  disabled
-                  title="No se pueden eliminar turnos pasados"
-                >
-                  <Trash size={14} />
-                  Eliminar
-                </button>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+    <>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center hover:bg-slate-50 transition-colors"
+            title="Acciones"
+            disabled={isPending}
+          >
+            <EllipsisVertical className="w-5 h-5 text-gray-600" />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content sideOffset={4} align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[140px] py-1">
+          <DropdownMenu.Item
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
+            onSelect={handleEditar}
+            disabled={!turno.id_paciente}
+          >
+            <Edit size={14} />
+            Editar
+          </DropdownMenu.Item>
+          {esProgramado && esPasado && (
+            <DropdownMenu.Item
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-green-600"
+              onSelect={onMarcarAtendido}
+            >
+              <CheckCircle size={14} />
+              Marcar Atendido
+            </DropdownMenu.Item>
+          )}
+          {esProgramado && !esPasado && (
+            <DropdownMenu.Item
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-orange-600"
+              onSelect={onCancelar}
+            >
+              <X size={14} />
+              Cancelar
+            </DropdownMenu.Item>
+          )}
+          {!esPasado && (
+            <DropdownMenu.Item
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+              onSelect={onEliminar}
+            >
+              <Trash size={14} />
+              Eliminar
+            </DropdownMenu.Item>
+          )}
+          {esPasado && (
+            <DropdownMenu.Item
+              className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 text-gray-400 cursor-not-allowed"
+              disabled
+              title="No se pueden eliminar turnos pasados"
+            >
+              <Trash size={14} />
+              Eliminar
+            </DropdownMenu.Item>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
 
       {/* Modal de edición */}
       {openEdit && turno.id_paciente && (
@@ -329,6 +277,6 @@ export default function AccionesTurno({ turno, onDone }: Props) {
         }}
         showCloseButton
       />
-    </div>
+    </>
   );
 }
