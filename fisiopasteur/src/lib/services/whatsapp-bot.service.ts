@@ -1,6 +1,10 @@
 "use server";
 
-import type { TurnoWithRelations } from "@/types/database.types";
+// import { WhatsAppService } from './whatsapp.service';
+import { createClient } from '../supabase/server';
+import type { TurnoConDetalles } from "@/stores/turno-store";
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { mapearTurnoParaBot } from "@/lib/utils/whatsapp.utils";
 
 // Configuración del bot
@@ -95,7 +99,7 @@ async function realizarPeticionBot(endpoint: string, data: any): Promise<BotResp
  * Enviar confirmación de turno por WhatsApp
  */
 export async function enviarConfirmacionTurno(
-  turnoOrTelefono: TurnoWithRelations | string,
+  turnoOrTelefono: TurnoConDetalles | string,
   nombrePaciente?: string,
   nombreEspecialista?: string,
   fecha?: string,
@@ -136,7 +140,7 @@ export async function enviarConfirmacionTurno(
     return resultado;
   }
 
-  // Si es un objeto TurnoWithRelations, usar la función original
+  // Si es un objeto TurnoConDetalles, usar la función original
   const turno = turnoOrTelefono;
   console.log('📱 Enviando confirmación de turno por WhatsApp...');
   
@@ -163,7 +167,7 @@ export async function enviarConfirmacionTurno(
 /**
  * Enviar recordatorio de turno por WhatsApp
  */
-export async function enviarRecordatorioTurno(turno: TurnoWithRelations): Promise<BotResponse> {
+export async function enviarRecordatorioTurno(turno: TurnoConDetalles): Promise<BotResponse> {
   console.log('⏰ Enviando recordatorio de turno por WhatsApp...');
   
   // Validar datos básicos
