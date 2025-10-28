@@ -13,6 +13,7 @@ import { use, useEffect, useState } from "react";
 import { useToastStore } from "@/stores/toast-store";
 import { PerfilCompleto } from "@/lib/actions/perfil.action";
 import { formatoNumeroTelefono } from "@/lib/utils";
+import { useAuth } from "@/hooks/usePerfil";
 
 type Especialidad = Tables<'especialidad'>
 type Especialista = Tables<"usuario"> & { 
@@ -25,6 +26,7 @@ export default function ConsultaEspecialistaMobile() {
     const router = useRouter();
     const params = useParams();
     const toast = useToastStore();
+    const { user } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [viewingEspecialista, setViewingEspecialista] = useState<PerfilCompleto | null>(null);
@@ -201,28 +203,30 @@ export default function ConsultaEspecialistaMobile() {
                     
                     <h1 className="absolute left-1/2 transform -translate-x-1/2 text-lg font-semibold">Perfil</h1>
 
-                    {/* Mostrar boton de perfil solo si es admin */}
-                    <div className="flex items-center space-x-2">
-                        <button
-                            onClick={() => setIsEditing(true)}
-                            className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
-                            style={{ backgroundColor: BRAND }}
-                            aria-label="Editar perfil"
-                            title="Editar perfil"
-                        >
-                            <Pencil className="w-4 h-4" />
-                        </button>
-                        {/* Mostrar boton de eliminar solo si es admin */}
-                        <button
-                            onClick={() => setIsDeleting(true)}
-                            className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
-                            style={{ backgroundColor: BRAND }}
-                            aria-label="Eliminar perfil"
-                            title="Eliminar perfil"
-                        >
-                            <Trash className="w-4 h-4" />
-                        </button>
-                    </div>
+                    {/* Mostrar botones solo para Admin y Programadores */}
+                    {user?.puedeGestionarTurnos && (
+                        <div className="flex items-center space-x-2">
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
+                                style={{ backgroundColor: BRAND }}
+                                aria-label="Editar perfil"
+                                title="Editar perfil"
+                            >
+                                <Pencil className="w-4 h-4" />
+                            </button>
+                            {/* Mostrar boton de eliminar solo si es admin */}
+                            <button
+                                onClick={() => setIsDeleting(true)}
+                                className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
+                                style={{ backgroundColor: BRAND }}
+                                aria-label="Eliminar perfil"
+                                title="Eliminar perfil"
+                            >
+                                <Trash className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
 
                 </div>
 
