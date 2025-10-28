@@ -226,8 +226,8 @@ export function EspecialistasTable({
           ))}
         </div>
 
-        {/* Boton flotante para agregar especialista - Solo Admin */}
-        {user?.esAdmin && (
+        {/* Boton flotante para agregar especialista - Solo Admin y Programadores */}
+        {user?.puedeGestionarTurnos && (
           <button
             onClick={() => setShowDialog(true)}
             className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"

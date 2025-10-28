@@ -233,9 +233,9 @@ export function NuevoTurnoModal({
     }
   }, [fechaSeleccionada, horaSeleccionada, isOpen]);
 
-  // Precargar especialista si no es admin
+  // Precargar especialista si no puede gestionar turnos (solo especialistas normales)
   useEffect(() => {
-    if (user && !user.esAdmin && user.id_usuario && isOpen) {
+    if (user && !user.puedeGestionarTurnos && user.id_usuario && isOpen) {
       setFormData(prev => ({
         ...prev,
         id_especialista: String(user.id_usuario)
@@ -922,7 +922,7 @@ export function NuevoTurnoModal({
             className="space-y-3 md:space-y-4 text-left max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1"
           >
             {/* Especialista */}
-            {user?.esAdmin && (
+            {user?.puedeGestionarTurnos && (
               <div>
                 <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
                   Especialista*
@@ -943,7 +943,7 @@ export function NuevoTurnoModal({
               </div>
             )}
 
-            {!user?.esAdmin && user?.nombre && (
+            {!user?.puedeGestionarTurnos && user?.nombre && (
               <div>
                 <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
                   Especialista

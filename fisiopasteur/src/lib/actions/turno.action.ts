@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/database.types";
+import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
@@ -873,66 +874,78 @@ export async function obtenerEspecialistas() {
   const supabase = await createClient();
   
   try {
-    const { data, error } = await supabase
+    // Obtener usuarios con roles permitidos (Admin y Especialistas)
+    const { data: usuarios, error: errorUsuarios } = await supabase
+      .from("usuario")
+      .select(`
+        id_usuario,
+        nombre,
+        apellido,
+        color,
+        email,
+        telefono,
+        activo,
+        id_rol,
+        rol:id_rol (
+          id,
+          nombre
+        )
+      `)
+      .in("id_rol", ROLES_ESPECIALISTAS) // Solo Admin (1) y Especialistas (2), excluye Programadores (3)
+      .eq("activo", true)
+      .order("nombre");
+
+    if (errorUsuarios) {
+      console.error("Error al obtener usuarios:", errorUsuarios);
+      return { success: false, error: errorUsuarios.message };
+    }
+
+    // Obtener especialidades de cada usuario
+    const { data: usuarioEspecialidades, error: errorEspecialidades } = await supabase
       .from("usuario_especialidad")
       .select(`
         id_usuario,
-        activo,
-        usuario!inner(
-          id_usuario,
-          nombre,
-          apellido,
-          color,
-          email,
-          telefono,
-          activo,
-          id_rol,
-          rol:id_rol (
-            id,
-            nombre
-          )
-        ),
-        especialidad!inner(
+        especialidad:id_especialidad(
           id_especialidad,
           nombre
         )
       `)
-      .eq("activo", true)
-      .eq("usuario.activo", true);
+      .eq("activo", true);
 
-    if (error) {
-      console.error("Error al obtener especialistas:", error);
-      return { success: false, error: error.message };
+    if (errorEspecialidades) {
+      console.error("Error al obtener especialidades:", errorEspecialidades);
+      // No retornar error, continuar sin especialidades
     }
 
-    const especialistasMap = new Map();
-    
-    data?.forEach(item => {
-      const usuario = item.usuario;
-      const especialidad = item.especialidad;
-      
-      if (!especialistasMap.has(usuario.id_usuario)) {
-        especialistasMap.set(usuario.id_usuario, {
-          id_usuario: usuario.id_usuario,
-          nombre: usuario.nombre,
-          apellido: usuario.apellido,
-          color: usuario.color,
-          email: usuario.email,
-          telefono: usuario.telefono,
-          activo: usuario.activo,
-          id_rol: usuario.id_rol, 
-          rol: usuario.rol,       
-          especialidad: null,
-          usuario_especialidad: []
+    // Mapear especialidades por usuario
+    const especialidadesMap = new Map();
+    usuarioEspecialidades?.forEach(item => {
+      if (!especialidadesMap.has(item.id_usuario)) {
+        especialidadesMap.set(item.id_usuario, []);
+      }
+      if (item.especialidad) {
+        especialidadesMap.get(item.id_usuario).push({
+          especialidad: item.especialidad
         });
       }
-      
-      especialistasMap.get(usuario.id_usuario).usuario_especialidad.push({
-        especialidad: especialidad
-      });
     });
 
-    const especialistas = Array.from(especialistasMap.values());
+    // Combinar usuarios con sus especialidades
+    const especialistas = usuarios.map(usuario => ({
+      id_usuario: usuario.id_usuario,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      color: usuario.color,
+      email: usuario.email,
+      telefono: usuario.telefono,
+      activo: usuario.activo,
+      id_rol: usuario.id_rol,
+      rol: usuario.rol,
+      especialidad: null,
+      usuario_especialidad: especialidadesMap.get(usuario.id_usuario) || []
+    }));
+    
+    console.log(`✅ Especialistas obtenidos: ${especialistas.length}`);
 
     return { success: true, data: especialistas };
   } catch (error) {
