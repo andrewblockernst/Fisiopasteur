@@ -1026,8 +1026,7 @@ export async function obtenerPacientes(busqueda?: string) {
       .from("paciente")
       .select("id_paciente, nombre, apellido, dni, telefono, email")
       .order("apellido")
-      .order("nombre")
-      .limit(50);
+      .order("nombre");
 
     if (busqueda && busqueda.length > 2) {
       query = query.or(`nombre.ilike.%${busqueda}%,apellido.ilike.%${busqueda}%,dni.ilike.%${busqueda}%`);
@@ -1308,5 +1307,87 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
     }
   } catch (error) {
     console.error("Error al enviar notificación agrupada:", error);
+  }
+}
+
+// =====================================
+// ⏰ ACTUALIZAR TURNOS VENCIDOS
+// =====================================
+
+/**
+ * ✅ Función para marcar como "vencido" los turnos programados cuya fecha/hora ya pasó
+ * Se ejecuta automáticamente cada vez que se carga la página de turnos
+ */
+export async function actualizarTurnosVencidos() {
+  const supabase = await createClient();
+  
+  try {
+    const ahora = new Date();
+    const fechaActual = ahora.toISOString().split('T')[0]; // yyyy-MM-dd
+    const horaActual = ahora.toTimeString().split(' ')[0].substring(0, 8); // HH:MM:SS
+
+    console.log(`🕐 Verificando turnos vencidos... (${fechaActual} ${horaActual})`);
+
+    // Obtener turnos "programado" que ya pasaron
+    const { data: turnosProgramados, error: fetchError } = await supabase
+      .from('turno')
+      .select('id_turno, fecha, hora, id_paciente, id_especialista')
+      .eq('estado', 'programado');
+
+    if (fetchError) {
+      console.error('❌ Error obteniendo turnos programados:', fetchError);
+      return { success: false, error: fetchError.message };
+    }
+
+    if (!turnosProgramados || turnosProgramados.length === 0) {
+      console.log('✅ No hay turnos programados');
+      return { success: true, data: [], mensaje: 'No hay turnos programados' };
+    }
+
+    // Filtrar los que ya pasaron
+    const turnosVencidos = turnosProgramados.filter(turno => {
+      const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora}`);
+      return fechaHoraTurno < ahora;
+    });
+
+    if (turnosVencidos.length === 0) {
+      console.log('✅ No hay turnos vencidos');
+      return { success: true, data: [], mensaje: 'No hay turnos vencidos' };
+    }
+
+    // Actualizar a estado "vencido"
+    const idsVencidos = turnosVencidos.map(t => t.id_turno);
+    
+    const { error: updateError } = await supabase
+      .from('turno')
+      .update({ 
+        estado: 'vencido',
+        updated_at: new Date().toISOString()
+      })
+      .in('id_turno', idsVencidos);
+
+    if (updateError) {
+      console.error('❌ Error actualizando turnos vencidos:', updateError);
+      return { success: false, error: updateError.message };
+    }
+
+    console.log(`✅ ${turnosVencidos.length} turno(s) marcado(s) como vencido(s)`);
+    
+    // Revalidar las rutas para que se actualice la UI
+    revalidatePath('/turnos');
+    revalidatePath('/inicio');
+    
+    return { 
+      success: true, 
+      data: turnosVencidos,
+      mensaje: `${turnosVencidos.length} turno(s) actualizado(s) a vencido`
+    };
+
+  } catch (error) {
+    console.error('❌ Error en actualizarTurnosVencidos:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
   }
 }

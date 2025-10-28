@@ -7,6 +7,7 @@ import TablaTurnos from './listado-turnos';
 import TurnosMobileList from './turnos-mobile-list';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
+import { actualizarTurnosVencidos } from '@/lib/actions/turno.action';
 import type { TurnoWithRelations, EspecialistaWithSpecialties, Tables } from "@/types/database.types";
 
 interface TurnosPageContainerProps {
@@ -36,6 +37,33 @@ export default function TurnosPageContainer({
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [selectedDate, setSelectedDate] = useState(initialFilters.fecha_desde);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // ⏰ Efecto para verificar y actualizar turnos vencidos automáticamente
+  useEffect(() => {
+    const verificarTurnosVencidos = async () => {
+      try {
+        console.log('🔍 Verificando turnos vencidos...');
+        const resultado = await actualizarTurnosVencidos();
+        
+        if (resultado.success && resultado.data && resultado.data.length > 0) {
+          console.log(`✅ ${resultado.data.length} turno(s) actualizado(s) a vencido`);
+          // Recargar la página para mostrar los cambios
+          router.refresh();
+        }
+      } catch (error) {
+        console.error('❌ Error verificando turnos vencidos:', error);
+      }
+    };
+
+    // Verificar al cargar el componente
+    verificarTurnosVencidos();
+
+    // Verificar cada 5 minutos (300000 ms)
+    const intervalo = setInterval(verificarTurnosVencidos, 300000);
+
+    // Limpiar intervalo al desmontar
+    return () => clearInterval(intervalo);
+  }, [router]);
 
   // Efecto para mostrar skeleton loader en la carga inicial
   useEffect(() => {
@@ -93,7 +121,7 @@ export default function TurnosPageContainer({
       <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
         {/* Desktop Header */}
         <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
-          <h2 className="text-2xl sm:text-3xl font-bold">Turnos</h2>
+          <h2 className="text-2xl sm:text-3xl text-black-500">Turnos</h2>
         </div>
 
         {/* Filtros y Búsqueda - Solo Desktop */}

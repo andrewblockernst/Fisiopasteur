@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import { cancelarTurno, eliminarTurno, marcarComoAtendido } from "@/lib/actions/turno.action";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
+import BaseDialog from "@/componentes/dialog/base-dialog";
 
 import { Database } from "@/types/database.types";
 
-import { MoreVertical, Edit, X, Trash, CheckCircle, ChevronUp, EllipsisVertical } from "lucide-react";
+import { MoreVertical, Edit, X, Trash, CheckCircle, ChevronUp, EllipsisVertical, AlertTriangle } from "lucide-react";
 import { useToastStore } from "@/stores/toast-store";
 
 
@@ -34,33 +35,18 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   const [isPending, startTransition] = useTransition();
   const { addToast } = useToastStore();
 
-  // Estados para confirmaciones
-  const [esperandoConfirmacionCancelar, setEsperandoConfirmacionCancelar] = useState(false);
-  const [esperandoConfirmacionEliminar, setEsperandoConfirmacionEliminar] = useState(false);
-  const [esperandoConfirmacionAtendido, setEsperandoConfirmacionAtendido] = useState(false);
+  // Estados para modales de confirmación
+  const [modalCancelarAbierto, setModalCancelarAbierto] = useState(false);
+  const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
+  const [modalAtendidoAbierto, setModalAtendidoAbierto] = useState(false);
 
   const onCancelar = () => {
     setMenuAbierto(false);
-    
-    if (!esperandoConfirmacionCancelar) {
-      // Primera vez - mostrar confirmación
-      setEsperandoConfirmacionCancelar(true);
-      addToast({
-        variant: 'warning',
-        message: 'Cancelar turno',
-        description: 'Haz clic nuevamente en "Cancelar" para confirmar la cancelación del turno.',
-        duration: 6000,
-      });
-      
-      // Limpiar el estado después de 6 segundos
-      setTimeout(() => {
-        setEsperandoConfirmacionCancelar(false);
-      }, 6000);
-      return;
-    }
+    setModalCancelarAbierto(true);
+  };
 
-    // Segunda vez - ejecutar cancelación
-    setEsperandoConfirmacionCancelar(false);
+  const confirmarCancelar = () => {
+    setModalCancelarAbierto(false);
     startTransition(async () => {
       const res = await cancelarTurno(turno.id_turno);
       if (res.success) {
@@ -93,25 +79,11 @@ export default function AccionesTurno({ turno, onDone }: Props) {
       return;
     }
 
-    if (!esperandoConfirmacionEliminar) {
-      // Primera vez - mostrar confirmación
-      setEsperandoConfirmacionEliminar(true);
-      addToast({
-        variant: 'error',
-        message: 'Eliminar turno',
-        description: 'ATENCIÓN: Esto elimina definitivamente el turno. Haz clic nuevamente en "Eliminar" para confirmar.',
-        duration: 8000,
-      });
-      
-      // Limpiar el estado después de 8 segundos
-      setTimeout(() => {
-        setEsperandoConfirmacionEliminar(false);
-      }, 8000);
-      return;
-    }
+    setModalEliminarAbierto(true);
+  };
 
-    // Segunda vez - ejecutar eliminación
-    setEsperandoConfirmacionEliminar(false);
+  const confirmarEliminar = () => {
+    setModalEliminarAbierto(false);
     startTransition(async () => {
       const res = await eliminarTurno(turno.id_turno);
       if (res.success) {
@@ -133,26 +105,11 @@ export default function AccionesTurno({ turno, onDone }: Props) {
 
   const onMarcarAtendido = () => {
     setMenuAbierto(false);
-    
-    if (!esperandoConfirmacionAtendido) {
-      // Primera vez - mostrar confirmación
-      setEsperandoConfirmacionAtendido(true);
-      addToast({
-        variant: 'info',
-        message: 'Marcar como atendido',
-        description: 'Haz clic nuevamente en "Marcar Atendido" para confirmar.',
-        duration: 5000,
-      });
-      
-      // Limpiar el estado después de 5 segundos
-      setTimeout(() => {
-        setEsperandoConfirmacionAtendido(false);
-      }, 5000);
-      return;
-    }
+    setModalAtendidoAbierto(true);
+  };
 
-    // Segunda vez - ejecutar marcado como atendido
-    setEsperandoConfirmacionAtendido(false);
+  const confirmarMarcarAtendido = () => {
+    setModalAtendidoAbierto(false);
     startTransition(async () => {
       const res = await marcarComoAtendido(turno.id_turno);
       if (res.success) {
@@ -253,12 +210,10 @@ export default function AccionesTurno({ turno, onDone }: Props) {
               {esProgramado && esPasado && (
                 <button
                   onClick={onMarcarAtendido}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${
-                    esperandoConfirmacionAtendido ? 'bg-blue-50 text-blue-700 font-medium' : 'text-green-600'
-                  }`}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-green-600"
                 >
                   <CheckCircle size={14} />
-                  {esperandoConfirmacionAtendido ? 'Confirmar Atendido' : 'Marcar Atendido'}
+                  Marcar Atendido
                 </button>
               )}
               
@@ -266,12 +221,10 @@ export default function AccionesTurno({ turno, onDone }: Props) {
               {esProgramado && !esPasado && (
                 <button
                   onClick={onCancelar}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${
-                    esperandoConfirmacionCancelar ? 'bg-orange-50 text-orange-700 font-medium' : 'text-orange-600'
-                  }`}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-orange-600"
                 >
                   <X size={14} />
-                  {esperandoConfirmacionCancelar ? 'Confirmar Cancelación' : 'Cancelar'}
+                  Cancelar
                 </button>
               )}
               
@@ -279,12 +232,10 @@ export default function AccionesTurno({ turno, onDone }: Props) {
               {!esPasado && (
                 <button
                   onClick={onEliminar}
-                  className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${
-                    esperandoConfirmacionEliminar ? 'bg-red-50 text-red-700 font-medium' : 'text-red-600'
-                  }`}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
                 >
                   <Trash size={14} />
-                  {esperandoConfirmacionEliminar ? 'Confirmar Eliminación' : 'Eliminar'}
+                  Eliminar
                 </button>
               )}
 
@@ -312,7 +263,7 @@ export default function AccionesTurno({ turno, onDone }: Props) {
         </>
       )}
 
-      {/* Solo mostrar el modal de edición si el turno tiene paciente */}
+      {/* Modal de edición */}
       {openEdit && turno.id_paciente && (
         <EditarTurnoDialog
           turno={turno}
@@ -324,6 +275,60 @@ export default function AccionesTurno({ turno, onDone }: Props) {
           }}
         />
       )}
+
+      {/* ✨ Modal de confirmación: Cancelar turno */}
+      <BaseDialog
+        type="warning"
+        title="¿Cancelar turno?"
+        message="¿Estás seguro de que deseas cancelar este turno? Esta acción se puede revertir."
+        isOpen={modalCancelarAbierto}
+        onClose={() => setModalCancelarAbierto(false)}
+        primaryButton={{
+          text: "Sí, cancelar",
+          onClick: confirmarCancelar
+        }}
+        secondaryButton={{
+          text: "No, volver",
+          onClick: () => setModalCancelarAbierto(false)
+        }}
+        showCloseButton
+      />
+
+      {/* ✨ Modal de confirmación: Eliminar turno */}
+      <BaseDialog
+        type="error"
+        title="¿Eliminar turno?"
+        message="⚠️ ATENCIÓN: Esta acción eliminará permanentemente el turno y NO se puede deshacer. ¿Deseas continuar?"
+        isOpen={modalEliminarAbierto}
+        onClose={() => setModalEliminarAbierto(false)}
+        primaryButton={{
+          text: "Sí, eliminar",
+          onClick: confirmarEliminar
+        }}
+        secondaryButton={{
+          text: "No, cancelar",
+          onClick: () => setModalEliminarAbierto(false)
+        }}
+        showCloseButton
+      />
+
+      {/* ✨ Modal de confirmación: Marcar como atendido */}
+      <BaseDialog
+        type="success"
+        title="¿Marcar como atendido?"
+        message="¿Confirmas que este turno fue atendido correctamente?"
+        isOpen={modalAtendidoAbierto}
+        onClose={() => setModalAtendidoAbierto(false)}
+        primaryButton={{
+          text: "Sí, marcar",
+          onClick: confirmarMarcarAtendido
+        }}
+        secondaryButton={{
+          text: "No, volver",
+          onClick: () => setModalAtendidoAbierto(false)
+        }}
+        showCloseButton
+      />
     </div>
   );
 }
