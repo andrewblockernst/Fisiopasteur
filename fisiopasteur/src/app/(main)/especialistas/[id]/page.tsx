@@ -283,36 +283,38 @@ export default function ConsultaEspecialistaMobile() {
                     </div>
                 </div>
 
-                {/* Precios */}
-                <div className="lg:col-span-5">
-                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm">
-                        <div className="px-6 pt-5 pb-3 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${BRAND}1A` }}>
-                                <CircleDollarSign className="w-5 h-5" style={{ color: BRAND }} />
-                            </div>
-                            <h3 className="text-base font-semibold text-neutral-800">Precios</h3>
-                        </div>
-
-                        <div className="px-4 pb-5 space-y-4">
-                            {!viewingEspecialista.especialidad_principal && viewingEspecialista.especialidades_adicionales.length === 0 && (
-                                <p className="text-sm text-neutral-600">No hay especialidades asignadas.</p>
-                            )}
-
-                            {viewingEspecialista.especialidades_adicionales.length > 0 && (
-                                <div className="space-y-4">
-                                    
-                                    {viewingEspecialista.especialidades_adicionales.map((esp) => (
-                                        <div key={esp.id_especialidad} className="p-4 border border-neutral-200 rounded-lg">
-                                            <h5 className="text-sm font-bold text-neutral-700 mb-1">{esp.nombre}</h5>
-                                            <p className="text-sm text-neutral-600">$ {esp.precio_particular}</p>
-                                        </div>
-                                    ))}
+                {/* Precios - Solo visible para Admin/Programador o el propio especialista */}
+                {(user?.puedeGestionarTurnos || user?.id_usuario === viewingEspecialista.id_usuario) && (
+                    <div className="lg:col-span-5">
+                        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm">
+                            <div className="px-6 pt-5 pb-3 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${BRAND}1A` }}>
+                                    <CircleDollarSign className="w-5 h-5" style={{ color: BRAND }} />
                                 </div>
-                            )}
-                        </div>
+                                <h3 className="text-base font-semibold text-neutral-800">Precios</h3>
+                            </div>
 
+                            <div className="px-4 pb-5 space-y-4">
+                                {!viewingEspecialista.especialidad_principal && viewingEspecialista.especialidades_adicionales.length === 0 && (
+                                    <p className="text-sm text-neutral-600">No hay especialidades asignadas.</p>
+                                )}
+
+                                {viewingEspecialista.especialidades_adicionales.length > 0 && (
+                                    <div className="space-y-4">
+                                        
+                                        {viewingEspecialista.especialidades_adicionales.map((esp) => (
+                                            <div key={esp.id_especialidad} className="p-4 border border-neutral-200 rounded-lg">
+                                                <h5 className="text-sm font-bold text-neutral-700 mb-1">{esp.nombre}</h5>
+                                                <p className="text-sm text-neutral-600">$ {esp.precio_particular}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                        </div>
                     </div>
-                </div>
+                )}
 
             </div>
 
