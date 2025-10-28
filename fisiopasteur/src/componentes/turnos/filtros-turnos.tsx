@@ -33,11 +33,11 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
       const verTodosParam = params.get('ver_todos');
       
       // Aplicar filtro automático si:
-      // 1. No es admin, O
-      // 2. Es admin pero también aparece en la lista de especialistas (es especialista activo)
+      // 1. No puede gestionar turnos (solo especialistas), O
+      // 2. Puede gestionar pero también aparece en la lista de especialistas (es especialista activo)
       const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
       
-      const debeAplicarFiltro = !user.esAdmin || (user.esAdmin && esEspecialistaActivo);
+      const debeAplicarFiltro = !user.puedeGestionarTurnos || (user.puedeGestionarTurnos && esEspecialistaActivo);
       
       // ✅ SOLO aplicar si NO hay ningún parámetro en la URL (primera carga)
       if (debeAplicarFiltro && !currentEspecialistaParam && !verTodosParam && user.id_usuario) {
@@ -161,7 +161,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     // Determinar si el usuario necesita el parámetro ver_todos
     const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user?.id_usuario);
     
-    const necesitaVerTodos = !user?.esAdmin || (user?.esAdmin && esEspecialistaActivo);
+    const necesitaVerTodos = !user?.puedeGestionarTurnos || (user?.puedeGestionarTurnos && esEspecialistaActivo);
     
     if (necesitaVerTodos) {
       router.push("/turnos?ver_todos=1");

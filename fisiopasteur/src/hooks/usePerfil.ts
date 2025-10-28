@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { ROLES, puedeGestionarSistema, puedeGestionarTurnos } from '@/lib/constants/roles';
 
 export interface Usuario {
   id: string;
@@ -9,8 +10,11 @@ export interface Usuario {
   id_usuario?: string;
   nombre?: string;
   apellido?: string;
+  id_rol?: number;
   esAdmin?: boolean;
-  esEspecialista?: boolean; // Agregar esta propiedad
+  esEspecialista?: boolean;
+  esProgramador?: boolean;
+  puedeGestionarTurnos?: boolean; // Nuevo: Admin y Programadores pueden gestionar turnos
   rol?: {
     id: number;
     nombre: string;
@@ -49,7 +53,8 @@ export function useAuth(): AuthState {
               apellido, 
               email, 
               activo,
-              rol (
+              id_rol,
+              rol:id_rol (
                 id,
                 nombre,
                 jerarquia
@@ -59,9 +64,12 @@ export function useAuth(): AuthState {
             .single();
 
           if (userProfile && !error) {
-            // Verificar roles
-            const esAdmin = userProfile.rol?.nombre === 'Administrador';
-            const esEspecialista = userProfile.rol?.nombre === 'Especialista';
+            // Verificar roles usando las constantes
+            const idRol = userProfile.id_rol;
+            const esAdmin = idRol === ROLES.ADMIN;
+            const esEspecialista = idRol === ROLES.ESPECIALISTA;
+            const esProgramador = idRol === ROLES.PROGRAMADOR;
+            const puedeGestionarTurnosPermiso = puedeGestionarTurnos(idRol);
 
             setAuthState({
               isAuthenticated: true,
@@ -71,8 +79,11 @@ export function useAuth(): AuthState {
                 id_usuario: userProfile.id_usuario,
                 nombre: userProfile.nombre,
                 apellido: userProfile.apellido,
+                id_rol: idRol,
                 esAdmin,
                 esEspecialista,
+                esProgramador,
+                puedeGestionarTurnos: puedeGestionarTurnosPermiso,
                 rol: userProfile.rol
               },
               loading: false
@@ -85,7 +96,9 @@ export function useAuth(): AuthState {
                 id: user.id,
                 email: user.email,
                 esAdmin: false,
-                esEspecialista: false
+                esEspecialista: false,
+                esProgramador: false,
+                puedeGestionarTurnos: false
               },
               loading: false
             });
@@ -122,7 +135,8 @@ export function useAuth(): AuthState {
               apellido, 
               email, 
               activo,
-              rol (
+              id_rol,
+              rol:id_rol (
                 id,
                 nombre,
                 jerarquia
@@ -131,8 +145,11 @@ export function useAuth(): AuthState {
             .eq('email', session.user.email)
             .single();
 
-          const esAdmin = userProfile?.rol?.nombre === 'Administrador';
-          const esEspecialista = userProfile?.rol?.nombre === 'Especialista';
+          const idRol = userProfile?.id_rol;
+          const esAdmin = idRol === ROLES.ADMIN;
+          const esEspecialista = idRol === ROLES.ESPECIALISTA;
+          const esProgramador = idRol === ROLES.PROGRAMADOR;
+          const puedeGestionarTurnosPermiso = puedeGestionarTurnos(idRol);
 
           setAuthState({
             isAuthenticated: true,
@@ -142,8 +159,11 @@ export function useAuth(): AuthState {
               id_usuario: userProfile?.id_usuario,
               nombre: userProfile?.nombre,
               apellido: userProfile?.apellido,
+              id_rol: idRol,
               esAdmin,
               esEspecialista,
+              esProgramador,
+              puedeGestionarTurnos: puedeGestionarTurnosPermiso,
               rol: userProfile?.rol
             },
             loading: false
