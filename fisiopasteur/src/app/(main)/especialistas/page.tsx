@@ -308,8 +308,8 @@ export default function EspecialistasPage() {
               </div>
             </div>
 
-            {/* Lado derecho: Botón Nuevo Especialista - Solo para Admin */}
-            {user?.esAdmin && (
+            {/* Lado derecho: Botón Nuevo Especialista - Solo para Admin y Programadores */}
+            {user?.puedeGestionarTurnos && (
               <div className="flex items-center">
                 <Button 
                   variant="primary"

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/service-role";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
+import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 
 type Especialista = Tables<"usuario">;
 type EspecialistaInsert = TablesInsert<"usuario">;
@@ -34,7 +35,7 @@ export async function getEspecialistas({ incluirInactivos = false } = {}) {
           )
         )
       `)
-      .eq("id_rol", 2);
+      .in("id_rol", ROLES_ESPECIALISTAS); // ✅ Admin (1) y Especialistas (2), excluye Programadores (3)
 
     if (!incluirInactivos) {
       query = query.eq("activo", true);
@@ -79,7 +80,7 @@ export async function getEspecialista(id: string) {
         )
       `)
       .eq("id_usuario", id)
-      .eq("id_rol", 2)
+      .in("id_rol", ROLES_ESPECIALISTAS) // ✅ Admin (1) y Especialistas (2), excluye Programadores (3)
       .single();
 
     if (error) {
@@ -248,7 +249,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       .from("usuario")
       .select("nombre, apellido")
       .eq("id_usuario", id)
-      .eq("id_rol", 2)
+      .in("id_rol", ROLES_ESPECIALISTAS) // ✅ Admin (1) y Especialistas (2), excluye Programadores (3)
       .single();
 
     if (errorVerificacion || !especialistaExistente) {
@@ -313,7 +314,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       .from("usuario")
       .update({ ...updateData, ...passwordPatch })
       .eq("id_usuario", id)
-      .eq("id_rol", 2);
+      .in("id_rol", ROLES_ESPECIALISTAS); // ✅ Admin (1) y Especialistas (2), excluye Programadores (3)
 
     if (errorUsuario) {
       console.error("Error updating especialista:", errorUsuario);
@@ -393,7 +394,7 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
       .from("usuario")
       .select("nombre, apellido")
       .eq("id_usuario", id)
-      .eq("id_rol", 2)
+      .in("id_rol", ROLES_ESPECIALISTAS) // ✅ Admin (1) y Especialistas (2), excluye Programadores (3)
       .single();
 
     if (errorVerificacion || !especialista) {
@@ -409,7 +410,7 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
       .from("usuario")
       .update({ activo })
       .eq("id_usuario", id)
-      .eq("id_rol", 2);
+      .in("id_rol", ROLES_ESPECIALISTAS); // ✅ Admin (1) y Especialistas (2), excluye Programadores (3)
 
     if (error) {
       console.error("Error toggling especialista status:", error);

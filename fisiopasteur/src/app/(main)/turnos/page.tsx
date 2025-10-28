@@ -1,5 +1,6 @@
 import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEspecialidades } from "@/lib/actions/turno.action";
 import TurnosPageContainer from "@/componentes/turnos/turnos-page-container";
+import type { TurnoConDetalles } from "@/stores/turno-store";
 
 export default async function TurnosPage({ searchParams }: { searchParams: Promise<any> }) {
   const params = await searchParams;
@@ -27,7 +28,7 @@ export default async function TurnosPage({ searchParams }: { searchParams: Promi
 
   return (
     <TurnosPageContainer
-      turnos={resTurnos.data ?? []}
+      turnos={(resTurnos.data ?? []) as unknown as TurnoConDetalles[]}
       especialistas={resEspecialistas.success ? (resEspecialistas.data ?? []) : []}
       especialidades={resEspecialidades.success ? (resEspecialidades.data ?? []) : []}
       boxes={resBoxes.success ? (resBoxes.data ?? []) : []}

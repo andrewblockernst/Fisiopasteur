@@ -14,12 +14,11 @@ import {
   Edit3,
   Trash2
 } from 'lucide-react';
-import type { TurnoWithRelations } from "@/types/database.types";
+import type { TurnoConDetalles } from "@/stores/turno-store";
 import Button from '../boton';
 
 interface TurnoDetailMobileProps {
-  turno: TurnoWithRelations;
-  numeroTalonario?: string | null;
+  turno: TurnoConDetalles;
 }
 
 export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetailMobileProps) {
@@ -141,9 +140,9 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
                   <p className="font-medium text-gray-900">
                     {turno.paciente.nombre} {turno.paciente.apellido}
                   </p>
-                  {turno.paciente.dni && (
+                  {/* {turno.paciente.dni && (
                     <p className="text-sm text-gray-500">DNI: {turno.paciente.dni}</p>
-                  )}
+                  )} */}
                 </div>
               </div>
               
@@ -189,9 +188,9 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
                 <p className="font-medium text-gray-900">
                   {turno.especialista.nombre} {turno.especialista.apellido}
                 </p>
-                {turno.especialidad && (
+                {/* {turno.especialidad && (
                   <p className="text-sm text-gray-500">{turno.especialidad.nombre}</p>
-                )}
+                )} */}
               </div>
             </div>
           </div>
