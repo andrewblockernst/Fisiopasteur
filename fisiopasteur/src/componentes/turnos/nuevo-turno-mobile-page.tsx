@@ -19,7 +19,6 @@ import { useTurnoForm } from '@/hooks/useTurnoForm';
 import SkeletonLoader from '@/componentes/skeleton-loader';
 import { NuevoPacienteDialog } from '@/componentes/paciente/nuevo-paciente-dialog';
 import { useToastStore } from '@/stores/toast-store';
-import type { SelectOption } from '@/types/database.types';
 
 export default function NuevoTurnoMobilePage() {
   const router = useRouter();

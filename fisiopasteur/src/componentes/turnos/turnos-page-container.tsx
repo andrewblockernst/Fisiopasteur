@@ -7,11 +7,13 @@ import TablaTurnos from './listado-turnos';
 import TurnosMobileList from './turnos-mobile-list';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
-import type { TurnoWithRelations, EspecialistaWithSpecialties, Tables } from "@/types/database.types";
+import type { TurnoConDetalles } from "@/stores/turno-store";
+import type { Tables } from "@/types/database.types";
+// import type { EspecialistaWithSpecialties } from "@/types/database.types";
 
 interface TurnosPageContainerProps {
-  turnos: TurnoWithRelations[];
-  especialistas: EspecialistaWithSpecialties[];
+  turnos: TurnoConDetalles[];
+  especialistas: any[]; // EspecialistaWithSpecialties[];
   especialidades: Tables<"especialidad">[];
   boxes: Tables<"box">[];
   loading?: boolean;
