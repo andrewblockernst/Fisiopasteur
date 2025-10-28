@@ -21,13 +21,17 @@ interface TurnoDetailMobileProps {
   turno: TurnoConDetalles;
 }
 
-export default function TurnoDetailMobile({ turno }: TurnoDetailMobileProps) {
+export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetailMobileProps) {
   const router = useRouter();
 
   const getEstadoColor = (estado: string) => {
     switch (estado.toLowerCase()) {
       case 'programado':
         return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'vencido':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'atendido':
+        return 'bg-green-100 text-green-800 border-green-200';
       case 'en_curso':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'completado':
@@ -63,9 +67,9 @@ export default function TurnoDetailMobile({ turno }: TurnoDetailMobileProps) {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+  <div className="min-h-screen bg-neutral-50 text-black">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-white border-b border-neutral-200">
+  <header className="sticky top-0 z-20 bg-white border-b border-neutral-200 text-black">
         <div className="flex items-center justify-between px-4 py-3">
           <button
             onClick={() => router.back()}
@@ -87,12 +91,21 @@ export default function TurnoDetailMobile({ turno }: TurnoDetailMobileProps) {
       </header>
 
       {/* Contenido */}
-      <div className="px-4 py-6 space-y-6">
+  <div className="px-4 py-6 space-y-6 text-black">
         {/* Estado del turno */}
-        <div className="text-center">
+        <div className="text-center space-y-3">
           <span className={`inline-block px-4 py-2 rounded-xl text-sm font-medium border ${getEstadoColor(turno.estado || 'programado')}`}>
-            {(turno.estado || 'programado').replace('_', ' ').toUpperCase()}
+            {turno.estado === 'vencido' ? '⚠️ VENCIDO' : (turno.estado || 'programado').replace('_', ' ').toUpperCase()}
           </span>
+          
+          {/* Número de talonario si existe */}
+          {numeroTalonario && (
+            <div className="flex justify-center">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 text-sm font-medium rounded-lg border border-blue-200">
+                📋 Paquete: Turno {numeroTalonario}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Fecha y Hora */}

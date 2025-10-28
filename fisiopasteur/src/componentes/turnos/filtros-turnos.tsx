@@ -338,7 +338,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
           <div className="flex flex-wrap gap-2">
             {filter.fecha_desde && (
               <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center gap-1 group">
-                Desde: {formatearFecha(filter.fecha_desde)}
+                      Desde: {formatearFecha(filter.fecha_desde)}
                 <button
                   onClick={() => removerFiltro('fecha_desde')}
                   className="ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors group-hover:bg-blue-200"
@@ -350,7 +350,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
             )}
             {filter.fecha_hasta && (
               <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center gap-1 group">
-                Hasta: {formatearFecha(filter.fecha_hasta)}
+                      Hasta: {formatearFecha(filter.fecha_hasta)}
                 <button
                   onClick={() => removerFiltro('fecha_hasta')}
                   className="ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors group-hover:bg-blue-200"
