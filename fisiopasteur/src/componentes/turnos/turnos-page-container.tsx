@@ -8,12 +8,12 @@ import TurnosMobileList from './turnos-mobile-list';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
 import type { TurnoConDetalles } from "@/stores/turno-store";
-import type { Tables } from "@/types/database.types";
-// import type { EspecialistaWithSpecialties } from "@/types/database.types";
+import type { Tables, EspecialistaWithSpecialties } from "@/types";
+import { actualizarTurnosVencidos } from '@/lib/actions/turno.action';
 
 interface TurnosPageContainerProps {
   turnos: TurnoConDetalles[];
-  especialistas: any[]; // EspecialistaWithSpecialties[];
+  especialistas: EspecialistaWithSpecialties[];
   especialidades: Tables<"especialidad">[];
   boxes: Tables<"box">[];
   loading?: boolean;
@@ -122,7 +122,7 @@ export default function TurnosPageContainer({
       <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
         {/* Desktop Header */}
         <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
-          <h2 className="text-2xl sm:text-3xl text-black-500">Turnos</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold">Turnos</h2>
         </div>
 
         {/* Filtros y Búsqueda - Solo Desktop */}

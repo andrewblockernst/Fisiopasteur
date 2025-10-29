@@ -1,6 +1,7 @@
 import { obtenerTurno, obtenerTurnos } from "@/lib/actions/turno.action";
 import TurnoDetailMobile from "@/componentes/turnos/turno-detail-mobile";
 import { notFound } from "next/navigation";
+import type { TurnoWithRelations } from "@/types";
 
 interface TurnoDetailPageProps {
   params: Promise<{ id: string }>;
@@ -54,5 +55,5 @@ export default async function TurnoDetailPage({ params }: TurnoDetailPageProps) 
     }
   }
 
-  return <TurnoDetailMobile turno={turno} numeroTalonario={numeroTalonario} />;
+  return <TurnoDetailMobile turno={turno as TurnoWithRelations} numeroTalonario={numeroTalonario} />;
 }

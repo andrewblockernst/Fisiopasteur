@@ -19,6 +19,7 @@ import Button from '../boton';
 
 interface TurnoDetailMobileProps {
   turno: TurnoConDetalles;
+  numeroTalonario?: string | null;
 }
 
 export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetailMobileProps) {
@@ -140,9 +141,9 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
                   <p className="font-medium text-gray-900">
                     {turno.paciente.nombre} {turno.paciente.apellido}
                   </p>
-                  {/* {turno.paciente.dni && (
+                  {turno.paciente.dni && (
                     <p className="text-sm text-gray-500">DNI: {turno.paciente.dni}</p>
-                  )} */}
+                  )}
                 </div>
               </div>
               
@@ -188,9 +189,9 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
                 <p className="font-medium text-gray-900">
                   {turno.especialista.nombre} {turno.especialista.apellido}
                 </p>
-                {/* {turno.especialidad && (
+                {turno.especialidad && (
                   <p className="text-sm text-gray-500">{turno.especialidad.nombre}</p>
-                )} */}
+                )}
               </div>
             </div>
           </div>

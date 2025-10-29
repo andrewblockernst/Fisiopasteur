@@ -1,23 +1,10 @@
 'use client';
 
 import { create } from 'zustand';
-import type { Tables } from '@/types/database.types';
+import type { TurnoWithRelations } from '@/types/extended-database.types';
 
-type Turno = Tables<'turno'>;
-type Usuario = Tables<'usuario'>;
-type Box = Tables<'box'>;
-
-export interface TurnoConDetalles extends Turno {
-  especialista?: Usuario;
-  box?: Box;
-  paciente?: {
-    id_paciente: number;
-    nombre: string;
-    apellido: string;
-    telefono?: string;
-    email?: string;
-  };
-}
+// Exportar TurnoWithRelations como TurnoConDetalles para compatibilidad con código existente
+export type TurnoConDetalles = TurnoWithRelations;
 
 interface TurnoStore {
   turnos: TurnoConDetalles[];

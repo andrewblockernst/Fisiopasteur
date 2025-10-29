@@ -30,7 +30,7 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
   const [showNuevoTurnoModal, setShowNuevoTurnoModal] = useState(false);
 
   // ✨ Función para calcular el número de talonario
-  const calcularNumeroTalonario = (turno: TurnoWithRelations): string | null => {
+  const calcularNumeroTalonario = (turno: TurnoConDetalles): string | null => {
     if (!turno.id_paciente || !turno.id_especialidad) return null;
 
     // Filtrar turnos del mismo paciente y especialidad (sin importar mes/año)
@@ -245,7 +245,7 @@ function TurnoCard({
   numeroTalonario,
   onClick 
 }: { 
-  turno: TurnoWithRelations; 
+  turno: TurnoConDetalles; 
   numeroTalonario: string | null;
   onClick: () => void;
 }) {
@@ -295,9 +295,9 @@ function TurnoCard({
               </span>
             )}
           </div>
-          {/* {turno.paciente?.dni && (
+          {turno.paciente?.dni && (
             <p className="text-sm text-neutral-600">DNI: {turno.paciente.dni}</p>
-          )} */}
+          )}
         </div>
         <ChevronRight className="w-5 h-5 text-neutral-400 ml-2" />
       </div>
@@ -312,9 +312,9 @@ function TurnoCard({
           <span className="text-sm text-neutral-700">
             {turno.especialista.nombre} {turno.especialista.apellido}
           </span>
-          {/* {turno.especialidad && (
+          {turno.especialidad && (
             <span className="text-sm text-neutral-500">• {turno.especialidad.nombre}</span>
-          )} */}
+          )}
         </div>
       )}
 
