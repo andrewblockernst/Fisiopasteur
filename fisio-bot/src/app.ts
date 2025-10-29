@@ -933,6 +933,44 @@ const main = async () => {
             service: 'Fisiopasteur WhatsApp Bot'
         }))
     })
+    
+    // Endpoint para forzar logout y regenerar QR
+    adapterProvider.server.post('/api/logout', async (req, res) => {
+        try {
+            console.log('🔄 Forzando logout y regeneración de QR...')
+            
+            // Intentar cerrar sesión si existe
+            if (adapterProvider.vendor) {
+                try {
+                    // @ts-ignore - logout puede no estar tipado correctamente
+                    if (typeof adapterProvider.vendor.logout === 'function') {
+                        // @ts-ignore
+                        await adapterProvider.vendor.logout()
+                        console.log('✅ Sesión cerrada correctamente')
+                    } else {
+                        console.log('⚠️ Método logout no disponible, reinicia el bot manualmente')
+                    }
+                } catch (error) {
+                    console.log('⚠️ No se pudo cerrar sesión (puede que no existiera):', error)
+                }
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            return res.end(JSON.stringify({ 
+                status: 'success',
+                message: 'Sesión cerrada. Reinicia el bot para generar nuevo QR.',
+                instruction: 'Ejecuta: heroku restart -a fisiopasteur-whatsapp-bot'
+            }))
+        } catch (error) {
+            console.error('❌ Error forzando logout:', error)
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            return res.end(JSON.stringify({ 
+                status: 'error',
+                message: 'Error al cerrar sesión',
+                details: error instanceof Error ? error.message : 'Error desconocido'
+            }))
+        }
+    })
 
     console.log(`🤖 Bot de Fisiopasteur iniciado en puerto ${PORT}`)
     console.log(`📱 Endpoints disponibles:`)
