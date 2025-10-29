@@ -1,1 +1,1 @@
-web: bash start-with-proxy.sh
+web: npm start
