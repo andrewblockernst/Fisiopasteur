@@ -19,8 +19,8 @@ import { handleCerrarSesion } from '@/lib/actions/logOut.action';
 const Herramientas = () => {
   const router = useRouter();
 
-  const onCerrarSesion = () => {
-    handleCerrarSesion(router);
+  const onCerrarSesion = async () => {
+    await handleCerrarSesion(router);
   };
 
   return (

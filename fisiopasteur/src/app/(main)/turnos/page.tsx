@@ -2,8 +2,12 @@ import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEsp
 import TurnosPageContainer from "@/componentes/turnos/turnos-page-container";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 
-export default async function TurnosPage({ searchParams }: { searchParams: Promise<any> }) {
-  const params = await searchParams;
+export default async function TurnosPage({ searchParams }: { searchParams: any }) {
+  // Si searchParams es una promesa, espera; si no, úsalo directo
+  const params = typeof searchParams.then === "function"
+    ? await searchParams
+    : searchParams;
+
   
   const hoy = new Date().toISOString().split('T')[0];
   const filtros = {
