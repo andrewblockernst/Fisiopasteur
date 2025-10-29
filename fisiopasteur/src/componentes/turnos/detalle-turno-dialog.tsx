@@ -17,7 +17,7 @@ import {
   Save
 } from "lucide-react";
 import Image from "next/image";
-import type { TurnoWithRelations } from "@/types/database.types";
+import type { TurnoWithRelations } from "@/types";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 

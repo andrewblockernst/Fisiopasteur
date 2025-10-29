@@ -6,7 +6,7 @@ import AccionesTurno from "@/componentes/turnos/acciones-turno";
 import { DetalleTurnoDialog } from "@/componentes/turnos/detalle-turno-dialog";
 import { obtenerTurnos } from "@/lib/actions/turno.action";
 import Button from "../boton";
-import type { TurnoWithRelations } from "@/types/database.types";
+import type { TurnoWithRelations } from "@/types";
 
 export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }) {
 

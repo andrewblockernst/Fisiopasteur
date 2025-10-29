@@ -35,7 +35,7 @@ export function mapearTurnoParaBot(turno: TurnoConDetalles) {
     profesional: turno.especialista ? 
       `${turno.especialista.nombre} ${turno.especialista.apellido}` : 
       'Profesional',
-    especialidad: 'Consulta', // turno.especialidad?.nombre || 'Consulta',
+    especialidad: turno.especialidad?.nombre || 'Consulta',
     turnoId: turno.id_turno.toString(),
     centroMedico: 'Fisiopasteur'
   };
