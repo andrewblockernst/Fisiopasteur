@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
           placeholder="Tucorreo@gmail.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2 border rounded"
+          className="w-full px-3 py-2 border rounded placeholder: text-black"
         />
         <div className="flex gap-2">
           <Boton variant="primary" type="submit" className="w-full text-black">
