@@ -4,8 +4,23 @@ import { createBot, createProvider, createFlow, addKeyword, utils, EVENTS } from
 import { MemoryDB as Database } from '@builderbot/bot'
 import { BaileysProvider as Provider } from '@builderbot/provider-baileys'
 import { procesarRecordatoriosPendientes } from './recordatorios.service'
+// @ts-ignore - global-agent no tiene tipos oficiales
+import { bootstrap } from 'global-agent'
 
 const PORT = process.env.PORT ?? 3008
+
+// Configurar proxy de QuotaGuard si está disponible
+if (process.env.QUOTAGUARDSTATIC_URL) {
+    // Configurar variables de entorno para global-agent
+    process.env.GLOBAL_AGENT_HTTP_PROXY = process.env.QUOTAGUARDSTATIC_URL
+    process.env.GLOBAL_AGENT_HTTPS_PROXY = process.env.QUOTAGUARDSTATIC_URL
+    
+    // Inicializar global-agent para interceptar todas las conexiones
+    bootstrap()
+    
+    console.log('🔒 Proxy QuotaGuard configurado globalmente')
+    console.log('🌐 Todas las conexiones HTTP/HTTPS usarán el proxy')
+}
 
 // Tipos para los datos del turno
 interface TurnoData {
