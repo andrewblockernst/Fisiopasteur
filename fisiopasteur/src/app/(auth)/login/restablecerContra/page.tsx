@@ -38,7 +38,7 @@ export default function ResetPasswordPage() {
           placeholder="Escribe tu nueva contraseña"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2 border rounded"
+          className="w-full px-3 py-2 border rounded placeholder: text-black"
         />
         <Boton variant="primary" type="submit" className="w-full text-black">
           Guardar
