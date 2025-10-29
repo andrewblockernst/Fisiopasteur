@@ -4,8 +4,6 @@ import { createBot, createProvider, createFlow, addKeyword, utils, EVENTS } from
 import { MemoryDB as Database } from '@builderbot/bot'
 import { BaileysProvider as Provider } from '@builderbot/provider-baileys'
 import { procesarRecordatoriosPendientes } from './recordatorios.service'
-// @ts-ignore
-import qrcode from 'qrcode-terminal'
 
 const PORT = process.env.PORT ?? 3008
 
@@ -282,14 +280,7 @@ const main = async () => {
         console.log('\n' + '='.repeat(50))
         console.log('📱 CÓDIGO QR PARA WHATSAPP:')
         console.log('='.repeat(50))
-        
-        // Mostrar QR en ASCII para terminal
-        qrcode.generate(qr, { small: true })
-        
-        // También mostrar el texto por si acaso
-        console.log('\nCódigo QR en texto (por si el ASCII no se ve):')
         console.log(qr)
-        
         console.log('='.repeat(50))
         console.log('⚠️  Escanea este QR con WhatsApp en tu teléfono:')
         console.log('   1. Abre WhatsApp en tu teléfono')
@@ -299,25 +290,8 @@ const main = async () => {
         console.log('='.repeat(50) + '\n')
     })
     
-    adapterProvider.on('auth_failure', async (error) => {
+    adapterProvider.on('auth_failure', (error) => {
         console.error('❌ Error de autenticación:', error)
-        
-        // Si es error 405, eliminar sesiones corruptas y reintentar
-        if (error && error.toString().includes('405')) {
-            console.log('🔄 Detectado error 405 - Intentando limpiar sesión corrupta...')
-            try {
-                const fs = await import('fs')
-                const sessionsPath = join(process.cwd(), 'bot_sessions')
-                if (fs.existsSync(sessionsPath)) {
-                    fs.rmSync(sessionsPath, { recursive: true, force: true })
-                    console.log('✅ Sesiones eliminadas. Reinicia el bot para generar nuevo QR.')
-                } else {
-                    console.log('ℹ️ No hay sesiones para eliminar.')
-                }
-            } catch (cleanError) {
-                console.error('❌ Error limpiando sesiones:', cleanError)
-            }
-        }
     })
     
     adapterProvider.on('disconnected', (reason) => {
@@ -339,8 +313,6 @@ const main = async () => {
     // Escuchar evento QR y mostrarlo en logs para Heroku
     adapterProvider.on('qr', (qr) => {
         console.log('🔥🔥🔥 CODIGO QR PARA ESCANEAR 🔥🔥🔥')
-        qrcode.generate(qr, { small: true })
-        console.log('\nTexto del QR:')
         console.log(qr)
         console.log('🔥🔥🔥 ESCANEA ESTE CODIGO CON WHATSAPP 🔥🔥🔥')
     })
@@ -960,44 +932,6 @@ const main = async () => {
             timestamp: new Date().toISOString(),
             service: 'Fisiopasteur WhatsApp Bot'
         }))
-    })
-    
-    // Endpoint para forzar logout y regenerar QR
-    adapterProvider.server.post('/api/logout', async (req, res) => {
-        try {
-            console.log('🔄 Forzando logout y regeneración de QR...')
-            
-            // Intentar cerrar sesión si existe
-            if (adapterProvider.vendor) {
-                try {
-                    // @ts-ignore - logout puede no estar tipado correctamente
-                    if (typeof adapterProvider.vendor.logout === 'function') {
-                        // @ts-ignore
-                        await adapterProvider.vendor.logout()
-                        console.log('✅ Sesión cerrada correctamente')
-                    } else {
-                        console.log('⚠️ Método logout no disponible, reinicia el bot manualmente')
-                    }
-                } catch (error) {
-                    console.log('⚠️ No se pudo cerrar sesión (puede que no existiera):', error)
-                }
-            }
-            
-            res.writeHead(200, { 'Content-Type': 'application/json' })
-            return res.end(JSON.stringify({ 
-                status: 'success',
-                message: 'Sesión cerrada. Reinicia el bot para generar nuevo QR.',
-                instruction: 'Ejecuta: heroku restart -a fisiopasteur-whatsapp-bot'
-            }))
-        } catch (error) {
-            console.error('❌ Error forzando logout:', error)
-            res.writeHead(500, { 'Content-Type': 'application/json' })
-            return res.end(JSON.stringify({ 
-                status: 'error',
-                message: 'Error al cerrar sesión',
-                details: error instanceof Error ? error.message : 'Error desconocido'
-            }))
-        }
     })
 
     console.log(`🤖 Bot de Fisiopasteur iniciado en puerto ${PORT}`)
