@@ -40,6 +40,11 @@ export function DetalleClaseModal({
   const { addToast } = useToastStore();
   
   // ============= ESTADO INTERNO PARA LOS TURNOS =============
+  // Horarios válidos para Pilates (igual que componenteSemanal)
+  const HORARIOS_PILATES = [
+    "08:00", "09:00", "10:00", "11:00",
+    "14:30", "15:30", "16:30", "17:30", "18:30", "19:30", "20:30", "21:30"
+  ];
   const [turnos, setTurnos] = useState(turnosIniciales);
   const [modoResolucionConflicto, setModoResolucionConflicto] = useState(false);
   const [especialistaSeleccionado, setEspecialistaSeleccionado] = useState('');
@@ -48,6 +53,17 @@ export function DetalleClaseModal({
   const [mostrarConfirmacionEliminar, setMostrarConfirmacionEliminar] = useState(false);
   const [dificultadSeleccionada, setDificultadSeleccionada] = useState<'principiante' | 'intermedio' | 'avanzado'>('principiante');
   const [cambiosPendientes, setCambiosPendientes] = useState(false);
+
+  // ================= MOVER UN ÚNICO TURNO (fecha + hora) =================
+  const [movingTurnoId, setMovingTurnoId] = useState<number | null>(null);
+  const [movingFecha, setMovingFecha] = useState<string | null>(null);
+  const [movingHora, setMovingHora] = useState<string | null>(null);
+  const [movingLoading, setMovingLoading] = useState(false);
+  // ======= MOVER TODA LA CLASE (header) =======
+  const [movingClaseFecha, setMovingClaseFecha] = useState<string | null>(null);
+  const [movingClaseHora, setMovingClaseHora] = useState<string | null>(null);
+  const [movingClaseLoading, setMovingClaseLoading] = useState(false);
+  const [movingClaseDisponible, setMovingClaseDisponible] = useState<boolean | null>(null);
 
   // ============= NUEVOS ESTADOS PARA BÚSQUEDA DE PACIENTES =============
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
@@ -117,6 +133,38 @@ export function DetalleClaseModal({
     return new Date(year, month - 1, day);
   })() : null;
 
+  // Sincronizar valores del header para mover la clase cuando cambian fecha/hora
+  useEffect(() => {
+    setMovingClaseFecha(fechaClase ?? null);
+    setMovingClaseHora(horaClase ?? null);
+  }, [fechaClase, horaClase]);
+
+  // Verificar disponibilidad automáticamente cuando el usuario cambia la fecha/hora del header
+  useEffect(() => {
+    let mounted = true;
+    setMovingClaseDisponible(null); // resetear mientras el usuario edita
+
+    const isValid = movingClaseFecha && movingClaseHora && (movingClaseFecha !== fechaClase || movingClaseHora !== horaClase);
+    if (!isValid) return;
+
+    const timeout = setTimeout(async () => {
+      try {
+        const excludeIds = turnos.map(t => t.id_turno);
+        const disponibilidad = await checkDisponibilidadMultiple(movingClaseFecha as string, movingClaseHora as string, excludeIds);
+        if (!mounted) return;
+        setMovingClaseDisponible(Boolean(disponibilidad.ok));
+      } catch (error) {
+        console.error('Error verificando disponibilidad automática:', error);
+        if (mounted) setMovingClaseDisponible(false);
+      }
+    }, 350);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
+  }, [movingClaseFecha, movingClaseHora, fechaClase, horaClase, turnos]);
+
   // Verificar si hay conflicto de especialistas
   const especialistasUnicos = [...new Set(turnos.map(t => t.id_especialista))];
   const hayConflicto = especialistasUnicos.length > 1;
@@ -140,7 +188,6 @@ export function DetalleClaseModal({
       const fechaClase = primeraClase?.fecha;
       const horaClase = primeraClase?.hora?.slice(0, 5);
       
-      console.log('🔄 Recargando datos del modal para:', { fechaClase, horaClase });
       
       const { obtenerTurnosConFiltros } = await import("@/lib/actions/turno.action");
       
@@ -159,7 +206,6 @@ export function DetalleClaseModal({
           turno.id_especialista === primeraClase.id_especialista
         );
         
-        console.log('✅ Datos recargados del modal:', turnosClase.length, 'participantes');
         setTurnos(turnosClase);
         
         return turnosClase;
@@ -172,6 +218,122 @@ export function DetalleClaseModal({
     
     return turnos;
   };
+
+  // ================= FUNCION: Verificar disponibilidad para fecha/hora (ignora conflicto consigo mismo si se pasa excludeTurnoId) =================
+  const checkDisponibilidad = async (fecha: string, hora: string, excludeTurnoId?: number) => {
+    try {
+      const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
+      const horaFormateada = hora.endsWith(':00') ? hora : `${hora}:00`;
+      const res = await verificarDisponibilidadPilates(fecha, horaFormateada);
+
+      if (!res || !res.success) {
+        return { ok: false, message: res?.error || 'Error verificando disponibilidad' };
+      }
+
+      if (res.disponible === true) return { ok: true };
+
+      const conflictos = res.conflictos as any[] | undefined;
+      if (Array.isArray(conflictos) && excludeTurnoId) {
+        if (conflictos.length === 1 && Number(conflictos[0].id_turno) === Number(excludeTurnoId)) {
+          return { ok: true };
+        }
+      }
+
+      return { ok: false, message: 'Horario no disponible' };
+    } catch (error) {
+      console.error('Error checkDisponibilidad:', error);
+      return { ok: false, message: 'Error verificando disponibilidad' };
+    }
+  };
+
+  // Similar a checkDisponibilidad pero acepta un array de ids a excluir (para mover toda la clase)
+  const checkDisponibilidadMultiple = async (fecha: string, hora: string, excludeTurnoIds?: number[]) => {
+    try {
+      const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
+      const horaFormateada = hora.endsWith(':00') ? hora : `${hora}:00`;
+      const res = await verificarDisponibilidadPilates(fecha, horaFormateada);
+
+      if (!res || !res.success) {
+        return { ok: false, message: res?.error || 'Error verificando disponibilidad' };
+      }
+
+      if (res.disponible === true) return { ok: true };
+
+      const conflictos = res.conflictos as any[] | undefined;
+      if (Array.isArray(conflictos) && Array.isArray(excludeTurnoIds) && excludeTurnoIds.length > 0) {
+        // Si todos los conflictos están dentro de excludeTurnoIds, lo consideramos disponible
+        const conflictosFiltrados = conflictos.filter(c => !excludeTurnoIds.includes(Number(c.id_turno)));
+        if (conflictosFiltrados.length === 0) {
+          return { ok: true };
+        }
+      }
+
+      return { ok: false, message: 'Horario no disponible' };
+    } catch (error) {
+      console.error('Error checkDisponibilidadMultiple:', error);
+      return { ok: false, message: 'Error verificando disponibilidad' };
+    }
+  };
+
+  // Helpers para validar/normalizar hora según cuadrilla de Pilates
+  const HORA_MIN_AM = '08:00';
+  const HORA_MAX_AM = '11:00';
+  const HORA_MIN_PM = '14:30';
+  const HORA_MAX_PM = '21:30';
+
+  const timeToMinutes = (t: string) => {
+    const [hh, mm] = t.split(':').map(Number);
+    return hh * 60 + (mm || 0);
+  };
+
+  const isHoraEnRango = (t: string) => {
+    const m = timeToMinutes(t);
+    return (m >= timeToMinutes(HORA_MIN_AM) && m <= timeToMinutes(HORA_MAX_AM)) ||
+           (m >= timeToMinutes(HORA_MIN_PM) && m <= timeToMinutes(HORA_MAX_PM));
+  };
+
+  const normalizeHoraToNearest = (t: string) => {
+    const m = timeToMinutes(t);
+    if (m <= timeToMinutes(HORA_MIN_AM)) return HORA_MIN_AM;
+    if (m >= timeToMinutes(HORA_MIN_AM) && m <= timeToMinutes(HORA_MAX_AM)) return t;
+    if (m > timeToMinutes(HORA_MAX_AM) && m < timeToMinutes(HORA_MIN_PM)) return HORA_MIN_PM;
+    if (m >= timeToMinutes(HORA_MIN_PM) && m <= timeToMinutes(HORA_MAX_PM)) return t;
+    return HORA_MAX_PM;
+  };
+
+  const handleMovingClaseHoraChange = (value: string) => {
+    if (!value) {
+      setMovingClaseHora(value);
+      return;
+    }
+
+    const normalized = normalizeHoraToNearest(value);
+    if (normalized !== value) {
+      addToast({ variant: 'info', message: 'Hora ajustada', description: `La hora se ajustó a ${normalized} según la cuadrilla disponible.` });
+    }
+    setMovingClaseHora(normalized);
+  };
+
+  // Generar lista de horarios permitidos (cada 15 minutos) dentro de las franjas
+  const generateAllowedTimes = () => {
+    const times: string[] = [];
+    const pushRange = (start: string, end: string) => {
+      let current = timeToMinutes(start);
+      const endM = timeToMinutes(end);
+      while (current <= endM) {
+        const hh = Math.floor(current / 60).toString().padStart(2, '0');
+        const mm = (current % 60).toString().padStart(2, '0');
+        times.push(`${hh}:${mm}`);
+        current += 15; // 15-minute steps
+      }
+    };
+
+    pushRange(HORA_MIN_AM, HORA_MAX_AM);
+    pushRange(HORA_MIN_PM, HORA_MAX_PM);
+    return times;
+  };
+
+  const allowedTimes = generateAllowedTimes();
 
   // Inicializar valores cuando se abre el modal
   useEffect(() => {
@@ -346,7 +508,6 @@ export function DetalleClaseModal({
     setIsSubmitting(true);
     
     try {
-      console.log('🔄 Iniciando resolución de conflicto...');
       
       for (const turno of turnos) {
         if (turno.id_especialista !== especialistaSeleccionado) {
@@ -560,10 +721,8 @@ export function DetalleClaseModal({
       const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
       const ahora = new Date();
       
-      console.log('✅ Todos los horarios validados - procediendo a crear turnos...');
 
       // ============= 🚨 VALIDACIÓN PREVIA DE DISPONIBILIDAD =============
-      console.log('🔍 Validando disponibilidad ANTES de crear turnos...');
       const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
       const horariosOcupados: string[] = [];
 
@@ -616,7 +775,6 @@ export function DetalleClaseModal({
         return;
       }
 
-      console.log('✅ Todos los horarios están disponibles, procediendo a crear...');
 
       const turnosParaLote = [];
 
@@ -651,7 +809,6 @@ export function DetalleClaseModal({
           const weeksDiff = Math.floor(diasDiferencia / 7);
           
           if (!esMismaFecha && !esPasado && weeksDiff < semanas) {
-            console.log(`✅ Creando turno para: ${fechaFormateada} (${fechaTurno.toLocaleDateString('es', { weekday: 'long' })}) - semana ${semana}, día ${diaSeleccionado}, weeksDiff: ${weeksDiff}, diasDiferencia: ${diasDiferencia}`);
             
             // Crear turnos para cada participante
             for (const pacienteId of pacientesSeleccionados) {
@@ -667,17 +824,13 @@ export function DetalleClaseModal({
             }
           } else {
             if (esMismaFecha) {
-              console.log(`⏭️ Saltando clase original: ${fechaFormateada}`);
             } else if (esPasado) {
-              console.log(`⏭️ Saltando clase pasada: ${fechaFormateada} ${horaClase}`);
             } else if (weeksDiff >= semanas) {
-              console.log(`⏭️ Saltando turno fuera de rango: ${fechaFormateada} (weeksDiff: ${weeksDiff} >= ${semanas})`);
             }
           }
         }
       }
 
-      console.log('🔄 Total de turnos a crear:', turnosParaLote.length);
 
       // ✅ Validar que haya turnos para crear
       if (turnosParaLote.length === 0) {
@@ -1089,6 +1242,96 @@ export function DetalleClaseModal({
                 {fechaClaseDate ? format(fechaClaseDate, "EEEE dd/MM", { locale: es }) : ''} - {horaClase}
               </span>
             </div>
+
+            {/* ===== Controles para mover toda la clase (solo esta ocurrencia) ===== */}
+            <div className="mt-3 flex flex-col items-start gap-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={movingClaseFecha ?? ''}
+                  onChange={(e) => setMovingClaseFecha(e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded text-sm"
+                />
+                <select
+                  value={movingClaseHora ?? ''}
+                  onChange={(e) => handleMovingClaseHoraChange(e.target.value)}
+                  className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+                >
+                  <option value="">Seleccionar hora</option>
+                  {HORARIOS_PILATES.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <button
+                  onClick={async () => {
+                    if (!movingClaseFecha || !movingClaseHora) {
+                      addToast({ variant: 'error', message: 'Fecha/hora incompleta', description: 'Completá fecha y hora antes de mover la clase.' });
+                      return;
+                    }
+
+                    setMovingClaseLoading(true);
+                    try {
+                      const excludeIds = turnos.map(t => t.id_turno);
+                      const disponibilidad = await checkDisponibilidadMultiple(movingClaseFecha, movingClaseHora, excludeIds);
+                      if (!disponibilidad.ok) {
+                        addToast({ variant: 'error', message: 'Horario ocupado', description: disponibilidad.message });
+                        return;
+                      }
+
+                      let exitosos = 0;
+                      let fallidos = 0;
+
+                      for (const turno of turnos) {
+                        const res = await actualizarTurno(turno.id_turno, { fecha: movingClaseFecha, hora: `${movingClaseHora}:00` });
+                        if (res && res.success) exitosos++; else fallidos++;
+                      }
+
+                      if (fallidos === 0) {
+                        addToast({ variant: 'success', message: 'Clase movida', description: `Se movieron ${exitosos} turnos a ${movingClaseFecha} ${movingClaseHora}` });
+                        await recargarDatosModal();
+                        if (onTurnosActualizados) await Promise.resolve(onTurnosActualizados());
+                        onClose(); // Cerrar el modal automáticamente
+                      } else {
+                        addToast({ variant: 'warning', message: 'Movido parcialmente', description: `${exitosos} éxitos, ${fallidos} fallidos.` });
+                        await recargarDatosModal();
+                        if (onTurnosActualizados) await Promise.resolve(onTurnosActualizados());
+                      }
+
+                    } catch (error) {
+                      console.error('Error moviendo clase:', error);
+                      addToast({ variant: 'error', message: 'Error', description: 'No se pudo mover la clase' });
+                    } finally {
+                      setMovingClaseLoading(false);
+                    }
+                  }}
+                  disabled={
+                    movingClaseLoading ||
+                    !(
+                      movingClaseFecha && movingClaseHora && (movingClaseFecha !== fechaClase || movingClaseHora !== horaClase)
+                    ) ||
+                    movingClaseDisponible !== true
+                  }
+                  className="px-3 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 text-sm w-full md:w-auto"
+                  title={
+                    movingClaseLoading
+                      ? 'Moviendo...'
+                      : movingClaseDisponible === false
+                        ? 'Horario no disponible'
+                        : !(movingClaseFecha && movingClaseHora) || (movingClaseFecha === fechaClase && movingClaseHora === horaClase)
+                          ? 'Seleccioná una fecha y hora diferente'
+                          : 'Mover esta clase'
+                  }
+                >
+                  {movingClaseLoading ? 'Moviendo...' : 'MOVER'}
+                </button>
+                {movingClaseDisponible === false && (
+                  <div className="text-xs text-red-600 mt-1">Horario no disponible</div>
+                )}
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <Users className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
               <span>{pacientesSeleccionados.length}/4 participantes</span>
@@ -1172,24 +1415,36 @@ export function DetalleClaseModal({
           {pacientesSeleccionados.length > 0 && (
             <div className="mb-3 space-y-2">
               {pacientesSeleccionados.map(pacienteId => {
-                const paciente = pacientes.find(p => p.id_paciente === pacienteId);
-                if (!paciente) return null;
-                
-                return (
-                  <div key={pacienteId} className="flex items-center justify-between p-2 md:p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <span className="text-xs md:text-sm font-medium text-green-800">
-                      {paciente.nombre} {paciente.apellido}
-                    </span>
-                    <button
-                      onClick={() => eliminarPaciente(pacienteId)}
-                      className="text-red-500 hover:text-red-700 transition-colors"
-                      title="Eliminar participante"
-                    >
-                      <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
-                    </button>
-                  </div>
-                );
-              })}
+                    const paciente = pacientes.find(p => p.id_paciente === pacienteId);
+                    if (!paciente) return null;
+
+                    // Buscar el turno correspondiente en esta clase para mostrar fecha/hora
+                    const turnoPaciente = turnos.find(t => Number(t.id_paciente) === Number(pacienteId));
+                    const turnoFecha = turnoPaciente?.fecha ?? fechaClase;
+                    const turnoHoraFull = turnoPaciente?.hora ?? '';
+                    const turnoHora = turnoHoraFull ? turnoHoraFull.slice(0,5) : horaClase;
+
+                    return (
+                      <div key={pacienteId} className="flex items-center justify-between p-2 md:p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex flex-col">
+                          <span className="text-xs md:text-sm font-medium text-green-800">
+                            {paciente.nombre} {paciente.apellido}
+                          </span>
+                          <span className="text-xs text-gray-600">
+                            Fecha: {turnoFecha} {turnoPaciente?.hora ? `• ${turnoHora}` : ''}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => eliminarPaciente(pacienteId)}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="Eliminar participante"
+                        >
+                          <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
             </div>
           )}
 
