@@ -59,16 +59,6 @@ export function NuevoTurnoModal({
 }: NuevoTurnoModalProps) {
   // 🔍 LOG DE DEBUGGING - Ver qué datos recibe el modal
   useEffect(() => {
-    if (isOpen) {
-      console.log('🔍 ===== MODAL NUEVO TURNO ABIERTO =====');
-      console.log('📅 Fecha seleccionada:', fechaSeleccionada);
-      console.log('⏰ Hora seleccionada:', horaSeleccionada);
-      console.log('👨‍⚕️ Especialistas recibidos (props):', especialistasProp);
-      console.log('👥 Pacientes recibidos (props):', pacientesProp);
-      console.log('📊 Cantidad de especialistas:', especialistasProp?.length || 0);
-      console.log('📊 Cantidad de pacientes:', pacientesProp?.length || 0);
-      console.log('=======================================');
-    }
   }, [isOpen, fechaSeleccionada, horaSeleccionada, especialistasProp, pacientesProp]);
 
   const { user, loading: authLoading } = useAuth();
@@ -693,9 +683,7 @@ export function NuevoTurnoModal({
         return;
       }
 
-      // ============= CON REPETICIÓN: CREAR MÚLTIPLES SESIONES =============
-      console.log('🔄 Creando paquete de sesiones...');
-      
+      // ============= CON REPETICIÓN: CREAR MÚLTIPLES SESIONES =============      
       const [year, month, day] = formData.fecha.split('-').map(Number);
       const fechaBaseParsed = new Date(year, month - 1, day);
       
@@ -778,8 +766,6 @@ export function NuevoTurnoModal({
         return;
       }
 
-      console.log('📊 Creando', turnosParaCrear.length, 'sesiones...');
-
       let exitosos = 0;
       let fallidos = 0;
       const turnosCreados: any[] = [];
@@ -818,7 +804,6 @@ export function NuevoTurnoModal({
       // ✅ ENVIAR UNA SOLA NOTIFICACIÓN AGRUPADA CON TODOS LOS TURNOS
       if (turnosCreados.length > 0) {
         try {
-          console.log('📱 Enviando notificación agrupada para', turnosCreados.length, 'turnos');
           
           // Importar el servicio de WhatsApp
           const { enviarNotificacionGrupalTurnos } = await import('@/lib/services/whatsapp-bot.service');
