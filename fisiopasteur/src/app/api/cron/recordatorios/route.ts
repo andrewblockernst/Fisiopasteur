@@ -3,7 +3,6 @@ import { ejecutarCronRecordatorios } from '@/lib/services/cron-recordatorios.ser
 
 export async function GET() {
   try {
-    console.log('🔄 Ejecutando cron de recordatorios via API...');
     
     const resultado = await ejecutarCronRecordatorios();
     
