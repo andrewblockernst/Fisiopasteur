@@ -290,9 +290,10 @@ const main = async () => {
         console.log('='.repeat(50) + '\n')
     })
     
-    adapterProvider.on('auth_failure', (error) => {
-        console.error('❌ Error de autenticación:', error)
-    })
+    // COMENTADO TEMPORALMENTE PARA DEBUGGING
+    // adapterProvider.on('auth_failure', (error) => {
+    //     console.error('❌ Error de autenticación:', error)
+    // })
     
     adapterProvider.on('disconnected', (reason) => {
         console.log('🔌 WhatsApp desconectado:', reason)
@@ -459,11 +460,11 @@ const main = async () => {
         console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 2 minutos)')
     })
     
-    // Escuchar cuando el bot se desconecta para detener recordatorios
-    adapterProvider.on('auth_failure', () => {
-        console.log('❌ Falla de autenticación')
-        detenerProcesadorRecordatorios()
-    })
+    // COMENTADO TEMPORALMENTE PARA DEBUGGING - VER SI EL BOT FUNCIONA DESPUÉS DEL ERROR 405
+    // adapterProvider.on('auth_failure', () => {
+    //     console.log('❌ Falla de autenticación')
+    //     detenerProcesadorRecordatorios()
+    // })
     
     // Manejar cierre del proceso
     process.on('SIGTERM', () => {

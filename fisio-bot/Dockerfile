@@ -1,40 +1,30 @@
-# Image size ~ 400MB
-FROM node:21-alpine3.18 as builder
+# Usar Node.js 20 LTS (Alpine para imagen más pequeña)
+FROM node:20-alpine
+
+# Instalar dependencias del sistema necesarias para sharp y jimp
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
-ENV PNPM_HOME=/usr/local/bin
+# Copiar package files
+COPY package*.json ./
 
+# Instalar TODAS las dependencias (necesitamos tsx que está en devDependencies)
+RUN npm ci
+
+# Copiar el código fuente
 COPY . .
 
-COPY package*.json *-lock.yaml ./
+# Exponer el puerto (Heroku lo asigna dinámicamente via $PORT)
+EXPOSE 3008
 
-RUN apk add --no-cache --virtual .gyp \
-        python3 \
-        make \
-        g++ \
-    && apk add --no-cache git \
-    && pnpm install && pnpm run build \
-    && apk del .gyp
-
-FROM node:21-alpine3.18 as deploy
-
-WORKDIR /app
-
-ARG PORT
-ENV PORT $PORT
-EXPOSE $PORT
-
-COPY --from=builder /app/assets ./assets
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/*.json /app/*-lock.yaml ./
-
-RUN corepack enable && corepack prepare pnpm@latest --activate 
-ENV PNPM_HOME=/usr/local/bin
-
-RUN npm cache clean --force && pnpm install --production --ignore-scripts \
-    && addgroup -g 1001 -S nodejs && adduser -S -u 1001 nodejs \
-    && rm -rf $PNPM_HOME/.npm $PNPM_HOME/.node-gyp
-
+# Comando para iniciar la app (usa tsx para ejecutar TypeScript directamente)
 CMD ["npm", "start"]
