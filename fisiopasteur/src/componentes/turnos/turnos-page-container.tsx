@@ -43,12 +43,9 @@ export default function TurnosPageContainer({
   useEffect(() => {
     const verificarTurnosVencidos = async () => {
       try {
-        console.log('🔍 Verificando turnos vencidos...');
         const resultado = await actualizarTurnosVencidos();
         
         if (resultado.success && resultado.data && resultado.data.length > 0) {
-          console.log(`✅ ${resultado.data.length} turno(s) actualizado(s) a vencido`);
-          // Recargar la página para mostrar los cambios
           router.refresh();
         }
       } catch (error) {
