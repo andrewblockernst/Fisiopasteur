@@ -320,12 +320,6 @@ export function NuevoTurnoPilatesModal({
 
       // ============= SIN REPETICIÓN: CREAR TURNOS SIMPLES =============
       if (!mostrarRepeticion || diasSeleccionados.length === 0) {
-        console.log('🔄 Creando turnos simples para:', {
-          fecha,
-          hora,
-          especialista: formData.especialistaId,
-          pacientes: formData.pacientesSeleccionados
-        });
 
         const resultados = [];
         for (const pacienteId of formData.pacientesSeleccionados) {
@@ -365,7 +359,6 @@ export function NuevoTurnoPilatesModal({
       }
 
       // ============= CON REPETICIÓN: CREAR TURNOS EN LOTE =============
-      console.log('🔄 Creando turnos con repetición');
       
       const turnosParaCrear = [];
       const diaBaseNumero = getDay(fechaSeleccionada);
@@ -393,7 +386,6 @@ export function NuevoTurnoPilatesModal({
             const esPasado = esFechaHoraPasada(fechaFormateada, hora);
 
             if (!esPasado) {
-              console.log(`✅ Creando turno para: ${fechaFormateada} (semana ${semana}, día ${diaSeleccionado})`);
               
               turnosParaCrear.push({
                 id_paciente: pacienteId.toString(),
@@ -405,7 +397,6 @@ export function NuevoTurnoPilatesModal({
                 dificultad: formData.dificultad
               });
             } else {
-              console.log(`⏭️ Saltando clase pasada: ${fechaFormateada} ${hora}`);
             }
           }
         }
@@ -421,7 +412,6 @@ export function NuevoTurnoPilatesModal({
         return;
       }
 
-      console.log('🔄 Turnos a crear:', turnosParaCrear.length);
 
       const resultado = await crearTurnosEnLote(turnosParaCrear);
 

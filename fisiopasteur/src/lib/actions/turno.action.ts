@@ -108,8 +108,6 @@ export async function obtenerTurnosConFiltros(filtros?: {
   const supabase = await createClient();
   
   try {
-    console.log('🔍 Filtros recibidos en obtenerTurnosConFiltros:', filtros);
-    
     let query = supabase
       .from("turno")
       .select(`
@@ -131,27 +129,22 @@ export async function obtenerTurnosConFiltros(filtros?: {
     // Aplicar filtros de rango de fechas
     if (filtros?.fecha_desde) {
       query = query.gte("fecha", filtros.fecha_desde);
-      console.log('📅 Filtro fecha_desde aplicado:', filtros.fecha_desde);
     }
     if (filtros?.fecha_hasta) {
       query = query.lte("fecha", filtros.fecha_hasta);
-      console.log('📅 Filtro fecha_hasta aplicado:', filtros.fecha_hasta);
     }
     
     // Filtro por especialista específico
     if (typeof filtros?.especialista_id === "string") {
       query = query.eq("id_especialista", filtros.especialista_id);
-      console.log('👨‍⚕️ Filtro especialista aplicado:', filtros.especialista_id);
     }
     
     // Filtro por especialidad del turno
     if (filtros?.especialidad_id) {
       query = query.eq("id_especialidad", filtros.especialidad_id);
-      console.log('🏥 Filtro especialidad aplicado:', filtros.especialidad_id);
     } else {
       // Si NO se especifica especialidad, EXCLUIR Pilates (id_especialidad = 4)
       query = query.neq("id_especialidad", 4);
-      console.log('🚫 Turnos de Pilates excluidos del calendario');
     }
     
     // Filtros de horario
@@ -172,11 +165,6 @@ export async function obtenerTurnosConFiltros(filtros?: {
     if (error) {
       console.error("Error al obtener turnos con filtros:", error);
       return { success: false, error: error.message };
-    }
-
-    console.log('📊 Turnos encontrados en BD:', data?.length || 0);
-    if (filtros?.especialidad_id === 4) {
-      console.log('🧘‍♀️ Turnos de Pilates específicos:', data);
     }
 
     return { success: true, data };
@@ -243,9 +231,6 @@ export async function crearTurno(
       return { success: false, error: error.message };
     }
 
-    console.log("✅ Turno creado exitosamente:", data.id_turno);
-    
-
     // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
     // ✅ Solo enviar notificaciones si enviarNotificacion === true
     if (enviarNotificacion) {
@@ -262,9 +247,7 @@ export async function crearTurno(
 
       // Verificar que el paciente tenga teléfono
       if (data.paciente?.telefono) {
-        console.log(`📱 Procesando notificaciones WhatsApp para turno ${data.id_turno}...`);
-
-        // 1. Registrar notificación de confirmación en BD
+          // 1. Registrar notificación de confirmación en BD
         const mensajeConfirmacion = `Turno confirmado para ${data.fecha} a las ${data.hora}`;
         const notifConfirmacion = await registrarNotificacionConfirmacion(
           data.id_turno,
@@ -293,11 +276,9 @@ export async function crearTurno(
           if (resultadoBot.status === 'success') {
             // Marcar como enviada exitosamente
             await marcarNotificacionEnviada(notifConfirmacion.data.id_notificacion);
-            console.log(`✅ Confirmación WhatsApp enviada para turno ${data.id_turno}`);
           } else {
             // Marcar como fallida
             await marcarNotificacionFallida(notifConfirmacion.data.id_notificacion);
-            console.log(`❌ Falló confirmación WhatsApp para turno ${data.id_turno}: ${resultadoBot.message}`);
           }
         }
 
@@ -307,14 +288,7 @@ export async function crearTurno(
         
         // ✅ USAR recordatorios del parámetro o los por defecto
         const tiposRecordatorio = recordatorios || ['1d', '2h'];
-        console.log(`🔍 Calculando recordatorios para turno ${data.id_turno}: tipos=[${tiposRecordatorio.join(', ')}], fecha=${data.fecha}, hora=${data.hora}`);
-        
         const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora, tiposRecordatorio);
-        console.log(`🔍 Tiempos calculados:`, JSON.stringify(
-          Object.fromEntries(
-            Object.entries(tiemposRecordatorio).map(([k, v]) => [k, v?.toISOString() || 'null'])
-          ), null, 2
-        ));
         
         // Filtrar solo los recordatorios válidos (no null)
         const recordatoriosValidos = Object.entries(tiemposRecordatorio)
@@ -323,8 +297,6 @@ export async function crearTurno(
             if (fecha) acc[tipo] = fecha;
             return acc;
           }, {} as Record<string, Date>);
-        
-        console.log(`🔍 Recordatorios válidos a guardar: ${Object.keys(recordatoriosValidos).join(', ')}`);
         
         if (Object.keys(recordatoriosValidos).length > 0) {
           const mensajeRecordatorio = `Recordatorio: Tu turno es el ${data.fecha} a las ${data.hora}`;
@@ -335,16 +307,11 @@ export async function crearTurno(
             mensajeRecordatorio,
             recordatoriosValidos
           );
-          
-          console.log(`🔍 Resultados de registro de notificaciones:`, JSON.stringify(resultadosNotif, null, 2));
-          
           const tiposConfigurados = Object.keys(recordatoriosValidos).join(', ');
-          console.log(`⏰ Recordatorios programados para turno ${data.id_turno}: ${tiposConfigurados}`);
           
           // 🚀 Trigger inmediato: disparar procesamiento de recordatorios sin esperar al polling
           try {
             const apiUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app';
-            console.log(`🔥 Disparando procesamiento inmediato de recordatorios en ${apiUrl}`);
             
             const response = await fetch(`${apiUrl}/api/cron/recordatorios`, {
               method: 'POST',
@@ -353,7 +320,6 @@ export async function crearTurno(
             
             if (response.ok) {
               const resultado = await response.json();
-              console.log(`✅ Procesamiento inmediato completado:`, resultado);
             } else {
               console.log(`⚠️ Procesamiento inmediato respondió con status ${response.status} (se procesará en el próximo ciclo)`);
             }
@@ -734,14 +700,10 @@ export async function verificarDisponibilidad(
 
     // ============= LÓGICA ESPECIAL PARA PILATES =============
     if (especialidad_id === 4) {
-      console.log(`🧘‍♀️ Verificando disponibilidad Pilates: ${data.length} participantes actuales`);
-      
       const pilatesTurnos = data.filter(t => t.id_especialidad === 4);
       const disponible = pilatesTurnos.length < 4;
-      
-      console.log(`🧘‍♀️ Pilates - Participantes: ${pilatesTurnos.length}/4, Disponible: ${disponible}`);
-      
-      return { 
+
+      return {
         success: true, 
         disponible,
         conflictos: disponible ? 0 : pilatesTurnos.length,
@@ -834,7 +796,6 @@ export async function obtenerProximoTurnoPorTelefono(telefono: string) {
       .single();
 
     if (pacienteError || !paciente) {
-      console.log(`No se encontró paciente con teléfono: ${telefono}`);
       return { success: true, data: null };
     }
 
@@ -944,8 +905,6 @@ export async function obtenerEspecialistas() {
       especialidad: null,
       usuario_especialidad: especialidadesMap.get(usuario.id_usuario) || []
     }));
-    
-    console.log(`✅ Especialistas obtenidos: ${especialistas.length}`);
 
     return { success: true, data: especialistas };
   } catch (error) {
@@ -1297,8 +1256,6 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
 
     // 4. Actualizar estado según resultado
     if (resultado.status === 'success') {
-      console.log(`✅ Notificación agrupada enviada a ${paciente.telefono} para ${turnos.length} turnos`);
-      
       if (notificacion) {
         await supabase
           .from("notificacion")
@@ -1338,9 +1295,6 @@ export async function actualizarTurnosVencidos() {
     const ahora = new Date();
     const fechaActual = ahora.toISOString().split('T')[0]; // yyyy-MM-dd
     const horaActual = ahora.toTimeString().split(' ')[0].substring(0, 8); // HH:MM:SS
-
-    console.log(`🕐 Verificando turnos vencidos... (${fechaActual} ${horaActual})`);
-
     // Obtener turnos "programado" que ya pasaron
     const { data: turnosProgramados, error: fetchError } = await supabase
       .from('turno')
@@ -1353,7 +1307,6 @@ export async function actualizarTurnosVencidos() {
     }
 
     if (!turnosProgramados || turnosProgramados.length === 0) {
-      console.log('✅ No hay turnos programados');
       return { success: true, data: [], mensaje: 'No hay turnos programados' };
     }
 
@@ -1364,7 +1317,6 @@ export async function actualizarTurnosVencidos() {
     });
 
     if (turnosVencidos.length === 0) {
-      console.log('✅ No hay turnos vencidos');
       return { success: true, data: [], mensaje: 'No hay turnos vencidos' };
     }
 
@@ -1382,10 +1334,7 @@ export async function actualizarTurnosVencidos() {
     if (updateError) {
       console.error('❌ Error actualizando turnos vencidos:', updateError);
       return { success: false, error: updateError.message };
-    }
-
-    console.log(`✅ ${turnosVencidos.length} turno(s) marcado(s) como vencido(s)`);
-    
+    }    
     // Revalidar las rutas para que se actualice la UI
     revalidatePath('/turnos');
     revalidatePath('/inicio');
