@@ -44,28 +44,51 @@ export function useAuth(): AuthState {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user && user.email) {
-          // Obtener información del usuario y su rol
-          const { data: userProfile, error } = await supabase
+          // ✅ MULTI-ORG: Obtener usuario y su rol desde usuario_organizacion
+          // Primero obtener el usuario
+          const { data: usuario } = await supabase
             .from('usuario')
+            .select('id_usuario, nombre, apellido, email, activo')
+            .eq('email', user.email)
+            .single();
+
+          if (!usuario) {
+            setAuthState({
+              isAuthenticated: true,
+              user: {
+                id: user.id,
+                email: user.email,
+                esAdmin: false,
+                esEspecialista: false,
+                esProgramador: false,
+                puedeGestionarTurnos: false
+              },
+              loading: false
+            });
+            return;
+          }
+
+          // Obtener el rol desde usuario_organizacion (primera org activa del usuario)
+          const { data: usuarioOrg, error } = await supabase
+            .from('usuario_organizacion')
             .select(`
-              id_usuario, 
-              nombre, 
-              apellido, 
-              email, 
-              activo,
+              id_usuario_organizacion,
               id_rol,
+              activo,
               rol:id_rol (
                 id,
                 nombre,
                 jerarquia
               )
             `)
-            .eq('email', user.email)
+            .eq('id_usuario', usuario.id_usuario)
+            .eq('activo', true)
+            .limit(1)
             .single();
 
-          if (userProfile && !error) {
+          if (usuarioOrg && !error) {
             // Verificar roles usando las constantes
-            const idRol = userProfile.id_rol;
+            const idRol = usuarioOrg.id_rol;
             const esAdmin = idRol === ROLES.ADMIN;
             const esEspecialista = idRol === ROLES.ESPECIALISTA;
             const esProgramador = idRol === ROLES.PROGRAMADOR;
@@ -76,15 +99,15 @@ export function useAuth(): AuthState {
               user: {
                 id: user.id,
                 email: user.email,
-                id_usuario: userProfile.id_usuario,
-                nombre: userProfile.nombre,
-                apellido: userProfile.apellido,
+                id_usuario: usuario.id_usuario,
+                nombre: usuario.nombre,
+                apellido: usuario.apellido,
                 id_rol: idRol,
                 esAdmin,
                 esEspecialista,
                 esProgramador,
                 puedeGestionarTurnos: puedeGestionarTurnosPermiso,
-                rol: userProfile.rol
+                rol: usuarioOrg.rol
               },
               loading: false
             });
@@ -126,26 +149,48 @@ export function useAuth(): AuthState {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user && session.user.email) {
-          // Obtener información del perfil cuando cambia la sesión
-          const { data: userProfile } = await supabase
+          // ✅ MULTI-ORG: Obtener usuario y su rol desde usuario_organizacion
+          const { data: usuario } = await supabase
             .from('usuario')
+            .select('id_usuario, nombre, apellido, email, activo')
+            .eq('email', session.user.email)
+            .single();
+
+          if (!usuario) {
+            setAuthState({
+              isAuthenticated: true,
+              user: {
+                id: session.user.id,
+                email: session.user.email,
+                esAdmin: false,
+                esEspecialista: false,
+                esProgramador: false,
+                puedeGestionarTurnos: false
+              },
+              loading: false
+            });
+            return;
+          }
+
+          // Obtener el rol desde usuario_organizacion
+          const { data: usuarioOrg } = await supabase
+            .from('usuario_organizacion')
             .select(`
-              id_usuario, 
-              nombre, 
-              apellido, 
-              email, 
-              activo,
+              id_usuario_organizacion,
               id_rol,
+              activo,
               rol:id_rol (
                 id,
                 nombre,
                 jerarquia
               )
             `)
-            .eq('email', session.user.email)
+            .eq('id_usuario', usuario.id_usuario)
+            .eq('activo', true)
+            .limit(1)
             .single();
 
-          const idRol = userProfile?.id_rol;
+          const idRol = usuarioOrg?.id_rol;
           const esAdmin = idRol === ROLES.ADMIN;
           const esEspecialista = idRol === ROLES.ESPECIALISTA;
           const esProgramador = idRol === ROLES.PROGRAMADOR;
@@ -156,15 +201,15 @@ export function useAuth(): AuthState {
             user: {
               id: session.user.id,
               email: session.user.email,
-              id_usuario: userProfile?.id_usuario,
-              nombre: userProfile?.nombre,
-              apellido: userProfile?.apellido,
+              id_usuario: usuario.id_usuario,
+              nombre: usuario.nombre,
+              apellido: usuario.apellido,
               id_rol: idRol,
               esAdmin,
               esEspecialista,
               esProgramador,
               puedeGestionarTurnos: puedeGestionarTurnosPermiso,
-              rol: userProfile?.rol
+              rol: usuarioOrg?.rol
             },
             loading: false
           });
