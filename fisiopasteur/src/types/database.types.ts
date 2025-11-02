@@ -117,6 +117,74 @@ export type Database = {
           },
         ]
       }
+      grupo_tratamiento: {
+        Row: {
+          created_at: string | null
+          fecha_inicio: string
+          id_especialidad: number | null
+          id_especialista: string | null
+          id_grupo: string
+          id_organizacion: string
+          id_paciente: number | null
+          nombre: string | null
+          tipo_plan: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          fecha_inicio: string
+          id_especialidad?: number | null
+          id_especialista?: string | null
+          id_grupo?: string
+          id_organizacion: string
+          id_paciente?: number | null
+          nombre?: string | null
+          tipo_plan?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          fecha_inicio?: string
+          id_especialidad?: number | null
+          id_especialista?: string | null
+          id_grupo?: string
+          id_organizacion?: string
+          id_paciente?: number | null
+          nombre?: string | null
+          tipo_plan?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grupo_tratamiento_id_especialidad_fkey"
+            columns: ["id_especialidad"]
+            isOneToOne: false
+            referencedRelation: "especialidad"
+            referencedColumns: ["id_especialidad"]
+          },
+          {
+            foreignKeyName: "grupo_tratamiento_id_especialista_fkey"
+            columns: ["id_especialista"]
+            isOneToOne: false
+            referencedRelation: "usuario"
+            referencedColumns: ["id_usuario"]
+          },
+          {
+            foreignKeyName: "grupo_tratamiento_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
+          {
+            foreignKeyName: "grupo_tratamiento_id_paciente_fkey"
+            columns: ["id_paciente"]
+            isOneToOne: false
+            referencedRelation: "paciente"
+            referencedColumns: ["id_paciente"]
+          },
+        ]
+      }
       notificacion: {
         Row: {
           estado: string | null

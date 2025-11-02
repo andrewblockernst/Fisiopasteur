@@ -180,14 +180,14 @@ export async function obtenerTurnosConFiltros(filtros?: {
 
 // Crear un nuevo turno
 export async function crearTurno(
-  datos: TurnoInsert, 
+  datos: TurnoInsert & { id_organizacion?: number; titulo_tratamiento?: string | null }, 
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
   enviarNotificacion: boolean = true,
   id_grupo_tratamiento?: string
 ) {
-  const supabase = await createClient();
-  
+
   try {
+    const supabase = await createClient();
     // ✅ Obtener id_organizacion del usuario actual
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -202,6 +202,29 @@ export async function crearTurno(
 
     if (errorOrg || !usuarioOrg) {
       return { success: false, error: 'No se encontró la organización del usuario' };
+    }
+
+    // ============= CREAR GRUPO DE TRATAMIENTO SI HAY TÍTULO =============
+    if (datos.titulo_tratamiento && !id_grupo_tratamiento) {
+      const { data: grupo, error: errorGrupo } = await supabase
+        .from('grupo_tratamiento')
+        .insert({
+          id_paciente: datos.id_paciente,
+          id_especialista: datos.id_especialista,
+          id_especialidad: datos.id_especialidad,
+          id_organizacion: usuarioOrg.id_organizacion,
+          nombre: datos.titulo_tratamiento,
+          fecha_inicio: datos.fecha,
+          tipo_plan: datos.tipo_plan,
+        })
+        .select('id_grupo')
+        .single();
+
+      if (errorGrupo) {
+        console.error('Error creando grupo de tratamiento:', errorGrupo);
+      } else if (grupo) {
+        id_grupo_tratamiento = grupo.id_grupo;
+      }
     }
 
     // ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
@@ -230,8 +253,11 @@ export async function crearTurno(
     }
 
     // ✅ Agregar id_organizacion y id_grupo_tratamiento
+    // ✅ Eliminar titulo_tratamiento porque no existe en la tabla turno
+    const { titulo_tratamiento, ...datosLimpios } = datos;
+    
     const turnoData = {
-      ...datos,
+      ...datosLimpios,
       id_organizacion: usuarioOrg.id_organizacion, // ✅ AGREGADO
       ...(id_grupo_tratamiento && { id_grupo_tratamiento })
     };
@@ -1085,6 +1111,7 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
     // ✅ Normalizar a número (convertir si es string)
     const pacienteId = typeof id_paciente === 'string' ? parseInt(id_paciente, 10) : id_paciente;
     
+    // 1️⃣ Primero obtener los turnos
     const { data, error } = await supabase
       .from("turno")
       .select(`
@@ -1092,7 +1119,7 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
         especialista:id_especialista(id_usuario, nombre, apellido),
         especialidad:id_especialidad(id_especialidad, nombre)
       `)
-      .eq("id_paciente", pacienteId) // ✅ Ahora siempre es number
+      .eq("id_paciente", pacienteId)
       .not("id_grupo_tratamiento", "is", null)
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
@@ -1102,15 +1129,36 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
       return { success: false, error: error.message };
     }
 
-    // ✅ Agrupar turnos por id_grupo_tratamiento
-    const gruposMap = new Map();
+    // 2️⃣ Obtener los IDs únicos de grupos de tratamiento (filtrar nulls)
+    const gruposIds = [...new Set(
+      data?.map(t => t.id_grupo_tratamiento).filter((id): id is string => id !== null)
+    )];
+    
+    // 3️⃣ Obtener información de los grupos de tratamiento
+    const { data: gruposTratamiento, error: errorGrupos } = await supabase
+      .from("grupo_tratamiento")
+      .select("id_grupo, nombre")
+      .in("id_grupo", gruposIds);
+    
+    if (errorGrupos) {
+      console.warn("⚠️ No se pudieron obtener nombres de grupos:", errorGrupos);
+    }
+    
+    // 4️⃣ Crear un mapa de grupos por ID para búsqueda rápida
+    const gruposMap = new Map(
+      gruposTratamiento?.map(g => [g.id_grupo, g.nombre]) || []
+    );
+
+    // 5️⃣ Agrupar turnos por id_grupo_tratamiento
+    const gruposHistorial = new Map();
     
     data?.forEach(turno => {
       const grupoId = turno.id_grupo_tratamiento;
-      if (!gruposMap.has(grupoId)) {
-        gruposMap.set(grupoId, {
+      if (!gruposHistorial.has(grupoId)) {
+        gruposHistorial.set(grupoId, {
           id_grupo: grupoId,
-          especialidad: turno.especialidad?.nombre,
+          // ✅ PRIORIDAD: nombre del grupo de tratamiento > nombre de especialidad
+          especialidad: (grupoId ? gruposMap.get(grupoId) : null) || turno.especialidad?.nombre || "Sin especialidad",
           especialista: turno.especialista,
           fecha_inicio: turno.fecha,
           tipo_plan: turno.tipo_plan,
@@ -1119,12 +1167,12 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
         });
       }
       
-      const grupo = gruposMap.get(grupoId);
+      const grupo = gruposHistorial.get(grupoId);
       grupo.turnos.push(turno);
       grupo.total_sesiones = grupo.turnos.length;
     });
 
-    const grupos = Array.from(gruposMap.values()).sort((a, b) => 
+    const grupos = Array.from(gruposHistorial.values()).sort((a, b) => 
       new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime()
     );
 
@@ -1507,5 +1555,58 @@ export async function actualizarTurnosVencidos() {
       success: false, 
       error: error instanceof Error ? error.message : 'Error desconocido'
     };
+  }
+}
+
+// =====================================
+// 🏥 GRUPOS DE TRATAMIENTO
+// =====================================
+
+/**
+ * Actualizar información de un grupo de tratamiento
+ */
+export async function actualizarGrupoTratamiento(
+  id_grupo: string,
+  datos: { nombre?: string }
+) {
+  const supabase = await createClient();
+  
+  try {
+    console.log('📝 Actualizando grupo de tratamiento:', { id_grupo, datos });
+    
+    // Validar que el grupo existe
+    const { data: grupoExistente, error: errorBusqueda } = await supabase
+      .from('grupo_tratamiento')
+      .select('id_grupo, nombre')
+      .eq('id_grupo', id_grupo)
+      .single();
+    
+    if (errorBusqueda) {
+      console.error('❌ Error buscando grupo:', errorBusqueda);
+      return { success: false, error: `Grupo no encontrado: ${errorBusqueda.message}` };
+    }
+    
+    console.log('✅ Grupo encontrado:', grupoExistente);
+    
+    const { data, error } = await supabase
+      .from('grupo_tratamiento')
+      .update({
+        nombre: datos.nombre,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id_grupo', id_grupo)
+      .select();
+
+    if (error) {
+      console.error('❌ Error actualizando grupo de tratamiento:', error);
+      return { success: false, error: error.message || 'Error al actualizar' };
+    }
+
+    console.log('✅ Grupo actualizado exitosamente:', data);
+    revalidatePath('/pacientes');
+    return { success: true, data };
+  } catch (error: any) {
+    console.error('❌ Error inesperado:', error);
+    return { success: false, error: error.message || 'Error inesperado' };
   }
 }
