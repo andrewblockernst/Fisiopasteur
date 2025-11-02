@@ -76,8 +76,10 @@ export async function procesarRecordatoriosPendientes(enviarMensaje: FuncionEnvi
 async function procesarNotificacionIndividual(enviarMensaje: FuncionEnviarMensaje, notificacion: NotificacionPendiente): Promise<boolean> {
   console.log(`📨 Procesando notificación ${notificacion.id_notificacion}`)
   
-  if (!notificacion.turno) {
-    console.log(`⚠️ Notificación ${notificacion.id_notificacion} no tiene turno asociado`)
+  // ✅ MULTI-ORG: Validar que tenga turno asociado
+  if (!notificacion.turno || !notificacion.id_turno) {
+    console.log(`⚠️ Notificación ${notificacion.id_notificacion} no tiene turno asociado (id_turno: ${notificacion.id_turno})`)
+    console.log(`   💡 Esta es probablemente una notificación huérfana (turno eliminado). Marcando como fallida.`)
     await marcarNotificacionFallida(notificacion.id_notificacion)
     return false
   }
