@@ -25,7 +25,7 @@ export default async function TurnosPage({ searchParams }: { searchParams: any }
     obtenerEspecialidades(),
     obtenerBoxes(),
   ]);
-
+  
   if (!resTurnos.success) {
     return <div className="p-6 text-red-700">Error: {resTurnos.error}</div>;
   }
