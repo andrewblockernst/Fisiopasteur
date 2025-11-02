@@ -11,8 +11,37 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/usePerfil";
 
 type Especialidad = Tables<"especialidad">;
-type Usuario = Tables<"usuario"> & { 
-  especialidades?: Especialidad[] 
+
+// ✅ Tipo correcto que coincide con lo que devuelve getEspecialistas()
+type EspecialistaConDatos = {
+  id_usuario: string;
+  id_usuario_organizacion: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string | null;
+  color: string | null;
+  activo: boolean;
+  id_rol: number;
+  rol: {
+    id: number;
+    nombre: string;
+  };
+  especialidades: Array<{
+    id_especialidad: number;
+    nombre: string;
+    precio_particular: number | null;
+    precio_obra_social: number | null;
+  }>;
+  usuario_especialidad: Array<{
+    precio_particular: number | null;
+    precio_obra_social: number | null;
+    activo: boolean | null; // ✅ Puede ser null según DB
+    especialidad: {
+      id_especialidad: number;
+      nombre: string;
+    };
+  }>;
 };
 
 const BRAND = '#9C1838';
@@ -26,7 +55,7 @@ export default function EspecialistasPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<Filter>("activos");
-  const [especialistas, setEspecialistas] = useState<Usuario[]>([]);
+  const [especialistas, setEspecialistas] = useState<EspecialistaConDatos[]>([]);
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
   // const [showDialog, setShowDialog] = useState(false);
   // const [loading, setLoading] = useState(true);

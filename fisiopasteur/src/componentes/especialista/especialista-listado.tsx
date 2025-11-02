@@ -11,12 +11,41 @@ import { useAuth } from "@/hooks/usePerfil";
 import { Plus } from "lucide-react";
 
 type Especialidad = Tables<"especialidad">;
-type Usuario = Tables<"usuario"> & { 
-  especialidades?: Especialidad[] 
+
+// ✅ Tipo que coincide con getEspecialistas()
+type EspecialistaConDatos = {
+  id_usuario: string;
+  id_usuario_organizacion: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string | null;
+  color: string | null;
+  activo: boolean;
+  id_rol: number;
+  rol: {
+    id: number;
+    nombre: string;
+  };
+  especialidades: Array<{
+    id_especialidad: number;
+    nombre: string;
+    precio_particular: number | null;
+    precio_obra_social: number | null;
+  }>;
+  usuario_especialidad: Array<{
+    precio_particular: number | null;
+    precio_obra_social: number | null;
+    activo: boolean | null;
+    especialidad: {
+      id_especialidad: number;
+      nombre: string;
+    };
+  }>;
 };
 
 interface EspecialistasTableProps {
-  especialistas: Usuario[];
+  especialistas: EspecialistaConDatos[];
   onEspecialistaDeleted?: () => void;
   onEspecialistaUpdated?: () => void;
   especialidades: Especialidad[];
@@ -30,7 +59,7 @@ export function EspecialistasTable({
   especialidades,
   setShowDialog
 }: EspecialistasTableProps) {
-  const [editingEspecialista, setEditingEspecialista] = useState<Usuario | null>(null);
+  const [editingEspecialista, setEditingEspecialista] = useState<EspecialistaConDatos | null>(null);
   const [isPending, startTransition] = useTransition();
   const { addToast } = useToastStore();
   const { user } = useAuth();
@@ -43,7 +72,7 @@ export function EspecialistasTable({
     }
   };
 
-  const handleToggleActivo = (especialista: Usuario) => {
+  const handleToggleActivo = (especialista: EspecialistaConDatos) => {
     startTransition(async () => {
       const res = await toggleEspecialistaActivo(especialista.id_usuario, !especialista.activo);
       addToast({

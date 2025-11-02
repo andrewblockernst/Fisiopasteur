@@ -7,15 +7,44 @@ import type { Tables } from "@/types/database.types";
 import { useToastStore } from '@/stores/toast-store';
 
 type Especialidad = Tables<"especialidad">;
-type Usuario = Tables<"usuario"> & { 
-  especialidades?: Especialidad[] 
+
+// ✅ Tipo que coincide con getEspecialistas()
+type EspecialistaConDatos = {
+  id_usuario: string;
+  id_usuario_organizacion: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string | null;
+  color: string | null;
+  activo: boolean;
+  id_rol: number;
+  rol: {
+    id: number;
+    nombre: string;
+  };
+  especialidades: Array<{
+    id_especialidad: number;
+    nombre: string;
+    precio_particular: number | null;
+    precio_obra_social: number | null;
+  }>;
+  usuario_especialidad: Array<{
+    precio_particular: number | null;
+    precio_obra_social: number | null;
+    activo: boolean | null;
+    especialidad: {
+      id_especialidad: number;
+      nombre: string;
+    };
+  }>;
 };
 
 interface EditarEspecialistaDialogProps {
   isOpen: boolean;
   onClose: () => void;
   especialidades: Especialidad[];
-  especialista: Usuario;
+  especialista: EspecialistaConDatos;
 }
 
 export function EditarEspecialistaDialog({ 
@@ -57,7 +86,7 @@ export function EditarEspecialistaDialog({
 
 interface EspecialistaEditFormWrapperProps {
   especialidades: Especialidad[];
-  especialista: Usuario;
+  especialista: EspecialistaConDatos;
   onSuccess: () => void;
 }
 
@@ -80,7 +109,7 @@ import ColorPicker from "@/componentes/color-selector";
 
 interface EspecialistaEditFormForDialogProps {
   especialidades: Especialidad[];
-  especialista: Usuario;
+  especialista: EspecialistaConDatos;
   onSuccess: () => void;
 }
 
@@ -92,7 +121,7 @@ function EspecialistaEditFormForDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedEspecialidades, setSelectedEspecialidades] = useState<number[]>(
-    especialista.especialidades?.map(e => e.id_especialidad) || []
+    especialista.especialidades?.map((e: { id_especialidad: number }) => e.id_especialidad) || []
   );
   const [selectedColor, setSelectedColor] = useState(especialista.color || "#3B82F6");
   const { showServerActionResponse } = useToastStore();
