@@ -660,6 +660,7 @@ export function NuevoTurnoModal({
           estado: "programado" as const,
           tipo_plan: formData.tipo_plan,
         };
+        // ✅ id_organizacion se inyecta automáticamente en crearTurno() con getAuthContext()
 
         const resultado = await crearTurno(turnoData, formData.recordatorios);
 

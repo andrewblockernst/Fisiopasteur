@@ -195,7 +195,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
 
 // Crear un nuevo turno
 export async function crearTurno(
-  datos: TurnoInsert, 
+  datos: Omit<TurnoInsert, 'id_organizacion'> & { id_organizacion?: number | null }, // ✅ id_organizacion opcional, se inyecta automáticamente
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
   enviarNotificacion: boolean = true // ✅ Nuevo parámetro para controlar notificaciones
 ) {
