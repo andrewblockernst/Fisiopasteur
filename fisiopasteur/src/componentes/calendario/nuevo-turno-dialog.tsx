@@ -72,7 +72,8 @@ export function NuevoTurnoModal({
     id_box: '',
     observaciones: '',
     precio: '',
-    recordatorios: ['1d', '2h'] as TipoRecordatorio[]
+    recordatorios: ['1d', '2h'] as TipoRecordatorio[],
+    titulo_tratamiento: '',
   });
 
   // Estados para datos cargados automáticamente
@@ -543,7 +544,8 @@ useEffect(() => {
           id_box: '',
           observaciones: '',
           precio: '',
-          recordatorios: ['1d', '2h'] as TipoRecordatorio[]
+          recordatorios: ['1d', '2h'] as TipoRecordatorio[],
+          titulo_tratamiento: '',
         });
         setEspecialidadesDisponibles([]);
         setBoxesDisponibles([]);
@@ -556,6 +558,7 @@ useEffect(() => {
         setMantenerHorario(true);
         setHorariosPorDia({ 1: '09:00', 2: '09:00', 3: '09:00', 4: '09:00', 5: '09:00' });
         setHorariosDisponiblesPorDia({});
+        
       }, 100);
       
       return () => clearTimeout(timer);
@@ -695,8 +698,8 @@ useEffect(() => {
         observaciones: formData.observaciones || null,
         estado: "programado" as const,
         tipo_plan: formData.tipo_plan,
-        id_organizacion: (user as any)?.id_organizacion || null,
-      };
+        titulo_tratamiento: formData.titulo_tratamiento || null,
+      } as any; // ✅ Cast temporal hasta que se actualicen los tipos
 
       const resultado = await crearTurno(turnoData, formData.recordatorios);
 
@@ -805,12 +808,15 @@ useEffect(() => {
     for (const turnoData of turnosParaCrear) {
       try {
         // ✅ PASAR id_grupo_tratamiento y false para no enviar notificaciones individuales
-        const turnoConOrganizacion = {
-          ...turnoData,
-          id_organizacion: (user as any)?.id_organizacion || null, // ✅ AGREGAR id_organizacion
-        };
-
-        const resultado = await crearTurno(turnoConOrganizacion, [], false, id_grupo_tratamiento);
+        const resultado = await crearTurno(
+          {
+            ...turnoData,
+            titulo_tratamiento: formData.titulo_tratamiento || null,
+          } as any, // ✅ Cast temporal hasta que se actualicen los tipos
+          [], 
+          false, 
+          id_grupo_tratamiento
+        );
 
         if (resultado.success && resultado.data) {
           exitosos++;
@@ -999,6 +1005,25 @@ useEffect(() => {
                 </p>
               )}
             </div>
+
+            {/* Título del tratamiento */}
+            {formData.id_especialidad && (
+              <div>
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+                  Título del tratamiento
+                </label>
+                <input
+                  type="text"
+                  value={formData.titulo_tratamiento}
+                  onChange={(e) => setFormData(prev => ({ ...prev, titulo_tratamiento: e.target.value }))}
+                  placeholder="Ej: Lesión hombro, Rehabilitación rodilla..."
+                  className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Este título se mostrará en el historial clínico del paciente
+                </p>
+              </div>
+            )}
 
             {/* Paciente */}
             <div className="relative">

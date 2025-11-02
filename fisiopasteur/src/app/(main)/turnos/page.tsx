@@ -4,9 +4,7 @@ import type { TurnoConDetalles } from "@/stores/turno-store";
 
 export default async function TurnosPage({ searchParams }: { searchParams: any }) {
   // Si searchParams es una promesa, espera; si no, úsalo directo
-  const params = typeof searchParams.then === "function"
-    ? await searchParams
-    : searchParams;
+  const params = searchParams;
 
   
   const hoy = new Date().toISOString().split('T')[0];
