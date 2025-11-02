@@ -14,7 +14,7 @@ export interface Usuario {
   esAdmin?: boolean;
   esEspecialista?: boolean;
   esProgramador?: boolean;
-  puedeGestionarTurnos?: boolean; // Nuevo: Admin y Programadores pueden gestionar turnos
+  puedeGestionarTurnos?: boolean;
   rol?: {
     id: number;
     nombre: string;
@@ -44,28 +44,28 @@ export function useAuth(): AuthState {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user && user.email) {
-          // Obtener información del usuario y su rol
+          // ✅ Obtener información del usuario y su rol
           const { data: userProfile, error } = await supabase
             .from('usuario')
             .select(`
-              id_usuario, 
-              nombre, 
-              apellido, 
-              email, 
-              activo,
-              id_rol,
-              rol:id_rol (
-                id,
-                nombre,
-                jerarquia
+              id_usuario,
+              nombre,
+              apellido,
+              email,
+              telefono,
+              id_organizacion,
+              rol:id_rol(id, nombre, jerarquia),
+              usuario_especialidad(
+                id_especialidad,
+                especialidad:id_especialidad(id_especialidad, nombre)
               )
             `)
-            .eq('email', user.email)
+            .eq('email', user.email) // ✅ Usar user.email en lugar de email
             .single();
 
           if (userProfile && !error) {
             // Verificar roles usando las constantes
-            const idRol = userProfile.id_rol;
+            const idRol = userProfile.rol?.id; // ✅ Acceder a rol.id en lugar de id_rol
             const esAdmin = idRol === ROLES.ADMIN;
             const esEspecialista = idRol === ROLES.ESPECIALISTA;
             const esProgramador = idRol === ROLES.PROGRAMADOR;
@@ -89,7 +89,7 @@ export function useAuth(): AuthState {
               loading: false
             });
           } else {
-            // Si no encuentra el perfil, crear usuario básico sin permisos de admin
+            // Si no encuentra el perfil, crear usuario básico sin permisos
             setAuthState({
               isAuthenticated: true,
               user: {
@@ -126,7 +126,7 @@ export function useAuth(): AuthState {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user && session.user.email) {
-          // Obtener información del perfil cuando cambia la sesión
+          // ✅ Obtener información del perfil cuando cambia la sesión
           const { data: userProfile } = await supabase
             .from('usuario')
             .select(`
@@ -135,17 +135,17 @@ export function useAuth(): AuthState {
               apellido, 
               email, 
               activo,
-              id_rol,
-              rol:id_rol (
-                id,
-                nombre,
-                jerarquia
+              id_organizacion,
+              rol:id_rol(id, nombre, jerarquia),
+              usuario_especialidad(
+                id_especialidad,
+                especialidad:id_especialidad(id_especialidad, nombre)
               )
             `)
             .eq('email', session.user.email)
             .single();
 
-          const idRol = userProfile?.id_rol;
+          const idRol = userProfile?.rol?.id; // ✅ Acceder a rol.id
           const esAdmin = idRol === ROLES.ADMIN;
           const esEspecialista = idRol === ROLES.ESPECIALISTA;
           const esProgramador = idRol === ROLES.PROGRAMADOR;

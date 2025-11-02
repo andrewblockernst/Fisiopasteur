@@ -205,33 +205,69 @@ export function NuevoTurnoModal({
   }, []);
 
   // Establecer fecha y hora seleccionadas cuando se abre el modal
-  useEffect(() => {
-    if (isOpen) {
-      const updates: Partial<typeof formData> = {};
-      
-      if (fechaSeleccionada) {
-        updates.fecha = fechaSeleccionada.toISOString().split('T')[0];
-      }
-      
-      if (horaSeleccionada) {
-        updates.hora = horaSeleccionada;
-      }
-      
-      if (Object.keys(updates).length > 0) {
-        setFormData(prev => ({ ...prev, ...updates }));
-      }
-    }
-  }, [fechaSeleccionada, horaSeleccionada, isOpen]);
+useEffect(() => {
+  if (isOpen) {
+    console.log('🔍 Modal abierto - Datos iniciales:', {
+      user: user,
+      puedeGestionarTurnos: user?.puedeGestionarTurnos,
+      id: user?.id, // ✅ Ahora revisamos también 'id'
+      id_usuario: user?.id_usuario,
+      especialistas: especialistas,
+      especialistasLength: especialistas.length
+    });
 
-  // Precargar especialista si no puede gestionar turnos (solo especialistas normales)
-  useEffect(() => {
-    if (user && !user.puedeGestionarTurnos && user.id_usuario && isOpen) {
-      setFormData(prev => ({
-        ...prev,
-        id_especialista: String(user.id_usuario)
-      }));
+    const updates: Partial<typeof formData> = {};
+    
+    if (fechaSeleccionada) {
+      updates.fecha = fechaSeleccionada.toISOString().split('T')[0];
     }
-  }, [user, isOpen]);
+    
+    if (horaSeleccionada) {
+      updates.hora = horaSeleccionada;
+    }
+    
+    // ✅ Usar user.id en lugar de user.id_usuario
+    const userId = user?.id_usuario || user?.id;
+    
+    if (user && !user.puedeGestionarTurnos && userId) {
+      console.log('👤 Usuario sin permisos - Asignando especialista:', userId);
+      updates.id_especialista = String(userId);
+      
+      // ✅ Obtener especialidad desde especialistas ya cargados
+      const especialistaActual = especialistas.find(e => 
+        String(e.id_usuario) === String(userId)
+      );
+      
+      console.log('🔍 Especialista encontrado:', especialistaActual);
+      
+      if (especialistaActual) {
+        // Prioridad: especialidad principal -> primera especialidad adicional
+        if (especialistaActual.id_especialidad) {
+          console.log('✅ Especialidad principal:', especialistaActual.id_especialidad);
+          updates.id_especialidad = String(especialistaActual.id_especialidad);
+        } else if (Array.isArray(especialistaActual.usuario_especialidad) && 
+                   especialistaActual.usuario_especialidad.length > 0) {
+          const primeraEspecialidad = especialistaActual.usuario_especialidad[0];
+          console.log('✅ Primera especialidad adicional:', primeraEspecialidad);
+          if (primeraEspecialidad?.especialidad?.id_especialidad) {
+            updates.id_especialidad = String(primeraEspecialidad.especialidad.id_especialidad);
+          }
+        } else {
+          console.warn('⚠️ Especialista sin especialidad asignada');
+        }
+      } else {
+        console.warn('⚠️ No se encontró el especialista en la lista');
+      }
+    }
+    
+    console.log('📝 Updates a aplicar:', updates);
+    
+    if (Object.keys(updates).length > 0) {
+      setFormData(prev => ({ ...prev, ...updates }));
+    }
+  }
+}, [fechaSeleccionada, horaSeleccionada, isOpen, user, especialistas]);
+
 
   // Construir lista de especialidades del especialista seleccionado
   useEffect(() => {
@@ -626,237 +662,221 @@ export function NuevoTurnoModal({
   };
 
   const handleSubmit = async () => {
-    if (esHoraPasada) {
-      addToast({
-        variant: 'error',
-        message: 'Horario no disponible',
-        description: 'No se pueden crear turnos en horarios que ya pasaron',
-      });
-      return;
-    }
+  if (esHoraPasada) {
+    addToast({
+      variant: 'error',
+      message: 'Horario no disponible',
+      description: 'No se pueden crear turnos en horarios que ya pasaron',
+    });
+    return;
+  }
 
-    if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
-      addToast({
-        variant: 'error',
-        message: 'Campos requeridos',
-        description: 'Por favor completa fecha, hora, especialista, especialidad y paciente',
-      });
-      return;
-    }
+  if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
+    addToast({
+      variant: 'error',
+      message: 'Campos requeridos',
+      description: 'Por favor completa fecha, hora, especialista, especialidad y paciente',
+    });
+    return;
+  }
 
-    setIsSubmitting(true);
-    
-    try {
-      // ============= SIN REPETICIÓN: CREAR TURNO SIMPLE =============
-      if (!mostrarRepeticion || diasSeleccionados.length === 0) {
-        const turnoData = {
-          fecha: formData.fecha,
-          hora: formData.hora + ':00',
-          id_especialista: formData.id_especialista,
-          id_paciente: parseInt(formData.id_paciente),
-          id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
-          id_box: formData.id_box ? parseInt(formData.id_box) : null,
-          observaciones: formData.observaciones || null,
-          estado: "programado" as const,
-          tipo_plan: formData.tipo_plan,
-        };
+  setIsSubmitting(true);
+  
+  try {
+    // ============= SIN REPETICIÓN: CREAR TURNO SIMPLE =============
+    if (!mostrarRepeticion || diasSeleccionados.length === 0) {
+      const turnoData = {
+        fecha: formData.fecha,
+        hora: formData.hora + ':00',
+        id_especialista: formData.id_especialista,
+        id_paciente: parseInt(formData.id_paciente),
+        id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
+        id_box: formData.id_box ? parseInt(formData.id_box) : null,
+        observaciones: formData.observaciones || null,
+        estado: "programado" as const,
+        tipo_plan: formData.tipo_plan,
+        id_organizacion: (user as any)?.id_organizacion || null,
+      };
 
-        const resultado = await crearTurno(turnoData, formData.recordatorios);
+      const resultado = await crearTurno(turnoData, formData.recordatorios);
 
-        if (resultado.success && resultado.data) {
-          addToast({
-            variant: 'success',
-            message: 'Turno creado',
-            description: 'El turno se creó exitosamente',
-          });
-
-          onTurnoCreated?.();
-          onClose();
-        } else {
-          addToast({
-            variant: 'error',
-            message: 'Error al crear turno',
-            description: resultado.error || 'No se pudo crear el turno',
-          });
-        }
-        setIsSubmitting(false);
-        return;
-      }
-
-      // ============= CON REPETICIÓN: CREAR MÚLTIPLES SESIONES =============      
-      const [year, month, day] = formData.fecha.split('-').map(Number);
-      const fechaBaseParsed = new Date(year, month - 1, day);
-      
-      const diaBaseNumeroJS = fechaBaseParsed.getDay();
-      const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
-
-      const turnosParaCrear = [];
-      let sesionesCreadas = 0;
-      let semanaActual = 0;
-
-      while (sesionesCreadas < numeroSesiones && semanaActual < 52) {
-        for (const diaSeleccionado of diasSeleccionados) {
-          if (sesionesCreadas >= numeroSesiones) break;
-
-          // ✅ CORRECCIÓN: Calcular diferencia de días correctamente
-          let diferenciaDias = diaSeleccionado - diaBaseNumero;
-          
-          // Si el día ya pasó en esta semana, ir a la próxima semana
-          if (diferenciaDias < 0) {
-            diferenciaDias += 7;
-          }
-
-          const fechaTurno = new Date(fechaBaseParsed);
-          
-          // ✅ Determinar si es el primer turno (mismo día y semana que la fecha base)
-          const esPrimerTurno = diferenciaDias === 0 && semanaActual === 0;
-          
-          if (esPrimerTurno) {
-            // Es HOY, mantener fechaBaseParsed
-          } else {
-            fechaTurno.setDate(fechaTurno.getDate() + (semanaActual * 7) + diferenciaDias);
-          }
-
-          const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
-          
-          // ✅ CORRECCIÓN: Determinar horario según configuración Y si es el primer turno
-          let horarioTurno = formData.hora;
-          
-          if (mantenerHorario) {
-            // Si mantiene horario, TODOS usan el mismo horario (incluso el primero)
-            horarioTurno = formData.hora;
-          } else {
-            // Si NO mantiene horario, usar horarios personalizados
-            if (esPrimerTurno) {
-              // El primer turno SIEMPRE usa el horario seleccionado originalmente
-              horarioTurno = formData.hora;
-            } else {
-              // Los demás usan el horario configurado para ese día
-              horarioTurno = horariosPorDia[diaSeleccionado] || '09:00';
-            }
-          }
-
-          const esPasado = esFechaHoraPasada(fechaFormateada, horarioTurno);
-
-          if (!esPasado) {
-            turnosParaCrear.push({
-              id_paciente: formData.id_paciente,
-              id_especialista: formData.id_especialista,
-              fecha: fechaFormateada,
-              hora_inicio: horarioTurno,
-              hora_fin: (parseInt(horarioTurno.split(':')[0]) + 1).toString().padStart(2, '0') + ':00',
-              estado: 'programado',
-              id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : undefined,
-              id_box: formData.id_box ? parseInt(formData.id_box) : undefined,
-              observaciones: formData.observaciones
-            });
-            sesionesCreadas++;
-          }
-        }
-        semanaActual++;
-      }
-
-      if (turnosParaCrear.length === 0) {
-        addToast({
-          variant: 'warning',
-          message: 'Sin turnos para crear',
-          description: 'Todos los horarios seleccionados ya pasaron',
-        });
-        setIsSubmitting(false);
-        return;
-      }
-
-      let exitosos = 0;
-      let fallidos = 0;
-      const turnosCreados: any[] = [];
-
-      // ✅ CREAR TURNOS SIN NOTIFICACIONES INDIVIDUALES
-      for (const turnoData of turnosParaCrear) {
-        try {
-          const datosBaseTurno = {
-            fecha: turnoData.fecha,
-            hora: turnoData.hora_inicio + ':00',
-            id_especialista: turnoData.id_especialista,
-            id_paciente: parseInt(turnoData.id_paciente),
-            id_especialidad: turnoData.id_especialidad || null,
-            id_box: turnoData.id_box || null,
-            observaciones: turnoData.observaciones || null,
-            estado: "programado" as const,
-            tipo_plan: formData.tipo_plan,
-          };
-
-          // ✅ PASAR false PARA NO ENVIAR NOTIFICACIONES INDIVIDUALES
-          const resultado = await crearTurno(datosBaseTurno, [], false);
-
-          if (resultado.success && resultado.data) {
-            exitosos++;
-            turnosCreados.push(resultado.data);
-          } else {
-            fallidos++;
-            console.error('Error creando turno:', resultado.error);
-          }
-        } catch (error) {
-          fallidos++;
-          console.error('Error en creación de turno:', error);
-        }
-      }
-
-      // ✅ ENVIAR UNA SOLA NOTIFICACIÓN AGRUPADA CON TODOS LOS TURNOS
-      if (turnosCreados.length > 0) {
-        try {
-          
-          // Importar el servicio de WhatsApp
-          const { enviarNotificacionGrupalTurnos } = await import('@/lib/services/whatsapp-bot.service');
-          
-          // Obtener datos del paciente
-          const paciente = pacientes.find(p => p.id_paciente === parseInt(formData.id_paciente));
-          const especialista = especialistas.find(e => String(e.id_usuario) === String(formData.id_especialista));
-          
-          if (paciente && especialista && paciente.telefono) {
-            await enviarNotificacionGrupalTurnos(
-              paciente.telefono,
-              paciente.nombre,
-              turnosCreados,
-              especialista.nombre
-            );
-          }
-        } catch (error) {
-          console.error('Error enviando notificación agrupada:', error);
-          // No fallar todo el proceso por error de notificación
-        }
-      }
-
-      if (fallidos > 0) {
-        addToast({
-          variant: 'warning',
-          message: 'Sesiones creadas parcialmente',
-          description: `Se crearon ${exitosos} de ${numeroSesiones} sesiones. ${fallidos} fallaron.`,
-        });
-      } else {
+      if (resultado.success && resultado.data) {
         addToast({
           variant: 'success',
-          message: 'Paquete de sesiones creado',
-          description: `✅ ${exitosos} sesiones creadas exitosamente`,
+          message: 'Turno creado',
+          description: 'El turno se creó exitosamente',
+        });
+
+        onTurnoCreated?.();
+        onClose();
+      } else {
+        addToast({
+          variant: 'error',
+          message: 'Error al crear turno',
+          description: resultado.error || 'No se pudo crear el turno',
         });
       }
-
-      onTurnoCreated?.();
-      
-      setTimeout(() => {
-        onClose();
-      }, 1000);
-
-    } catch (error) {
-      console.error('Error al crear turno:', error);
-      addToast({
-        variant: 'error',
-        message: 'Error inesperado',
-        description: 'Ocurrió un problema al crear el turno',
-      });
-    } finally {
       setIsSubmitting(false);
+      return;
     }
-  };
+
+    // ============= CON REPETICIÓN: CREAR PAQUETE DE SESIONES =============
+    
+    // ✅ Generar UUID único para este paquete de tratamiento
+    const id_grupo_tratamiento = crypto.randomUUID();
+    
+    const [year, month, day] = formData.fecha.split('-').map(Number);
+    const fechaBaseParsed = new Date(year, month - 1, day);
+    
+    const diaBaseNumeroJS = fechaBaseParsed.getDay();
+    const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
+
+    const turnosParaCrear = [];
+    let sesionesCreadas = 0;
+    let semanaActual = 0;
+
+    while (sesionesCreadas < numeroSesiones && semanaActual < 52) {
+      for (const diaSeleccionado of diasSeleccionados) {
+        if (sesionesCreadas >= numeroSesiones) break;
+
+        let diferenciaDias = diaSeleccionado - diaBaseNumero;
+        
+        if (diferenciaDias < 0) {
+          diferenciaDias += 7;
+        }
+
+        const fechaTurno = new Date(fechaBaseParsed);
+        
+        const esPrimerTurno = diferenciaDias === 0 && semanaActual === 0;
+        
+        if (!esPrimerTurno) {
+          fechaTurno.setDate(fechaTurno.getDate() + (semanaActual * 7) + diferenciaDias);
+        }
+
+        const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+        
+        let horarioTurno = formData.hora;
+        
+        if (mantenerHorario) {
+          horarioTurno = formData.hora;
+        } else {
+          if (esPrimerTurno) {
+            horarioTurno = formData.hora;
+          } else {
+            horarioTurno = horariosPorDia[diaSeleccionado] || '09:00';
+          }
+        }
+
+        const esPasado = esFechaHoraPasada(fechaFormateada, horarioTurno);
+
+        if (!esPasado) {
+          turnosParaCrear.push({
+            fecha: fechaFormateada,
+            hora: horarioTurno + ':00',
+            id_especialista: formData.id_especialista,
+            id_paciente: parseInt(formData.id_paciente),
+            id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
+            id_box: formData.id_box ? parseInt(formData.id_box) : null,
+            observaciones: formData.observaciones || null,
+            estado: "programado" as const,
+            tipo_plan: formData.tipo_plan,
+          });
+          sesionesCreadas++;
+        }
+      }
+      semanaActual++;
+    }
+
+    if (turnosParaCrear.length === 0) {
+      addToast({
+        variant: 'warning',
+        message: 'Sin turnos para crear',
+        description: 'Todos los horarios seleccionados ya pasaron',
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    let exitosos = 0;
+    let fallidos = 0;
+    const turnosCreados: any[] = [];
+
+    // ✅ CREAR TURNOS CON EL MISMO id_grupo_tratamiento
+    for (const turnoData of turnosParaCrear) {
+      try {
+        // ✅ PASAR id_grupo_tratamiento y false para no enviar notificaciones individuales
+        const turnoConOrganizacion = {
+          ...turnoData,
+          id_organizacion: (user as any)?.id_organizacion || null, // ✅ AGREGAR id_organizacion
+        };
+
+        const resultado = await crearTurno(turnoConOrganizacion, [], false, id_grupo_tratamiento);
+
+        if (resultado.success && resultado.data) {
+          exitosos++;
+          turnosCreados.push(resultado.data);
+        } else {
+          fallidos++;
+          console.error('Error creando turno:', resultado.error);
+        }
+      } catch (error) {
+        fallidos++;
+        console.error('Error en creación de turno:', error);
+      }
+    }
+
+    // ✅ ENVIAR UNA SOLA NOTIFICACIÓN AGRUPADA
+    if (turnosCreados.length > 0) {
+      try {
+        const { enviarNotificacionGrupalTurnos } = await import('@/lib/services/whatsapp-bot.service');
+        
+        const paciente = pacientes.find(p => p.id_paciente === parseInt(formData.id_paciente));
+        const especialista = especialistas.find(e => String(e.id_usuario) === String(formData.id_especialista));
+        
+        if (paciente && especialista && paciente.telefono) {
+          await enviarNotificacionGrupalTurnos(
+            paciente.telefono,
+            paciente.nombre,
+            turnosCreados,
+            especialista.nombre
+          );
+        }
+      } catch (error) {
+        console.error('Error enviando notificación agrupada:', error);
+      }
+    }
+
+    if (fallidos > 0) {
+      addToast({
+        variant: 'warning',
+        message: 'Sesiones creadas parcialmente',
+        description: `Se crearon ${exitosos} de ${numeroSesiones} sesiones. ${fallidos} fallaron.`,
+      });
+    } else {
+      addToast({
+        variant: 'success',
+        message: 'Paquete de sesiones creado',
+        description: `✅ ${exitosos} sesiones creadas exitosamente`,
+      });
+    }
+
+    onTurnoCreated?.();
+    
+    setTimeout(() => {
+      onClose();
+    }, 1000);
+
+  } catch (error) {
+    console.error('Error al crear turno:', error);
+    addToast({
+      variant: 'error',
+      message: 'Error inesperado',
+      description: 'Ocurrió un problema al crear el turno',
+    });
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // Mostrar loading
   if (loading || authLoading) {
@@ -906,12 +926,14 @@ export function NuevoTurnoModal({
             onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
             className="space-y-3 md:space-y-4 text-left max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1"
           >
-            {/* Especialista */}
-            {user?.puedeGestionarTurnos && (
-              <div>
-                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
-                  Especialista*
-                </label>
+            {/* Especialista - SIEMPRE VISIBLE */}
+            <div>
+              <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+                Especialista*
+              </label>
+              
+              {user?.puedeGestionarTurnos ? (
+                // ✅ Usuario con permisos: selector habilitado
                 <select
                   value={formData.id_especialista}
                   onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
@@ -925,24 +947,32 @@ export function NuevoTurnoModal({
                     </option>
                   ))}
                 </select>
-              </div>
-            )}
-
-            {!user?.puedeGestionarTurnos && user?.nombre && (
-              <div>
-                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
-                  Especialista
-                </label>
-                <div className="w-full px-2 md:px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 text-sm">
-                  {user.nombre} {user.apellido}
-                  {user.rol && (
-                    <span className="ml-2 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                      {user.rol.nombre}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+              ) : (
+                // ✅ Usuario sin permisos: campo deshabilitado con su nombre desde la lista de especialistas
+                <select
+                  value={formData.id_especialista}
+                  disabled
+                  className="w-full px-2 md:px-3 py-2 text-sm bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed opacity-75"
+                  required
+                >
+                  {(() => {
+                    const userId = user?.id_usuario || user?.id; // ✅ Usar user.id como fallback
+                    const especialistaActual = especialistas.find(e => 
+                      String(e.id_usuario) === String(userId)
+                    );
+                    
+                    return (
+                      <option value={userId || ''}>
+                        {especialistaActual 
+                          ? `${especialistaActual.nombre} ${especialistaActual.apellido}`
+                          : `${user?.nombre || ''} ${user?.apellido || ''}`.trim() || 'Especialista actual'
+                        }
+                      </option>
+                    );
+                  })()}
+                </select>
+              )}
+            </div>
 
             {/* Especialidad */}
             <div>
