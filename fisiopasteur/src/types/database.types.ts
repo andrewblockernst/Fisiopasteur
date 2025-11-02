@@ -19,6 +19,7 @@ export type Database = {
           created_at: string | null
           estado: string
           id_box: number
+          id_organizacion: string
           numero: number
           updated_at: string | null
         }
@@ -26,6 +27,7 @@ export type Database = {
           created_at?: string | null
           estado: string
           id_box?: number
+          id_organizacion: string
           numero: number
           updated_at?: string | null
         }
@@ -33,30 +35,51 @@ export type Database = {
           created_at?: string | null
           estado?: string
           id_box?: number
+          id_organizacion?: string
           numero?: number
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "box_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
+        ]
       }
       especialidad: {
         Row: {
           id_especialidad: number
+          id_organizacion: string
           nombre: string
         }
         Insert: {
           id_especialidad?: number
+          id_organizacion: string
           nombre: string
         }
         Update: {
           id_especialidad?: number
+          id_organizacion?: string
           nombre?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "especialidad_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
+        ]
       }
       evolucion_clinica: {
         Row: {
           created_at: string | null
           id_evolucion: number
+          id_organizacion: string
           id_turno: number | null
           observaciones: string | null
           updated_at: string | null
@@ -64,6 +87,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id_evolucion?: number
+          id_organizacion: string
           id_turno?: number | null
           observaciones?: string | null
           updated_at?: string | null
@@ -71,11 +95,19 @@ export type Database = {
         Update: {
           created_at?: string | null
           id_evolucion?: number
+          id_organizacion?: string
           id_turno?: number | null
           observaciones?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "evolucion_clinica_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
           {
             foreignKeyName: "evolucion_clinica_id_turno_fkey"
             columns: ["id_turno"]
@@ -91,6 +123,7 @@ export type Database = {
           fecha_envio: string | null
           fecha_programada: string | null
           id_notificacion: number
+          id_organizacion: string
           id_turno: number | null
           medio: string
           mensaje: string
@@ -101,6 +134,7 @@ export type Database = {
           fecha_envio?: string | null
           fecha_programada?: string | null
           id_notificacion?: number
+          id_organizacion: string
           id_turno?: number | null
           medio: string
           mensaje: string
@@ -111,12 +145,20 @@ export type Database = {
           fecha_envio?: string | null
           fecha_programada?: string | null
           id_notificacion?: number
+          id_organizacion?: string
           id_turno?: number | null
           medio?: string
           mensaje?: string
           telefono?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "notificacion_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
           {
             foreignKeyName: "notificacion_id_turno_fkey"
             columns: ["id_turno"]
@@ -125,6 +167,39 @@ export type Database = {
             referencedColumns: ["id_turno"]
           },
         ]
+      }
+      organizacion: {
+        Row: {
+          activo: boolean
+          created_at: string
+          cuit_cuil: string | null
+          direccion: string | null
+          email_contacto: string | null
+          id_organizacion: string
+          nombre: string
+          telefono_contacto: string | null
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          cuit_cuil?: string | null
+          direccion?: string | null
+          email_contacto?: string | null
+          id_organizacion?: string
+          nombre: string
+          telefono_contacto?: string | null
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          cuit_cuil?: string | null
+          direccion?: string | null
+          email_contacto?: string | null
+          id_organizacion?: string
+          nombre?: string
+          telefono_contacto?: string | null
+        }
+        Relationships: []
       }
       paciente: {
         Row: {
@@ -137,6 +212,7 @@ export type Database = {
           email: string | null
           fecha_nacimiento: string | null
           historia_clinica: string | null
+          id_organizacion: string
           id_paciente: number
           nombre: string
           telefono: string
@@ -152,6 +228,7 @@ export type Database = {
           email?: string | null
           fecha_nacimiento?: string | null
           historia_clinica?: string | null
+          id_organizacion: string
           id_paciente?: number
           nombre: string
           telefono: string
@@ -167,12 +244,21 @@ export type Database = {
           email?: string | null
           fecha_nacimiento?: string | null
           historia_clinica?: string | null
+          id_organizacion?: string
           id_paciente?: number
           nombre?: string
           telefono?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "paciente_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
+        ]
       }
       rol: {
         Row: {
@@ -202,6 +288,7 @@ export type Database = {
           id_box: number | null
           id_especialidad: number | null
           id_especialista: string | null
+          id_organizacion: string
           id_paciente: number | null
           id_turno: number
           notas: string | null
@@ -219,6 +306,7 @@ export type Database = {
           id_box?: number | null
           id_especialidad?: number | null
           id_especialista?: string | null
+          id_organizacion: string
           id_paciente?: number | null
           id_turno?: number
           notas?: string | null
@@ -236,6 +324,7 @@ export type Database = {
           id_box?: number | null
           id_especialidad?: number | null
           id_especialista?: string | null
+          id_organizacion?: string
           id_paciente?: number | null
           id_turno?: number
           notas?: string | null
@@ -267,6 +356,13 @@ export type Database = {
             referencedColumns: ["id_usuario"]
           },
           {
+            foreignKeyName: "turno_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
+          {
             foreignKeyName: "turno_id_paciente_fkey"
             columns: ["id_paciente"]
             isOneToOne: false
@@ -284,7 +380,6 @@ export type Database = {
           created_at: string | null
           email: string
           id_especialidad: number | null
-          id_rol: number
           id_usuario: string
           nombre: string
           telefono: string | null
@@ -298,7 +393,6 @@ export type Database = {
           created_at?: string | null
           email: string
           id_especialidad?: number | null
-          id_rol: number
           id_usuario?: string
           nombre: string
           telefono?: string | null
@@ -312,7 +406,6 @@ export type Database = {
           created_at?: string | null
           email?: string
           id_especialidad?: number | null
-          id_rol?: number
           id_usuario?: string
           nombre?: string
           telefono?: string | null
@@ -326,13 +419,6 @@ export type Database = {
             referencedRelation: "especialidad"
             referencedColumns: ["id_especialidad"]
           },
-          {
-            foreignKeyName: "usuario_id_rol_fkey"
-            columns: ["id_rol"]
-            isOneToOne: false
-            referencedRelation: "rol"
-            referencedColumns: ["id"]
-          },
         ]
       }
       usuario_especialidad: {
@@ -342,6 +428,7 @@ export type Database = {
           id_especialidad: number
           id_usuario: string
           id_usuario_especialidad: number
+          id_usuario_organizacion: string
           precio_obra_social: number | null
           precio_particular: number | null
           updated_at: string | null
@@ -352,6 +439,7 @@ export type Database = {
           id_especialidad: number
           id_usuario: string
           id_usuario_especialidad?: number
+          id_usuario_organizacion: string
           precio_obra_social?: number | null
           precio_particular?: number | null
           updated_at?: string | null
@@ -362,6 +450,7 @@ export type Database = {
           id_especialidad?: number
           id_usuario?: string
           id_usuario_especialidad?: number
+          id_usuario_organizacion?: string
           precio_obra_social?: number | null
           precio_particular?: number | null
           updated_at?: string | null
@@ -376,6 +465,65 @@ export type Database = {
           },
           {
             foreignKeyName: "usuario_especialidad_id_usuario_fkey"
+            columns: ["id_usuario"]
+            isOneToOne: false
+            referencedRelation: "usuario"
+            referencedColumns: ["id_usuario"]
+          },
+          {
+            foreignKeyName: "usuario_especialidad_id_usuario_organizacion_fkey"
+            columns: ["id_usuario_organizacion"]
+            isOneToOne: false
+            referencedRelation: "usuario_organizacion"
+            referencedColumns: ["id_usuario_organizacion"]
+          },
+        ]
+      }
+      usuario_organizacion: {
+        Row: {
+          activo: boolean
+          color_calendario: string | null
+          creado_en: string
+          id_organizacion: string
+          id_rol: number
+          id_usuario: string
+          id_usuario_organizacion: string
+        }
+        Insert: {
+          activo?: boolean
+          color_calendario?: string | null
+          creado_en?: string
+          id_organizacion: string
+          id_rol: number
+          id_usuario: string
+          id_usuario_organizacion?: string
+        }
+        Update: {
+          activo?: boolean
+          color_calendario?: string | null
+          creado_en?: string
+          id_organizacion?: string
+          id_rol?: number
+          id_usuario?: string
+          id_usuario_organizacion?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuario_organizacion_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
+          {
+            foreignKeyName: "usuario_organizacion_id_rol_fkey"
+            columns: ["id_rol"]
+            isOneToOne: false
+            referencedRelation: "rol"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usuario_organizacion_id_usuario_fkey"
             columns: ["id_usuario"]
             isOneToOne: false
             referencedRelation: "usuario"
