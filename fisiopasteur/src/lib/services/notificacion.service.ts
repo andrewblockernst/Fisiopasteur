@@ -63,6 +63,10 @@ export async function actualizarEstadoNotificacion(
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional para verificar pertenencia
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+    
     const updateData: NotificacionUpdate = {
       estado,
       ...(fechaEnvio && { fecha_envio: fechaEnvio })
@@ -72,6 +76,7 @@ export async function actualizarEstadoNotificacion(
       .from("notificacion")
       .update(updateData)
       .eq("id_notificacion", id)
+      .eq("id_organizacion", orgId) // ✅ Verificar que la notificación pertenece a la org
       .select("*")
       .single();
 
@@ -94,10 +99,15 @@ export async function obtenerNotificacionesTurno(idTurno: number) {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+    
     const { data, error } = await supabase
       .from("notificacion")
       .select("*")
       .eq("id_turno", idTurno)
+      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .order("fecha_programada", { ascending: true });
 
     if (error) {
@@ -114,11 +124,16 @@ export async function obtenerNotificacionesTurno(idTurno: number) {
 
 /**
  * Obtener notificaciones pendientes de enviar
+ * ✅ MULTI-ORG: Filtrar por organización
  */
 export async function obtenerNotificacionesPendientes() {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+    
     const ahora = new Date().toISOString();
     
     const { data, error } = await supabase
@@ -132,6 +147,7 @@ export async function obtenerNotificacionesPendientes() {
           especialidad:id_especialidad(nombre)
         )
       `)
+      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .eq("estado", "pendiente")
       .lte("fecha_programada", ahora)
       .order("fecha_programada", { ascending: true });
@@ -316,14 +332,20 @@ export async function marcarNotificacionFallida(idNotificacion: number) {
 
 /**
  * Obtener estadísticas de notificaciones
+ * ✅ MULTI-ORG: Filtrar por organización
  */
 export async function obtenerEstadisticasNotificaciones(fechaDesde?: string, fechaHasta?: string) {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+    
     let query = supabase
       .from("notificacion")
-      .select("estado, medio, fecha_envio, fecha_programada");
+      .select("estado, medio, fecha_envio, fecha_programada")
+      .eq("id_organizacion", orgId); // ✅ Filtrar por organización
 
     if (fechaDesde) {
       query = query.gte("fecha_programada", fechaDesde);

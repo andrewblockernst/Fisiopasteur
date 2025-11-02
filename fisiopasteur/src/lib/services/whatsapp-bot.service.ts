@@ -6,6 +6,7 @@ import type { TurnoConDetalles } from "@/stores/turno-store";
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { mapearTurnoParaBot } from "@/lib/utils/whatsapp.utils";
+import { getBrandingConfig } from './branding.service'; // ✅ MULTI-ORG: Importar servicio de branding
 
 // Configuración del bot
 const BOT_URL = process.env.WHATSAPP_BOT_URL || 'https://fisiopasteur-whatsapp-bot-df9edfb46742.herokuapp.com';
@@ -152,7 +153,20 @@ export async function enviarConfirmacionTurno(
     };
   }
 
-  const datosBot = mapearTurnoParaBot(turno);
+  // ✅ MULTI-ORG: Obtener branding de la organización del turno
+  let nombreOrganizacion = 'Centro Médico';
+  if (turno.id_organizacion) {
+    try {
+      const brandingResult = await getBrandingConfig(turno.id_organizacion);
+      if (brandingResult.success && brandingResult.data) {
+        nombreOrganizacion = brandingResult.data.nombre;
+      }
+    } catch (error) {
+      console.warn('No se pudo obtener branding, usando nombre por defecto');
+    }
+  }
+
+  const datosBot = mapearTurnoParaBot(turno, nombreOrganizacion);
   const resultado = await realizarPeticionBot('/api/turno/confirmar', datosBot);
   
   if (resultado.status === 'success') {
@@ -166,6 +180,7 @@ export async function enviarConfirmacionTurno(
 
 /**
  * Enviar recordatorio de turno por WhatsApp
+ * ✅ MULTI-ORG: Incluye branding de la organización
  */
 export async function enviarRecordatorioTurno(turno: TurnoConDetalles): Promise<BotResponse> {
   console.log('⏰ Enviando recordatorio de turno por WhatsApp...');
@@ -178,7 +193,20 @@ export async function enviarRecordatorioTurno(turno: TurnoConDetalles): Promise<
     };
   }
 
-  const datosBot = mapearTurnoParaBot(turno);
+  // ✅ MULTI-ORG: Obtener branding de la organización del turno
+  let nombreOrganizacion = 'Centro Médico';
+  if (turno.id_organizacion) {
+    try {
+      const brandingResult = await getBrandingConfig(turno.id_organizacion);
+      if (brandingResult.success && brandingResult.data) {
+        nombreOrganizacion = brandingResult.data.nombre;
+      }
+    } catch (error) {
+      console.warn('No se pudo obtener branding, usando nombre por defecto');
+    }
+  }
+
+  const datosBot = mapearTurnoParaBot(turno, nombreOrganizacion);
   const resultado = await realizarPeticionBot('/api/turno/recordatorio', datosBot);
   
   if (resultado.status === 'success') {
