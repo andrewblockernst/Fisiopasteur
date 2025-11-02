@@ -700,7 +700,8 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<Pe
           nombre,
           apellido,
           email,
-          telefono
+          telefono,
+          color
         ),
         rol:id_rol (
           id,
@@ -759,7 +760,7 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<Pe
       apellido: usuario?.apellido,
       email: usuario?.email,
       telefono: usuario?.telefono,
-      color: usuarioOrg.color_calendario, // ✅ Ahora viene de usuario_organizacion
+      color: usuario?.color, // ✅ Color individual del especialista desde usuario.color
       rol: {
         id: rol?.id || 1,
         nombre: rol?.nombre || 'usuario',

@@ -121,7 +121,8 @@ function EspecialistaEditFormForDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedEspecialidades, setSelectedEspecialidades] = useState<number[]>(
-    especialista.especialidades?.map((e: { id_especialidad: number }) => e.id_especialidad) || []
+    // ✅ Eliminar duplicados usando Set
+    [...new Set(especialista.especialidades?.map((e: { id_especialidad: number }) => e.id_especialidad) || [])]
   );
   const [selectedColor, setSelectedColor] = useState(especialista.color || "#3B82F6");
   const { showServerActionResponse } = useToastStore();
@@ -200,9 +201,11 @@ function EspecialistaEditFormForDialog({
   const toggleEspecialidad = (especialidadId: number) => {
     setSelectedEspecialidades(prev => {
       if (prev.includes(especialidadId)) {
+        // Remover la especialidad
         return prev.filter(id => id !== especialidadId);
       } else {
-        return [...prev, especialidadId];
+        // Agregar solo si no existe (prevenir duplicados)
+        return [...new Set([...prev, especialidadId])];
       }
     });
   };
