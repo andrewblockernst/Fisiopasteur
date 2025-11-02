@@ -136,6 +136,10 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       redirect('/login');
     }
 
+    // 1.1. Obtener ID de organización del usuario
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     // 1.5. Verificar si el usuario existe por ID
     const { data: existeUsuarioPorId, error: checkIdError } = await supabase
       .from('usuario')
@@ -188,70 +192,94 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       }
     }
 
-    // 2. Obtener datos del usuario con joins
-    // Primero intentar por ID de Auth
+    // 2. Obtener datos del usuario desde usuario_organizacion (multi-org)
     let userData = null;
     let userError = null;
 
-    const { data: userById, error: errorById } = await supabase
-      .from('usuario')
+    const { data: userOrgById, error: errorById } = await supabase
+      .from('usuario_organizacion')
       .select(`
-        id_usuario,
-        nombre,
-        apellido,
-        email,
-        telefono,
-        color,
-        rol:id_rol (
-          id,
-          nombre,
-          jerarquia
-        ),
-        especialidad:id_especialidad (
-          id_especialidad,
-          nombre
-        )
-      `)
-      .eq('id_usuario', user.id)
-      .single();
-
-    if (userById && !errorById) {
-      // Usuario encontrado por ID de Auth
-      userData = userById;
-    } else {
-      // No encontrado por ID, buscar por email
-      const { data: userByEmail, error: errorByEmail } = await supabase
-        .from('usuario')
-        .select(`
+        id_usuario_organizacion,
+        activo,
+        color_calendario,
+        usuario:id_usuario (
           id_usuario,
           nombre,
           apellido,
           email,
           telefono,
-          color,
-          rol:id_rol (
-            id,
-            nombre,
-            jerarquia
-          ),
-          especialidad:id_especialidad (
-            id_especialidad,
-            nombre
-          )
-        `)
+          color
+        ),
+        rol:id_rol (
+          id,
+          nombre,
+          jerarquia
+        )
+      `)
+      .eq('id_usuario', user.id)
+      .eq('id_organizacion', orgId)
+      .single();
+
+    if (userOrgById && !errorById) {
+      // Usuario encontrado en usuario_organizacion
+      userData = {
+        ...userOrgById.usuario,
+        rol: userOrgById.rol,
+        id_usuario_organizacion: userOrgById.id_usuario_organizacion,
+        color_calendario: userOrgById.color_calendario
+      };
+    } else {
+      // No encontrado por ID, buscar por email en usuario_organizacion
+      // Primero buscar usuario por email
+      const { data: usuarioByEmail } = await supabase
+        .from('usuario')
+        .select('id_usuario')
         .eq('email', user.email || '')
         .single();
 
-      if (userByEmail && !errorByEmail) {
-        // Usuario encontrado por email
-        userData = userByEmail;
-        console.log('Usuario encontrado por email, usando perfil existente:', {
-          authId: user.id,
-          dbId: userByEmail.id_usuario,
-          email: user.email
-        });
+      if (usuarioByEmail) {
+        // Luego buscar en usuario_organizacion
+        const { data: userOrgByEmail, error: errorByEmail } = await supabase
+          .from('usuario_organizacion')
+          .select(`
+            id_usuario_organizacion,
+            activo,
+            color_calendario,
+            usuario:id_usuario (
+              id_usuario,
+              nombre,
+              apellido,
+              email,
+              telefono,
+              color
+            ),
+            rol:id_rol (
+              id,
+              nombre,
+              jerarquia
+            )
+          `)
+          .eq('id_usuario', usuarioByEmail.id_usuario)
+          .eq('id_organizacion', orgId)
+          .single();
+
+        if (userOrgByEmail && !errorByEmail) {
+          userData = {
+            ...userOrgByEmail.usuario,
+            rol: userOrgByEmail.rol,
+            id_usuario_organizacion: userOrgByEmail.id_usuario_organizacion,
+            color_calendario: userOrgByEmail.color_calendario
+          };
+          console.log('Usuario encontrado por email en org, usando perfil existente:', {
+            authId: user.id,
+            dbId: usuarioByEmail.id_usuario,
+            email: user.email
+          });
+        } else {
+          userError = errorById || errorByEmail;
+        }
       } else {
-        userError = errorById || errorByEmail;
+        userError = errorById;
       }
     }
 
@@ -264,7 +292,7 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       throw new Error('Usuario no encontrado en la base de datos');
     }
 
-    // 3. Obtener especialidades adicionales
+    // 3. Obtener especialidades desde usuario_especialidad (usa id_usuario_organizacion)
     const { data: especialidadesData, error: especialidadesError } = await supabase
       .from('usuario_especialidad')
       .select(`
@@ -273,10 +301,11 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
           nombre
         )
       `)
-      .eq('id_usuario', userData.id_usuario); // Usar el ID del usuario encontrado
+      .eq('id_usuario_organizacion', userData.id_usuario_organizacion)
+      .eq('activo', true);
 
-    // 4. Construir perfil completo
-    const especialidadesAdicionales = especialidadesError 
+    // 4. Construir lista de especialidades
+    const especialidadesArray = especialidadesError 
       ? [] 
       : (especialidadesData || [])
           .map(item => item.especialidad)
@@ -285,6 +314,10 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
             id_especialidad: esp.id_especialidad,
             nombre: esp.nombre
           }));
+
+    // La primera especialidad activa es la principal
+    const especialidadPrincipal = especialidadesArray.length > 0 ? especialidadesArray[0] : null;
+    const especialidadesAdicionales = especialidadesArray.slice(1); // Resto de especialidades
 
     const perfil: PerfilCompleto = {
       id_usuario: userData.id_usuario,
@@ -298,10 +331,7 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
         nombre: userData.rol?.nombre || 'Usuario',
         jerarquia: userData.rol?.jerarquia || 1
       },
-      especialidad_principal: userData.especialidad ? {
-        id_especialidad: userData.especialidad.id_especialidad,
-        nombre: userData.especialidad.nombre
-      } : null,
+      especialidad_principal: especialidadPrincipal,
       especialidades_adicionales: especialidadesAdicionales
     };
 
