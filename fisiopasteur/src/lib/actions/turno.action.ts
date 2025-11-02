@@ -18,6 +18,10 @@ export async function obtenerTurno(id: number) {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     const { data, error } = await supabase
       .from("turno")
       .select(`
@@ -28,6 +32,7 @@ export async function obtenerTurno(id: number) {
         box:id_box(id_box, numero)
       `)
       .eq("id_turno", id)
+      .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
       .single();
 
     if (error) {
@@ -52,6 +57,10 @@ export async function obtenerTurnos(filtros?: {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     let query = supabase
       .from("turno")
       .select(`
@@ -61,6 +70,7 @@ export async function obtenerTurnos(filtros?: {
         especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero)
       `)
+      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -187,6 +197,10 @@ export async function crearTurno(
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     // ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
     if (datos.fecha && datos.hora && datos.id_especialista) {
       const disponibilidad = await verificarDisponibilidad(
@@ -213,10 +227,16 @@ export async function crearTurno(
       }
     }
 
+    // ✅ MULTI-ORG: Inyectar id_organizacion en los datos del turno
+    const turnoConOrg = {
+      ...datos,
+      id_organizacion: orgId,
+    };
+
     // ✅ AHORA datos es TurnoInsert puro, sin recordatorios
     const { data, error } = await supabase
       .from("turno")
-      .insert(datos)
+      .insert(turnoConOrg)
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
