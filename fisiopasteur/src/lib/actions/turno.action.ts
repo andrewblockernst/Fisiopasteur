@@ -293,6 +293,9 @@ export async function crearTurno(
 
         if (data.paciente?.telefono) {
           const mensajeConfirmacion = `Turno confirmado para ${data.fecha} a las ${data.hora}`;
+          
+          // ✅ Registrar confirmación para que el cron la procese
+          // Esto evita problemas de rate limit al crear múltiples turnos seguidos
           const notifConfirmacion = await registrarNotificacionConfirmacion(
             data.id_turno,
             data.paciente.telefono,
@@ -300,26 +303,9 @@ export async function crearTurno(
           );
 
           if (notifConfirmacion.success && notifConfirmacion.data) {
-            const turnoCompleto: any = {
-              ...data,
-              paciente: data.paciente ? {
-                ...data.paciente,
-                id_paciente: data.id_paciente || 0,
-                email: null
-              } : null,
-              especialista: data.especialista ? {
-                ...data.especialista,
-                id_usuario: data.id_especialista || ''
-              } : null
-            };
-            
-            const resultadoBot = await enviarConfirmacionTurno(turnoCompleto);
-            
-            if (resultadoBot.status === 'success') {
-              await marcarNotificacionEnviada(notifConfirmacion.data.id_notificacion);
-            } else {
-              await marcarNotificacionFallida(notifConfirmacion.data.id_notificacion);
-            }
+            console.log(`📝 Confirmación registrada para procesamiento por cron: notificación ${notifConfirmacion.data.id_notificacion}`);
+            // ⏰ El cron procesará esta confirmación en los próximos 2 minutos
+            // Esto respeta el rate limit de WaSender (1 mensaje cada 5 segundos)
           }
 
           // Programar recordatorios
