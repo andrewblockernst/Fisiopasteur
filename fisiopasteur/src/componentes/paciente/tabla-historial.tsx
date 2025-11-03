@@ -30,9 +30,10 @@ interface GrupoTratamiento {
 
 interface Props {
   grupo: GrupoTratamiento;
+  onActualizar?: () => void | Promise<void>;
 }
 
-export function TablaHistorialClinico({ grupo }: Props) {
+export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
   const { addToast } = useToastStore();
   const [editandoEvolucion, setEditandoEvolucion] = useState<number | null>(null);
   const [editandoTratamiento, setEditandoTratamiento] = useState(false);
@@ -111,7 +112,11 @@ export function TablaHistorialClinico({ grupo }: Props) {
         description: "La evolución clínica se guardó correctamente"
       });
       setEditandoEvolucion(null);
-      window.location.reload();
+      
+      // ✅ Recargar datos después de guardar
+      if (onActualizar) {
+        await onActualizar();
+      }
     } catch (error: any) {
       addToast({
         variant: "error",
@@ -135,7 +140,11 @@ export function TablaHistorialClinico({ grupo }: Props) {
         description: `El turno se marcó como ${estadoLabel(nuevoEstado)}`
       });
       setDialogConfirmacion({ open: false, id_turno: null, accion: null });
-      window.location.reload();
+      
+      // ✅ Recargar datos después de actualizar
+      if (onActualizar) {
+        await onActualizar();
+      }
     } else {
       addToast({
         variant: "error",
@@ -169,7 +178,11 @@ export function TablaHistorialClinico({ grupo }: Props) {
         description: "El nombre del tratamiento se actualizó correctamente"
       });
       setEditandoTratamiento(false);
-      window.location.reload();
+      
+      // ✅ Recargar datos después de actualizar
+      if (onActualizar) {
+        await onActualizar();
+      }
     } else {
       addToast({
         variant: "error",
