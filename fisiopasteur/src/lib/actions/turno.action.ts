@@ -18,6 +18,10 @@ export async function obtenerTurno(id: number) {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     const { data, error } = await supabase
       .from("turno")
       .select(`
@@ -28,6 +32,7 @@ export async function obtenerTurno(id: number) {
         box:id_box(id_box, numero)
       `)
       .eq("id_turno", id)
+      .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
       .single();
 
     if (error) {
@@ -52,6 +57,10 @@ export async function obtenerTurnos(filtros?: {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     let query = supabase
       .from("turno")
       .select(`
@@ -61,6 +70,7 @@ export async function obtenerTurnos(filtros?: {
         especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero)
       `)
+      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -108,6 +118,10 @@ export async function obtenerTurnosConFiltros(filtros?: {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     let query = supabase
       .from("turno")
       .select(`
@@ -123,6 +137,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
         especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero)
       `)
+      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -226,6 +241,9 @@ export async function crearTurno(
         id_grupo_tratamiento = grupo.id_grupo;
       }
     }
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
 
     // ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
     if (datos.fecha && datos.hora && datos.id_especialista) {
@@ -265,6 +283,16 @@ export async function crearTurno(
     const { data, error } = await supabase
       .from("turno")
       .insert(turnoData)
+    // ✅ MULTI-ORG: Inyectar id_organizacion en los datos del turno
+    const turnoConOrg = {
+      ...datos,
+      id_organizacion: orgId,
+    };
+
+    // ✅ AHORA datos es TurnoInsert puro, sin recordatorios
+    const { data, error } = await supabase
+      .from("turno")
+      .insert(turnoConOrg)
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
@@ -363,12 +391,17 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     // Si se cambia fecha/hora/especialista, verificar disponibilidad
     if (datos.fecha || datos.hora || datos.id_especialista || datos.id_box !== undefined) {
       const turnoActual = await supabase
         .from("turno")
-        .select("fecha, hora, id_especialista, id_box, id_especialidad")
+        .select("fecha, hora, id_especialista, id_box, id_especialidad, id_organizacion")
         .eq("id_turno", id)
+        .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
         .single();
 
       if (turnoActual.data) {
@@ -411,6 +444,8 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
             }
           }
         }
+      } else {
+        return { success: false, error: "Turno no encontrado o no pertenece a esta organización" };
       }
     }
 
@@ -421,6 +456,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
         updated_at: new Date().toISOString()
       })
       .eq("id_turno", id)
+      .eq("id_organizacion", orgId) // ✅ Asegurar que solo actualiza de su org
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
@@ -517,11 +553,28 @@ export async function eliminarTurno(id: number) {
   const supabase = await createClient();
   
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
+    // Verificar que el turno pertenece a esta organización antes de eliminar
+    const { data: turnoVerificado, error: errorVerificar } = await supabase
+      .from("turno")
+      .select("id_turno")
+      .eq("id_turno", id)
+      .eq("id_organizacion", orgId)
+      .single();
+
+    if (errorVerificar || !turnoVerificado) {
+      return { success: false, error: "Turno no encontrado o no pertenece a esta organización" };
+    }
+
     // Primero eliminar todas las notificaciones asociadas al turno
     const { error: notificacionesError } = await supabase
       .from("notificacion")
       .delete()
-      .eq("id_turno", id);
+      .eq("id_turno", id)
+      .eq("id_organizacion", orgId); // ✅ También filtrar notificaciones por org
 
     if (notificacionesError) {
       console.error("Error al eliminar notificaciones del turno:", notificacionesError);
@@ -532,7 +585,8 @@ export async function eliminarTurno(id: number) {
     const { error: turnoError } = await supabase
       .from("turno")
       .delete()
-      .eq("id_turno", id);
+      .eq("id_turno", id)
+      .eq("id_organizacion", orgId); // ✅ Asegurar que solo elimina de su org
 
     if (turnoError) {
       console.error("Error al eliminar turno:", turnoError);
@@ -843,89 +897,94 @@ export async function obtenerEspecialistas() {
   const supabase = await createClient();
   
   try {
-    // ✅ Traer datos desde usuario_organizacion + relación con usuario (que tiene id_especialidad)
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
+    // ✅ NUEVO MODELO: Consultar usuario_organizacion con roles permitidos
     const { data: usuariosOrg, error: errorUsuarios } = await supabase
       .from("usuario_organizacion")
       .select(`
+        id_usuario_organizacion,
         id_usuario,
-        id_rol,
+        color_calendario,
         activo,
-        usuario:id_usuario(
+        usuario:id_usuario (
           id_usuario,
           nombre,
           apellido,
-          color,
           email,
-          telefono,
-          id_especialidad,
-          especialidad:id_especialidad(
-            id_especialidad,
-            nombre
-          )
+          telefono
         ),
-        rol:id_rol(
+        rol:id_rol (
           id,
           nombre,
           jerarquia
         )
       `)
-      .in("id_rol", ROLES_ESPECIALISTAS)
+      .eq("id_organizacion", orgId)
+      .in("id_rol", ROLES_ESPECIALISTAS) // Solo Admin (1) y Especialistas (2), excluye Programadores (3)
       .eq("activo", true);
 
-    if (errorUsuarios) {
+    if (errorUsuarios || !usuariosOrg) {
       console.error("Error al obtener usuarios:", errorUsuarios);
-      return { success: false, error: errorUsuarios.message };
+      return { success: false, error: errorUsuarios?.message || "No se encontraron usuarios" };
     }
 
-    // ✅ Filtrar usuarios que existen
-    const usuariosValidos = usuariosOrg.filter(uo => uo.usuario !== null);
-
-    // Obtener especialidades ADICIONALES de cada usuario (desde usuario_especialidad)
+    // ✅ NUEVO MODELO: Obtener especialidades por id_usuario_organizacion
+    const idsUsuarioOrg = usuariosOrg.map(uo => uo.id_usuario_organizacion);
+    
     const { data: usuarioEspecialidades, error: errorEspecialidades } = await supabase
       .from("usuario_especialidad")
       .select(`
-        id_usuario,
+        id_usuario_organizacion,
         especialidad:id_especialidad(
           id_especialidad,
           nombre
         )
       `)
+      .in("id_usuario_organizacion", idsUsuarioOrg)
       .eq("activo", true);
 
     if (errorEspecialidades) {
       console.error("Error al obtener especialidades:", errorEspecialidades);
     }
 
-    // Mapear especialidades adicionales por usuario
+    // Mapear especialidades por id_usuario_organizacion
     const especialidadesMap = new Map();
     usuarioEspecialidades?.forEach(item => {
-      if (!especialidadesMap.has(item.id_usuario)) {
-        especialidadesMap.set(item.id_usuario, []);
+      if (!especialidadesMap.has(item.id_usuario_organizacion)) {
+        especialidadesMap.set(item.id_usuario_organizacion, []);
       }
+      // @ts-ignore - especialidad es join
       if (item.especialidad) {
-        especialidadesMap.get(item.id_usuario).push({
+        especialidadesMap.get(item.id_usuario_organizacion).push({
+          // @ts-ignore
           especialidad: item.especialidad
         });
       }
     });
 
-    // ✅ Combinar datos correctamente
-    const especialistas = usuariosValidos.map(usuarioOrg => {
-      const usuario = usuarioOrg.usuario!; // Ya filtramos los null arriba
+    // ✅ Combinar usuarios con sus especialidades (nuevo formato)
+    const especialistas = usuariosOrg.map(usuarioOrg => {
+      // @ts-ignore - usuario y rol son joins
+      const usuario = usuarioOrg.usuario;
+      // @ts-ignore
+      const rol = usuarioOrg.rol;
       
       return {
-        id_usuario: usuario.id_usuario,
-        nombre: usuario.nombre,
-        apellido: usuario.apellido,
-        color: usuario.color,
-        email: usuario.email,
-        telefono: usuario.telefono,
-        activo: usuarioOrg.activo,
-        id_rol: usuarioOrg.id_rol,
-        rol: usuarioOrg.rol, // ✅ Viene de usuario_organizacion -> rol
-        id_especialidad: usuario.id_especialidad, // ✅ Especialidad principal del usuario
-        especialidad: usuario.especialidad, // ✅ Datos completos de la especialidad principal
-        usuario_especialidad: especialidadesMap.get(usuario.id_usuario) || [] // ✅ Especialidades adicionales
+        id_usuario: usuarioOrg.id_usuario,
+        id_usuario_organizacion: usuarioOrg.id_usuario_organizacion,
+        nombre: usuario?.nombre,
+        apellido: usuario?.apellido,
+        color: usuarioOrg.color_calendario, // ✅ Ahora viene de usuario_organizacion
+        email: usuario?.email,
+        telefono: usuario?.telefono,
+        activo: usuarioOrg.activo, // ✅ Ahora viene de usuario_organizacion
+        id_rol: rol?.id,
+        rol: rol,
+        especialidad: null,
+        usuario_especialidad: especialidadesMap.get(usuarioOrg.id_usuario_organizacion) || []
       };
     });
 
@@ -1275,6 +1334,10 @@ export async function crearTurnosEnLote(turnos: Array<{
     }
 
     const id_organizacion = usuarioOrg.id_organizacion;
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     const turnosCreados = [];
     const errores = [];
 
@@ -1293,7 +1356,7 @@ export async function crearTurnosEnLote(turnos: Array<{
             estado: turnoData.estado || 'programado',
             tipo_plan: 'particular',
             dificultad: turnoData.dificultad || 'principiante',
-            id_organizacion // ✅ AGREGADO
+            id_organizacion: orgId // ✅ Inyectar orgId
           })
           .select()
           .single();
@@ -1424,11 +1487,16 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
       return;
     }
 
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+    
     // 1. Obtener datos del paciente
     const { data: paciente } = await supabase
       .from("paciente")
       .select("nombre, telefono")
       .eq("id_paciente", parseInt(id_paciente))
+      .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
       .single();
 
     if (!paciente || !paciente.telefono) {
@@ -1446,6 +1514,7 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
         telefono: paciente.telefono,
         estado: "pendiente",
         id_organizacion: usuarioOrg.id_organizacion // ✅ AGREGADO
+        id_organizacion: orgId // ✅ Inyectar orgId
       })
       .select()
       .single();

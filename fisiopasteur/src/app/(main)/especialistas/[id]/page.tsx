@@ -5,7 +5,7 @@ import Button from "@/componentes/boton";
 import { EditarEspecialistaDialog } from "@/componentes/especialista/editar-especialista-dialog";
 import { DeleteEspecialistaDialog } from "@/componentes/especialista/eliminar-especialista-dialog";
 import { FullScreenLoading } from "@/componentes/loading";
-import { getEspecialista, getPerfilEspecialista } from "@/lib/actions/especialista.action";
+import { getEspecialista, getPerfilEspecialista, getEspecialidades } from "@/lib/actions/especialista.action";
 import { Tables } from "@/types/database.types";
 import { ArrowLeft, Bone, CircleDollarSign, Mail, Palette, Pencil, Phone, Trash } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
@@ -31,28 +31,32 @@ export default function ConsultaEspecialistaMobile() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [viewingEspecialista, setViewingEspecialista] = useState<PerfilCompleto | null>(null);
 
-    // const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
+    const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     
 
     useEffect(() => {
-        const loadEspecialista = async () => {
+        const loadData = async () => {
             try {
                 setIsLoading(true);
                 const especialistaId = params.id as string;
                 if (especialistaId) {
-                    const especialista = await getPerfilEspecialista(especialistaId);
+                    const [especialista, especialidadesData] = await Promise.all([
+                        getPerfilEspecialista(especialistaId),
+                        getEspecialidades()
+                    ]);
                     setViewingEspecialista(especialista);
+                    setEspecialidades(especialidadesData);
                 }
             } catch (error) {
-                console.error("Error loading especialista:", error);
+                console.error("Error loading data:", error);
             } finally {
                 setIsLoading(false);
             }
         }
 
-        loadEspecialista();
+        loadData();
     }, [params.id, router]);
 
     if (isLoading) {
@@ -318,6 +322,63 @@ export default function ConsultaEspecialistaMobile() {
 
             </div>
 
+            )}
+
+            {/* Diálogos de edición y eliminación */}
+            {isEditing && viewingEspecialista && especialidades.length > 0 && (
+                <EditarEspecialistaDialog
+                    isOpen={isEditing}
+                    onClose={handleEditClose}
+                    especialidades={especialidades}
+                    especialista={{
+                        id_usuario: viewingEspecialista.id_usuario,
+                        nombre: viewingEspecialista.nombre,
+                        apellido: viewingEspecialista.apellido,
+                        email: viewingEspecialista.email,
+                        telefono: viewingEspecialista.telefono,
+                        color: viewingEspecialista.color,
+                        activo: true,
+                        id_usuario_organizacion: '',
+                        id_rol: viewingEspecialista.rol.id,
+                        rol: viewingEspecialista.rol,
+                        especialidades: [
+                            ...(viewingEspecialista.especialidad_principal ? [{
+                                id_especialidad: viewingEspecialista.especialidad_principal.id_especialidad,
+                                nombre: viewingEspecialista.especialidad_principal.nombre,
+                                precio_particular: viewingEspecialista.especialidad_principal.precio_particular ?? null,
+                                precio_obra_social: viewingEspecialista.especialidad_principal.precio_obra_social ?? null
+                            }] : []),
+                            ...viewingEspecialista.especialidades_adicionales.map(esp => ({
+                                id_especialidad: esp.id_especialidad,
+                                nombre: esp.nombre,
+                                precio_particular: esp.precio_particular ?? null,
+                                precio_obra_social: esp.precio_obra_social ?? null
+                            }))
+                        ],
+                        usuario_especialidad: []
+                    }}
+                />
+            )}
+
+            {isDeleting && viewingEspecialista && (
+                <DeleteEspecialistaDialog
+                    isOpen={isDeleting}
+                    onClose={handleDeleteClose}
+                    especialista={{
+                        id_usuario: viewingEspecialista.id_usuario,
+                        nombre: viewingEspecialista.nombre,
+                        apellido: viewingEspecialista.apellido,
+                        email: viewingEspecialista.email,
+                        telefono: viewingEspecialista.telefono,
+                        color: viewingEspecialista.color,
+                        activo: true,
+                        contraseña: '',
+                        created_at: null,
+                        id_especialidad: null,
+                        updated_at: null
+                    }}
+                    handleToast={toast.addToast}
+                />
             )}
             
         </div>

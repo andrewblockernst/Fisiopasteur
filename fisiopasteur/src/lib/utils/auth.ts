@@ -6,6 +6,7 @@ type Usuario = Tables<'usuario'>;
 
 /**
  * Obtiene el usuario autenticado actual con su información completa
+ * ✅ MULTI-ORG: Obtiene usuario de la tabla usuario (sin id_rol)
  */
 export async function obtenerUsuarioActual(): Promise<Usuario | null> {
   try {
@@ -36,42 +37,127 @@ export async function obtenerUsuarioActual(): Promise<Usuario | null> {
 
 /**
  * Verifica si el usuario actual tiene permisos de administrador
+ * ✅ MULTI-ORG: Obtiene id_rol de usuario_organizacion
  */
 export async function verificarEsAdmin(): Promise<boolean> {
-  const usuario = await obtenerUsuarioActual();
-  return esAdmin(usuario?.id_rol);
+  try {
+    const { getAuthContext } = await import("./auth-context");
+    const { orgId } = await getAuthContext();
+    const usuario = await obtenerUsuarioActual();
+    if (!usuario) return false;
+    
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from('usuario_organizacion')
+      .select('id_rol')
+      .eq('id_usuario', usuario.id_usuario)
+      .eq('id_organizacion', orgId)
+      .single();
+    
+    return esAdmin(data?.id_rol);
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Verifica si el usuario actual es especialista
+ * ✅ MULTI-ORG: Obtiene id_rol de usuario_organizacion
  */
 export async function verificarEsEspecialista(): Promise<boolean> {
-  const usuario = await obtenerUsuarioActual();
-  return esEspecialista(usuario?.id_rol);
+  try {
+    const { getAuthContext } = await import("./auth-context");
+    const { orgId } = await getAuthContext();
+    const usuario = await obtenerUsuarioActual();
+    if (!usuario) return false;
+    
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from('usuario_organizacion')
+      .select('id_rol')
+      .eq('id_usuario', usuario.id_usuario)
+      .eq('id_organizacion', orgId)
+      .single();
+    
+    return esEspecialista(data?.id_rol);
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Verifica si el usuario actual es programador
+ * ✅ MULTI-ORG: Obtiene id_rol de usuario_organizacion
  */
 export async function verificarEsProgramador(): Promise<boolean> {
-  const usuario = await obtenerUsuarioActual();
-  return esProgramador(usuario?.id_rol);
+  try {
+    const { getAuthContext } = await import("./auth-context");
+    const { orgId } = await getAuthContext();
+    const usuario = await obtenerUsuarioActual();
+    if (!usuario) return false;
+    
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from('usuario_organizacion')
+      .select('id_rol')
+      .eq('id_usuario', usuario.id_usuario)
+      .eq('id_organizacion', orgId)
+      .single();
+    
+    return esProgramador(data?.id_rol);
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Verifica si el usuario actual puede gestionar el sistema
+ * ✅ MULTI-ORG: Obtiene id_rol de usuario_organizacion
  */
 export async function verificarPuedeGestionarSistema(): Promise<boolean> {
-  const usuario = await obtenerUsuarioActual();
-  return puedeGestionarSistema(usuario?.id_rol);
+  try {
+    const { getAuthContext } = await import("./auth-context");
+    const { orgId } = await getAuthContext();
+    const usuario = await obtenerUsuarioActual();
+    if (!usuario) return false;
+    
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from('usuario_organizacion')
+      .select('id_rol')
+      .eq('id_usuario', usuario.id_usuario)
+      .eq('id_organizacion', orgId)
+      .single();
+    
+    return puedeGestionarSistema(data?.id_rol);
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Verifica si el usuario actual puede gestionar turnos
+ * ✅ MULTI-ORG: Obtiene id_rol de usuario_organizacion
  */
 export async function verificarPuedeGestionarTurnos(): Promise<boolean> {
-  const usuario = await obtenerUsuarioActual();
-  return puedeGestionarTurnos(usuario?.id_rol);
+  try {
+    const { getAuthContext } = await import("./auth-context");
+    const { orgId } = await getAuthContext();
+    const usuario = await obtenerUsuarioActual();
+    if (!usuario) return false;
+    
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from('usuario_organizacion')
+      .select('id_rol')
+      .eq('id_usuario', usuario.id_usuario)
+      .eq('id_organizacion', orgId)
+      .single();
+    
+    return puedeGestionarTurnos(data?.id_rol);
+  } catch {
+    return false;
+  }
 }
 
 /**

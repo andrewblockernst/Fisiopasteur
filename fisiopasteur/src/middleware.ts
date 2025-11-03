@@ -27,13 +27,14 @@ export async function middleware(request: NextRequest) {
     return response; // Dejar pasar sin verificar auth
   }
 
-  // ✅ Rutas públicas que no requieren autenticación
+  // ✅ Rutas públicas que no requieren autenticación (incluye selector de org)
   const publicPaths = [
     '/login',
     '/not-found',
     '/centro-de-ayuda',
     '/recuperarContra',
-    '/restablecerContra'
+    '/restablecerContra',
+    '/seleccionar-organizacion', // ✅ Nuevo: para usuarios multi-org
   ];
 
   const isPublicPath = publicPaths.some(path => 
@@ -98,6 +99,62 @@ export async function middleware(request: NextRequest) {
   // ✅ Si no hay usuario autenticado, redirigir a login
   if (!user && request.nextUrl.pathname !== '/login') {
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // ========================================
+  // 🏢 CONTEXTO ORGANIZACIONAL (MULTI-ORG)
+  // ========================================
+  
+  if (user) {
+    // Verificar si el usuario tiene una organización seleccionada
+    const orgCookie = request.cookies.get('org_actual')?.value;
+
+    // Si NO tiene organización seleccionada, verificar cuántas tiene
+    if (!orgCookie) {
+      // Consultar organizaciones del usuario
+      const { data: userOrgs } = await supabase
+        .from('usuario_organizacion')
+        .select('id_organizacion, organizacion:id_organizacion(nombre, activo)')
+        .eq('id_usuario', user.id)
+        .eq('activo', true);
+
+      if (userOrgs && userOrgs.length > 0) {
+        // Si tiene una sola organización, setearla automáticamente
+        if (userOrgs.length === 1) {
+          response.cookies.set('org_actual', userOrgs[0].id_organizacion, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 30, // 30 días
+            path: '/',
+          });
+        } else {
+          // Si tiene múltiples organizaciones, redirigir al selector
+          if (request.nextUrl.pathname !== '/seleccionar-organizacion') {
+            return NextResponse.redirect(new URL('/seleccionar-organizacion', request.url));
+          }
+        }
+      } else {
+        // Usuario no tiene organizaciones asignadas - esto es un problema
+        console.error(`Usuario ${user.id} no tiene organizaciones asignadas`);
+        // Podríamos redirigir a una página de "sin acceso" o logout
+      }
+    } else {
+      // Verificar que la org_actual sigue siendo válida para este usuario
+      const { data: orgAccess } = await supabase
+        .from('usuario_organizacion')
+        .select('activo')
+        .eq('id_usuario', user.id)
+        .eq('id_organizacion', orgCookie)
+        .eq('activo', true)
+        .single();
+
+      // Si ya no tiene acceso a esa organización, limpiar cookie y re-evaluar
+      if (!orgAccess) {
+        response.cookies.delete('org_actual');
+        // En el próximo request se evaluará de nuevo
+      }
+    }
   }
 
   return response

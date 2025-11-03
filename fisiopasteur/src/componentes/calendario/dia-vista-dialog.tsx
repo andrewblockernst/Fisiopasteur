@@ -144,6 +144,7 @@ export function DayViewModal({
             id_paciente: turnoEditando.id_paciente ?? null,
             id_especialista: turnoEditando.id_especialista ?? null,
             id_especialidad: turnoEditando.id_especialidad ?? null,
+            id_organizacion: (turnoEditando as any).id_organizacion ?? null,
             id_box: (turnoEditando as any).id_box ?? null,
             fecha: turnoEditando.fecha,
             hora: turnoEditando.hora,
