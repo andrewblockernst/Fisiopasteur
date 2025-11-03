@@ -434,6 +434,10 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
 
     revalidatePath("/turnos");
     revalidatePath("/pilates");
+    revalidatePath("/pacientes");
+    revalidatePath("/pacientes/HistorialClinico");
+    revalidatePath("/inicio");
+    
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
@@ -563,10 +567,106 @@ export async function eliminarTurno(id: number) {
   }
 }
 
-// Cancelar (marcar como cancelado, sin borrar)
+export async function marcarComoAtendido(id_turno: number) {
+  const supabase = await createClient();
+  
+  try {
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
+    // Verificar estado actual del turno
+    const { data: turnoActual, error: errorGet } = await supabase
+      .from('turno')
+      .select('id_turno, estado, id_organizacion')
+      .eq('id_turno', id_turno)
+      .eq('id_organizacion', orgId)
+      .single();
+
+    if (errorGet || !turnoActual) {
+      return { 
+        success: false, 
+        error: 'Turno no encontrado o no pertenece a esta organización' 
+      };
+    }
+
+    // ✅ Solo permitir desde programado o vencido
+    const estadosPermitidos = ['programado', 'vencido'];
+    if (!turnoActual.estado || !estadosPermitidos.includes(turnoActual.estado)) {
+      return {
+        success: false,
+        error: `No se puede marcar como atendido un turno en estado: ${turnoActual.estado || 'desconocido'}`
+      };
+    }
+
+    // Actualizar a atendido
+    const { error } = await supabase
+      .from('turno')
+      .update({ 
+        estado: 'atendido',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id_turno', id_turno)
+      .eq('id_organizacion', orgId);
+
+    if (error) {
+      console.error('❌ Error al marcar turno como atendido:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Error al actualizar el turno'
+      };
+    }
+
+    console.log(`✅ Turno ${id_turno} marcado como atendido (desde estado: ${turnoActual.estado})`);
+    
+    revalidatePath('/turnos');
+    revalidatePath('/pilates');
+    revalidatePath('/inicio');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error inesperado al marcar como atendido:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
+
+/**
+ * ✅ Cancelar turno
+ * Permite cambiar desde: programado, vencido
+ */
 export async function cancelarTurno(id: number, motivo?: string) {
   const supabase = await createClient();
+  
   try {
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
+    // Verificar estado actual del turno
+    const { data: turnoActual, error: errorGet } = await supabase
+      .from('turno')
+      .select('id_turno, estado, id_organizacion')
+      .eq('id_turno', id)
+      .eq('id_organizacion', orgId)
+      .single();
+
+    if (errorGet || !turnoActual) {
+      return { 
+        success: false, 
+        error: 'Turno no encontrado o no pertenece a esta organización' 
+      };
+    }
+
+    // ✅ Solo permitir desde programado o vencido
+    const estadosPermitidos = ['programado', 'vencido'];
+    if (!turnoActual.estado || !estadosPermitidos.includes(turnoActual.estado)) {
+      return {
+        success: false,
+        error: `No se puede cancelar un turno en estado: ${turnoActual.estado || 'desconocido'}`
+      };
+    }
+
+    // Actualizar a cancelado
     const { data, error } = await supabase
       .from("turno")
       .update({
@@ -574,37 +674,23 @@ export async function cancelarTurno(id: number, motivo?: string) {
         updated_at: new Date().toISOString(),
       })
       .eq("id_turno", id)
+      .eq("id_organizacion", orgId)
       .select("*")
       .single();
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      console.error('❌ Error al cancelar turno:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`✅ Turno ${id} cancelado (desde estado: ${turnoActual.estado})`);
+    
     revalidatePath("/turnos");
     revalidatePath("/pilates");
+    revalidatePath('/inicio');
     return { success: true, data };
-  } catch {
-    return { success: false, error: "Error inesperado" };
-  }
-}
-
-export async function marcarComoAtendido(id_turno: number) {
-  const supabase = await createClient();
-  
-  try {
-    const { error } = await supabase
-      .from('turno')
-      .update({ 
-        estado: 'atendido',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id_turno', id_turno);
-
-    if (error) throw error;
-
-    revalidatePath('/turnos');
-    revalidatePath("/pilates");
-    return { success: true };
   } catch (error) {
-    console.error('Error al marcar turno como atendido:', error);
+    console.error('❌ Error inesperado al cancelar turno:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Error desconocido'
@@ -1251,7 +1337,11 @@ export async function actualizarEvolucionClinica(
       return { success: false, error: error.message };
     }
 
+    // ✅ Revalidar todas las rutas donde se muestra el historial clínico
     revalidatePath("/pacientes");
+    revalidatePath("/pacientes/HistorialClinico");
+    revalidatePath("/imprimir/historia-clinica");
+    
     return { success: true };
   } catch (error) {
     console.error("❌ Error inesperado:", error);
@@ -1605,7 +1695,12 @@ export async function actualizarGrupoTratamiento(
     }
 
     console.log('✅ Grupo actualizado exitosamente:', data);
+    
+    // ✅ Revalidar todas las rutas donde se muestra el historial clínico
     revalidatePath('/pacientes');
+    revalidatePath('/pacientes/HistorialClinico');
+    revalidatePath('/imprimir/historia-clinica');
+    
     return { success: true, data };
   } catch (error: any) {
     console.error('❌ Error inesperado:', error);

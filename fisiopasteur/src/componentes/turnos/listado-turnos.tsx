@@ -2,26 +2,93 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
-import AccionesTurno from "@/componentes/turnos/acciones-turno";
 import { DetalleTurnoDialog } from "@/componentes/turnos/detalle-turno-dialog";
-import { obtenerTurnos } from "@/lib/actions/turno.action";
+import { obtenerTurnos, marcarComoAtendido, cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
+import { useToastStore } from "@/stores/toast-store";
 import Button from "../boton";
+import EditarTurnoModal from "./editar-turno-modal";
 import type { TurnoWithRelations } from "@/types";
+import { MoreVertical, CheckCircle, XCircle, Edit, Trash, AlertCircle } from "lucide-react";
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }) {
 
   const router = useRouter();
+  const toast = useToastStore();
   
   // ============= ESTADO PARA MODAL DE DETALLE =============
   const [turnoSeleccionado, setTurnoSeleccionado] = useState<TurnoWithRelations | null>(null);
   const [numeroTalonarioSeleccionado, setNumeroTalonarioSeleccionado] = useState<string | null>(null);
   const [modalDetalleAbierto, setModalDetalleAbierto] = useState(false);
 
+  // ============= ESTADO PARA MODAL DE EDICIÓN =============
+  const [turnoParaEditar, setTurnoParaEditar] = useState<TurnoWithRelations | null>(null);
+  const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
+
   // ============= ESTADO PARA TURNOS COMPLETOS (PARA CÁLCULO DE TALONARIO) =============
   const [todosLosTurnos, setTodosLosTurnos] = useState<TurnoWithRelations[]>([]);
   const [cargandoTurnos, setCargandoTurnos] = useState(true);
 
-  // const [openNew, setOpenNew] = useState(false);
+  // ============= FUNCIONES DE ACCIONES =============
+  const handleMarcarAtendido = async (turno: TurnoWithRelations) => {
+    const resultado = await marcarComoAtendido(turno.id_turno);
+    
+    if (resultado.success) {
+      toast.addToast({
+        variant: "success",
+        message: "Turno marcado como atendido",
+      });
+      router.refresh();
+    } else {
+      toast.addToast({
+        variant: "error",
+        message: resultado.error || "Error al marcar turno",
+      });
+    }
+  };
+
+  const handleCancelar = async (turno: TurnoWithRelations) => {
+    const resultado = await cancelarTurno(turno.id_turno);
+    
+    if (resultado.success) {
+      toast.addToast({
+        variant: "success",
+        message: "Turno cancelado",
+      });
+      router.refresh();
+    } else {
+      toast.addToast({
+        variant: "error",
+        message: resultado.error || "Error al cancelar turno",
+      });
+    }
+  };
+
+  const handleEliminar = async (turno: TurnoWithRelations) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar este turno? Esta acción no se puede deshacer.")) {
+      return;
+    }
+
+    const resultado = await eliminarTurno(turno.id_turno);
+    
+    if (resultado.success) {
+      toast.addToast({
+        variant: "success",
+        message: "Turno eliminado",
+      });
+      router.refresh();
+    } else {
+      toast.addToast({
+        variant: "error",
+        message: resultado.error || "Error al eliminar turno",
+      });
+    }
+  };
+
+  const handleEditar = (turno: TurnoWithRelations) => {
+    setTurnoParaEditar(turno);
+    setModalEditarAbierto(true);
+  };
 
   // ============= CARGAR TODOS LOS TURNOS PARA CALCULAR TALONARIO CORRECTAMENTE =============
   useEffect(() => {
@@ -83,9 +150,9 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
     if (turno.estado === 'cancelado') {
       baseClass += " bg-red-100";
     }
-    // ✅ NUEVO: Turnos vencidos con fondo amarillo
+    // ✅ Turnos vencidos con fondo amarillo + borde para destacar
     if (turno.estado === 'vencido') {
-      baseClass += " bg-yellow-50";
+      baseClass += " bg-yellow-50 border-l-4 border-l-yellow-500";
     }
     return baseClass;
   };
@@ -234,15 +301,80 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
                 {/* ✅ COLUMNA DE ACCIONES - Evitar propagación del click */}
                 <td className="p-3" onClick={(e) => e.stopPropagation()}>
                   {t.id_paciente && (
-                    <AccionesTurno 
-                      turno={{ 
-                        ...t, 
-                        id_paciente: t.id_paciente,
-                        index: turnosOrdenados.indexOf(t), 
-                        total: turnosOrdenados.length 
-                      } as any} 
-                      onDone={() => router.refresh()} 
-                    />
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button
+                          className="p-1 hover:bg-gray-100 rounded transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="w-5 h-5 text-gray-600" />
+                        </button>
+                      </DropdownMenu.Trigger>
+
+                      <DropdownMenu.Content align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
+                        {/* ⚠️ ALERTA para turnos vencidos */}
+                        {t.estado === 'vencido' && (
+                          <>
+                            <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-200">
+                              <div className="flex items-start gap-2">
+                                <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-yellow-800">
+                                  Turno vencido. Confirma si fue atendido o cancelado.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="h-px bg-gray-200 my-1" />
+                          </>
+                        )}
+
+                        {/* Marcar como Atendido */}
+                        {(t.estado === 'programado' || t.estado === 'vencido') && (
+                          <DropdownMenu.Item
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-green-50 flex items-center gap-2 text-green-600 cursor-pointer outline-none"
+                            onSelect={() => handleMarcarAtendido(t)}
+                          >
+                            <CheckCircle size={16} />
+                            Marcar como Atendido
+                          </DropdownMenu.Item>
+                        )}
+
+                        {/* Cancelar Turno */}
+                        {(t.estado === 'programado' || t.estado === 'vencido') && (
+                          <DropdownMenu.Item
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer outline-none"
+                            onSelect={() => handleCancelar(t)}
+                          >
+                            <XCircle size={16} />
+                            Cancelar Turno
+                          </DropdownMenu.Item>
+                        )}
+
+                        {/* Separador */}
+                        {(t.estado === 'programado' || t.estado === 'vencido') && (
+                          <div className="h-px bg-gray-200 my-1" />
+                        )}
+
+                        {/* Editar */}
+                        {t.estado !== 'atendido' && (
+                          <DropdownMenu.Item
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700 cursor-pointer outline-none"
+                            onSelect={() => handleEditar(t)}
+                          >
+                            <Edit size={16} />
+                            Editar
+                          </DropdownMenu.Item>
+                        )}
+
+                        {/* Eliminar */}
+                        <DropdownMenu.Item
+                          className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer outline-none"
+                          onSelect={() => handleEliminar(t)}
+                        >
+                          <Trash size={16} />
+                          Eliminar
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Root>
                   )}
                 </td>
               </tr>
@@ -269,6 +401,19 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
       numeroTalonario={numeroTalonarioSeleccionado}
       onTurnoActualizado={() => router.refresh()}
     />
+
+    {/* Modal de Edición del Turno */}
+    {modalEditarAbierto && turnoParaEditar && (
+      <EditarTurnoModal
+        turno={turnoParaEditar as any}
+        open={modalEditarAbierto}
+        onClose={() => setModalEditarAbierto(false)}
+        onSaved={() => {
+          setModalEditarAbierto(false);
+          router.refresh();
+        }}
+      />
+    )}
   </>
   );
 }
