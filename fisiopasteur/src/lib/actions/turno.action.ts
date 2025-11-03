@@ -209,17 +209,17 @@ export async function crearTurno(
     const { orgId } = await getAuthContext();
 
     // ============= CREAR GRUPO DE TRATAMIENTO SI HAY TÍTULO =============
-    if (datos.titulo_tratamiento && !id_grupo_tratamiento) {
+    if (datos.titulo_tratamiento && !id_grupo_tratamiento && datos.id_paciente && datos.id_especialista) {
       const { data: grupo, error: errorGrupo } = await supabase
         .from('grupo_tratamiento')
         .insert({
           id_paciente: datos.id_paciente,
           id_especialista: datos.id_especialista,
-          id_especialidad: datos.id_especialidad,
+          id_especialidad: datos.id_especialidad ?? undefined,
           id_organizacion: orgId,
           nombre: datos.titulo_tratamiento,
           fecha_inicio: datos.fecha,
-          tipo_plan: datos.tipo_plan,
+          tipo_plan: datos.tipo_plan ?? 'particular',
         })
         .select('id_grupo')
         .single();

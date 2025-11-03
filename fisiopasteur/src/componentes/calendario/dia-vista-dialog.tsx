@@ -159,6 +159,7 @@ export function DayViewModal({
             evolucion_clinica: (turnoEditando as any).evolucion_clinica ?? null,
             evolucion_completada_en: (turnoEditando as any).evolucion_completada_en ?? null,
             id_grupo_tratamiento: (turnoEditando as any).id_grupo_tratamiento ?? null,
+            titulo_tratamiento: (turnoEditando as any).titulo_tratamiento ?? null,
           }}
           open={Boolean(turnoEditando)}
           onClose={() => setTurnoEditando(null)}
