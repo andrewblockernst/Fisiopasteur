@@ -122,36 +122,36 @@ export type Database = {
           created_at: string | null
           fecha_inicio: string
           id_especialidad: number | null
-          id_especialista: string | null
+          id_especialista: string
           id_grupo: string
           id_organizacion: string
-          id_paciente: number | null
-          nombre: string | null
-          tipo_plan: string | null
+          id_paciente: number
+          nombre: string
+          tipo_plan: string
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           fecha_inicio: string
           id_especialidad?: number | null
-          id_especialista?: string | null
+          id_especialista: string
           id_grupo?: string
           id_organizacion: string
-          id_paciente?: number | null
-          nombre?: string | null
-          tipo_plan?: string | null
+          id_paciente: number
+          nombre: string
+          tipo_plan: string
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           fecha_inicio?: string
           id_especialidad?: number | null
-          id_especialista?: string | null
+          id_especialista?: string
           id_grupo?: string
           id_organizacion?: string
-          id_paciente?: number | null
-          nombre?: string | null
-          tipo_plan?: string | null
+          id_paciente?: number
+          nombre?: string
+          tipo_plan?: string
           updated_at?: string | null
         }
         Relationships: [
@@ -366,6 +366,7 @@ export type Database = {
           observaciones: string | null
           precio: number | null
           tipo_plan: string | null
+          titulo_tratamiento: string | null
           updated_at: string | null
         }
         Insert: {
@@ -387,6 +388,7 @@ export type Database = {
           observaciones?: string | null
           precio?: number | null
           tipo_plan?: string | null
+          titulo_tratamiento?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -408,6 +410,7 @@ export type Database = {
           observaciones?: string | null
           precio?: number | null
           tipo_plan?: string | null
+          titulo_tratamiento?: string | null
           updated_at?: string | null
         }
         Relationships: [

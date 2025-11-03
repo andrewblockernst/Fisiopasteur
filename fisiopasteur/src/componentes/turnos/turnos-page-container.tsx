@@ -21,7 +21,7 @@ interface TurnosPageContainerProps {
     fecha_desde: string;
     fecha_hasta: string;
     especialista_id?: string;
-    especialidad_id?: string;
+    especialidad_id?: number;
     estado?: string;
   };
 }
