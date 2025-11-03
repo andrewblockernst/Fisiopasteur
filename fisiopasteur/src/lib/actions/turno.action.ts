@@ -195,13 +195,52 @@ export async function obtenerTurnosConFiltros(filtros?: {
 
 // Crear un nuevo turno
 export async function crearTurno(
-  datos: Omit<TurnoInsert, 'id_organizacion'> & { id_organizacion?: number | null }, // ✅ id_organizacion opcional, se inyecta automáticamente
+  datos: TurnoInsert & { id_organizacion?: number; titulo_tratamiento?: string | null }, 
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
-  enviarNotificacion: boolean = true // ✅ Nuevo parámetro para controlar notificaciones
+  enviarNotificacion: boolean = true,
+  id_grupo_tratamiento?: string
 ) {
-  const supabase = await createClient();
-  
+
   try {
+    const supabase = await createClient();
+    // ✅ Obtener id_organizacion del usuario actual
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: 'Usuario no autenticado' };
+    }
+
+    const { data: usuarioOrg, error: errorOrg } = await supabase
+      .from('usuario_organizacion')
+      .select('id_organizacion')
+      .eq('id_usuario', user.id)
+      .single();
+
+    if (errorOrg || !usuarioOrg) {
+      return { success: false, error: 'No se encontró la organización del usuario' };
+    }
+
+    // ============= CREAR GRUPO DE TRATAMIENTO SI HAY TÍTULO =============
+    if (datos.titulo_tratamiento && !id_grupo_tratamiento) {
+      const { data: grupo, error: errorGrupo } = await supabase
+        .from('grupo_tratamiento')
+        .insert({
+          id_paciente: datos.id_paciente,
+          id_especialista: datos.id_especialista,
+          id_especialidad: datos.id_especialidad,
+          id_organizacion: usuarioOrg.id_organizacion,
+          nombre: datos.titulo_tratamiento,
+          fecha_inicio: datos.fecha,
+          tipo_plan: datos.tipo_plan,
+        })
+        .select('id_grupo')
+        .single();
+
+      if (errorGrupo) {
+        console.error('Error creando grupo de tratamiento:', errorGrupo);
+      } else if (grupo) {
+        id_grupo_tratamiento = grupo.id_grupo;
+      }
+    }
     // ✅ MULTI-ORG: Obtener contexto organizacional
     const { getAuthContext } = await import("@/lib/utils/auth-context");
     const { orgId } = await getAuthContext();
@@ -217,7 +256,6 @@ export async function crearTurno(
       );
       
       if (!disponibilidad.success || !disponibilidad.disponible) {
-        // Mensaje más específico para Pilates
         if (datos.id_especialidad === 4) {
           return { 
             success: false, 
@@ -232,6 +270,19 @@ export async function crearTurno(
       }
     }
 
+    // ✅ Agregar id_organizacion y id_grupo_tratamiento
+    // ✅ Eliminar titulo_tratamiento porque no existe en la tabla turno
+    const { titulo_tratamiento, ...datosLimpios } = datos;
+    
+    const turnoData = {
+      ...datosLimpios,
+      id_organizacion: usuarioOrg.id_organizacion, // ✅ AGREGADO
+      ...(id_grupo_tratamiento && { id_grupo_tratamiento })
+    };
+
+    const { data, error } = await supabase
+      .from("turno")
+      .insert(turnoData)
     // ✅ MULTI-ORG: Inyectar id_organizacion en los datos del turno
     const turnoConOrg = {
       ...datos,
@@ -257,113 +308,73 @@ export async function crearTurno(
     }
 
     // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
-    // ✅ Solo enviar notificaciones si enviarNotificacion === true
     if (enviarNotificacion) {
       try {
-      // Importar servicios de WhatsApp (solo si el turno se creó correctamente)
-      const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
-      const { 
-        registrarNotificacionConfirmacion, 
-        registrarNotificacionesRecordatorio,
-        marcarNotificacionEnviada,
-        marcarNotificacionFallida
-      } = await import("@/lib/services/notificacion.service");
-      const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+        const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
+        const { 
+          registrarNotificacionConfirmacion, 
+          marcarNotificacionEnviada,
+          marcarNotificacionFallida
+        } = await import("@/lib/services/notificacion.service");
 
-      // Verificar que el paciente tenga teléfono
-      if (data.paciente?.telefono) {
-          // 1. Registrar notificación de confirmación en BD
-        const mensajeConfirmacion = `Turno confirmado para ${data.fecha} a las ${data.hora}`;
-        const notifConfirmacion = await registrarNotificacionConfirmacion(
-          data.id_turno,
-          data.paciente.telefono,
-          mensajeConfirmacion
-        );
-
-        // 2. Enviar confirmación inmediatamente por WhatsApp
-        if (notifConfirmacion.success && notifConfirmacion.data) {
-          // Convertir datos al formato esperado por TurnoWithRelations
-          const turnoCompleto: any = {
-            ...data,
-            paciente: data.paciente ? {
-              ...data.paciente,
-              id_paciente: data.id_paciente || 0,
-              email: null
-            } : null,
-            especialista: data.especialista ? {
-              ...data.especialista,
-              id_usuario: data.id_especialista || ''
-            } : null
-          };
-          
-          const resultadoBot = await enviarConfirmacionTurno(turnoCompleto);
-          
-          if (resultadoBot.status === 'success') {
-            // Marcar como enviada exitosamente
-            await marcarNotificacionEnviada(notifConfirmacion.data.id_notificacion);
-          } else {
-            // Marcar como fallida
-            await marcarNotificacionFallida(notifConfirmacion.data.id_notificacion);
-          }
-        }
-
-        // 3. Programar recordatorios automáticos
-        const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
-        const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
-        
-        // ✅ USAR recordatorios del parámetro o los por defecto
-        const tiposRecordatorio = recordatorios || ['1d', '2h'];
-        const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora, tiposRecordatorio);
-        
-        // Filtrar solo los recordatorios válidos (no null)
-        const recordatoriosValidos = Object.entries(tiemposRecordatorio)
-          .filter(([_, fecha]) => fecha !== null)
-          .reduce((acc, [tipo, fecha]) => {
-            if (fecha) acc[tipo] = fecha;
-            return acc;
-          }, {} as Record<string, Date>);
-        
-        if (Object.keys(recordatoriosValidos).length > 0) {
-          const mensajeRecordatorio = `Recordatorio: Tu turno es el ${data.fecha} a las ${data.hora}`;
-          
-          const resultadosNotif = await registrarNotificacionesRecordatorioFlexible(
+        if (data.paciente?.telefono) {
+          const mensajeConfirmacion = `Turno confirmado para ${data.fecha} a las ${data.hora}`;
+          const notifConfirmacion = await registrarNotificacionConfirmacion(
             data.id_turno,
             data.paciente.telefono,
-            mensajeRecordatorio,
-            recordatoriosValidos
+            mensajeConfirmacion
           );
-          const tiposConfigurados = Object.keys(recordatoriosValidos).join(', ');
-          
-          // 🚀 Trigger inmediato: disparar procesamiento de recordatorios sin esperar al polling
-          try {
-            const apiUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app';
+
+          if (notifConfirmacion.success && notifConfirmacion.data) {
+            const turnoCompleto: any = {
+              ...data,
+              paciente: data.paciente ? {
+                ...data.paciente,
+                id_paciente: data.id_paciente || 0,
+                email: null
+              } : null,
+              especialista: data.especialista ? {
+                ...data.especialista,
+                id_usuario: data.id_especialista || ''
+              } : null
+            };
             
-            const response = await fetch(`${apiUrl}/api/cron/recordatorios`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-            });
+            const resultadoBot = await enviarConfirmacionTurno(turnoCompleto);
             
-            if (response.ok) {
-              const resultado = await response.json();
+            if (resultadoBot.status === 'success') {
+              await marcarNotificacionEnviada(notifConfirmacion.data.id_notificacion);
             } else {
-              console.log(`⚠️ Procesamiento inmediato respondió con status ${response.status} (se procesará en el próximo ciclo)`);
+              await marcarNotificacionFallida(notifConfirmacion.data.id_notificacion);
             }
-          } catch (triggerError) {
-            // No bloquear si falla, el polling cada 60s lo manejará
-            console.log('⚠️ No se pudo disparar procesamiento inmediato (se procesará en el próximo ciclo):', triggerError);
           }
-        } else {
-          console.log(`⚠️ No hay recordatorios válidos para programar (todos están en el pasado)`);
+
+          // Programar recordatorios
+          const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+          const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
+          
+          const tiposRecordatorio = recordatorios || ['1d', '2h'];
+          const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora, tiposRecordatorio);
+          
+          const recordatoriosValidos = Object.entries(tiemposRecordatorio)
+            .filter(([_, fecha]) => fecha !== null)
+            .reduce((acc, [tipo, fecha]) => {
+              if (fecha) acc[tipo] = fecha;
+              return acc;
+            }, {} as Record<string, Date>);
+          
+          if (Object.keys(recordatoriosValidos).length > 0) {
+            const mensajeRecordatorio = `Recordatorio: Tu turno es el ${data.fecha} a las ${data.hora}`;
+            await registrarNotificacionesRecordatorioFlexible(
+              data.id_turno,
+              data.paciente.telefono,
+              mensajeRecordatorio,
+              recordatoriosValidos
+            );
+          }
         }
-      } else {
-        console.log(`⚠️ Turno ${data.id_turno} creado sin teléfono - no se enviarán notificaciones WhatsApp`);
-      }
       } catch (botError) {
-        // Si falla la integración con WhatsApp, no afectar la creación del turno
         console.error("Error en integración WhatsApp (turno creado exitosamente):", botError);
       }
-    } else {
-      console.log(`📭 Notificaciones deshabilitadas para este turno (creación en lote)`);
     }
 
     revalidatePath("/turnos");
@@ -907,7 +918,8 @@ export async function obtenerEspecialistas() {
         ),
         rol:id_rol (
           id,
-          nombre
+          nombre,
+          jerarquia
         )
       `)
       .eq("id_organizacion", orgId)
@@ -936,7 +948,6 @@ export async function obtenerEspecialistas() {
 
     if (errorEspecialidades) {
       console.error("Error al obtener especialidades:", errorEspecialidades);
-      // No retornar error, continuar sin especialidades
     }
 
     // Mapear especialidades por id_usuario_organizacion
@@ -1143,6 +1154,150 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
   }
 }
 
+// ...existing code...
+
+// =====================================
+// 📊 HISTORIAL CLÍNICO
+// =====================================
+
+/**
+ * Obtener turnos de un paciente agrupados por tratamiento
+ */
+export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | number) {
+  const supabase = await createClient();
+  
+  try {
+    // ✅ Normalizar a número (convertir si es string)
+    const pacienteId = typeof id_paciente === 'string' ? parseInt(id_paciente, 10) : id_paciente;
+    
+    // 1️⃣ Primero obtener los turnos
+    const { data, error } = await supabase
+      .from("turno")
+      .select(`
+        *,
+        especialista:id_especialista(id_usuario, nombre, apellido),
+        especialidad:id_especialidad(id_especialidad, nombre)
+      `)
+      .eq("id_paciente", pacienteId)
+      .not("id_grupo_tratamiento", "is", null)
+      .order("fecha", { ascending: true })
+      .order("hora", { ascending: true });
+
+    if (error) {
+      console.error("❌ Error obteniendo historial:", error);
+      return { success: false, error: error.message };
+    }
+
+    // 2️⃣ Obtener los IDs únicos de grupos de tratamiento (filtrar nulls)
+    const gruposIds = [...new Set(
+      data?.map(t => t.id_grupo_tratamiento).filter((id): id is string => id !== null)
+    )];
+    
+    // 3️⃣ Obtener información de los grupos de tratamiento
+    const { data: gruposTratamiento, error: errorGrupos } = await supabase
+      .from("grupo_tratamiento")
+      .select("id_grupo, nombre")
+      .in("id_grupo", gruposIds);
+    
+    if (errorGrupos) {
+      console.warn("⚠️ No se pudieron obtener nombres de grupos:", errorGrupos);
+    }
+    
+    // 4️⃣ Crear un mapa de grupos por ID para búsqueda rápida
+    const gruposMap = new Map(
+      gruposTratamiento?.map(g => [g.id_grupo, g.nombre]) || []
+    );
+
+    // 5️⃣ Agrupar turnos por id_grupo_tratamiento
+    const gruposHistorial = new Map();
+    
+    data?.forEach(turno => {
+      const grupoId = turno.id_grupo_tratamiento;
+      if (!gruposHistorial.has(grupoId)) {
+        gruposHistorial.set(grupoId, {
+          id_grupo: grupoId,
+          // ✅ PRIORIDAD: nombre del grupo de tratamiento > nombre de especialidad
+          especialidad: (grupoId ? gruposMap.get(grupoId) : null) || turno.especialidad?.nombre || "Sin especialidad",
+          especialista: turno.especialista,
+          fecha_inicio: turno.fecha,
+          tipo_plan: turno.tipo_plan,
+          total_sesiones: 0,
+          turnos: []
+        });
+      }
+      
+      const grupo = gruposHistorial.get(grupoId);
+      grupo.turnos.push(turno);
+      grupo.total_sesiones = grupo.turnos.length;
+    });
+
+    const grupos = Array.from(gruposHistorial.values()).sort((a, b) => 
+      new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime()
+    );
+
+    return { success: true, data: grupos };
+  } catch (error) {
+    console.error("❌ Error inesperado:", error);
+    return { success: false, error: "Error inesperado" };
+  }
+}
+
+/**
+ * Actualizar evolución clínica de un turno
+ */
+export async function actualizarEvolucionClinica(
+  id_turno: number, 
+  evolucion_clinica: string
+) {
+  const supabase = await createClient();
+  
+  try {
+    // ✅ Obtener turno actual para validar tiempo de edición
+    const { data: turnoActual, error: errorGet } = await supabase
+      .from("turno")
+      .select("evolucion_completada_en")
+      .eq("id_turno", id_turno)
+      .single();
+
+    if (errorGet) {
+      return { success: false, error: "Turno no encontrado" };
+    }
+
+    // ✅ Validar límite de 5 minutos si ya existe evolución
+    if (turnoActual.evolucion_completada_en) {
+      const tiempoTranscurrido = Date.now() - new Date(turnoActual.evolucion_completada_en).getTime();
+      const cincoMinutos = 5 * 60 * 1000;
+      
+      if (tiempoTranscurrido > cincoMinutos) {
+        return { 
+          success: false, 
+          error: "No se puede editar la evolución después de 5 minutos" 
+        };
+      }
+    }
+
+    // ✅ Actualizar evolución
+    const { error } = await supabase
+      .from("turno")
+      .update({
+        evolucion_clinica,
+        evolucion_completada_en: new Date().toISOString()
+      })
+      .eq("id_turno", id_turno);
+
+    if (error) {
+      console.error("❌ Error actualizando evolución:", error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/pacientes");
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Error inesperado:", error);
+    return { success: false, error: "Error inesperado" };
+  }
+}
+
 // =====================================
 // 🔁 CREAR TURNOS EN LOTE (PILATES)
 // =====================================
@@ -1162,6 +1317,23 @@ export async function crearTurnosEnLote(turnos: Array<{
   try {
     const supabase = await createClient();
     
+    // ✅ Obtener id_organizacion del usuario actual
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: 'Usuario no autenticado' };
+    }
+
+    const { data: usuarioOrg } = await supabase
+      .from('usuario_organizacion')
+      .select('id_organizacion')
+      .eq('id_usuario', user.id)
+      .single();
+
+    if (!usuarioOrg) {
+      return { success: false, error: 'No se encontró organización del usuario' };
+    }
+
+    const id_organizacion = usuarioOrg.id_organizacion;
     // ✅ MULTI-ORG: Obtener contexto organizacional
     const { getAuthContext } = await import("@/lib/utils/auth-context");
     const { orgId } = await getAuthContext();
@@ -1172,8 +1344,7 @@ export async function crearTurnosEnLote(turnos: Array<{
     // Crear turnos uno por uno
     for (const turnoData of turnos) {
       try {
-        // ✅ La validación de disponibilidad se hace ANTES en los modales
-        // Aquí solo insertamos, confiando en que ya se validó
+        // ✅ CORRECCIÓN: Agregar id_organizacion
         const { data: turno, error } = await supabase
           .from("turno")
           .insert({
@@ -1298,6 +1469,24 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
   try {
     const supabase = await createClient();
     
+    // ✅ Obtener id_organizacion del usuario actual
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.error("Usuario no autenticado");
+      return;
+    }
+
+    const { data: usuarioOrg } = await supabase
+      .from('usuario_organizacion')
+      .select('id_organizacion')
+      .eq('id_usuario', user.id)
+      .single();
+
+    if (!usuarioOrg) {
+      console.error("No se encontró organización del usuario");
+      return;
+    }
+
     // ✅ MULTI-ORG: Obtener contexto organizacional
     const { getAuthContext } = await import("@/lib/utils/auth-context");
     const { orgId } = await getAuthContext();
@@ -1315,7 +1504,7 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
       return;
     }
 
-    // 2. Registrar notificación en BD
+    // 2. Registrar notificación en BD - ✅ CORRECCIÓN: Agregar id_organizacion
     const { data: notificacion } = await supabase
       .from("notificacion")
       .insert({
@@ -1324,6 +1513,7 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
         medio: "whatsapp",
         telefono: paciente.telefono,
         estado: "pendiente",
+        id_organizacion: usuarioOrg.id_organizacion // ✅ AGREGADO
         id_organizacion: orgId // ✅ Inyectar orgId
       })
       .select()
@@ -1434,5 +1624,58 @@ export async function actualizarTurnosVencidos() {
       success: false, 
       error: error instanceof Error ? error.message : 'Error desconocido'
     };
+  }
+}
+
+// =====================================
+// 🏥 GRUPOS DE TRATAMIENTO
+// =====================================
+
+/**
+ * Actualizar información de un grupo de tratamiento
+ */
+export async function actualizarGrupoTratamiento(
+  id_grupo: string,
+  datos: { nombre?: string }
+) {
+  const supabase = await createClient();
+  
+  try {
+    console.log('📝 Actualizando grupo de tratamiento:', { id_grupo, datos });
+    
+    // Validar que el grupo existe
+    const { data: grupoExistente, error: errorBusqueda } = await supabase
+      .from('grupo_tratamiento')
+      .select('id_grupo, nombre')
+      .eq('id_grupo', id_grupo)
+      .single();
+    
+    if (errorBusqueda) {
+      console.error('❌ Error buscando grupo:', errorBusqueda);
+      return { success: false, error: `Grupo no encontrado: ${errorBusqueda.message}` };
+    }
+    
+    console.log('✅ Grupo encontrado:', grupoExistente);
+    
+    const { data, error } = await supabase
+      .from('grupo_tratamiento')
+      .update({
+        nombre: datos.nombre,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id_grupo', id_grupo)
+      .select();
+
+    if (error) {
+      console.error('❌ Error actualizando grupo de tratamiento:', error);
+      return { success: false, error: error.message || 'Error al actualizar' };
+    }
+
+    console.log('✅ Grupo actualizado exitosamente:', data);
+    revalidatePath('/pacientes');
+    return { success: true, data };
+  } catch (error: any) {
+    console.error('❌ Error inesperado:', error);
+    return { success: false, error: error.message || 'Error inesperado' };
   }
 }

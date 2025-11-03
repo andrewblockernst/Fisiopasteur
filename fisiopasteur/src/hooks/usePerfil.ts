@@ -14,7 +14,7 @@ export interface Usuario {
   esAdmin?: boolean;
   esEspecialista?: boolean;
   esProgramador?: boolean;
-  puedeGestionarTurnos?: boolean; // Nuevo: Admin y Programadores pueden gestionar turnos
+  puedeGestionarTurnos?: boolean;
   rol?: {
     id: number;
     nombre: string;
@@ -112,7 +112,7 @@ export function useAuth(): AuthState {
               loading: false
             });
           } else {
-            // Si no encuentra el perfil, crear usuario básico sin permisos de admin
+            // Si no encuentra el perfil, crear usuario básico sin permisos
             setAuthState({
               isAuthenticated: true,
               user: {
