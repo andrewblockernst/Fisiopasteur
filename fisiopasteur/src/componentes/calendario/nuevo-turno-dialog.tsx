@@ -781,6 +781,27 @@ useEffect(() => {
           message: 'Error al crear grupo',
           description: errorGrupo.message || 'No se pudo crear el grupo de tratamiento',
         });
+        };
+        // ✅ id_organizacion se inyecta automáticamente en crearTurno() con getAuthContext()
+
+        const resultado = await crearTurno(turnoData, formData.recordatorios);
+
+        if (resultado.success && resultado.data) {
+          addToast({
+            variant: 'success',
+            message: 'Turno creado',
+            description: 'El turno se creó exitosamente',
+          });
+
+          onTurnoCreated?.();
+          onClose();
+        } else {
+          addToast({
+            variant: 'error',
+            message: 'Error al crear turno',
+            description: resultado.error || 'No se pudo crear el turno',
+          });
+        }
         setIsSubmitting(false);
         return;
       }
