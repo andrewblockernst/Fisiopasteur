@@ -447,6 +447,10 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
 
     revalidatePath("/turnos");
     revalidatePath("/pilates");
+    revalidatePath("/pacientes");
+    revalidatePath("/pacientes/HistorialClinico");
+    revalidatePath("/inicio");
+    
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
@@ -1346,7 +1350,11 @@ export async function actualizarEvolucionClinica(
       return { success: false, error: error.message };
     }
 
+    // ✅ Revalidar todas las rutas donde se muestra el historial clínico
     revalidatePath("/pacientes");
+    revalidatePath("/pacientes/HistorialClinico");
+    revalidatePath("/imprimir/historia-clinica");
+    
     return { success: true };
   } catch (error) {
     console.error("❌ Error inesperado:", error);
@@ -1693,7 +1701,12 @@ export async function actualizarGrupoTratamiento(
     }
 
     console.log('✅ Grupo actualizado exitosamente:', data);
+    
+    // ✅ Revalidar todas las rutas donde se muestra el historial clínico
     revalidatePath('/pacientes');
+    revalidatePath('/pacientes/HistorialClinico');
+    revalidatePath('/imprimir/historia-clinica');
+    
     return { success: true, data };
   } catch (error: any) {
     console.error('❌ Error inesperado:', error);
