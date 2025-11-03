@@ -1504,9 +1504,9 @@ export async function actualizarTurnosVencidos() {
   const supabase = await createClient();
   
   try {
+    // ✅ Obtener fecha y hora actual en zona horaria local (Argentina GMT-3)
     const ahora = new Date();
-    const fechaActual = ahora.toISOString().split('T')[0]; // yyyy-MM-dd
-    const horaActual = ahora.toTimeString().split(' ')[0].substring(0, 8); // HH:MM:SS
+    
     // Obtener turnos "programado" que ya pasaron
     const { data: turnosProgramados, error: fetchError } = await supabase
       .from('turno')
@@ -1522,9 +1522,15 @@ export async function actualizarTurnosVencidos() {
       return { success: true, data: [], mensaje: 'No hay turnos programados' };
     }
 
-    // Filtrar los que ya pasaron
+    // ✅ Filtrar los que ya pasaron usando comparación correcta con zona horaria
     const turnosVencidos = turnosProgramados.filter(turno => {
-      const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora}`);
+      // Parsear fecha y hora del turno (formato: "2025-11-03" y "10:00:00")
+      const [año, mes, dia] = turno.fecha.split('-').map(Number);
+      const [hora, minuto] = turno.hora.split(':').map(Number);
+      
+      // Crear Date en zona horaria local (no UTC)
+      const fechaHoraTurno = new Date(año, mes - 1, dia, hora, minuto);
+      
       return fechaHoraTurno < ahora;
     });
 
