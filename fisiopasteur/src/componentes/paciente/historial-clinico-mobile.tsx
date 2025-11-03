@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getEvolucionesClinicas, agregarObservacion, editarObservacion } from "@/lib/actions/paciente.action";
+import { getEvolucionesClinicas, editarObservacion } from "@/lib/actions/paciente.action";
 import { Tables } from "@/types/database.types";
 import { useToastStore } from "@/stores/toast-store";
-import { createClient } from "@/lib/supabase/client";
 import Boton from "../boton";
 
 type Observacion = Tables<"evolucion_clinica">;
@@ -16,10 +15,8 @@ interface HistorialClinicoMobileProps {
 export function HistorialClinicoMobile({ pacienteId }: HistorialClinicoMobileProps) {
   const [observaciones, setObservaciones] = useState<Observacion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [nuevaObservacion, setNuevaObservacion] = useState("");
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
-  const [isAdding, setIsAdding] = useState(false);
   const toast = useToastStore();
 
   useEffect(() => {
@@ -30,34 +27,6 @@ export function HistorialClinicoMobile({ pacienteId }: HistorialClinicoMobilePro
     }
     cargarObservaciones();
   }, [pacienteId]);
-
-  // Handler para agregar observación
-  const handleAgregarObservacion = async () => {
-    if (!nuevaObservacion.trim()) return;
-
-    try {
-      // Obtener el usuario logueado
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      const nombreUsuario = user?.user_metadata?.nombre || user?.email || "Desconocido";
-      const textoFinal = `[${nombreUsuario}] ${nuevaObservacion}`;
-      
-      // Guardar la observación con el nombre incluido
-      const nueva = await agregarObservacion(pacienteId, textoFinal);
-      setObservaciones([...observaciones, nueva]);
-      setNuevaObservacion("");
-      setIsAdding(false);
-      toast.addToast({
-        variant: "success",
-        message: "Observación agregada correctamente",
-      });
-    } catch (error: any) {
-      toast.addToast({
-        variant: "error",
-        message: error.message || "Error al agregar la observación",
-      });
-    }
-  };
 
   // Handler para editar observación
   const handleEditarObservacion = async (idObs: number) => {
@@ -132,7 +101,7 @@ export function HistorialClinicoMobile({ pacienteId }: HistorialClinicoMobilePro
       {isOpen && (
         <div className="p-6">
           {/* Lista de observaciones */}
-          <div className="space-y-4 mb-6">
+          <div className="space-y-4">
             {observaciones.length === 0 ? (
               <div className="text-gray-500 text-center py-4">
                 No hay observaciones registradas.
@@ -227,50 +196,6 @@ export function HistorialClinicoMobile({ pacienteId }: HistorialClinicoMobilePro
               })
             )}
           </div>
-
-          {/* Botón para agregar nueva observación */}
-          {!isAdding ? (
-            <button
-              onClick={() => setIsAdding(true)}
-              className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-[#9C1838] hover:text-[#9C1838] transition-colors flex items-center justify-center"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Agregar observación
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <textarea
-                value={nuevaObservacion}
-                onChange={e => setNuevaObservacion(e.target.value)}
-                placeholder="Escriba su observación aquí..."
-                className="w-full p-3 border border-gray-300 rounded-lg text-sm resize-none"
-                rows={3}
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <Boton
-                  variant="primary"
-                  onClick={handleAgregarObservacion}
-                  className="flex-1"
-                  disabled={!nuevaObservacion.trim()}
-                >
-                  Guardar
-                </Boton>
-                <Boton
-                  variant="secondary"
-                  onClick={() => {
-                    setIsAdding(false);
-                    setNuevaObservacion("");
-                  }}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Boton>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
