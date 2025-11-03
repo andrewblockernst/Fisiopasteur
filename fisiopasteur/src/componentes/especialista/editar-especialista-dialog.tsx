@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 
 import { useState } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";

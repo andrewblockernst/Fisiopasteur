@@ -195,7 +195,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
 
 // Crear un nuevo turno
 export async function crearTurno(
-  datos: TurnoInsert & { id_organizacion?: number; titulo_tratamiento?: string | null }, 
+  datos: Omit<TurnoInsert, 'id_organizacion'> & { id_organizacion?: string; titulo_tratamiento?: string | null }, 
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
   enviarNotificacion: boolean = true,
   id_grupo_tratamiento?: string
@@ -203,21 +203,10 @@ export async function crearTurno(
 
   try {
     const supabase = await createClient();
-    // ✅ Obtener id_organizacion del usuario actual
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { success: false, error: 'Usuario no autenticado' };
-    }
-
-    const { data: usuarioOrg, error: errorOrg } = await supabase
-      .from('usuario_organizacion')
-      .select('id_organizacion')
-      .eq('id_usuario', user.id)
-      .single();
-
-    if (errorOrg || !usuarioOrg) {
-      return { success: false, error: 'No se encontró la organización del usuario' };
-    }
+    
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
 
     // ============= CREAR GRUPO DE TRATAMIENTO SI HAY TÍTULO =============
     if (datos.titulo_tratamiento && !id_grupo_tratamiento) {
@@ -227,7 +216,7 @@ export async function crearTurno(
           id_paciente: datos.id_paciente,
           id_especialista: datos.id_especialista,
           id_especialidad: datos.id_especialidad,
-          id_organizacion: usuarioOrg.id_organizacion,
+          id_organizacion: orgId,
           nombre: datos.titulo_tratamiento,
           fecha_inicio: datos.fecha,
           tipo_plan: datos.tipo_plan,
@@ -241,9 +230,6 @@ export async function crearTurno(
         id_grupo_tratamiento = grupo.id_grupo;
       }
     }
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
 
     // ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
     if (datos.fecha && datos.hora && datos.id_especialista) {
@@ -270,23 +256,11 @@ export async function crearTurno(
       }
     }
 
-    // ✅ Agregar id_organizacion y id_grupo_tratamiento
-    // ✅ Eliminar titulo_tratamiento porque no existe en la tabla turno
-    const { titulo_tratamiento, ...datosLimpios } = datos;
-    
-    const turnoData = {
-      ...datosLimpios,
-      id_organizacion: usuarioOrg.id_organizacion, // ✅ AGREGADO
-      ...(id_grupo_tratamiento && { id_grupo_tratamiento })
-    };
-
-    const { data, error } = await supabase
-      .from("turno")
-      .insert(turnoData)
     // ✅ MULTI-ORG: Inyectar id_organizacion en los datos del turno
     const turnoConOrg = {
       ...datos,
       id_organizacion: orgId,
+      ...(id_grupo_tratamiento && { id_grupo_tratamiento })
     };
 
     // ✅ AHORA datos es TurnoInsert puro, sin recordatorios
@@ -1318,22 +1292,6 @@ export async function crearTurnosEnLote(turnos: Array<{
     const supabase = await createClient();
     
     // ✅ Obtener id_organizacion del usuario actual
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { success: false, error: 'Usuario no autenticado' };
-    }
-
-    const { data: usuarioOrg } = await supabase
-      .from('usuario_organizacion')
-      .select('id_organizacion')
-      .eq('id_usuario', user.id)
-      .single();
-
-    if (!usuarioOrg) {
-      return { success: false, error: 'No se encontró organización del usuario' };
-    }
-
-    const id_organizacion = usuarioOrg.id_organizacion;
     // ✅ MULTI-ORG: Obtener contexto organizacional
     const { getAuthContext } = await import("@/lib/utils/auth-context");
     const { orgId } = await getAuthContext();
@@ -1469,24 +1427,6 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
   try {
     const supabase = await createClient();
     
-    // ✅ Obtener id_organizacion del usuario actual
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.error("Usuario no autenticado");
-      return;
-    }
-
-    const { data: usuarioOrg } = await supabase
-      .from('usuario_organizacion')
-      .select('id_organizacion')
-      .eq('id_usuario', user.id)
-      .single();
-
-    if (!usuarioOrg) {
-      console.error("No se encontró organización del usuario");
-      return;
-    }
-
     // ✅ MULTI-ORG: Obtener contexto organizacional
     const { getAuthContext } = await import("@/lib/utils/auth-context");
     const { orgId } = await getAuthContext();
@@ -1513,7 +1453,6 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
         medio: "whatsapp",
         telefono: paciente.telefono,
         estado: "pendiente",
-        id_organizacion: usuarioOrg.id_organizacion // ✅ AGREGADO
         id_organizacion: orgId // ✅ Inyectar orgId
       })
       .select()
