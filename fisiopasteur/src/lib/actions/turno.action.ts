@@ -326,7 +326,8 @@ export async function crearTurno(
           const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
           const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
           
-          const tiposRecordatorio = recordatorios || ['1d', '2h'];
+          // ✅ Por defecto: 1 día antes, 2 horas antes Y 1 hora antes
+          const tiposRecordatorio = recordatorios || ['1d', '2h', '1h'];
           const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora, tiposRecordatorio);
           
           const recordatoriosValidos = Object.entries(tiemposRecordatorio)
@@ -1334,7 +1335,8 @@ export async function crearTurnosEnLote(turnos: Array<{
           const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
           const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
           
-          const tiposRecordatorio: ('1d' | '2h')[] = ['1d', '2h'];
+          // ✅ Por defecto: 1 día antes, 2 horas antes Y 1 hora antes
+          const tiposRecordatorio: ('1d' | '2h' | '1h')[] = ['1d', '2h', '1h'];
           const tiemposRecordatorio = calcularTiemposRecordatorio(turno.fecha, turno.hora, tiposRecordatorio);
           
           if (turno.id_paciente) {
