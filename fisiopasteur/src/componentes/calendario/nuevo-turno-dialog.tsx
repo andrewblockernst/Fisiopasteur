@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/usePerfil';
 import { UserPlus2, CalendarDays, Info } from "lucide-react";
 import type { TipoRecordatorio } from "@/lib/utils/whatsapp.utils";
 import { format } from "date-fns";
+import { createClient } from "@/lib/supabase/client";
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -725,9 +726,71 @@ useEffect(() => {
 
     // ============= CON REPETICIÓN: CREAR PAQUETE DE SESIONES =============
     
-    // ✅ Generar UUID único para este paquete de tratamiento
-    const id_grupo_tratamiento = crypto.randomUUID();
+    // ✅ PASO 1: Crear el grupo de tratamiento PRIMERO
+    let id_grupo_tratamiento: string | undefined;
     
+    if (formData.titulo_tratamiento) {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        addToast({
+          variant: 'error',
+          message: 'Error de autenticación',
+          description: 'No se pudo obtener el usuario actual',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      const { data: usuarioOrg, error: errorOrg } = await supabase
+        .from('usuario_organizacion')
+        .select('id_organizacion')
+        .eq('id_usuario', user.id)
+        .single();
+      
+      if (errorOrg || !usuarioOrg) {
+        addToast({
+          variant: 'error',
+          message: 'Error de organización',
+          description: 'No se encontró la organización del usuario',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Crear grupo de tratamiento
+      const { data: grupo, error: errorGrupo } = await supabase
+        .from('grupo_tratamiento')
+        .insert({
+          id_paciente: parseInt(formData.id_paciente),
+          id_especialista: formData.id_especialista,
+          id_especialidad: parseInt(formData.id_especialidad),
+          id_organizacion: usuarioOrg.id_organizacion,
+          nombre: formData.titulo_tratamiento,
+          fecha_inicio: formData.fecha,
+          tipo_plan: formData.tipo_plan,
+        })
+        .select('id_grupo')
+        .single();
+      
+      if (errorGrupo) {
+        console.error('Error creando grupo de tratamiento:', errorGrupo);
+        addToast({
+          variant: 'error',
+          message: 'Error al crear grupo',
+          description: errorGrupo.message || 'No se pudo crear el grupo de tratamiento',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (grupo) {
+        id_grupo_tratamiento = grupo.id_grupo;
+      }
+    }
+    
+    // ✅ PASO 2: Generar lista de turnos
     const [year, month, day] = formData.fecha.split('-').map(Number);
     const fechaBaseParsed = new Date(year, month - 1, day);
     
