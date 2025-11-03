@@ -2,11 +2,14 @@ import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEsp
 import TurnosPageContainer from "@/componentes/turnos/turnos-page-container";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 
-export default async function TurnosPage({ searchParams }: { searchParams: any }) {
-  // Si searchParams es una promesa, espera; si no, úsalo directo
-  const params = searchParams;
+export default async function TurnosPage({ 
+  searchParams 
+}: { 
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }> 
+}) {
+  // ✅ Await searchParams (Next.js 15 requirement)
+  const params = await searchParams;
 
-  
   const hoy = new Date().toISOString().split('T')[0];
   const filtros = {
     fecha_desde: params?.desde ?? hoy,

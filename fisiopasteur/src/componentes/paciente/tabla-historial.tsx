@@ -56,8 +56,7 @@ export function TablaHistorialClinico({ grupo }: Props) {
       programado: "Programado",
       atendido: "Atendido",
       cancelado: "Cancelado",
-      vencido: "Vencido",
-      confirmado: "Confirmado"
+      vencido: "Vencido"
     };
     return estados[estado] || estado;
   };
@@ -77,28 +76,42 @@ export function TablaHistorialClinico({ grupo }: Props) {
     const turno = grupo.turnos.find(t => t.id_turno === id_turno);
     
     try {
-      // Solo guardar evolución clínica si el turno está atendido
-      if (turno?.estado === 'atendido' && evolucionTemp.trim()) {
-        const resultadoEvo = await actualizarEvolucionClinica(id_turno, evolucionTemp);
-        
-        if (!resultadoEvo.success) {
-          throw new Error(resultadoEvo.error || "Error al guardar evolución clínica");
-        }
-        
+      // Validar límite de 5 minutos
+      if (!puedeEditar(turno!)) {
         addToast({
-          variant: "success",
-          message: "Evolución guardada",
-          description: "La evolución clínica se guardó correctamente"
+          variant: "error",
+          message: "Tiempo excedido",
+          description: "Por razones legales, la evolución solo puede editarse durante los primeros 5 minutos después de completarla"
         });
-        setEditandoEvolucion(null);
-        window.location.reload();
-      } else {
+        setGuardando(false);
+        return;
+      }
+      
+      // Validar que haya contenido
+      if (!evolucionTemp.trim()) {
         addToast({
           variant: "warning",
-          message: "Sin cambios",
-          description: "No hay evolución clínica para guardar o el turno no está atendido"
+          message: "Campo vacío",
+          description: "Por favor ingresa la evolución clínica antes de guardar"
         });
+        setGuardando(false);
+        return;
       }
+      
+      // Guardar evolución clínica
+      const resultadoEvo = await actualizarEvolucionClinica(id_turno, evolucionTemp);
+      
+      if (!resultadoEvo.success) {
+        throw new Error(resultadoEvo.error || "Error al guardar evolución clínica");
+      }
+      
+      addToast({
+        variant: "success",
+        message: "Evolución guardada",
+        description: "La evolución clínica se guardó correctamente"
+      });
+      setEditandoEvolucion(null);
+      window.location.reload();
     } catch (error: any) {
       addToast({
         variant: "error",
@@ -133,7 +146,6 @@ export function TablaHistorialClinico({ grupo }: Props) {
     
     setGuardando(false);
   };
-  
   const abrirConfirmacion = (id_turno: number, accion: 'confirmar' | 'cancelar') => {
     setDialogConfirmacion({ open: true, id_turno, accion });
   };
@@ -244,11 +256,13 @@ export function TablaHistorialClinico({ grupo }: Props) {
           <tbody className="divide-y divide-gray-200">
             {grupo.turnos.map((turno, index) => {
               // ✅ Determinar color de fondo según estado
-              const bgColor = turno.estado === 'confirmado' 
+              const bgColor = turno.estado === 'atendido' 
                 ? 'bg-green-50 hover:bg-green-100' 
                 : turno.estado === 'cancelado'
                   ? 'bg-red-50 hover:bg-red-100'
-                  : 'hover:bg-gray-50';
+                  : turno.estado === 'confirmado'
+                    ? 'bg-blue-50 hover:bg-blue-100'
+                    : 'hover:bg-gray-50';
               
               return (
                 <tr key={turno.id_turno} className={bgColor}>
@@ -264,31 +278,34 @@ export function TablaHistorialClinico({ grupo }: Props) {
                 <td className="px-4 py-3">
                   {editandoEvolucion === turno.id_turno ? (
                     <div className="space-y-2">
-                      {/* Evolución clínica (solo si está atendido) */}
-                      {turno.estado === 'atendido' ? (
-                        <div>
-                          <label className="text-xs text-gray-600 font-medium">Evolución clínica (no editable después de 5 min):</label>
-                          <textarea
-                            value={evolucionTemp}
-                            onChange={(e) => setEvolucionTemp(e.target.value)}
-                            className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-black mt-1"
-                            rows={4}
-                            placeholder="Evolución clínica del paciente..."
-                            disabled={guardando}
-                          />
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic">
-                          Solo se puede agregar evolución clínica a turnos atendidos
-                        </p>
-                      )}
+                      <div>
+                        <label className="text-xs text-gray-600 font-medium">
+                          Evolución clínica 
+                          {!puedeEditar(turno) && (
+                            <span className="text-red-600 ml-1">(bloqueada - pasaron más de 5 min)</span>
+                          )}
+                        </label>
+                        <textarea
+                          value={evolucionTemp}
+                          onChange={(e) => setEvolucionTemp(e.target.value)}
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-black mt-1"
+                          rows={4}
+                          placeholder="Describa la evolución del paciente en esta sesión..."
+                          disabled={guardando || !puedeEditar(turno)}
+                        />
+                        {!puedeEditar(turno) && (
+                          <p className="text-xs text-red-600 mt-1">
+                            Por razones legales, la evolución clínica solo puede editarse durante los primeros 5 minutos.
+                          </p>
+                        )}
+                      </div>
                       
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => handleGuardarEvolucion(turno.id_turno)}
-                          disabled={guardando || turno.estado !== 'atendido'}
+                          disabled={guardando || !puedeEditar(turno)}
                           className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
-                          title="Guardar"
+                          title="Guardar evolución clínica"
                         >
                           <Check size={14} />
                           Guardar
@@ -305,36 +322,33 @@ export function TablaHistorialClinico({ grupo }: Props) {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="flex items-center gap-2">
                       {/* Mostrar evolución clínica si existe */}
                       {turno.evolucion_clinica ? (
-                        <div className="text-sm">
-                          <span className="text-black">{turno.evolucion_clinica}</span>
-                        </div>
+                        <p className="text-sm text-black whitespace-pre-wrap flex-1">
+                          {turno.evolucion_clinica}
+                        </p>
                       ) : (
-                        <span className="text-gray-400 text-sm">-</span>
+                        <span className="text-gray-400 text-sm flex-1">Sin evolución</span>
                       )}
                       
-                      {/* Botón de edición - solo para turnos atendidos */}
-                      {turno.estado === 'atendido' && (
-                        <div className="mt-1">
-                          <button
-                            onClick={() => {
-                              setEditandoEvolucion(turno.id_turno);
-                              setEvolucionTemp(turno.evolucion_clinica || "");
-                            }}
-                            disabled={!puedeEditar(turno)}
-                            className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                            title={
-                              !puedeEditar(turno)
-                                ? "No se puede editar la evolución (pasaron más de 5 min)"
-                                : "Editar evolución clínica"
-                            }
-                          >
-                            <Edit2 size={12} />
-                            Editar
-                          </button>
-                        </div>
+                      {/* SIEMPRE mostrar botón de editar/agregar */}
+                      {puedeEditar(turno) ? (
+                        <button
+                          onClick={() => {
+                            setEditandoEvolucion(turno.id_turno);
+                            setEvolucionTemp(turno.evolucion_clinica || "");
+                          }}
+                          className="text-xs px-2 py-1 text-blue-600 hover:bg-blue-50 rounded flex items-center gap-1 flex-shrink-0"
+                          title={turno.evolucion_clinica ? "Editar evolución clínica" : "Agregar evolución clínica"}
+                        >
+                          <Edit2 size={14} />
+                          {turno.evolucion_clinica ? "Editar" : "Agregar"}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-red-600 italic flex-shrink-0">
+                          ⏱️ Bloqueada
+                        </span>
                       )}
                     </div>
                   )}
@@ -346,7 +360,7 @@ export function TablaHistorialClinico({ grupo }: Props) {
                       <button
                         onClick={() => abrirConfirmacion(turno.id_turno, 'confirmar')}
                         className="p-1 text-green-600 hover:bg-green-50 rounded"
-                        title="Confirmar turno"
+                        title="Marcar como atendido"
                       >
                         <Check size={16} />
                       </button>
@@ -385,20 +399,20 @@ export function TablaHistorialClinico({ grupo }: Props) {
       <BaseDialog
         type={dialogConfirmacion.accion === 'cancelar' ? 'error' : 'info'}
         size="sm"
-        title={dialogConfirmacion.accion === 'cancelar' ? 'Cancelar turno' : 'Confirmar turno'}
+        title={dialogConfirmacion.accion === 'cancelar' ? 'Cancelar turno' : 'Marcar como atendido'}
         message={
           dialogConfirmacion.accion === 'cancelar'
             ? '¿Estás seguro de que deseas cancelar este turno? Esta acción no se puede deshacer.'
-            : '¿Confirmar la asistencia del paciente a este turno?'
+            : '¿Confirmar que el paciente fue atendido? Podrás agregar la evolución clínica después.'
         }
         isOpen={dialogConfirmacion.open}
         onClose={() => setDialogConfirmacion({ open: false, id_turno: null, accion: null })}
         showCloseButton
         primaryButton={{
-          text: guardando ? 'Procesando...' : (dialogConfirmacion.accion === 'cancelar' ? 'Sí, cancelar' : 'Sí, confirmar'),
+          text: guardando ? 'Procesando...' : (dialogConfirmacion.accion === 'cancelar' ? 'Sí, cancelar' : 'Sí, marcar como atendido'),
           onClick: () => {
             if (dialogConfirmacion.id_turno && dialogConfirmacion.accion) {
-              const nuevoEstado = dialogConfirmacion.accion === 'cancelar' ? 'cancelado' : 'confirmado';
+              const nuevoEstado = dialogConfirmacion.accion === 'cancelar' ? 'cancelado' : 'atendido';
               handleCambiarEstado(dialogConfirmacion.id_turno, nuevoEstado);
             }
           },
