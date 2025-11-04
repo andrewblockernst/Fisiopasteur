@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, 
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import Button from '../boton';
+import EditarTurnoModal from './editar-turno-modal';
 
 interface TurnoDetailMobileProps {
   turno: TurnoConDetalles;
@@ -24,6 +26,7 @@ interface TurnoDetailMobileProps {
 
 export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetailMobileProps) {
   const router = useRouter();
+  const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
 
   const getEstadoColor = (estado: string) => {
     switch (estado.toLowerCase()) {
@@ -82,7 +85,7 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
           <h1 className="text-lg font-semibold">Detalle del Turno</h1>
           <div className="flex gap-2">
             <button
-              onClick={() => router.push(`/turnos/${turno.id_turno}/editar`)}
+              onClick={() => setModalEditarAbierto(true)}
               className="p-2 text-[#9C1838] hover:bg-neutral-100 rounded-md transition"
             >
               <Edit3 className="w-5 h-5" />
@@ -239,6 +242,19 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
           )}
         </div>
       </div>
+
+      {/* Modal de Edición */}
+      {modalEditarAbierto && (
+        <EditarTurnoModal
+          turno={turno as any}
+          open={modalEditarAbierto}
+          onClose={() => setModalEditarAbierto(false)}
+          onSaved={() => {
+            setModalEditarAbierto(false);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
