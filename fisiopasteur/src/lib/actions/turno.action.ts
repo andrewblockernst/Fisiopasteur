@@ -209,17 +209,17 @@ export async function crearTurno(
     const { orgId } = await getAuthContext();
 
     // ============= CREAR GRUPO DE TRATAMIENTO SI HAY TÍTULO =============
-    if (datos.titulo_tratamiento && !id_grupo_tratamiento) {
+    if (datos.titulo_tratamiento && !id_grupo_tratamiento && datos.id_paciente && datos.id_especialista) {
       const { data: grupo, error: errorGrupo } = await supabase
         .from('grupo_tratamiento')
         .insert({
           id_paciente: datos.id_paciente,
           id_especialista: datos.id_especialista,
-          id_especialidad: datos.id_especialidad,
+          id_especialidad: datos.id_especialidad ?? undefined,
           id_organizacion: orgId,
           nombre: datos.titulo_tratamiento,
           fecha_inicio: datos.fecha,
-          tipo_plan: datos.tipo_plan,
+          tipo_plan: datos.tipo_plan ?? 'particular',
         })
         .select('id_grupo')
         .single();
@@ -293,6 +293,9 @@ export async function crearTurno(
 
         if (data.paciente?.telefono) {
           const mensajeConfirmacion = `Turno confirmado para ${data.fecha} a las ${data.hora}`;
+          
+          // ✅ Registrar confirmación para que el cron la procese
+          // Esto evita problemas de rate limit al crear múltiples turnos seguidos
           const notifConfirmacion = await registrarNotificacionConfirmacion(
             data.id_turno,
             data.paciente.telefono,
@@ -300,33 +303,17 @@ export async function crearTurno(
           );
 
           if (notifConfirmacion.success && notifConfirmacion.data) {
-            const turnoCompleto: any = {
-              ...data,
-              paciente: data.paciente ? {
-                ...data.paciente,
-                id_paciente: data.id_paciente || 0,
-                email: null
-              } : null,
-              especialista: data.especialista ? {
-                ...data.especialista,
-                id_usuario: data.id_especialista || ''
-              } : null
-            };
-            
-            const resultadoBot = await enviarConfirmacionTurno(turnoCompleto);
-            
-            if (resultadoBot.status === 'success') {
-              await marcarNotificacionEnviada(notifConfirmacion.data.id_notificacion);
-            } else {
-              await marcarNotificacionFallida(notifConfirmacion.data.id_notificacion);
-            }
+            console.log(`📝 Confirmación registrada para procesamiento por cron: notificación ${notifConfirmacion.data.id_notificacion}`);
+            // ⏰ El cron procesará esta confirmación en los próximos 2 minutos
+            // Esto respeta el rate limit de WaSender (1 mensaje cada 5 segundos)
           }
 
           // Programar recordatorios
           const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
           const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
           
-          const tiposRecordatorio = recordatorios || ['1d', '2h'];
+          // ✅ Por defecto: 1 día antes, 2 horas antes Y 1 hora antes
+          const tiposRecordatorio = recordatorios || ['1d', '2h', '1h'];
           const tiemposRecordatorio = calcularTiemposRecordatorio(data.fecha, data.hora, tiposRecordatorio);
           
           const recordatoriosValidos = Object.entries(tiemposRecordatorio)
@@ -447,78 +434,14 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
 
     revalidatePath("/turnos");
     revalidatePath("/pilates");
+    revalidatePath("/pacientes");
+    revalidatePath("/pacientes/HistorialClinico");
+    revalidatePath("/inicio");
+    
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };
-  }
-}
-
-// Mover un turno (Drag and Drop) - optimizado para cambio de fecha/hora
-export async function moverTurno(id: number, nuevaFecha: string, nuevaHora: string) {
-  'use server';
-  
-  const supabase = await createClient();
-  
-  try {
-    // Obtener turno actual
-    const { data: turnoActual, error: turnoError } = await supabase
-      .from("turno")
-      .select("*, especialista:usuario(*), especialidad:especialidad(*)")
-      .eq("id_turno", id)
-      .single();
-
-    if (turnoError || !turnoActual) {
-      return { success: false, error: "No se encontró el turno" };
-    }
-
-    // Verificar disponibilidad en el nuevo horario
-    if (turnoActual.id_especialista) {
-      const disponibilidad = await verificarDisponibilidadParaActualizacion(
-        nuevaFecha,
-        nuevaHora,
-        turnoActual.id_especialista,
-        turnoActual.id_box,
-        id,
-        turnoActual.id_especialidad ?? undefined
-      );
-      
-      if (!disponibilidad.success || !disponibilidad.disponible) {
-        // Mensaje específico para Pilates
-        if (turnoActual.id_especialidad === 4) {
-          return { 
-            success: false, 
-            error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4` 
-          };
-        } else {
-          return { 
-            success: false, 
-            error: `Horario no disponible. El especialista ya tiene un turno en ese horario` 
-          };
-        }
-      }
-    }
-
-    // Actualizar solo fecha y hora
-    const { data: turnoActualizado, error: updateError } = await supabase
-      .from("turno")
-      .update({ 
-        fecha: nuevaFecha, 
-        hora: nuevaHora,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id_turno", id)
-      .select("*")
-      .single();
-
-    if (updateError) {
-      return { success: false, error: updateError.message };
-    }
-
-    return { success: true, data: turnoActualizado };
-  } catch (error: any) {
-    console.error("Error al mover turno:", error);
-    return { success: false, error: error.message || "Error inesperado" };
   }
 }
 
@@ -576,10 +499,106 @@ export async function eliminarTurno(id: number) {
   }
 }
 
-// Cancelar (marcar como cancelado, sin borrar)
+export async function marcarComoAtendido(id_turno: number) {
+  const supabase = await createClient();
+  
+  try {
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
+    // Verificar estado actual del turno
+    const { data: turnoActual, error: errorGet } = await supabase
+      .from('turno')
+      .select('id_turno, estado, id_organizacion')
+      .eq('id_turno', id_turno)
+      .eq('id_organizacion', orgId)
+      .single();
+
+    if (errorGet || !turnoActual) {
+      return { 
+        success: false, 
+        error: 'Turno no encontrado o no pertenece a esta organización' 
+      };
+    }
+
+    // ✅ Solo permitir desde programado o vencido
+    const estadosPermitidos = ['programado', 'vencido'];
+    if (!turnoActual.estado || !estadosPermitidos.includes(turnoActual.estado)) {
+      return {
+        success: false,
+        error: `No se puede marcar como atendido un turno en estado: ${turnoActual.estado || 'desconocido'}`
+      };
+    }
+
+    // Actualizar a atendido
+    const { error } = await supabase
+      .from('turno')
+      .update({ 
+        estado: 'atendido',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id_turno', id_turno)
+      .eq('id_organizacion', orgId);
+
+    if (error) {
+      console.error('❌ Error al marcar turno como atendido:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Error al actualizar el turno'
+      };
+    }
+
+    console.log(`✅ Turno ${id_turno} marcado como atendido (desde estado: ${turnoActual.estado})`);
+    
+    revalidatePath('/turnos');
+    revalidatePath('/pilates');
+    revalidatePath('/inicio');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error inesperado al marcar como atendido:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
+
+/**
+ * ✅ Cancelar turno
+ * Permite cambiar desde: programado, vencido
+ */
 export async function cancelarTurno(id: number, motivo?: string) {
   const supabase = await createClient();
+  
   try {
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
+    // Verificar estado actual del turno
+    const { data: turnoActual, error: errorGet } = await supabase
+      .from('turno')
+      .select('id_turno, estado, id_organizacion')
+      .eq('id_turno', id)
+      .eq('id_organizacion', orgId)
+      .single();
+
+    if (errorGet || !turnoActual) {
+      return { 
+        success: false, 
+        error: 'Turno no encontrado o no pertenece a esta organización' 
+      };
+    }
+
+    // ✅ Solo permitir desde programado o vencido
+    const estadosPermitidos = ['programado', 'vencido'];
+    if (!turnoActual.estado || !estadosPermitidos.includes(turnoActual.estado)) {
+      return {
+        success: false,
+        error: `No se puede cancelar un turno en estado: ${turnoActual.estado || 'desconocido'}`
+      };
+    }
+
+    // Actualizar a cancelado
     const { data, error } = await supabase
       .from("turno")
       .update({
@@ -587,37 +606,23 @@ export async function cancelarTurno(id: number, motivo?: string) {
         updated_at: new Date().toISOString(),
       })
       .eq("id_turno", id)
+      .eq("id_organizacion", orgId)
       .select("*")
       .single();
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      console.error('❌ Error al cancelar turno:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`✅ Turno ${id} cancelado (desde estado: ${turnoActual.estado})`);
+    
     revalidatePath("/turnos");
     revalidatePath("/pilates");
+    revalidatePath('/inicio');
     return { success: true, data };
-  } catch {
-    return { success: false, error: "Error inesperado" };
-  }
-}
-
-export async function marcarComoAtendido(id_turno: number) {
-  const supabase = await createClient();
-  
-  try {
-    const { error } = await supabase
-      .from('turno')
-      .update({ 
-        estado: 'atendido',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id_turno', id_turno);
-
-    if (error) throw error;
-
-    revalidatePath('/turnos');
-    revalidatePath("/pilates");
-    return { success: true };
   } catch (error) {
-    console.error('Error al marcar turno como atendido:', error);
+    console.error('❌ Error inesperado al cancelar turno:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Error desconocido'
@@ -1264,7 +1269,11 @@ export async function actualizarEvolucionClinica(
       return { success: false, error: error.message };
     }
 
+    // ✅ Revalidar todas las rutas donde se muestra el historial clínico
     revalidatePath("/pacientes");
+    revalidatePath("/pacientes/HistorialClinico");
+    revalidatePath("/imprimir/historia-clinica");
+    
     return { success: true };
   } catch (error) {
     console.error("❌ Error inesperado:", error);
@@ -1334,7 +1343,8 @@ export async function crearTurnosEnLote(turnos: Array<{
           const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
           const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
           
-          const tiposRecordatorio: ('1d' | '2h')[] = ['1d', '2h'];
+          // ✅ Por defecto: 1 día antes, 2 horas antes Y 1 hora antes
+          const tiposRecordatorio: ('1d' | '2h' | '1h')[] = ['1d', '2h', '1h'];
           const tiemposRecordatorio = calcularTiemposRecordatorio(turno.fecha, turno.hora, tiposRecordatorio);
           
           if (turno.id_paciente) {
@@ -1504,9 +1514,9 @@ export async function actualizarTurnosVencidos() {
   const supabase = await createClient();
   
   try {
+    // ✅ Obtener fecha y hora actual en zona horaria local (Argentina GMT-3)
     const ahora = new Date();
-    const fechaActual = ahora.toISOString().split('T')[0]; // yyyy-MM-dd
-    const horaActual = ahora.toTimeString().split(' ')[0].substring(0, 8); // HH:MM:SS
+    
     // Obtener turnos "programado" que ya pasaron
     const { data: turnosProgramados, error: fetchError } = await supabase
       .from('turno')
@@ -1522,9 +1532,15 @@ export async function actualizarTurnosVencidos() {
       return { success: true, data: [], mensaje: 'No hay turnos programados' };
     }
 
-    // Filtrar los que ya pasaron
+    // ✅ Filtrar los que ya pasaron usando comparación correcta con zona horaria
     const turnosVencidos = turnosProgramados.filter(turno => {
-      const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora}`);
+      // Parsear fecha y hora del turno (formato: "2025-11-03" y "10:00:00")
+      const [año, mes, dia] = turno.fecha.split('-').map(Number);
+      const [hora, minuto] = turno.hora.split(':').map(Number);
+      
+      // Crear Date en zona horaria local (no UTC)
+      const fechaHoraTurno = new Date(año, mes - 1, dia, hora, minuto);
+      
       return fechaHoraTurno < ahora;
     });
 
@@ -1611,7 +1627,12 @@ export async function actualizarGrupoTratamiento(
     }
 
     console.log('✅ Grupo actualizado exitosamente:', data);
+    
+    // ✅ Revalidar todas las rutas donde se muestra el historial clínico
     revalidatePath('/pacientes');
+    revalidatePath('/pacientes/HistorialClinico');
+    revalidatePath('/imprimir/historia-clinica');
+    
     return { success: true, data };
   } catch (error: any) {
     console.error('❌ Error inesperado:', error);

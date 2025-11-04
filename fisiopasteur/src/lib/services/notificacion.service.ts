@@ -54,6 +54,7 @@ export async function crearNotificacion(datos: NotificacionInsert) {
 
 /**
  * Actualizar estado de una notificación
+ * ✅ MULTI-ORG: Solo verifica organización si hay contexto autenticado (no en cron)
  */
 export async function actualizarEstadoNotificacion(
   id: number, 
@@ -63,22 +64,33 @@ export async function actualizarEstadoNotificacion(
   const supabase = await createClient();
   
   try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional para verificar pertenencia
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-    
     const updateData: NotificacionUpdate = {
       estado,
       ...(fechaEnvio && { fecha_envio: fechaEnvio })
     };
 
-    const { data, error } = await supabase
+    // ✅ Intentar obtener contexto organizacional solo si está disponible
+    let orgId: string | undefined;
+    try {
+      const { getAuthContext } = await import("@/lib/utils/auth-context");
+      const context = await getAuthContext();
+      orgId = context.orgId;
+    } catch (error) {
+      // Si falla, es un cron sin autenticación - actualizar sin filtro de org
+      console.log("🤖 Actualizando notificación desde cron (sin verificación de org)");
+    }
+
+    let query = supabase
       .from("notificacion")
       .update(updateData)
-      .eq("id_notificacion", id)
-      .eq("id_organizacion", orgId) // ✅ Verificar que la notificación pertenece a la org
-      .select("*")
-      .single();
+      .eq("id_notificacion", id);
+
+    // ✅ Solo verificar organización si tenemos orgId
+    if (orgId) {
+      query = query.eq("id_organizacion", orgId);
+    }
+
+    const { data, error } = await query.select("*").single();
 
     if (error) {
       console.error("Error actualizando notificación:", error);
@@ -124,19 +136,29 @@ export async function obtenerNotificacionesTurno(idTurno: number) {
 
 /**
  * Obtener notificaciones pendientes de enviar
- * ✅ MULTI-ORG: Filtrar por organización
+ * ✅ MULTI-ORG: Cuando se llama desde CRON (sin orgId), procesa TODAS las organizaciones
+ * ✅ Cuando se llama desde contexto autenticado (con orgId), filtra por organización
  */
-export async function obtenerNotificacionesPendientes() {
+export async function obtenerNotificacionesPendientes(orgId?: string) {
   const supabase = await createClient();
   
   try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
+    // ✅ Si no se pasa orgId, intentar obtenerlo del contexto (si existe)
+    let organizacionId = orgId;
+    if (!organizacionId) {
+      try {
+        const { getAuthContext } = await import("@/lib/utils/auth-context");
+        const context = await getAuthContext();
+        organizacionId = context.orgId;
+      } catch (error) {
+        // Si falla, es porque es un cron sin autenticación - procesamos todas las orgs
+        console.log("🤖 Cron sin autenticación: procesando notificaciones de todas las organizaciones");
+      }
+    }
     
     const ahora = new Date().toISOString();
     
-    const { data, error } = await supabase
+    let query = supabase
       .from("notificacion")
       .select(`
         *,
@@ -147,16 +169,26 @@ export async function obtenerNotificacionesPendientes() {
           especialidad:id_especialidad(nombre)
         )
       `)
-      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .eq("estado", "pendiente")
       .lte("fecha_programada", ahora)
       .order("fecha_programada", { ascending: true });
+    
+    // ✅ Solo filtrar por organización si tenemos orgId
+    if (organizacionId) {
+      query = query.eq("id_organizacion", organizacionId);
+      console.log(`🔍 Filtrando notificaciones pendientes para organización: ${organizacionId}`);
+    } else {
+      console.log(`🔍 Obteniendo notificaciones pendientes de TODAS las organizaciones`);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error obteniendo notificaciones pendientes:", error);
       return { success: false, error: error.message };
     }
 
+    console.log(`📋 Notificaciones pendientes encontradas: ${data?.length || 0}`);
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado obteniendo notificaciones pendientes:", error);

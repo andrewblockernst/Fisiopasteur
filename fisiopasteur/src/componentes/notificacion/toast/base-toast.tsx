@@ -26,32 +26,32 @@ export interface ToastProps {
 
 const variantStyles = {
   success: {
-    bg: 'bg-green-50 dark:bg-green-900/20',
+    bg: 'bg-green-50 dark:bg-green-900',
     border: 'border-l-4 border-green-500',
-    text: 'text-green-900 dark:text-green-100',
-    icon: 'text-green-600 dark:text-green-400',
-    hover: 'hover:bg-green-100 dark:hover:bg-green-900/40'
+    text: 'text-green-900 dark:text-green-50',
+    icon: 'text-green-600 dark:text-green-300',
+    hover: 'hover:bg-green-100 dark:hover:bg-green-800'
   },
   info: {
-    bg: 'bg-blue-50 dark:bg-blue-900/20',
+    bg: 'bg-blue-50 dark:bg-blue-900',
     border: 'border-l-4 border-blue-500',
-    text: 'text-blue-900 dark:text-blue-100',
-    icon: 'text-blue-600 dark:text-blue-400',
-    hover: 'hover:bg-blue-100 dark:hover:bg-blue-900/40'
+    text: 'text-blue-900 dark:text-blue-50',
+    icon: 'text-blue-600 dark:text-blue-300',
+    hover: 'hover:bg-blue-100 dark:hover:bg-blue-800'
   },
   warning: {
-    bg: 'bg-yellow-50 dark:bg-yellow-900/20',
+    bg: 'bg-yellow-50 dark:bg-yellow-900',
     border: 'border-l-4 border-yellow-500',
-    text: 'text-yellow-900 dark:text-yellow-100',
-    icon: 'text-yellow-600 dark:text-yellow-400',
-    hover: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/40'
+    text: 'text-yellow-900 dark:text-yellow-50',
+    icon: 'text-yellow-600 dark:text-yellow-300',
+    hover: 'hover:bg-yellow-100 dark:hover:bg-yellow-800'
   },
   error: {
-    bg: 'bg-red-50 dark:bg-red-900/20',
+    bg: 'bg-red-50 dark:bg-red-900',
     border: 'border-l-4 border-red-500',
-    text: 'text-red-900 dark:text-red-100',
-    icon: 'text-red-600 dark:text-red-400',
-    hover: 'hover:bg-red-100 dark:hover:bg-red-900/40'
+    text: 'text-red-900 dark:text-red-50',
+    icon: 'text-red-600 dark:text-red-300',
+    hover: 'hover:bg-red-100 dark:hover:bg-red-800'
   }
 };
 

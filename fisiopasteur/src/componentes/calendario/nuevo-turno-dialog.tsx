@@ -132,33 +132,58 @@ export function NuevoTurnoModal({
   useEffect(() => {
     if (!isOpen) return;
     
+    // ✅ Solo cargar si NO tenemos los datos básicos todavía
+    const necesitaCargar = 
+      especialidades.length === 0 || 
+      boxes.length === 0 ||
+      (especialistasProp.length === 0 && especialistas.length === 0) ||
+      (pacientesProp.length === 0 && pacientes.length === 0);
+    
+    if (!necesitaCargar) {
+      console.log('✅ Datos ya disponibles, no es necesario cargar');
+      return;
+    }
+    
     const cargarDatos = async () => {
       setLoading(true);
       try {
         const promises = [];
         
-        if (especialistasProp.length === 0) {
+        // Solo cargar especialistas si no vienen por props Y no los tenemos
+        if (especialistasProp.length === 0 && especialistas.length === 0) {
           promises.push(obtenerEspecialistas().then(res => {
             if (res.success) setEspecialistas(res.data || []);
           }));
         }
         
-        if (pacientesProp.length === 0) {
+        // Solo cargar pacientes si no vienen por props Y no los tenemos
+        if (pacientesProp.length === 0 && pacientes.length === 0) {
           promises.push(obtenerPacientes().then(res => {
             if (res.success) setPacientes(res.data || []);
           }));
         }
         
-        promises.push(
-          obtenerEspecialidades().then(res => {
-            if (res.success) setEspecialidades(res.data || []);
-          }),
-          obtenerBoxes().then(res => {
-            if (res.success) setBoxes(res.data || []);
-          })
-        );
+        // Solo cargar especialidades si no las tenemos
+        if (especialidades.length === 0) {
+          promises.push(
+            obtenerEspecialidades().then(res => {
+              if (res.success) setEspecialidades(res.data || []);
+            })
+          );
+        }
         
-        await Promise.all(promises);
+        // Solo cargar boxes si no los tenemos
+        if (boxes.length === 0) {
+          promises.push(
+            obtenerBoxes().then(res => {
+              if (res.success) setBoxes(res.data || []);
+            })
+          );
+        }
+        
+        if (promises.length > 0) {
+          await Promise.all(promises);
+        }
       } catch (error) {
         console.error('Error cargando datos:', error);
       } finally {
@@ -167,7 +192,7 @@ export function NuevoTurnoModal({
     };
     
     cargarDatos();
-  }, [isOpen, especialistasProp.length, pacientesProp.length]);
+  }, [isOpen]);
 
   // Filtrar pacientes según búsqueda
   useEffect(() => {

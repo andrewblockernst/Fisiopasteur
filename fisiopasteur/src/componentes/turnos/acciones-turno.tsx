@@ -7,7 +7,7 @@ import BaseDialog from "@/componentes/dialog/base-dialog";
 
 import { Database } from "@/types/database.types";
 
-import { MoreVertical, Edit, X, Trash, CheckCircle, ChevronUp, EllipsisVertical, AlertTriangle } from "lucide-react";
+import { MoreVertical, Edit, X, Trash, CheckCircle, ChevronUp, EllipsisVertical, AlertTriangle, AlertCircle, XCircle } from "lucide-react";
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useToastStore } from "@/stores/toast-store";
 
@@ -67,17 +67,6 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const onEliminar = () => {
-    
-    // Verificar si el turno ya pasó antes de mostrar confirmación
-    if (esPasado) {
-      addToast({
-        variant: 'error',
-        message: 'No se puede eliminar',
-        description: 'No se pueden eliminar turnos que ya pasaron.',
-      });
-      return;
-    }
-
     setModalEliminarAbierto(true);
   };
 
@@ -148,63 +137,96 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const esPasado = turnoYaPaso();
+  const esVencido = turno.estado === 'vencido';
   const esProgramado = turno.estado === 'programado';
+  const esAtendido = turno.estado === 'atendido';
+  const esCancelado = turno.estado === 'cancelado';
+
+  // ✅ Determinar qué acciones están disponibles
+  const puedeMarcarAtendido = (esProgramado || esVencido) && !esAtendido;
+  const puedeCancelar = (esProgramado || esVencido) && !esCancelado && !esAtendido;
+  const puedeEditar = !esAtendido; // Solo no se puede editar si ya fue atendido
+  const puedeEliminar = true; // Siempre se puede eliminar
 
   return (
     <>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button
-            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center hover:bg-slate-50 transition-colors"
+            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center hover:bg-slate-50 transition-colors relative"
             title="Acciones"
             disabled={isPending}
           >
             <EllipsisVertical className="w-5 h-5 text-gray-600" />
+            {/* ✅ Indicador visual para turnos vencidos */}
+            {esVencido && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+            )}
           </button>
         </DropdownMenu.Trigger>
-        <DropdownMenu.Content sideOffset={4} align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[140px] py-1">
-          <DropdownMenu.Item
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700"
-            onSelect={handleEditar}
-            disabled={!turno.id_paciente}
-          >
-            <Edit size={14} />
-            Editar
-          </DropdownMenu.Item>
-          {esProgramado && esPasado && (
+        <DropdownMenu.Content sideOffset={4} align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
+          
+          {/* ⚠️ ALERTA para turnos vencidos */}
+          {esVencido && (
+            <>
+              <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-200">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-yellow-800">
+                    Turno vencido. Confirma si fue atendido o cancelado.
+                  </p>
+                </div>
+              </div>
+              <div className="h-px bg-gray-200 my-1" />
+            </>
+          )}
+
+          {/* Marcar como Atendido */}
+          {puedeMarcarAtendido && (
             <DropdownMenu.Item
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-green-600"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-green-50 flex items-center gap-2 text-green-600 cursor-pointer"
               onSelect={onMarcarAtendido}
             >
-              <CheckCircle size={14} />
-              Marcar Atendido
+              <CheckCircle size={16} />
+              Marcar como Atendido
             </DropdownMenu.Item>
           )}
-          {esProgramado && !esPasado && (
+
+          {/* Cancelar Turno */}
+          {puedeCancelar && (
             <DropdownMenu.Item
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-orange-600"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer"
               onSelect={onCancelar}
             >
-              <X size={14} />
-              Cancelar
+              <XCircle size={16} />
+              Cancelar Turno
             </DropdownMenu.Item>
           )}
-          {!esPasado && (
+
+          {/* Separador */}
+          {(puedeMarcarAtendido || puedeCancelar) && puedeEditar && (
+            <div className="h-px bg-gray-200 my-1" />
+          )}
+
+          {/* Editar */}
+          {puedeEditar && (
             <DropdownMenu.Item
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700 cursor-pointer"
+              onSelect={handleEditar}
+              disabled={!turno.id_paciente}
+            >
+              <Edit size={16} />
+              Editar
+            </DropdownMenu.Item>
+          )}
+
+          {/* Eliminar */}
+          {puedeEliminar && (
+            <DropdownMenu.Item
+              className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer"
               onSelect={onEliminar}
             >
-              <Trash size={14} />
-              Eliminar
-            </DropdownMenu.Item>
-          )}
-          {esPasado && (
-            <DropdownMenu.Item
-              className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 text-gray-400 cursor-not-allowed"
-              disabled
-              title="No se pueden eliminar turnos pasados"
-            >
-              <Trash size={14} />
+              <Trash size={16} />
               Eliminar
             </DropdownMenu.Item>
           )}

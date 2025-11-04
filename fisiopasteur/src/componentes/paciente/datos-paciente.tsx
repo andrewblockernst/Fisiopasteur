@@ -17,19 +17,19 @@ export default function DatosPaciente({ paciente, observaciones }: Props) {
   const [historialClinico, setHistorialClinico] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
 
-  useEffect(() => {
-    const cargarHistorial = async () => {
-      setCargando(true);
-      // ✅ Convertir number a string
-      const resultado = await obtenerHistorialClinicoPorPaciente(String(paciente.id_paciente));
-      
-      if (resultado.success) {
-        setHistorialClinico(resultado.data || []);
-      }
-      
-      setCargando(false);
-    };
+  const cargarHistorial = async () => {
+    setCargando(true);
+    // ✅ Convertir number a string
+    const resultado = await obtenerHistorialClinicoPorPaciente(String(paciente.id_paciente));
+    
+    if (resultado.success) {
+      setHistorialClinico(resultado.data || []);
+    }
+    
+    setCargando(false);
+  };
 
+  useEffect(() => {
     cargarHistorial();
   }, [paciente.id_paciente]);
 
@@ -85,7 +85,11 @@ export default function DatosPaciente({ paciente, observaciones }: Props) {
         ) : (
           <div className="space-y-6">
             {historialClinico.map((grupo) => (
-              <TablaHistorialClinico key={grupo.id_grupo} grupo={grupo} />
+              <TablaHistorialClinico 
+                key={grupo.id_grupo} 
+                grupo={grupo} 
+                onActualizar={cargarHistorial}
+              />
             ))}
           </div>
         )}

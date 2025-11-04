@@ -1,4 +1,5 @@
-import { getPaciente, getEvolucionesClinicas } from "@/lib/actions/paciente.action";
+import { getPaciente } from "@/lib/actions/paciente.action";
+import { obtenerHistorialClinicoPorPaciente } from "@/lib/actions/turno.action";
 import PlantillaImpresion from "@/componentes/impresion/plantilla";
 import AutoImpresion from "@/componentes/impresion/autoImpresion";
 import ControladorVistaPrevia from "@/componentes/impresion/controladorVistaPrevia";
@@ -6,7 +7,6 @@ import { notFound } from "next/navigation";
 import { Tables } from "@/types/database.types";
 
 type Paciente = Tables<"paciente">;
-type Evolucion = Tables<"evolucion_clinica">;
 
 type Props = {
   params: Promise<{ id: string }>; 
@@ -18,7 +18,6 @@ type Props = {
 };
 
 export default async function ImprimirHistorialPage({ params, searchParams }: Props) {
-  // AWAIT los parámetros
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;
   
@@ -29,15 +28,19 @@ export default async function ImprimirHistorialPage({ params, searchParams }: Pr
   }
 
   let paciente: Paciente | null = null;
-  let evoluciones: Evolucion[] = [];
+  let grupos: any[] = [];
 
   try {
+    // Obtener datos del paciente
     const pacienteResult = await getPaciente(pacienteId);
-    const evolucionesResult = await getEvolucionesClinicas(pacienteId);
-    
     paciente = pacienteResult as Paciente;
-    evoluciones = (evolucionesResult as Evolucion[]) || [];
     
+    // Obtener historial clínico agrupado por tratamientos
+    const historialResult = await obtenerHistorialClinicoPorPaciente(pacienteId);
+    
+    if (historialResult.success && historialResult.data) {
+      grupos = historialResult.data;
+    }
     
   } catch (error) {
     console.error("Error cargando datos:", error);
@@ -48,164 +51,63 @@ export default async function ImprimirHistorialPage({ params, searchParams }: Pr
     notFound();
   }
 
-  if (!Array.isArray(evoluciones)) {
-    evoluciones = [];
+  // Filtrar grupos por fechas si se especifican
+  let gruposFiltrados = grupos;
+  
+  if (resolvedSearchParams.desde || resolvedSearchParams.hasta) {
+    gruposFiltrados = grupos.map(grupo => {
+      const turnosFiltrados = grupo.turnos.filter((turno: any) => {
+        const fechaTurno = new Date(turno.fecha);
+        
+        if (resolvedSearchParams.desde && fechaTurno < new Date(resolvedSearchParams.desde)) {
+          return false;
+        }
+        if (resolvedSearchParams.hasta && fechaTurno > new Date(resolvedSearchParams.hasta)) {
+          return false;
+        }
+        return true;
+      });
+      
+      return {
+        ...grupo,
+        turnos: turnosFiltrados,
+        total_sesiones: turnosFiltrados.length
+      };
+    }).filter(grupo => grupo.turnos.length > 0);
   }
 
-  // Filtrar por fechas - usar resolvedSearchParams
-  const evolucionesFiltradas = evoluciones.filter(evo => {
-    if (!resolvedSearchParams.desde && !resolvedSearchParams.hasta) return true;
-    
-    if (!evo.created_at) return true;
-    
-    try {
-      const fechaEvo = new Date(evo.created_at);
-      if (resolvedSearchParams.desde && fechaEvo < new Date(resolvedSearchParams.desde)) return false;
-      if (resolvedSearchParams.hasta && fechaEvo > new Date(resolvedSearchParams.hasta)) return false;
-      return true;
-    } catch {
-      return true;
-    }
-  });
-
-  const formatearFechaHora = (fecha: string | null) => {
-    if (!fecha) return 'Sin fecha';
-    try {
-      return new Date(fecha).toLocaleString('es-AR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return 'Fecha inválida';
-    }
-  };
-
-  const calcularEdad = (fechaNacimiento: string | null) => {
-    if (!fechaNacimiento) return 'No especificada';
-    try {
-      const hoy = new Date();
-      const nacimiento = new Date(fechaNacimiento);
-      let edad = hoy.getFullYear() - nacimiento.getFullYear();
-      const mes = hoy.getMonth() - nacimiento.getMonth();
-      if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
-        edad--;
-      }
-      return `${edad} años`;
-    } catch {
-      return 'Edad no calculable';
-    }
-  };
-
-  const textoPeriodo = (resolvedSearchParams.desde || resolvedSearchParams.hasta) 
-    ? `Período: ${resolvedSearchParams.desde || 'Inicio'} - ${resolvedSearchParams.hasta || 'Actual'}`
-    : undefined;
+  // Contar total de sesiones (turnos) para el resumen
+  const totalRegistros = gruposFiltrados.reduce(
+    (sum, grupo) => sum + grupo.turnos.length, 
+    0
+  );
 
   const autoImprimir = resolvedSearchParams.auto === "1";
 
   return (
     <>
-      {/* Vista previa - solo se muestra si auto !== "1" */}
-    <ControladorVistaPrevia
-      pacienteId={resolvedParams.id}
-      pacienteNombre={`${paciente.nombre} ${paciente.apellido}`}
-      totalRegistros={evolucionesFiltradas.length}
-    />
+      {/* Vista previa */}
+      {!autoImprimir && (
+        <ControladorVistaPrevia
+          pacienteId={resolvedParams.id}
+          pacienteNombre={`${paciente.nombre} ${paciente.apellido}`}
+          totalRegistros={totalRegistros}
+          grupos={gruposFiltrados}
+          paciente={paciente}
+        />
+      )}
 
-    {/* Contenido de impresión - se oculta en vista previa, se muestra al imprimir */}
-    <div className={autoImprimir ? 'block' : 'hidden print:block'}></div>
-      <AutoImpresion habilitado={autoImprimir} />
-      
-      <PlantillaImpresion
-        titulo="HISTORIAL CLÍNICO"
-        subtitulo={`${paciente.nombre} ${paciente.apellido}`}
-        textoPeriodo={textoPeriodo}
-      >
-        {/* Datos del paciente */}
-        <section className="evitar-corte">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2">
-            DATOS DEL PACIENTE
-          </h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="font-medium text-gray-700">Nombre completo:</span>
-              <p className="text-gray-900">{paciente.nombre} {paciente.apellido}</p>
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">DNI:</span>
-              <p className="text-gray-900">{paciente.dni || 'No especificado'}</p>
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Edad:</span>
-              <p className="text-gray-900">{calcularEdad(paciente.fecha_nacimiento)}</p>
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Teléfono:</span>
-              <p className="text-gray-900">{paciente.telefono}</p>
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Dirección:</span>
-              <p className="text-gray-900">{paciente.direccion || 'No especificada'}</p>
-            </div>
-            <div className="col-span-2">
-              <span className="font-medium text-gray-700">Email:</span>
-              <p className="text-gray-900">{paciente.email || 'No especificado'}</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Evoluciones clínicas */}
-        <section>
-          <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2">
-            EVOLUCIONES CLÍNICAS ({evolucionesFiltradas.length} registros)
-          </h3>
-          
-          {evolucionesFiltradas.length === 0 ? (
-            <div className="text-gray-500 text-center py-8">
-              <p>No hay evoluciones clínicas{resolvedSearchParams.desde || resolvedSearchParams.hasta ? ' en el período seleccionado' : ' registradas'}</p>
-              <p className="text-xs mt-2">Paciente ID: {paciente.id_paciente} - Debug: Verificar turnos y evoluciones en base de datos</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {evolucionesFiltradas
-                .sort((a, b) => {
-                  const fechaA = a.created_at ? new Date(a.created_at).getTime() : 0;
-                  const fechaB = b.created_at ? new Date(b.created_at).getTime() : 0;
-                  return fechaB - fechaA;
-                })
-                .map((evolucion, index) => (
-                  <article 
-                    key={evolucion.id_evolucion || index} 
-                    className="evitar-corte superficie-impresion border border-gray-200 rounded-lg p-4"
-                  >
-                    <div className="mb-3">
-                      <span className="font-medium text-gray-700 text-sm">Fecha:</span>
-                      <p className="text-gray-900">{formatearFechaHora(evolucion.created_at)}</p>
-                    </div>
-                    
-                    <div>
-                      <span className="font-medium text-gray-700 text-sm">Observaciones:</span>
-                      <div className="text-gray-900 text-sm mt-1">
-                        {evolucion.observaciones?.startsWith("[") ? (
-                          <>
-                            <span className="font-semibold text-[#9C1838]">
-                              {evolucion.observaciones.split("]")[0].replace("[", "")}:
-                            </span>
-                            <span className="ml-1">{evolucion.observaciones.split("]")[1] || ''}</span>
-                          </>
-                        ) : (
-                          <span>{evolucion.observaciones || 'Sin observaciones'}</span>
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                ))}
-            </div>
-          )}
-        </section>
-      </PlantillaImpresion>
+      {/* Contenido de impresión */}
+      <div className={autoImprimir ? 'block' : 'hidden print:block'}>
+        <AutoImpresion habilitado={autoImprimir} />
+        
+        <PlantillaImpresion
+          paciente={paciente}
+          grupos={gruposFiltrados}
+          fechaInicio={resolvedSearchParams.desde || null}
+          fechaFin={resolvedSearchParams.hasta || null}
+        />
+      </div>
     </>
   );
 }
