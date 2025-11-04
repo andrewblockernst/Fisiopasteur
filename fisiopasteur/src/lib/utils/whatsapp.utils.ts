@@ -1,5 +1,7 @@
 // Funciones utilitarias para WhatsApp (NO son server actions)
-import type { TurnoWithRelations } from "@/types/database.types";
+import { format } from 'date-fns';
+import type { TurnoConDetalles } from "@/stores/turno-store";
+import { es } from 'date-fns/locale';
 
 // =====================================
 // 🔧 FUNCIONES AUXILIARES
@@ -22,8 +24,12 @@ export function formatearHoraParaBot(hora: string): string {
 
 /**
  * Convertir datos del turno al formato esperado por el bot
+ * ✅ MULTI-ORG: Ahora recibe brandingConfig para personalización
  */
-export function mapearTurnoParaBot(turno: TurnoWithRelations) {
+export function mapearTurnoParaBot(
+  turno: TurnoConDetalles, 
+  centroMedico?: string
+) {
   return {
     pacienteNombre: turno.paciente?.nombre || 'Paciente',
     pacienteApellido: turno.paciente?.apellido || '',
@@ -35,7 +41,7 @@ export function mapearTurnoParaBot(turno: TurnoWithRelations) {
       'Profesional',
     especialidad: turno.especialidad?.nombre || 'Consulta',
     turnoId: turno.id_turno.toString(),
-    centroMedico: 'Fisiopasteur'
+    centroMedico: centroMedico || 'Centro Médico' // ✅ Personalizable
   };
 }
 

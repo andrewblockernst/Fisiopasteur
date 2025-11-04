@@ -5,7 +5,7 @@ import Button from "@/componentes/boton";
 import { EditarEspecialistaDialog } from "@/componentes/especialista/editar-especialista-dialog";
 import { DeleteEspecialistaDialog } from "@/componentes/especialista/eliminar-especialista-dialog";
 import { FullScreenLoading } from "@/componentes/loading";
-import { getEspecialista, getPerfilEspecialista } from "@/lib/actions/especialista.action";
+import { getEspecialista, getPerfilEspecialista, getEspecialidades } from "@/lib/actions/especialista.action";
 import { Tables } from "@/types/database.types";
 import { ArrowLeft, Bone, CircleDollarSign, Mail, Palette, Pencil, Phone, Trash } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
@@ -13,6 +13,7 @@ import { use, useEffect, useState } from "react";
 import { useToastStore } from "@/stores/toast-store";
 import { PerfilCompleto } from "@/lib/actions/perfil.action";
 import { formatoNumeroTelefono } from "@/lib/utils";
+import { useAuth } from "@/hooks/usePerfil";
 
 type Especialidad = Tables<'especialidad'>
 type Especialista = Tables<"usuario"> & { 
@@ -25,32 +26,37 @@ export default function ConsultaEspecialistaMobile() {
     const router = useRouter();
     const params = useParams();
     const toast = useToastStore();
+    const { user } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [viewingEspecialista, setViewingEspecialista] = useState<PerfilCompleto | null>(null);
 
-    // const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
+    const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
     
 
     useEffect(() => {
-        const loadEspecialista = async () => {
+        const loadData = async () => {
             try {
                 setIsLoading(true);
                 const especialistaId = params.id as string;
                 if (especialistaId) {
-                    const especialista = await getPerfilEspecialista(especialistaId);
+                    const [especialista, especialidadesData] = await Promise.all([
+                        getPerfilEspecialista(especialistaId),
+                        getEspecialidades()
+                    ]);
                     setViewingEspecialista(especialista);
+                    setEspecialidades(especialidadesData);
                 }
             } catch (error) {
-                console.error("Error loading especialista:", error);
+                console.error("Error loading data:", error);
             } finally {
                 setIsLoading(false);
             }
         }
 
-        loadEspecialista();
+        loadData();
     }, [params.id, router]);
 
     if (isLoading) {
@@ -201,28 +207,30 @@ export default function ConsultaEspecialistaMobile() {
                     
                     <h1 className="absolute left-1/2 transform -translate-x-1/2 text-lg font-semibold">Perfil</h1>
 
-                    {/* Mostrar boton de perfil solo si es admin */}
-                    <div className="flex items-center space-x-2">
-                        <button
-                            onClick={() => setIsEditing(true)}
-                            className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
-                            style={{ backgroundColor: BRAND }}
-                            aria-label="Editar perfil"
-                            title="Editar perfil"
-                        >
-                            <Pencil className="w-4 h-4" />
-                        </button>
-                        {/* Mostrar boton de eliminar solo si es admin */}
-                        <button
-                            onClick={() => setIsDeleting(true)}
-                            className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
-                            style={{ backgroundColor: BRAND }}
-                            aria-label="Eliminar perfil"
-                            title="Eliminar perfil"
-                        >
-                            <Trash className="w-4 h-4" />
-                        </button>
-                    </div>
+                    {/* Mostrar botones solo para Admin y Programadores */}
+                    {user?.puedeGestionarTurnos && (
+                        <div className="flex items-center space-x-2">
+                            <button
+                                onClick={() => setIsEditing(true)}
+                                className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
+                                style={{ backgroundColor: BRAND }}
+                                aria-label="Editar perfil"
+                                title="Editar perfil"
+                            >
+                                <Pencil className="w-4 h-4" />
+                            </button>
+                            {/* Mostrar boton de eliminar solo si es admin */}
+                            <button
+                                onClick={() => setIsDeleting(true)}
+                                className="p-2 rounded-4xl active:scale-95 transition hover:bg-red-800 border-2 border-red-900 text-white ml-auto"
+                                style={{ backgroundColor: BRAND }}
+                                aria-label="Eliminar perfil"
+                                title="Eliminar perfil"
+                            >
+                                <Trash className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
 
                 </div>
 
@@ -279,39 +287,98 @@ export default function ConsultaEspecialistaMobile() {
                     </div>
                 </div>
 
-                {/* Precios */}
-                <div className="lg:col-span-5">
-                    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm">
-                        <div className="px-6 pt-5 pb-3 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${BRAND}1A` }}>
-                                <CircleDollarSign className="w-5 h-5" style={{ color: BRAND }} />
-                            </div>
-                            <h3 className="text-base font-semibold text-neutral-800">Precios</h3>
-                        </div>
-
-                        <div className="px-4 pb-5 space-y-4">
-                            {!viewingEspecialista.especialidad_principal && viewingEspecialista.especialidades_adicionales.length === 0 && (
-                                <p className="text-sm text-neutral-600">No hay especialidades asignadas.</p>
-                            )}
-
-                            {viewingEspecialista.especialidades_adicionales.length > 0 && (
-                                <div className="space-y-4">
-                                    
-                                    {viewingEspecialista.especialidades_adicionales.map((esp) => (
-                                        <div key={esp.id_especialidad} className="p-4 border border-neutral-200 rounded-lg">
-                                            <h5 className="text-sm font-bold text-neutral-700 mb-1">{esp.nombre}</h5>
-                                            <p className="text-sm text-neutral-600">$ {esp.precio_particular}</p>
-                                        </div>
-                                    ))}
+                {/* Precios - Solo visible para Admin/Programador o el propio especialista */}
+                {(user?.puedeGestionarTurnos || user?.id_usuario === viewingEspecialista.id_usuario) && (
+                    <div className="lg:col-span-5">
+                        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm">
+                            <div className="px-6 pt-5 pb-3 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${BRAND}1A` }}>
+                                    <CircleDollarSign className="w-5 h-5" style={{ color: BRAND }} />
                                 </div>
-                            )}
-                        </div>
+                                <h3 className="text-base font-semibold text-neutral-800">Precios</h3>
+                            </div>
 
+                            <div className="px-4 pb-5 space-y-4">
+                                {!viewingEspecialista.especialidad_principal && viewingEspecialista.especialidades_adicionales.length === 0 && (
+                                    <p className="text-sm text-neutral-600">No hay especialidades asignadas.</p>
+                                )}
+
+                                {viewingEspecialista.especialidades_adicionales.length > 0 && (
+                                    <div className="space-y-4">
+                                        
+                                        {viewingEspecialista.especialidades_adicionales.map((esp) => (
+                                            <div key={esp.id_especialidad} className="p-4 border border-neutral-200 rounded-lg">
+                                                <h5 className="text-sm font-bold text-neutral-700 mb-1">{esp.nombre}</h5>
+                                                <p className="text-sm text-neutral-600">$ {esp.precio_particular}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                        </div>
                     </div>
-                </div>
+                )}
 
             </div>
 
+            )}
+
+            {/* Diálogos de edición y eliminación */}
+            {isEditing && viewingEspecialista && especialidades.length > 0 && (
+                <EditarEspecialistaDialog
+                    isOpen={isEditing}
+                    onClose={handleEditClose}
+                    especialidades={especialidades}
+                    especialista={{
+                        id_usuario: viewingEspecialista.id_usuario,
+                        nombre: viewingEspecialista.nombre,
+                        apellido: viewingEspecialista.apellido,
+                        email: viewingEspecialista.email,
+                        telefono: viewingEspecialista.telefono,
+                        color: viewingEspecialista.color,
+                        activo: true,
+                        id_usuario_organizacion: '',
+                        id_rol: viewingEspecialista.rol.id,
+                        rol: viewingEspecialista.rol,
+                        especialidades: [
+                            ...(viewingEspecialista.especialidad_principal ? [{
+                                id_especialidad: viewingEspecialista.especialidad_principal.id_especialidad,
+                                nombre: viewingEspecialista.especialidad_principal.nombre,
+                                precio_particular: viewingEspecialista.especialidad_principal.precio_particular ?? null,
+                                precio_obra_social: viewingEspecialista.especialidad_principal.precio_obra_social ?? null
+                            }] : []),
+                            ...viewingEspecialista.especialidades_adicionales.map(esp => ({
+                                id_especialidad: esp.id_especialidad,
+                                nombre: esp.nombre,
+                                precio_particular: esp.precio_particular ?? null,
+                                precio_obra_social: esp.precio_obra_social ?? null
+                            }))
+                        ],
+                        usuario_especialidad: []
+                    }}
+                />
+            )}
+
+            {isDeleting && viewingEspecialista && (
+                <DeleteEspecialistaDialog
+                    isOpen={isDeleting}
+                    onClose={handleDeleteClose}
+                    especialista={{
+                        id_usuario: viewingEspecialista.id_usuario,
+                        nombre: viewingEspecialista.nombre,
+                        apellido: viewingEspecialista.apellido,
+                        email: viewingEspecialista.email,
+                        telefono: viewingEspecialista.telefono,
+                        color: viewingEspecialista.color,
+                        activo: true,
+                        contraseña: '',
+                        created_at: null,
+                        id_especialidad: null,
+                        updated_at: null
+                    }}
+                    handleToast={toast.addToast}
+                />
             )}
             
         </div>

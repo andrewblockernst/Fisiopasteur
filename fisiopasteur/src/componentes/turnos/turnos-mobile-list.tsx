@@ -14,10 +14,10 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
-import type { TurnoWithRelations } from "@/types/database.types";
+import type { TurnoConDetalles } from "@/stores/turno-store";
 
 interface TurnosMobileListProps {
-  turnos: TurnoWithRelations[];
+  turnos: TurnoConDetalles[];
   fecha: string;
   onDateChange: (date: string) => void;
   onTurnoCreated?: () => void;
@@ -28,6 +28,34 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showNuevoTurnoModal, setShowNuevoTurnoModal] = useState(false);
+
+  // ✨ Función para calcular el número de talonario
+  const calcularNumeroTalonario = (turno: TurnoConDetalles): string | null => {
+    if (!turno.id_paciente || !turno.id_especialidad) return null;
+
+    // Filtrar turnos del mismo paciente y especialidad (sin importar mes/año)
+    const turnosMismoPaquete = turnos.filter(t => 
+      t.id_paciente === turno.id_paciente &&
+      t.id_especialidad === turno.id_especialidad &&
+      t.estado !== 'cancelado' // Excluir cancelados del conteo
+    );
+
+    // Si solo hay un turno, no mostrar número
+    if (turnosMismoPaquete.length <= 1) return null;
+
+    // Ordenar por fecha y hora
+    const turnosOrdenados = [...turnosMismoPaquete].sort((a, b) => {
+      const fechaA = new Date(`${a.fecha}T${a.hora}`);
+      const fechaB = new Date(`${b.fecha}T${b.hora}`);
+      return fechaA.getTime() - fechaB.getTime();
+    });
+
+    // Encontrar la posición del turno actual
+    const posicion = turnosOrdenados.findIndex(t => t.id_turno === turno.id_turno) + 1;
+    const total = turnosOrdenados.length;
+
+    return `${posicion}/${total}`;
+  };
 
   // Filtrar turnos por término de búsqueda
   const turnosFiltrados = turnos.filter(turno => {
@@ -48,7 +76,7 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
     }
     groups[hora].push(turno);
     return groups;
-  }, {} as Record<string, TurnoWithRelations[]>);
+  }, {} as Record<string, TurnoConDetalles[]>);
 
   // Ordenar horas
   const horasOrdenadas = Object.keys(turnosAgrupados).sort();
@@ -92,25 +120,25 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+  <div className="min-h-screen bg-neutral-50 text-black">
       {/* Header fijo - Estilo similar al perfil */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3">
+  <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 text-black">
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.back()}
             className="p-2 -ml-2 rounded-md active:scale-95 transition hover:bg-gray-100"
             aria-label="Volver"
           >
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="w-6 h-6 text-black" />
           </button>
           <div className="flex-1 flex justify-center">
-            <h1 className="text-lg font-semibold text-center">Turnos</h1>
+            <h1 className="text-lg text-black text-center">Turnos</h1>
           </div>
         </div>
       </header>
 
       {/* Contenido principal */}
-      <div className="px-4 py-3">
+  <div className="px-4 py-3 text-black">
 
         {/* Selector de fecha */}
         <div className="flex items-center gap-3 mb-3">
@@ -149,7 +177,7 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
       </div>
 
       {/* Contenido */}
-      <div className="px-4 pb-20">
+  <div className="px-4 pb-20 text-black">
         {horasOrdenadas.length === 0 ? (
           <div className="text-center py-12">
             <Calendar className="w-16 h-16 text-neutral-300 mx-auto mb-4" />
@@ -166,7 +194,7 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
               <div key={hora} className="space-y-3">
                 {/* Header de hora */}
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-16 h-8 bg-[#9C1838] text-white rounded-lg text-sm font-medium">
+                  <div className="flex items-center justify-center min-w-[80px] px-3 h-8 bg-[#9C1838] text-white rounded-lg text-sm font-medium whitespace-nowrap">
                     {formatTime(hora)}
                   </div>
                   <div className="flex-1 h-px bg-neutral-200" />
@@ -177,7 +205,8 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
                   {turnosAgrupados[hora].map((turno) => (
                     <TurnoCard 
                       key={turno.id_turno} 
-                      turno={turno} 
+                      turno={turno}
+                      numeroTalonario={calcularNumeroTalonario(turno)}
                       onClick={() => router.push(`/turnos/${turno.id_turno}`)} 
                     />
                   ))}
@@ -211,11 +240,21 @@ export default function TurnosMobileList({ turnos, fecha, onDateChange, onTurnoC
   );
 }
 
-function TurnoCard({ turno, onClick }: { turno: TurnoWithRelations; onClick: () => void }) {
+function TurnoCard({ 
+  turno, 
+  numeroTalonario,
+  onClick 
+}: { 
+  turno: TurnoConDetalles; 
+  numeroTalonario: string | null;
+  onClick: () => void;
+}) {
   const getEstadoColor = (estado: string) => {
     switch (estado.toLowerCase()) {
       case 'programado':
         return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'vencido':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'en_curso':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'completado':
@@ -229,19 +268,32 @@ function TurnoCard({ turno, onClick }: { turno: TurnoWithRelations; onClick: () 
     }
   };
 
+  const getCardBackgroundColor = (estado: string) => {
+    if (estado.toLowerCase() === 'vencido') {
+      return 'bg-yellow-50';
+    }
+    return 'bg-white';
+  };
+
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl border border-neutral-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
+      className={`${getCardBackgroundColor(turno.estado || 'programado')} rounded-xl border border-neutral-200 p-4 hover:shadow-md transition-shadow cursor-pointer`}
     >
       {/* Header del turno */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <User className="w-4 h-4 text-[#9C1838]" />
             <span className="font-semibold text-gray-900">
               {turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}` : 'Sin paciente'}
             </span>
+            {/* Badge de talonario */}
+            {numeroTalonario && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-md border border-blue-200">
+                📋 {numeroTalonario}
+              </span>
+            )}
           </div>
           {turno.paciente?.dni && (
             <p className="text-sm text-neutral-600">DNI: {turno.paciente.dni}</p>
@@ -285,7 +337,7 @@ function TurnoCard({ turno, onClick }: { turno: TurnoWithRelations; onClick: () 
         
         {/* Estado */}
         <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${getEstadoColor(turno.estado || 'programado')}`}>
-          {(turno.estado || 'programado').replace('_', ' ').toUpperCase()}
+          {turno.estado === 'vencido' ? '⚠️ VENCIDO' : (turno.estado || 'programado').replace('_', ' ').toUpperCase()}
         </span>
       </div>
 

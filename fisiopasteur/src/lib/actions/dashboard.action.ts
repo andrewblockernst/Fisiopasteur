@@ -9,15 +9,16 @@ type Notificacion = Database["public"]["Tables"]["notificacion"]["Row"];
 
 export interface KPIsDashboard {
   turnosHoy: number;
-  turnosCompletadosSemana: number;
+  turnosAtendidosSemana: number;
   cancelacionesMes: number;
   notificacionesEnviadas: number;
 }
 
 export interface KPIHistorico {
   fecha: string;
+  hora?: string; // Para cuando se agrupa por hora (filtro "hoy")
   turnosHoy: number;
-  turnosCompletados: number;
+  turnosAtendidos: number;
   cancelaciones: number;
   notificacionesEnviadas: number;
 }
@@ -30,8 +31,10 @@ export interface ProximoTurno {
   nombrePaciente: string;
   apellidoPaciente: string;
   especialista: string;
+  especialidad: string;
+  colorEspecialista: string;
   box: number | null;
-  estado: string;
+  // estado: string; LOS PROXIMOS TURNOS SOLO PUEDEN ESTAR EN ESTADO PROGRAMADO
   telefono: string;
 }
 
@@ -74,13 +77,19 @@ export async function obtenerKPIsConHistorial(
     const fechaInicioStr = fechaInicio.toISOString().split("T")[0];
     const fechaFinStr = fechaFin.toISOString().split("T")[0];
 
+    // Para "hoy", obtener también la hora
+    let selectFields = "fecha, estado, id_turno";
+    if (periodo === "hoy") {
+      selectFields = "fecha, hora, estado, id_turno";
+    }
+
     // Obtener turnos en el rango
     const { data: turnos, error: errorTurnos } = await supabase
       .from("turno")
-      .select("fecha, estado, id_turno")
+      .select(selectFields)
       .gte("fecha", fechaInicioStr)
       .lte("fecha", fechaFinStr)
-    //   .neq("id_especialidad", 4); // EXCLUYE PILATES
+      .neq("id_especialidad", 4); // EXCLUYE PILATES
 
     // Obtener notificaciones en el rango
     const { data: notificaciones, error: errorNotificaciones } = await supabase
@@ -94,56 +103,105 @@ export async function obtenerKPIsConHistorial(
       throw new Error("Error al obtener datos históricos");
     }
 
-    // Agrupar por fecha
+    // Agrupar por fecha o por hora (si es "hoy")
     const datosMap = new Map<string, KPIHistorico>();
 
-    // Inicializar todas las fechas del rango con 0
-    for (let i = 0; i < daysToGet; i++) {
-      const fecha = new Date(fechaInicio);
-      fecha.setDate(fecha.getDate() + i);
-      const fechaStr = fecha.toISOString().split("T")[0];
-      datosMap.set(fechaStr, {
-        fecha: fechaStr,
-        turnosHoy: 0,
-        turnosCompletados: 0,
-        cancelaciones: 0,
-        notificacionesEnviadas: 0,
+    if (periodo === "hoy") {
+      // Inicializar 24 horas del día
+      for (let hora = 0; hora < 24; hora++) {
+        const horaStr = String(hora).padStart(2, "0");
+        const clave = `${fechaInicioStr}T${horaStr}`;
+        datosMap.set(clave, {
+          fecha: horaStr,
+          hora: `${horaStr}:00`,
+          turnosHoy: 0,
+          turnosAtendidos: 0,
+          cancelaciones: 0,
+          notificacionesEnviadas: 0,
+        });
+      }
+
+      // Procesar turnos agrupados por hora
+      (turnos || []).forEach((turno: any) => {
+        if (turno.hora) {
+          const hora = turno.hora.split(":")[0];
+          const clave = `${turno.fecha}T${hora}`;
+          const dato = datosMap.get(clave);
+          if (dato) {
+            dato.turnosHoy++;
+            if (turno.estado === "atendido") {
+              dato.turnosAtendidos++;
+            } else if (turno.estado === "cancelado") {
+              dato.cancelaciones++;
+            }
+          }
+        }
+      });
+
+      // Procesar notificaciones agrupadas por hora
+      (notificaciones || []).forEach((notif: any) => {
+        if (notif.fecha_envio) {
+          const fechaHoraArray = notif.fecha_envio.split("T");
+          if (fechaHoraArray.length > 1) {
+            const fecha = fechaHoraArray[0];
+            const hora = fechaHoraArray[1].split(":")[0];
+            const clave = `${fecha}T${hora}`;
+            const dato = datosMap.get(clave);
+            if (dato) {
+              dato.notificacionesEnviadas++;
+            }
+          }
+        }
+      });
+    } else {
+      // Inicializar todas las fechas del rango con 0
+      for (let i = 0; i < daysToGet; i++) {
+        const fecha = new Date(fechaInicio);
+        fecha.setDate(fecha.getDate() + i);
+        const fechaStr = fecha.toISOString().split("T")[0];
+        datosMap.set(fechaStr, {
+          fecha: fechaStr,
+          turnosHoy: 0,
+          turnosAtendidos: 0,
+          cancelaciones: 0,
+          notificacionesEnviadas: 0,
+        });
+      }
+
+      // Procesar turnos agrupados por fecha
+      (turnos || []).forEach((turno: any) => {
+        const fechaStr = turno.fecha;
+        const dato = datosMap.get(fechaStr);
+        if (dato) {
+          dato.turnosHoy++;
+          if (turno.estado === "atendido") {
+            dato.turnosAtendidos++;
+          } else if (turno.estado === "cancelado") {
+            dato.cancelaciones++;
+          }
+        }
+      });
+
+      // Procesar notificaciones agrupadas por fecha
+      (notificaciones || []).forEach((notif: any) => {
+        if (notif.fecha_envio) {
+          const fechaStr = notif.fecha_envio.split("T")[0];
+          const dato = datosMap.get(fechaStr);
+          if (dato) {
+            dato.notificacionesEnviadas++;
+          }
+        }
       });
     }
 
-    // Procesar turnos
-    (turnos || []).forEach((turno: any) => {
-      const fechaStr = turno.fecha;
-      const dato = datosMap.get(fechaStr);
-      if (dato) {
-        dato.turnosHoy++;
-        if (turno.estado === "completado") {
-          dato.turnosCompletados++;
-        } else if (turno.estado === "cancelado") {
-          dato.cancelaciones++;
-        }
-      }
-    });
-
-    // Procesar notificaciones
-    (notificaciones || []).forEach((notif: any) => {
-      if (notif.fecha_envio) {
-        const fechaStr = notif.fecha_envio.split("T")[0];
-        const dato = datosMap.get(fechaStr);
-        if (dato) {
-          dato.notificacionesEnviadas++;
-        }
-      }
-    });
-
     // Convertir a array y calcular totales
     const datos = Array.from(datosMap.values()).sort(
-      (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+      (a, b) => a.fecha.localeCompare(b.fecha)
     );
 
     const total: KPIsDashboard = {
       turnosHoy: datos.reduce((sum, d) => sum + d.turnosHoy, 0),
-      turnosCompletadosSemana: datos.reduce((sum, d) => sum + d.turnosCompletados, 0),
+      turnosAtendidosSemana: datos.reduce((sum, d) => sum + d.turnosAtendidos, 0),
       cancelacionesMes: datos.reduce((sum, d) => sum + d.cancelaciones, 0),
       notificacionesEnviadas: datos.reduce((sum, d) => sum + d.notificacionesEnviadas, 0),
     };
@@ -155,7 +213,7 @@ export async function obtenerKPIsConHistorial(
       datos: [],
       total: {
         turnosHoy: 0,
-        turnosCompletadosSemana: 0,
+        turnosAtendidosSemana: 0,
         cancelacionesMes: 0,
         notificacionesEnviadas: 0,
       },
@@ -183,13 +241,13 @@ export async function obtenerKPIsDashboard(): Promise<KPIsDashboard> {
       .eq("fecha", hoy)
     //   .neq("id_especialidad", 4); // Excluir Pilates
 
-    // 2️⃣ Turnos completados esta semana
-    const { data: completadosSemanaData, error: errorCompletados } = await supabase
+    // 2️⃣ Turnos atendidos esta semana
+    const { data: atendidosSemanaData, error: errorAtendidos } = await supabase
       .from("turno")
       .select("id_turno", { count: "exact" })
       .gte("fecha", inicioSemana.toISOString().split("T")[0])
       .lte("fecha", finSemana.toISOString().split("T")[0])
-      .eq("estado", "completado")
+      .eq("estado", "atendido")
     //   .neq("id_especialidad", 4);
 
     // 3️⃣ Cancelaciones del mes
@@ -206,10 +264,10 @@ export async function obtenerKPIsDashboard(): Promise<KPIsDashboard> {
       .select("id_notificacion", { count: "exact" })
       .eq("estado", "enviado");
 
-    if (errorTurnosHoy || errorCompletados || errorCancelaciones || errorNotificaciones) {
+    if (errorTurnosHoy || errorAtendidos || errorCancelaciones || errorNotificaciones) {
       console.error("Error al obtener KPIs:", {
         errorTurnosHoy,
-        errorCompletados,
+        errorAtendidos,
         errorCancelaciones,
         errorNotificaciones,
       });
@@ -218,7 +276,7 @@ export async function obtenerKPIsDashboard(): Promise<KPIsDashboard> {
 
     return {
       turnosHoy: turnosHoyData?.length || 0,
-      turnosCompletadosSemana: completadosSemanaData?.length || 0,
+      turnosAtendidosSemana: atendidosSemanaData?.length || 0,
       cancelacionesMes: cancelacionesMesData?.length || 0,
       notificacionesEnviadas: notificacionesData?.length || 0,
     };
@@ -226,7 +284,7 @@ export async function obtenerKPIsDashboard(): Promise<KPIsDashboard> {
     console.error("❌ Error en obtenerKPIsDashboard:", error);
     return {
       turnosHoy: 0,
-      turnosCompletadosSemana: 0,
+      turnosAtendidosSemana: 0,
       cancelacionesMes: 0,
       notificacionesEnviadas: 0,
     };
@@ -246,13 +304,15 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
         `
         id_turno,
         hora,
-        estado,
         paciente:id_paciente(nombre, apellido, telefono),
-        especialista:id_especialista(nombre, apellido),
+        especialista:id_especialista(nombre, apellido, color),
+        especialidad:id_especialidad(nombre),
         box:id_box(numero)
       `
       )
       .eq("fecha", hoy)
+      .eq("estado", "programado")
+      .gt("hora", new Date().toLocaleTimeString("en-US", { hour12: false }))
     //   .neq("id_especialidad", 4) // Excluir Pilates
       .order("hora", { ascending: true });
 
@@ -267,8 +327,10 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
       nombrePaciente: turno.paciente?.nombre || "Desconocido",
       apellidoPaciente: turno.paciente?.apellido || "",
       especialista: `${turno.especialista?.nombre || ""} ${turno.especialista?.apellido || ""}`,
+      especialidad: turno.especialidad?.nombre || "Desconocida",
+      colorEspecialista: turno.especialista?.color || "#6B7280", // Color por defecto gris
       box: turno.box?.numero || null,
-      estado: turno.estado,
+      // estado: turno.estado,
       telefono: turno.paciente?.telefono || "",
     }));
   } catch (error) {
@@ -297,7 +359,7 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
       .select("id_box, id_turno")
       .eq("fecha", hoy)
     //   .neq("id_especialidad", 4)
-      .in("estado", ["programado", "completado"]);
+      .in("estado", ["programado", "atendido"]);
 
     if (errorTurnos) throw errorTurnos;
 

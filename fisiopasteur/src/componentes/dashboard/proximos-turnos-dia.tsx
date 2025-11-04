@@ -8,17 +8,19 @@ interface ProximoTurnoProps {
   nombrePaciente: string;
   apellidoPaciente: string;
   especialista: string;
+  especialidad: string;
+  colorEspecialista: string;
   box: number | null;
-  estado: string;
+  // estado: string;
   telefono: string;
 }
 
 function getEstadoBadge(estado: string) {
   const estilos: Record<string, { bg: string; text: string; etiqueta: string }> = {
     programado: { bg: "bg-blue-100", text: "text-blue-800", etiqueta: "Programado" },
-    completado: { bg: "bg-green-100", text: "text-green-800", etiqueta: "Completado" },
+    atendido: { bg: "bg-green-100", text: "text-green-800", etiqueta: "Atendido" },
     cancelado: { bg: "bg-red-100", text: "text-red-800", etiqueta: "Cancelado" },
-    ausencia: { bg: "bg-orange-100", text: "text-orange-800", etiqueta: "No asistió" },
+    vencido: { bg: "bg-yellow-100", text: "text-yellow-800", etiqueta: "Vencido" },
   };
 
   return estilos[estado] || { bg: "bg-gray-100", text: "text-gray-800", etiqueta: "Desconocido" };
@@ -29,23 +31,47 @@ function TurnoCard({
   nombrePaciente, 
   apellidoPaciente, 
   especialista, 
+  especialidad,
+  colorEspecialista,
   box, 
-  estado, 
+  // estado, 
   telefono 
 }: ProximoTurnoProps) {
-  const estadoInfo = getEstadoBadge(estado);
+  // const estadoInfo = getEstadoBadge(estado);
   const horaNum = parseInt(hora.split(":")[0]);
   const ahora = new Date().getHours();
-  const estaProximo = horaNum === ahora && estado === "programado";
+  const estaProximo = horaNum === ahora; // && estado === "programado"
+
+  // Mapear estados a colores de fondo suave
+  // const bgColors: Record<string, string> = {
+  //   programado: "bg-blue-50",
+  //   atendido: "bg-green-50",
+  //   cancelado: "bg-red-50",
+  //   vencido: "bg-yellow-50",
+  // };
+
+  // const borderColors: Record<string, string> = {
+  //   programado: "border-l-blue-300",
+  //   atendido: "border-l-green-300",
+  //   cancelado: "border-l-red-300",
+  //   vencido: "border-l-yellow-300",
+  // };
+
+  // const bgColor = bgColors[estado] || "bg-gray-50";
+  // const borderColor = borderColors[estado] || "border-l-gray-300";
 
   return (
     <div
-      className={`bg-white rounded-lg border-l-4 p-4 hover:shadow-md transition-all ${
+      className={`rounded-lg border-l-4 p-4 hover:shadow-md transition-all ${
         estaProximo
-          ? "border-l-red-500 bg-red-50 shadow-md"
-          : "border-l-gray-300"
-      }`}
-    >
+          ? "shadow-md"
+          : ""
+        }`}
+      style={{
+        backgroundColor: colorEspecialista + "20", // Agregar transparencia (20%)
+        borderColor: colorEspecialista,
+      }}
+    > {/* ${bgColor} ${borderColor} bg-${colorEspecialista + 20} border-l-${colorEspecialista} */}
       <div className="flex items-start justify-between gap-4">
         {/* Columna izquierda: Hora y paciente */}
         <div className="flex-1 min-w-0">
@@ -63,21 +89,36 @@ function TurnoCard({
             {nombrePaciente} {apellidoPaciente}
           </p>
           <p className="text-xs text-gray-600 truncate">{especialista}</p>
+          <p className="text-xs text-gray-500 truncate">{especialidad}</p>
         </div>
 
-        {/* Columna central: Box */}
-        {box && (
-          <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded text-sm">
-            <MapPin className="w-4 h-4 text-gray-600" />
-            <span className="font-semibold text-gray-900">Box {box}</span>
-          </div>
-        )}
+        
 
-        {/* Columna derecha: Estado */}
+        {/* Columna derecha */}
         <div className="flex flex-col items-end gap-2">
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${estadoInfo.bg} ${estadoInfo.text}`}>
+
+          {/* Estado */}
+          {/* <span className={`px-3 py-1 rounded-full text-xs font-semibold ${estadoInfo.bg} ${estadoInfo.text}`}>
             {estadoInfo.etiqueta}
-          </span>
+          </span> */}
+
+          {/* Box */}
+          {box && (
+            <div className="flex items-center gap-2 bg-white bg-opacity-60 px-3 py-2 rounded text-sm border border-gray-200">
+              <MapPin className="w-4 h-4 text-gray-600" />
+              <span className="font-semibold text-gray-900">Box {box}</span>
+              {/* <div
+              className="flex items-center gap-2 px-3 py-2 rounded text-sm border"
+              style={{
+                backgroundColor: colorEspecialista + "20", // Agregar transparencia (20%)
+                borderColor: colorEspecialista,
+              }}
+            >
+              <MapPin className="w-4 h-4" style={{ color: colorEspecialista }} />
+              <span className="font-semibold" style={{ color: colorEspecialista }}>Box {box}</span> */}
+            </div>
+          )}
+          
           {/* {telefono && (
             <a
               href={`tel:${telefono}`}

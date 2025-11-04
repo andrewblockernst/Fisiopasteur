@@ -11,12 +11,41 @@ import { useAuth } from "@/hooks/usePerfil";
 import { Plus } from "lucide-react";
 
 type Especialidad = Tables<"especialidad">;
-type Usuario = Tables<"usuario"> & { 
-  especialidades?: Especialidad[] 
+
+// ✅ Tipo que coincide con getEspecialistas()
+type EspecialistaConDatos = {
+  id_usuario: string;
+  id_usuario_organizacion: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string | null;
+  color: string | null;
+  activo: boolean;
+  id_rol: number;
+  rol: {
+    id: number;
+    nombre: string;
+  };
+  especialidades: Array<{
+    id_especialidad: number;
+    nombre: string;
+    precio_particular: number | null;
+    precio_obra_social: number | null;
+  }>;
+  usuario_especialidad: Array<{
+    precio_particular: number | null;
+    precio_obra_social: number | null;
+    activo: boolean | null;
+    especialidad: {
+      id_especialidad: number;
+      nombre: string;
+    };
+  }>;
 };
 
 interface EspecialistasTableProps {
-  especialistas: Usuario[];
+  especialistas: EspecialistaConDatos[];
   onEspecialistaDeleted?: () => void;
   onEspecialistaUpdated?: () => void;
   especialidades: Especialidad[];
@@ -30,7 +59,7 @@ export function EspecialistasTable({
   especialidades,
   setShowDialog
 }: EspecialistasTableProps) {
-  const [editingEspecialista, setEditingEspecialista] = useState<Usuario | null>(null);
+  const [editingEspecialista, setEditingEspecialista] = useState<EspecialistaConDatos | null>(null);
   const [isPending, startTransition] = useTransition();
   const { addToast } = useToastStore();
   const { user } = useAuth();
@@ -43,7 +72,7 @@ export function EspecialistasTable({
     }
   };
 
-  const handleToggleActivo = (especialista: Usuario) => {
+  const handleToggleActivo = (especialista: EspecialistaConDatos) => {
     startTransition(async () => {
       const res = await toggleEspecialistaActivo(especialista.id_usuario, !especialista.activo);
       addToast({
@@ -68,7 +97,10 @@ export function EspecialistasTable({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              {/* Solo mostrar columna de acciones si puede gestionar turnos */}
+              {user?.puedeGestionarTurnos && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -114,23 +146,26 @@ export function EspecialistasTable({
                     {especialista.activo ? "Activo" : "Inactivo"}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  <Button 
-                    variant="secondary" 
-                    className="text-xs"
-                    onClick={() => setEditingEspecialista(especialista)}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    variant={especialista.activo ? "danger" : "success"}
-                    className="text-xs"
-                    disabled={isPending}
-                    onClick={() => handleToggleActivo(especialista)}
-                  >
-                    {especialista.activo ? "Inactivar" : "Activar"}
-                  </Button>
-                </td>
+                {/* Solo mostrar acciones si puede gestionar turnos */}
+                {user?.puedeGestionarTurnos && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                    <Button 
+                      variant="secondary" 
+                      className="text-xs"
+                      onClick={() => setEditingEspecialista(especialista)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant={especialista.activo ? "danger" : "success"}
+                      className="text-xs"
+                      disabled={isPending}
+                      onClick={() => handleToggleActivo(especialista)}
+                    >
+                      {especialista.activo ? "Inactivar" : "Activar"}
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -226,8 +261,8 @@ export function EspecialistasTable({
           ))}
         </div>
 
-        {/* Boton flotante para agregar especialista - Solo Admin */}
-        {user?.esAdmin && (
+        {/* Boton flotante para agregar especialista - Solo Admin y Programadores */}
+        {user?.puedeGestionarTurnos && (
           <button
             onClick={() => setShowDialog(true)}
             className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"

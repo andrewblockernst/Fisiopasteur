@@ -86,9 +86,14 @@ export async function getPacientes(options?: {
     orderDirection = "asc"
   } = options || {};
 
+  // ✅ MULTI-ORG: Obtener contexto organizacional
+  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  const { orgId } = await getAuthContext();
+
   let query = supabase
     .from("paciente")
-    .select("*", { count: "exact" });
+    .select("*", { count: "exact" })
+    .eq("id_organizacion", orgId); // ✅ Filtrar por organización
 
   // Filtro de búsqueda
   if (search.trim()) {
@@ -118,10 +123,15 @@ export async function getPacientes(options?: {
 export async function getPaciente(id: number) {
   const supabase = await createClient();
   
+  // ✅ MULTI-ORG: Obtener contexto organizacional
+  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  const { orgId } = await getAuthContext();
+  
   const { data, error } = await supabase
     .from("paciente")
     .select("*")
     .eq("id_paciente", id)
+    .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
     .single();
 
   if (error) {
@@ -139,9 +149,14 @@ export async function getPaciente(id: number) {
 export async function searchPacientes(searchTerm: string) {
   const supabase = await createClient();
   
+  // ✅ MULTI-ORG: Obtener contexto organizacional
+  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  const { orgId } = await getAuthContext();
+  
   const { data, error } = await supabase
     .from("paciente")
     .select("id_paciente, nombre, apellido, email, documento, telefono")
+    .eq("id_organizacion", orgId) // ✅ Filtrar por organización
     .or(`nombre.ilike.%${searchTerm}%,apellido.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,documento.ilike.%${searchTerm}%`)
     .order("nombre")
     .limit(10);
@@ -158,6 +173,10 @@ export async function searchPacientes(searchTerm: string) {
 export async function createPaciente(formData: FormData) {
   const supabase = await createClient();
 
+  // ✅ MULTI-ORG: Obtener contexto organizacional
+  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  const { orgId } = await getAuthContext();
+
   const pacienteData: Omit<PacienteInsert, 'id_paciente'> = {
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
@@ -166,6 +185,7 @@ export async function createPaciente(formData: FormData) {
     telefono: formData.get("telefono") as string,
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
+    id_organizacion: orgId, // ✅ Inyectar orgId
   };
 
   // Validaciones
@@ -220,6 +240,10 @@ export async function createPaciente(formData: FormData) {
 export async function updatePaciente(id: number, formData: FormData) {
   const supabase = await createClient();
 
+  // ✅ MULTI-ORG: Obtener contexto organizacional
+  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  const { orgId } = await getAuthContext();
+
   const updateData: PacienteUpdate = {
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
@@ -252,6 +276,7 @@ export async function updatePaciente(id: number, formData: FormData) {
       .from("paciente")
       .update(updateData)
       .eq("id_paciente", id)
+      .eq("id_organizacion", orgId) // ✅ Asegurar que solo actualiza de su org
       .select()
       .single();
 
@@ -284,11 +309,16 @@ export async function deletePaciente(id: number) {
   const supabase = await createClient();
 
   try {
+    // ✅ MULTI-ORG: Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
+
     // Verificar si el paciente tiene turnos asociados
     const { data: turnos } = await supabase
       .from("turno")
       .select("id_turno")
       .eq("id_paciente", id)
+      .eq("id_organizacion", orgId) // ✅ Verificar en la misma org
       .limit(1);
 
     if (turnos && turnos.length > 0) {
@@ -300,7 +330,8 @@ export async function deletePaciente(id: number) {
     const { error } = await supabase
       .from("paciente")
       .update({ activo: false })
-      .eq("id_paciente", id);
+      .eq("id_paciente", id)
+      .eq("id_organizacion", orgId); // ✅ Asegurar que solo elimina de su org
 
     if (error) {
       console.error("Error deleting paciente:", error);
@@ -334,11 +365,16 @@ export async function getHistorialClinico(idPaciente: number) {
 export async function agregarObservacion(idPaciente: number, observaciones: string) {
   const supabase = await createClient();
 
+  // ✅ MULTI-ORG: Obtener contexto organizacional
+  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  const { orgId } = await getAuthContext();
+
   // 1. Buscar el último turno del paciente
   const { data: turnos, error: errorTurnos } = await supabase
     .from("turno")
     .select("id_turno")
     .eq("id_paciente", idPaciente)
+    .eq("id_organizacion", orgId) // ✅ Filtrar por org
     .order("fecha", { ascending: false })
     .limit(1);
 
@@ -354,6 +390,7 @@ export async function agregarObservacion(idPaciente: number, observaciones: stri
     .insert({
       id_turno: idTurno,
       observaciones,
+      id_organizacion: orgId, // ✅ Inyectar orgId
     })
     .select()
     .single();
@@ -423,12 +460,17 @@ export async function getEvolucionesClinicas(idPaciente: number) {
 // Agregar evolución clínica
 export async function agregarEvolucionClinica(idTurno: number, observaciones: string) {
   const supabase = await createClient();
+  
+  // ✅ MULTI-ORG: Obtener contexto organizacional
+  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  const { orgId } = await getAuthContext();
+  
   const { data, error } = await supabase
     .from("evolucion_clinica")
     .insert({
       id_turno: idTurno,
       observaciones,
-      fecha: new Date().toISOString(),
+      id_organizacion: orgId, // ✅ Inyectar orgId
     })
     .select()
     .single();

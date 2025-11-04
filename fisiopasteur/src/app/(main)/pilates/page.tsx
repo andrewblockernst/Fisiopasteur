@@ -93,14 +93,12 @@ export default function PilatesPage() {
             return principal || adicional;
           });
           
-          console.log('👨‍⚕️ Especialistas de Pilates encontrados:', pilates.length);
           setEspecialistas(pilates);
         }
 
         // Cargar pacientes
         const resPacientes = await obtenerPacientes();
         if (resPacientes.success && Array.isArray(resPacientes.data)) {
-          console.log('👥 Pacientes encontrados:', resPacientes.data.length);
           setPacientes(resPacientes.data);
         }
       } catch (error) {
@@ -152,7 +150,6 @@ export default function PilatesPage() {
 
   // ============= HANDLERS PARA CREAR NUEVOS TURNOS =============
   const handleAgregarTurno = (dia: Date, horario: string) => {
-    console.log('🆕 Intentando agregar nuevo turno para:', dia, horario);
     
     const disponibilidad = verificarDisponibilidadSlot(dia, horario);
     
@@ -187,7 +184,6 @@ export default function PilatesPage() {
 
   // ============= HANDLERS PARA VER DETALLES DE CLASES EXISTENTES =============
   const handleVerTurno = (turnos: any[]) => {
-    console.log('👁️ Viendo detalles de turnos:', turnos);
     
     // Verificar que todos los turnos sean del mismo especialista (validación extra)
     const especialistasUnicos = [...new Set(turnos.map(t => t.id_especialista))];
@@ -225,15 +221,12 @@ export default function PilatesPage() {
 
   // ============= HANDLER PARA REFRESCAR DATOS DESPUÉS DE CAMBIOS =============
   const handleTurnoCreated = async () => {
-  console.log('🔄 Recargando turnos después de cambios...');
   
   try {
     // Esperar un poco más para asegurar que la BD esté actualizada
     await new Promise(resolve => setTimeout(resolve, 300));
     
     await cargarTurnos();
-    
-    console.log('✅ Turnos recargados exitosamente');
   } catch (error) {
     console.error('❌ Error recargando turnos:', error);
     addToast({
@@ -293,7 +286,6 @@ export default function PilatesPage() {
         isOpen={showDetalleDialog}
         onClose={() => setShowDetalleDialog(false)}
         onTurnosActualizados={async () => {
-          console.log('🔄 Recargando datos de la página principal...');
           await cargarTurnos(); // ← Hacer esta función async si no lo es
         }}
         turnos={turnosSeleccionados}

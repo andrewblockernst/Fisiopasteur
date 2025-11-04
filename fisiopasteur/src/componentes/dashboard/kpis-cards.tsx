@@ -31,14 +31,14 @@ function KPICard({ titulo, valor, icono, color, descripcion }: KPICardProps) {
 
 interface KPIsDashboardProps {
   turnosHoy: number;
-  turnosCompletadosSemana: number;
+  turnosAtendidosSemana: number;
   cancelacionesMes: number;
   notificacionesEnviadas: number;
 }
 
 export function KPIsCards({ 
   turnosHoy, 
-  turnosCompletadosSemana, 
+  turnosAtendidosSemana, 
   cancelacionesMes, 
   notificacionesEnviadas 
 }: KPIsDashboardProps) {
@@ -52,8 +52,8 @@ export function KPIsCards({
         descripcion="Programados"
       />
       <KPICard
-        titulo="Completados esta Semana"
-        valor={turnosCompletadosSemana}
+        titulo="Atendidos esta Semana"
+        valor={turnosAtendidosSemana}
         icono={<CheckCircle className="w-6 h-6 text-green-600" />}
         color="text-green-600"
         descripcion="Esta semana"

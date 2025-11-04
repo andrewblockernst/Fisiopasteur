@@ -16,8 +16,9 @@ interface KPICardMetricsProps {
   icono: React.ReactNode;
   color: string;
   datos: KPIHistorico[];
-  dataKey: "turnosHoy" | "turnosCompletados" | "cancelaciones" | "notificacionesEnviadas";
+  dataKey: "turnosHoy" | "turnosAtendidos" | "cancelaciones" | "notificacionesEnviadas";
   descripcion: string;
+  periodo: PeriodoFiltro;
 }
 
 function KPICardWithChart({
@@ -28,7 +29,19 @@ function KPICardWithChart({
   datos,
   dataKey,
   descripcion,
+  periodo,
 }: KPICardMetricsProps) {
+  // Determinar formato del eje X según período
+  const tickFormatter = (value: string) => {
+    if (periodo === "hoy") {
+      // Para "hoy", mostrar la hora (ej: "14:00", "15:00")
+      return `${value}:00`;
+    } else {
+      // Para semana y mes, mostrar fecha abreviada
+      return new Date(value).toLocaleDateString("es-ES", { month: "short", day: "numeric" });
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       {/* Header */}
@@ -53,14 +66,26 @@ function KPICardWithChart({
             <XAxis
               dataKey="fecha"
               tick={{ fontSize: 12 }}
-              tickFormatter={(fecha) => new Date(fecha).toLocaleDateString("es-ES", { month: "short", day: "numeric" })}
+              tickFormatter={tickFormatter}
+              interval={periodo === "hoy" ? 23 : periodo === "semana" ? 6 : 28} // Mostrar cada 24 horas para "hoy"
             />
-            <YAxis tick={{ fontSize: 12 }} />
+            {/* <YAxis tick={{ fontSize: 12 }} /> */}
             <Tooltip
               contentStyle={{ backgroundColor: "#f3f4f6", border: "1px solid #e5e7eb" }}
               formatter={(value) => [value, titulo]}
+              labelFormatter={(label) => `${label}${periodo === "hoy" ? ":00" : ""}`}
             />
-            <Bar dataKey={dataKey} fill={color.replace("text-", "#").split("-")[0]} radius={[4, 4, 0, 0]} />
+            <Bar 
+              dataKey={dataKey} 
+              fill={
+                color.includes("blue") ? "#2563eb" :
+                color.includes("green") ? "#16a34a" :
+                color.includes("orange") ? "#ea580c" :
+                color.includes("purple") ? "#9333ea" :
+                "#6b7280"
+              } 
+              radius={[4, 4, 0, 0]} 
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -77,7 +102,7 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
   const [datos, setDatos] = useState<KPIHistorico[]>([]);
   const [totales, setTotales] = useState<KPIsDashboard>({
     turnosHoy: 0,
-    turnosCompletadosSemana: 0,
+    turnosAtendidosSemana: 0,
     cancelacionesMes: 0,
     notificacionesEnviadas: 0,
   });
@@ -159,16 +184,18 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
           datos={datos}
           dataKey="turnosHoy"
           descripcion="Programados"
+          periodo={periodo}
         />
 
         <KPICardWithChart
-          titulo="Completados"
-          valor={totales.turnosCompletadosSemana}
+          titulo="Atendidos"
+          valor={totales.turnosAtendidosSemana}
           icono={<CheckCircle className="w-6 h-6 text-green-600" />}
           color="text-green-600"
           datos={datos}
-          dataKey="turnosCompletados"
-          descripcion="Completados"
+          dataKey="turnosAtendidos"
+          descripcion="Atendidos"
+          periodo={periodo}
         />
 
         <KPICardWithChart
@@ -179,6 +206,7 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
           datos={datos}
           dataKey="cancelaciones"
           descripcion="Cancelados"
+          periodo={periodo}
         />
 
         <KPICardWithChart
@@ -189,6 +217,7 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
           datos={datos}
           dataKey="notificacionesEnviadas"
           descripcion="Enviadas"
+          periodo={periodo}
         />
       </div>
     </div>

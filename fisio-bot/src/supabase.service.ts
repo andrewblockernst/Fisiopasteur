@@ -43,10 +43,13 @@ export interface NotificacionPendiente {
 
 /**
  * Obtener notificaciones pendientes de Supabase
+ * ✅ MULTI-ORG: Ahora procesa notificaciones de TODAS las organizaciones
  */
 export async function obtenerNotificacionesPendientes(): Promise<NotificacionPendiente[]> {
   try {
     const ahora = new Date().toISOString()
+    
+    console.log('🔍 Consultando notificaciones pendientes hasta:', ahora)
     
     const { data, error } = await supabase
       .from('notificacion')
@@ -65,7 +68,17 @@ export async function obtenerNotificacionesPendientes(): Promise<NotificacionPen
 
     if (error) {
       console.error('❌ Error obteniendo notificaciones de Supabase:', error)
+      console.error('Detalles del error:', JSON.stringify(error, null, 2))
       return []
+    }
+
+    console.log(`✅ Encontradas ${data?.length || 0} notificaciones pendientes`)
+    if (data && data.length > 0) {
+      console.log('📋 Notificaciones:', data.map(n => ({
+        id: n.id_notificacion,
+        turno: n.id_turno,
+        fecha_programada: n.fecha_programada
+      })))
     }
 
     return data || []

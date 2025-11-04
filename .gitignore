@@ -1,1 +1,3 @@
 .vercel
+fisio-bot/bot_sessions/
+fisio-bot/*.log

@@ -33,11 +33,11 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
       const verTodosParam = params.get('ver_todos');
       
       // Aplicar filtro automático si:
-      // 1. No es admin, O
-      // 2. Es admin pero también aparece en la lista de especialistas (es especialista activo)
+      // 1. No puede gestionar turnos (solo especialistas), O
+      // 2. Puede gestionar pero también aparece en la lista de especialistas (es especialista activo)
       const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
       
-      const debeAplicarFiltro = !user.esAdmin || (user.esAdmin && esEspecialistaActivo);
+      const debeAplicarFiltro = !user.puedeGestionarTurnos || (user.puedeGestionarTurnos && esEspecialistaActivo);
       
       // ✅ SOLO aplicar si NO hay ningún parámetro en la URL (primera carga)
       if (debeAplicarFiltro && !currentEspecialistaParam && !verTodosParam && user.id_usuario) {
@@ -161,7 +161,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     // Determinar si el usuario necesita el parámetro ver_todos
     const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user?.id_usuario);
     
-    const necesitaVerTodos = !user?.esAdmin || (user?.esAdmin && esEspecialistaActivo);
+    const necesitaVerTodos = !user?.puedeGestionarTurnos || (user?.puedeGestionarTurnos && esEspecialistaActivo);
     
     if (necesitaVerTodos) {
       router.push("/turnos?ver_todos=1");
@@ -338,7 +338,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
           <div className="flex flex-wrap gap-2">
             {filter.fecha_desde && (
               <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center gap-1 group">
-                Desde: {formatearFecha(filter.fecha_desde)}
+                      Desde: {formatearFecha(filter.fecha_desde)}
                 <button
                   onClick={() => removerFiltro('fecha_desde')}
                   className="ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors group-hover:bg-blue-200"
@@ -350,7 +350,7 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
             )}
             {filter.fecha_hasta && (
               <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center gap-1 group">
-                Hasta: {formatearFecha(filter.fecha_hasta)}
+                      Hasta: {formatearFecha(filter.fecha_hasta)}
                 <button
                   onClick={() => removerFiltro('fecha_hasta')}
                   className="ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors group-hover:bg-blue-200"
