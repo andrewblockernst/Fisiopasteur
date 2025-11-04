@@ -202,7 +202,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                 className="text-xs px-3 py-2 h-8 flex items-center justify-center"
                                 onClick={() => setDeletingPaciente(paciente)}
                                 >
-                                    Eliminar
+                                    Inactivar
                                 </Button>
                             )}
                             {!(paciente.activo) && (
@@ -314,7 +314,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                                 className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
                                                 onClick={() => setDeletingPaciente(paciente)}
                                             >
-                                                Eliminar
+                                                Inactivar
                                             </Button>
                                         )}
 
@@ -391,7 +391,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                                         }}
                                                         className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-red-600 hover:bg-red-50 transition-colors"
                                                     >
-                                                        Eliminar
+                                                        Inactivar
                                                     </button>
                                                     )}
                                                     {!(paciente.activo) && (

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
+import { normalizePhoneNumber } from "@/lib/utils/phone.utils";
 
 type Paciente = Tables<"paciente">;
 type PacienteInsert = TablesInsert<"paciente">;
@@ -63,6 +64,23 @@ async function checkDocumentoExists(documento: string, excludeId?: number): Prom
     .from("paciente")
     .select("id_paciente")
     .eq("documento", documento);
+
+  if (excludeId) {
+    query = query.neq("id_paciente", excludeId);
+  }
+
+  const { data } = await query.single();
+  return !!data;
+}
+
+// Verificar si el teléfono ya existe
+async function checkTelefonoExists(telefono: string, excludeId?: number): Promise<boolean> {
+  const supabase = await createClient();
+  
+  let query = supabase
+    .from("paciente")
+    .select("id_paciente")
+    .eq("telefono", telefono);
 
   if (excludeId) {
     query = query.neq("id_paciente", excludeId);
@@ -177,12 +195,16 @@ export async function createPaciente(formData: FormData) {
   const { getAuthContext } = await import("@/lib/utils/auth-context");
   const { orgId } = await getAuthContext();
 
+  // ✅ Normalizar número de teléfono al formato internacional
+  const telefonoRaw = formData.get("telefono") as string;
+  const telefonoNormalizado = normalizePhoneNumber(telefonoRaw);
+
   const pacienteData: Omit<PacienteInsert, 'id_paciente'> = {
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
     email: formData.get("email") as string || null,
     dni: formData.get("dni") as string || null,
-    telefono: formData.get("telefono") as string,
+    telefono: telefonoNormalizado, // ✅ Guardar teléfono normalizado
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
     id_organizacion: orgId, // ✅ Inyectar orgId
@@ -195,13 +217,18 @@ export async function createPaciente(formData: FormData) {
   }
 
   // Verificar email único
-  if (await checkEmailExists(pacienteData.email!)) {
+  if (pacienteData.email && await checkEmailExists(pacienteData.email)) {
     throw new Error("Ya existe un paciente con este email");
   }
 
   // Verificar DNI único
-  if (await checkDocumentoExists(pacienteData.dni!)) {
+  if (pacienteData.dni && await checkDocumentoExists(pacienteData.dni)) {
     throw new Error("Ya existe un paciente con este DNI");
+  }
+
+  // Verificar teléfono único
+  if (await checkTelefonoExists(telefonoNormalizado)) {
+    throw new Error("Ya existe un paciente con este número de teléfono");
   }
 
   try {
@@ -213,24 +240,27 @@ export async function createPaciente(formData: FormData) {
 
     if (error) {
       console.error("Error creating paciente:", error);
-      throw new Error("Error al crear paciente");
+      
+      // Manejo específico de errores de constraint de Supabase
+      if (error.code === "23505") { // Constraint violation
+        if (error.details?.includes("email")) {
+          throw new Error("Ya existe un paciente con este email");
+        }
+        if (error.details?.includes("dni")) {
+          throw new Error("Ya existe un paciente con este DNI");
+        }
+        if (error.details?.includes("telefono")) {
+          throw new Error("Ya existe un paciente con este número de teléfono");
+        }
+      }
+      
+      throw new Error("Error al crear paciente: " + error.message);
     }
 
     revalidatePath("/paciente");
     return data;
   } catch (error: any) {
     console.error("Error in createPaciente:", error);
-    
-    // Manejo específico de errores de Supabase
-    if (error?.code === "23505") { // Constraint violation
-      if (error.details?.includes("email")) {
-        throw new Error("Ya existe un paciente con este email");
-      }
-      if (error.details?.includes("dni")) {
-        throw new Error("Ya existe un paciente con este DNI");
-      }
-    }
-    
     throw error instanceof Error ? error : new Error("Error al crear paciente");
   }
 }
@@ -244,12 +274,16 @@ export async function updatePaciente(id: number, formData: FormData) {
   const { getAuthContext } = await import("@/lib/utils/auth-context");
   const { orgId } = await getAuthContext();
 
+  // ✅ Normalizar número de teléfono al formato internacional
+  const telefonoRaw = formData.get("telefono") as string;
+  const telefonoNormalizado = normalizePhoneNumber(telefonoRaw);
+
   const updateData: PacienteUpdate = {
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
     email: formData.get("email") as string || null,
     dni: formData.get("dni") as string,
-    telefono: formData.get("telefono") as string,
+    telefono: telefonoNormalizado, // ✅ Guardar teléfono normalizado
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
     // estado: formData.get("estado") as string || "activo",
@@ -262,13 +296,18 @@ export async function updatePaciente(id: number, formData: FormData) {
   }
 
   // Verificar email único (excluyendo el actual)
-  if (await checkEmailExists(updateData.email!, id)) {
+  if (updateData.email && await checkEmailExists(updateData.email, id)) {
     throw new Error("Ya existe otro paciente con este email");
   }
 
   // Verificar documento único (excluyendo el actual)
-  if (await checkDocumentoExists(updateData.dni!, id)) {
+  if (updateData.dni && await checkDocumentoExists(updateData.dni, id)) {
     throw new Error("Ya existe otro paciente con este DNI");
+  }
+
+  // Verificar teléfono único (excluyendo el actual)
+  if (await checkTelefonoExists(telefonoNormalizado, id)) {
+    throw new Error("Ya existe otro paciente con este número de teléfono");
   }
 
   try {
@@ -282,6 +321,20 @@ export async function updatePaciente(id: number, formData: FormData) {
 
     if (error) {
       console.error("Error updating paciente:", error);
+      
+      // Manejo específico de errores de constraint de Supabase
+      if (error.code === "23505") {
+        if (error.details?.includes("email")) {
+          throw new Error("Ya existe otro paciente con este email");
+        }
+        if (error.details?.includes("dni")) {
+          throw new Error("Ya existe otro paciente con este DNI");
+        }
+        if (error.details?.includes("telefono")) {
+          throw new Error("Ya existe otro paciente con este número de teléfono");
+        }
+      }
+      
       throw new Error(error.message || "Error al actualizar paciente");
     }
 
@@ -289,17 +342,6 @@ export async function updatePaciente(id: number, formData: FormData) {
     return data;
   } catch (error: any) {
     console.error("Error in updatePaciente:", error);
-    
-    // Manejo específico de errores
-    if (error?.code === "23505") {
-      if (error.details?.includes("email")) {
-        throw new Error("Ya existe otro paciente con este email");
-      }
-      if (error.details?.includes("dni")) {
-        throw new Error("Ya existe otro paciente con este DNI");
-      }
-    }
-    
     throw error instanceof Error ? error : new Error("Error al actualizar paciente");
   }
 }

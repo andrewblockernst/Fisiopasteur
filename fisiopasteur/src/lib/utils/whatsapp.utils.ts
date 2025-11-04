@@ -60,6 +60,7 @@ export type TipoRecordatorio = keyof typeof OPCIONES_RECORDATORIO;
 
 /**
  * Calcular cuándo enviar recordatorios basado en fecha/hora del turno
+ * ✅ Usa zona horaria LOCAL del servidor (no hardcoded)
  */
 export function calcularTiemposRecordatorio(
   fecha: string, 
@@ -67,12 +68,18 @@ export function calcularTiemposRecordatorio(
   tiposRecordatorio: TipoRecordatorio[] = ['1d', '2h']
 ): Record<TipoRecordatorio, Date | null> {
   try {
-    // Crear fecha/hora del turno en zona horaria de Argentina (UTC-3)
-    // Formato ISO: YYYY-MM-DDTHH:mm:ss-03:00
-    const [year, month, day] = fecha.split('-');
-    const [hours, minutes] = hora.split(':');
-    const fechaTurno = new Date(`${year}-${month}-${day}T${hours}:${minutes}:00-03:00`);
+    // ✅ Crear fecha/hora del turno en zona horaria LOCAL
+    // Parsear componentes de fecha y hora
+    const [year, month, day] = fecha.split('-').map(Number);
+    const [hours, minutes] = hora.split(':').map(Number);
+    
+    // Crear Date en zona horaria local (no UTC)
+    const fechaTurno = new Date(year, month - 1, day, hours, minutes, 0);
     const ahora = new Date();
+    
+    console.log(`📅 Calculando recordatorios para turno: ${fecha} ${hora}`);
+    console.log(`   Fecha turno (local): ${fechaTurno.toISOString()}`);
+    console.log(`   Ahora (local): ${ahora.toISOString()}`);
     
     const recordatorios: Record<TipoRecordatorio, Date | null> = {
       '1h': null,
@@ -87,7 +94,9 @@ export function calcularTiemposRecordatorio(
       const opcion = OPCIONES_RECORDATORIO[tipo];
       if (opcion) {
         const tiempoRecordatorio = new Date(fechaTurno.getTime() - (opcion.minutos * 60 * 1000));
-        recordatorios[tipo] = tiempoRecordatorio > ahora ? tiempoRecordatorio : null;
+        const esValido = tiempoRecordatorio > ahora;
+        recordatorios[tipo] = esValido ? tiempoRecordatorio : null;
+        console.log(`   ${tipo}: ${esValido ? tiempoRecordatorio.toISOString() : 'Ya pasó (no se programará)'}`);
       }
     }
     

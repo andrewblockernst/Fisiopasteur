@@ -84,6 +84,7 @@ import Button from "../boton";
 import { useState } from "react";
 import { useToastStore } from "@/stores/toast-store";
 import { error } from "console";
+import { getPhoneInputHint, isValidPhoneNumber } from "@/lib/utils/phone.utils";
 
 interface PacienteFormForDialogProps {
     mode: "create" | "edit";
@@ -95,6 +96,7 @@ interface PacienteFormForDialogProps {
 function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteFormForDialogProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [phoneInput, setPhoneInput] = useState('');
 
     const validateForm = (formData: FormData): boolean => {
         const newErrors: Record<string, string> = {};
@@ -102,11 +104,17 @@ function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteF
         // Validar campos del formulario y agregar errores a newErrors
         if (!formData.get("nombre")) newErrors.nombre = "El nombre es obligatorio.";
         if(!formData.get("apellido")) newErrors.apellido = "El apellido es obligatorio.";
-        if(!formData.get("telefono")) newErrors.telefono = "El telefono es obligatorio.";
+        
+        const telefono = formData.get("telefono") as string;
+        if(!telefono) {
+            newErrors.telefono = "El teléfono es obligatorio.";
+        } else if (!isValidPhoneNumber(telefono)) {
+            newErrors.telefono = "El formato del teléfono no es válido. Ej: 1166782051";
+        }
 
         const email = formData.get("email") as string;
         if (email && !/\S+@\S+\.\S+/.test(email)) {
-        newErrors.email = "Email inválido";
+            newErrors.email = "Email inválido";
         }
 
         setErrors(newErrors);
@@ -175,18 +183,29 @@ function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteF
                 {/* Telefono */}
                 <div>
                     <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
-                        Telefono *
+                        Teléfono *
                     </label>
                     <input
                         type="text"
                         id="telefono"
                         name="telefono"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.telefono ? "border-red-500" : "border-gray-300"
                         }`}
-                        placeholder="Ingresa el telefono"
+                        placeholder="Ej: 1166782051 o +5491166782051"
                     />
                     {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
+                    {!errors.telefono && phoneInput && (
+                        <p className={`text-xs mt-1 ${
+                            getPhoneInputHint(phoneInput).startsWith('✓') 
+                                ? 'text-green-600' 
+                                : 'text-gray-500'
+                        }`}>
+                            {getPhoneInputHint(phoneInput)}
+                        </p>
+                    )}
                 </div>
 
                 {/* Email */}
