@@ -97,13 +97,19 @@ export default function TurnosMobileList({
     setShowFilters(false);
   };
 
-  // Función para limpiar filtros
+  // Función para limpiar filtros y aplicar inmediatamente
   const limpiarFiltros = () => {
-    setFechaDesde(initialFilters.fecha_desde);
-    setFechaHasta(initialFilters.fecha_hasta);
-    setEspecialistaId('');
-    setEspecialidadId('');
-    setFiltroEstado('todos');
+    // Obtener fecha de hoy
+    const ahora = new Date();
+    const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
+    
+    // Navegar solo con la fecha de hoy (sin filtros)
+    const params = new URLSearchParams();
+    params.set('desde', hoy);
+    params.set('hasta', hoy);
+    
+    router.push(`/turnos?${params.toString()}`);
+    setShowFilters(false);
   };
 
   // Contar filtros activos
