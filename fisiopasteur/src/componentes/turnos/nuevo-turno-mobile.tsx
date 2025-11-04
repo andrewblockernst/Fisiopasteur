@@ -14,7 +14,11 @@ import { useMemo, useState } from 'react';
 import {
   ArrowLeft, UserPlus2, Bell, Package, Repeat, ChevronDown,
 } from 'lucide-react';
-import type { SelectOption } from '@/types/database.types';
+// Define SelectOption type locally since it's not exported from database.types
+type SelectOption = {
+  label: string;
+  value: string;
+};
 
 interface NuevoTurnoMobileProps {
   // Datos para poblar UI (pueden venir de tu store/api)

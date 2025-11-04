@@ -1,10 +1,40 @@
-dist/*
+# Dependencies
 node_modules
-.env
+dist/*
 
+# Environment variables
+.env
+.env.local
+.env.production
+
+# WhatsApp sessions
 *_sessions
+bot_sessions/*
 *tokens
 .wwebjs*
 
+# Backups
+*.tar.gz
+*.zip
+whatsapp-session-backup-*
+
+# Logs
 *.log
-*qr.pngwhatsapp_session.tar.gz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# QR codes
+*qr.png
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea

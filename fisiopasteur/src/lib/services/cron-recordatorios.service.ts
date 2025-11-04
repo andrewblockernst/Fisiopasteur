@@ -6,7 +6,7 @@ import {
   marcarNotificacionFallida 
 } from "@/lib/services/notificacion.service";
 import { enviarRecordatorioTurno } from "@/lib/services/whatsapp-bot.service";
-import type { TurnoWithRelations } from "@/types/database.types";
+import type { TurnoConDetalles } from "@/stores/turno-store";
 
 /**
  * Procesar todas las notificaciones pendientes que ya llegaron a su hora programada
@@ -48,7 +48,7 @@ export async function procesarNotificacionesPendientes() {
         
         // Construir objeto turno completo para el bot
         const turno = notificacion.turno as any;
-        const turnoParaBot = turno as TurnoWithRelations;
+        const turnoParaBot = turno as unknown as TurnoConDetalles;
         
         // Enviar recordatorio por WhatsApp
         const resultadoBot = await enviarRecordatorioTurno(turnoParaBot);

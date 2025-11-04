@@ -13,7 +13,12 @@ type Usuario = Tables<"usuario">;
 interface EspecialistaFormProps {
   especialidades: Especialidad[];
   mode: "create" | "edit";
-  initialData?: Usuario & { especialidades?: Especialidad[] };
+  initialData?: Usuario & { 
+    especialidades?: (Especialidad & { 
+      precio_particular?: number | null; 
+      precio_obra_social?: number | null 
+    })[] 
+  };
 }
 
 export default function EspecialistaForm({ 
@@ -27,6 +32,18 @@ export default function EspecialistaForm({
     initialData?.especialidades?.map(e => e.id_especialidad) || []
   );
   const [selectedColor, setSelectedColor] = useState(initialData?.color || "#3B82F6");
+  
+  // Estado para precios por especialidad
+  const [precios, setPrecios] = useState<Record<number, { particular: number; obraSocial: number }>>(() => {
+    const initialPrecios: Record<number, { particular: number; obraSocial: number }> = {};
+    initialData?.especialidades?.forEach(esp => {
+      initialPrecios[esp.id_especialidad] = {
+        particular: esp.precio_particular || 0,
+        obraSocial: esp.precio_obra_social || 0
+      };
+    });
+    return initialPrecios;
+  });
 
   const validateForm = (formData: FormData): boolean => {
     const newErrors: Record<string, string> = {};
@@ -54,9 +71,14 @@ export default function EspecialistaForm({
   const handleSubmit = async (formData: FormData) => {
     if (!validateForm(formData)) return;
 
-    // Agregar especialidades seleccionadas al FormData
+    // Agregar especialidades seleccionadas con sus precios al FormData
     selectedEspecialidades.forEach((especialidadId, index) => {
       formData.append(`especialidades[${index}]`, especialidadId.toString());
+      
+      // Agregar precios de esta especialidad
+      const precio = precios[especialidadId] || { particular: 0, obraSocial: 0 };
+      formData.append(`precios[${especialidadId}][particular]`, precio.particular.toString());
+      formData.append(`precios[${especialidadId}][obraSocial]`, precio.obraSocial.toString());
     });
 
     // Agregar color seleccionado
@@ -88,6 +110,13 @@ export default function EspecialistaForm({
       if (prev.includes(especialidadId)) {
         return prev.filter(id => id !== especialidadId);
       } else {
+        // Al agregar nueva especialidad, inicializar precios en 0 si no existen
+        if (!precios[especialidadId]) {
+          setPrecios(p => ({
+            ...p,
+            [especialidadId]: { particular: 0, obraSocial: 0 }
+          }));
+        }
         return [...prev, especialidadId];
       }
     });
@@ -95,6 +124,17 @@ export default function EspecialistaForm({
 
   const removeEspecialidad = (especialidadId: number) => {
     setSelectedEspecialidades(prev => prev.filter(id => id !== especialidadId));
+  };
+
+  const updatePrecio = (especialidadId: number, tipo: 'particular' | 'obraSocial', valor: string) => {
+    const numero = parseFloat(valor) || 0;
+    setPrecios(prev => ({
+      ...prev,
+      [especialidadId]: {
+        ...prev[especialidadId],
+        [tipo]: numero
+      }
+    }));
   };
 
   return (
@@ -200,31 +240,65 @@ export default function EspecialistaForm({
           </div>
 
           {/* Especialidades - Ahora alineado en el grid */}
-          <div>
+          <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Especialidades *
             </label>
             
-            {/* Tags seleccionadas */}
+            {/* Tags seleccionadas con precios */}
             {selectedEspecialidades.length > 0 && (
-              <div className="mb-3 p-2 bg-gray-50 rounded-md">
-                <div className="flex flex-wrap gap-1">
+              <div className="mb-3 p-4 bg-gray-50 rounded-md border border-gray-200">
+                <div className="space-y-3">
                   {selectedEspecialidades.map((especialidadId) => {
                     const especialidad = especialidades.find(e => e.id_especialidad === especialidadId);
+                    const precioActual = precios[especialidadId] || { particular: 0, obraSocial: 0 };
+                    
                     return (
-                      <span
-                        key={especialidadId}
-                        className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                      >
-                        {especialidad?.nombre}
-                        <button
-                          type="button"
-                          onClick={() => removeEspecialidad(especialidadId)}
-                          className="ml-1 text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          ×
-                        </button>
-                      </span>
+                      <div key={especialidadId} className="bg-white p-3 rounded border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-sm text-gray-900">
+                            {especialidad?.nombre}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeEspecialidad(especialidadId)}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">
+                              Precio Particular ($)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={precioActual.particular}
+                              onChange={(e) => updatePrecio(especialidadId, 'particular', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">
+                              Precio Obra Social ($)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={precioActual.obraSocial}
+                              onChange={(e) => updatePrecio(especialidadId, 'obraSocial', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { ROLES, puedeGestionarSistema, puedeGestionarTurnos } from '@/lib/constants/roles';
 
 export interface Usuario {
   id: string;
@@ -9,8 +10,11 @@ export interface Usuario {
   id_usuario?: string;
   nombre?: string;
   apellido?: string;
+  id_rol?: number;
   esAdmin?: boolean;
-  esEspecialista?: boolean; // Agregar esta propiedad
+  esEspecialista?: boolean;
+  esProgramador?: boolean;
+  puedeGestionarTurnos?: boolean;
   rol?: {
     id: number;
     nombre: string;
@@ -40,52 +44,84 @@ export function useAuth(): AuthState {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user && user.email) {
-          // Obtener información del usuario y su rol
-          const { data: userProfile, error } = await supabase
+          // ✅ MULTI-ORG: Obtener usuario y su rol desde usuario_organizacion
+          // Primero obtener el usuario
+          const { data: usuario } = await supabase
             .from('usuario')
-            .select(`
-              id_usuario, 
-              nombre, 
-              apellido, 
-              email, 
-              activo,
-              rol (
-                id,
-                nombre,
-                jerarquia
-              )
-            `)
+            .select('id_usuario, nombre, apellido, email, activo')
             .eq('email', user.email)
             .single();
 
-          if (userProfile && !error) {
-            // Verificar roles
-            const esAdmin = userProfile.rol?.nombre === 'Administrador';
-            const esEspecialista = userProfile.rol?.nombre === 'Especialista';
-
-            setAuthState({
-              isAuthenticated: true,
-              user: {
-                id: user.id,
-                email: user.email,
-                id_usuario: userProfile.id_usuario,
-                nombre: userProfile.nombre,
-                apellido: userProfile.apellido,
-                esAdmin,
-                esEspecialista,
-                rol: userProfile.rol
-              },
-              loading: false
-            });
-          } else {
-            // Si no encuentra el perfil, crear usuario básico sin permisos de admin
+          if (!usuario) {
             setAuthState({
               isAuthenticated: true,
               user: {
                 id: user.id,
                 email: user.email,
                 esAdmin: false,
-                esEspecialista: false
+                esEspecialista: false,
+                esProgramador: false,
+                puedeGestionarTurnos: false
+              },
+              loading: false
+            });
+            return;
+          }
+
+          // Obtener el rol desde usuario_organizacion (primera org activa del usuario)
+          const { data: usuarioOrg, error } = await supabase
+            .from('usuario_organizacion')
+            .select(`
+              id_usuario_organizacion,
+              id_rol,
+              activo,
+              rol:id_rol (
+                id,
+                nombre,
+                jerarquia
+              )
+            `)
+            .eq('id_usuario', usuario.id_usuario)
+            .eq('activo', true)
+            .limit(1)
+            .single();
+
+          if (usuarioOrg && !error) {
+            // Verificar roles usando las constantes
+            const idRol = usuarioOrg.id_rol;
+            const esAdmin = idRol === ROLES.ADMIN;
+            const esEspecialista = idRol === ROLES.ESPECIALISTA;
+            const esProgramador = idRol === ROLES.PROGRAMADOR;
+            const puedeGestionarTurnosPermiso = puedeGestionarTurnos(idRol);
+
+            setAuthState({
+              isAuthenticated: true,
+              user: {
+                id: user.id,
+                email: user.email,
+                id_usuario: usuario.id_usuario,
+                nombre: usuario.nombre,
+                apellido: usuario.apellido,
+                id_rol: idRol,
+                esAdmin,
+                esEspecialista,
+                esProgramador,
+                puedeGestionarTurnos: puedeGestionarTurnosPermiso,
+                rol: usuarioOrg.rol
+              },
+              loading: false
+            });
+          } else {
+            // Si no encuentra el perfil, crear usuario básico sin permisos
+            setAuthState({
+              isAuthenticated: true,
+              user: {
+                id: user.id,
+                email: user.email,
+                esAdmin: false,
+                esEspecialista: false,
+                esProgramador: false,
+                puedeGestionarTurnos: false
               },
               loading: false
             });
@@ -113,38 +149,67 @@ export function useAuth(): AuthState {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user && session.user.email) {
-          // Obtener información del perfil cuando cambia la sesión
-          const { data: userProfile } = await supabase
+          // ✅ MULTI-ORG: Obtener usuario y su rol desde usuario_organizacion
+          const { data: usuario } = await supabase
             .from('usuario')
+            .select('id_usuario, nombre, apellido, email, activo')
+            .eq('email', session.user.email)
+            .single();
+
+          if (!usuario) {
+            setAuthState({
+              isAuthenticated: true,
+              user: {
+                id: session.user.id,
+                email: session.user.email,
+                esAdmin: false,
+                esEspecialista: false,
+                esProgramador: false,
+                puedeGestionarTurnos: false
+              },
+              loading: false
+            });
+            return;
+          }
+
+          // Obtener el rol desde usuario_organizacion
+          const { data: usuarioOrg } = await supabase
+            .from('usuario_organizacion')
             .select(`
-              id_usuario, 
-              nombre, 
-              apellido, 
-              email, 
+              id_usuario_organizacion,
+              id_rol,
               activo,
-              rol (
+              rol:id_rol (
                 id,
                 nombre,
                 jerarquia
               )
             `)
-            .eq('email', session.user.email)
+            .eq('id_usuario', usuario.id_usuario)
+            .eq('activo', true)
+            .limit(1)
             .single();
 
-          const esAdmin = userProfile?.rol?.nombre === 'Administrador';
-          const esEspecialista = userProfile?.rol?.nombre === 'Especialista';
+          const idRol = usuarioOrg?.id_rol;
+          const esAdmin = idRol === ROLES.ADMIN;
+          const esEspecialista = idRol === ROLES.ESPECIALISTA;
+          const esProgramador = idRol === ROLES.PROGRAMADOR;
+          const puedeGestionarTurnosPermiso = puedeGestionarTurnos(idRol);
 
           setAuthState({
             isAuthenticated: true,
             user: {
               id: session.user.id,
               email: session.user.email,
-              id_usuario: userProfile?.id_usuario,
-              nombre: userProfile?.nombre,
-              apellido: userProfile?.apellido,
+              id_usuario: usuario.id_usuario,
+              nombre: usuario.nombre,
+              apellido: usuario.apellido,
+              id_rol: idRol,
               esAdmin,
               esEspecialista,
-              rol: userProfile?.rol
+              esProgramador,
+              puedeGestionarTurnos: puedeGestionarTurnosPermiso,
+              rol: usuarioOrg?.rol
             },
             loading: false
           });
