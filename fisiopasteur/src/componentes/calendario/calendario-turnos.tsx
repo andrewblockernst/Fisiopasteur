@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock } from
 import { useTurnoStore } from "@/stores/turno-store";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import Button from "../boton";
-import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 
 interface CalendarioTurnosProps {
   turnos: TurnoConDetalles[];
@@ -14,7 +13,6 @@ interface CalendarioTurnosProps {
   onEspecialistaChange: (especialistaId: string) => void;
   onDayClick: (date: Date, turnos: TurnoConDetalles[]) => void;
   onCreateTurno: (date: Date, hora?: string) => void;
-  onMoverTurno?: (turnoId: number, nuevaFecha: string, nuevaHora: string) => Promise<void>;
 }
 
 type VistaCalendario = 'mes' | 'semana' | 'dia';
@@ -43,7 +41,6 @@ export function CalendarioTurnos({
   onEspecialistaChange,
   onDayClick,
   onCreateTurno,
-  onMoverTurno,
   vistaProp,
   onVistaChange,
   goToTodaySignal,
@@ -54,19 +51,6 @@ export function CalendarioTurnos({
   const vista = vistaProp ?? vistaInternal;
   const [isMobile, setIsMobile] = useState(false);
   const { getTurnosByDate } = useTurnoStore();
-  
-  // Hook para drag and drop
-  const {
-    isDragging,
-    isValidating,
-    handleDragStart,
-    handleDragEnd,
-    handleDragOver,
-    handleDrop
-  } = useDragAndDrop();
-  
-  // Estado para trackear el turno que se acaba de mover (para animación)
-  const [recentlyMovedTurnoId, setRecentlyMovedTurnoId] = useState<number | null>(null);
 
   useEffect(() => {
     // Solo se ejecuta en el cliente
@@ -186,25 +170,10 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
             const turnosDelDia = getTurnosParaDia(fecha);
             const esHoy = esDiaActual(fecha);
             
-            const fechaStr = fecha.toISOString().split('T')[0];
-            
             return (
               <div 
                 key={index} 
-                className={`bg-white h-28 md:h-36 p-1 relative group transition-all ${
-                  isDragging ? 'ring-2 ring-[#9C1838]/20' : ''
-                }`}
-                onDragOver={handleDragOver}
-                onDrop={async (e) => {
-                  if (onMoverTurno) {
-                    await handleDrop(e, fechaStr, undefined, async (turnoId, fecha, hora) => {
-                      await onMoverTurno(turnoId, fecha, hora);
-                      // Marcar el turno como recién movido para animación
-                      setRecentlyMovedTurnoId(turnoId);
-                      setTimeout(() => setRecentlyMovedTurnoId(null), 2000);
-                    });
-                  }
-                }}
+                className="bg-white h-28 md:h-36 p-1 relative group transition-all"
               >
                 <div
                   className="w-full h-full rounded cursor-pointer transition-colors relative hover:bg-gray-50"
@@ -226,22 +195,11 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                     <div className="flex-1 overflow-hidden">
                       {turnosDelDia.length > 0 ? (
                         <div className="space-y-0.5">
-                          {turnosDelDia.slice(0, 4).map((turno) => {
-                            const isRecentlyMoved = recentlyMovedTurnoId === turno.id_turno;
-                            return (
+                          {turnosDelDia.slice(0, 4).map((turno) => (
                             <div
                               key={turno.id_turno}
-                              draggable={!!onMoverTurno}
-                              onDragStart={(e) => {
-                                e.stopPropagation();
-                                handleDragStart(turno.id_turno, turno.fecha, turno.hora);
-                              }}
-                              onDragEnd={handleDragEnd}
                               onClick={(e) => e.stopPropagation()}
-                              className={`flex items-center gap-1 text-xs px-1 py-0.5 rounded transition-all ${
-                                onMoverTurno ? 'cursor-move hover:bg-white hover:shadow-sm' : ''
-                              } ${isRecentlyMoved ? 'animate-pulse bg-green-50 ring-2 ring-green-400' : ''}`}
-                              title={onMoverTurno ? 'Arrastra para mover el turno' : ''}
+                              className="flex items-center gap-1 text-xs px-1 py-0.5 rounded transition-all"
                             >
                               {/* Indicador de color del especialista */}
                               <div 
@@ -257,7 +215,7 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                                 </span>
                               </div>
                             </div>
-                          )})}
+                          ))}
                           {turnosDelDia.length > 4 && (
                             <div className="text-xs text-gray-500 px-1">
                               +{turnosDelDia.length - 4} más
@@ -358,21 +316,7 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                     return (
                       <div 
                         key={di} 
-                        className={`p-2 relative group min-h-[70px] transition-all duration-200 border-r border-gray-100 last:border-r-0 ${
-                          isDragging 
-                            ? 'bg-blue-50/50 ring-1 ring-inset ring-blue-200' 
-                            : 'hover:bg-gray-50/50'
-                        }`}
-                        onDragOver={handleDragOver}
-                        onDrop={async (e) => {
-                          if (onMoverTurno) {
-                            await handleDrop(e, fechaStr, horaStr, async (turnoId, fecha, hora) => {
-                              await onMoverTurno(turnoId, fecha, hora);
-                              setRecentlyMovedTurnoId(turnoId);
-                              setTimeout(() => setRecentlyMovedTurnoId(null), 2000);
-                            });
-                          }
-                        }}
+                        className="p-2 relative group min-h-[70px] transition-all duration-200 border-r border-gray-100 last:border-r-0 hover:bg-gray-50/50"
                       >
                         {turnosEnHora.length > 0 && (
                           <div
@@ -381,20 +325,10 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                               turnosEnHora.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
                             }`}
                           >
-                            {turnosEnHora.slice(0, 3).map((turno) => {
-                              const isRecentlyMoved = recentlyMovedTurnoId === turno.id_turno;
-                              return (
+                            {turnosEnHora.slice(0, 3).map((turno) => (
                               <div
                                 key={turno.id_turno}
-                                draggable={!!onMoverTurno}
-                                onDragStart={(e) => {
-                                  e.stopPropagation();
-                                  handleDragStart(turno.id_turno, turno.fecha, turno.hora);
-                                }}
-                                onDragEnd={handleDragEnd}
-                                className={`text-xs rounded-lg shadow-sm border-l-2 overflow-hidden transition-all duration-200 hover:shadow-md hover:scale-[1.02] ${
-                                  onMoverTurno ? 'cursor-move' : 'cursor-pointer'
-                                } ${isRecentlyMoved ? 'animate-pulse ring-2 ring-green-400 shadow-lg' : ''}`}
+                                className="text-xs rounded-lg shadow-sm border-l-2 overflow-hidden transition-all duration-200 hover:shadow-md hover:scale-[1.02] cursor-pointer"
                                 style={{
                                   backgroundColor: (turno.especialista?.color || '#9C1838') + '15',
                                   borderLeftColor: turno.especialista?.color || '#9C1838',
@@ -403,7 +337,6 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                                   e.stopPropagation();
                                   onDayClick(fecha, turnosDelDiaCompleto);
                                 }}
-                                title={onMoverTurno ? 'Arrastra para mover el turno' : ''}
                               >
                                 <div className="p-1.5 h-full flex flex-col justify-center">
                                   <div className="font-semibold truncate text-xs text-gray-900 leading-tight">
@@ -414,7 +347,7 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                                   </div>
                                 </div>
                               </div>
-                            )})}
+                            ))}
                           </div>
                         )}
 
@@ -538,44 +471,18 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                                     </div>
                                     
                                     {/* Contenido de turnos */}
-                                    <div 
-                                        className={`flex-1 p-3 transition-colors ${
-                                          isDragging ? 'bg-blue-50' : ''
-                                        }`}
-                                        onDragOver={handleDragOver}
-                                        onDrop={async (e) => {
-                                          if (onMoverTurno) {
-                                            const fechaStr = fechaActual.toISOString().split('T')[0];
-                                            await handleDrop(e, fechaStr, horaStr, async (turnoId, fecha, hora) => {
-                                              await onMoverTurno(turnoId, fecha, hora);
-                                              setRecentlyMovedTurnoId(turnoId);
-                                              setTimeout(() => setRecentlyMovedTurnoId(null), 2000);
-                                            });
-                                          }
-                                        }}
-                                    >
+                                    <div className="flex-1 p-3">
                                         {turnosHora.length > 0 ? (
                                             <div className="space-y-2">
-                                                {turnosHora.map((turno) => {
-                                                  const isRecentlyMoved = recentlyMovedTurnoId === turno.id_turno;
-                                                  return (
+                                                {turnosHora.map((turno) => (
                                                     <div
                                                         key={turno.id_turno}
-                                                        draggable={!!onMoverTurno}
-                                                        onDragStart={(e) => {
-                                                          e.stopPropagation();
-                                                          handleDragStart(turno.id_turno, turno.fecha, turno.hora);
-                                                        }}
-                                                        onDragEnd={handleDragEnd}
-                                                        className={`border rounded-lg p-3 active:scale-95 transition-all ${
-                                                          onMoverTurno ? 'cursor-move' : 'cursor-pointer'
-                                                        } ${isRecentlyMoved ? 'animate-pulse ring-2 ring-green-400' : ''}`}
+                                                        className="border rounded-lg p-3 active:scale-95 transition-all cursor-pointer"
                                                         style={{ 
                                                             borderColor: turno.especialista?.color || '#9C1838',
                                                             backgroundColor: (turno.especialista?.color || '#9C1838') + '15'
                                                         }}
                                                         onClick={() => onDayClick(fechaActual, [turno])}
-                                                        title={onMoverTurno ? 'Arrastra para mover el turno' : ''}
                                                     >
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="flex items-center gap-2">                                                  
@@ -601,7 +508,7 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                                                             )}
                                                         </div>
                                                     </div>
-                                                )})}
+                                                ))}
                                             </div>
                                         ) : (
                                             <div 
@@ -647,50 +554,24 @@ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
                     {Array.from({ length: 12 }, (_, i) => i + 8).map((hora) => {
                         const horaStr = `${hora.toString().padStart(2, '0')}:00`;
                         const turnosHora = turnosDelDia.filter(t => t.hora.startsWith(hora.toString().padStart(2, '0')));
-                        const fechaStr = fechaActual.toISOString().split('T')[0];
                         
                         return (
                             <div key={hora} className="border-b flex">
                                 <div className="w-16 p-3 text-sm text-gray-500 border-r">
                                     {horaStr}
                                 </div>
-                                <div 
-                                    className={`flex-1 p-3 min-h-16 transition-colors ${
-                                      isDragging ? 'bg-blue-50' : ''
-                                    }`}
-                                    onDragOver={handleDragOver}
-                                    onDrop={async (e) => {
-                                      if (onMoverTurno) {
-                                        await handleDrop(e, fechaStr, horaStr, async (turnoId, fecha, hora) => {
-                                          await onMoverTurno(turnoId, fecha, hora);
-                                          setRecentlyMovedTurnoId(turnoId);
-                                          setTimeout(() => setRecentlyMovedTurnoId(null), 2000);
-                                        });
-                                      }
-                                    }}
-                                >
-                                    {turnosHora.map((turno) => {
-                                      const isRecentlyMoved = recentlyMovedTurnoId === turno.id_turno;
-                                      return (
+                                <div className="flex-1 p-3 min-h-16">
+                                    {turnosHora.map((turno) => (
                                         <div
                                             key={turno.id_turno}
-                                            draggable={!!onMoverTurno}
-                                            onDragStart={(e) => {
-                                              e.stopPropagation();
-                                              handleDragStart(turno.id_turno, turno.fecha, turno.hora);
-                                            }}
-                                            onDragEnd={handleDragEnd}
-                                            className={`bg-blue-100 text-blue-800 p-2 rounded mb-1 transition-all ${
-                                              onMoverTurno ? 'cursor-move' : 'cursor-pointer'
-                                            } ${isRecentlyMoved ? 'animate-pulse ring-2 ring-green-400' : ''}`}
+                                            className="bg-blue-100 text-blue-800 p-2 rounded mb-1 transition-all cursor-pointer"
                                             style={{ backgroundColor: turno.especialista?.color + '20', color: turno.especialista?.color || '#9C1838' }}
                                             onClick={() => onDayClick(fechaActual, [turno])}
-                                            title={onMoverTurno ? 'Arrastra para mover el turno' : ''}
                                         >
                                             <div className="font-medium text-black">{turno.paciente?.nombre} {turno.paciente?.apellido}</div>
                                             <div className="text-xs text-black opacity-75">Dr. {turno.especialista?.nombre}</div>
                                         </div>
-                                    )})}
+                                    ))}
                                 </div>
                             </div>
                         );
