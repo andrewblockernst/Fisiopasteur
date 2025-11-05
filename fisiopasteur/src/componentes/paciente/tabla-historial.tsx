@@ -5,7 +5,8 @@ import { actualizarEvolucionClinica, actualizarTurno, actualizarGrupoTratamiento
 import { useToastStore } from "@/stores/toast-store"; 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Check, Edit2, X, Calendar, Ban, Clock } from "lucide-react";
+import { Check, Edit2, X, Calendar, Ban, Clock, ClipboardList } from "lucide-react";
+import { EvaluacionInicialModal } from "./evaluacion-inicial-modal";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 
 interface Turno {
@@ -22,6 +23,15 @@ interface GrupoTratamiento {
   id_grupo: string;
   especialidad?: string;
   especialista?: { nombre: string; apellido: string };
+  paciente?: { 
+    id_paciente?: number;
+    nombre?: string; 
+    apellido?: string; 
+    dni?: string; 
+    telefono?: string; 
+    direccion?: string; 
+    fecha_nacimiento?: string; 
+  };
   fecha_inicio: string;
   tipo_plan: 'particular' | 'obra_social';
   total_sesiones: number;
@@ -40,6 +50,7 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
   const [evolucionTemp, setEvolucionTemp] = useState("");
   const [tratamientoTemp, setTratamientoTemp] = useState(grupo.especialidad || "");
   const [guardando, setGuardando] = useState(false);
+  const [modalEvaluacionAbierto, setModalEvaluacionAbierto] = useState(false);  
   
   // Estados para confirmaciones
   const [dialogConfirmacion, setDialogConfirmacion] = useState<{
@@ -195,63 +206,76 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
   };
 
   return (
-    <div className="mb-8 border border-gray-200 rounded-lg overflow-hidden">
-      {/* Título del tratamiento - EDITABLE */}
-      <div className="bg-[#9C1838] text-white px-6 py-3">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold">
-            Tratamiento: 
-          </h3>
-          {editandoTratamiento ? (
+    <>
+      <div className="mb-8 border border-gray-200 rounded-lg overflow-hidden">
+        {/* Título del tratamiento - EDITABLE */}
+        <div className="bg-[#9C1838] text-white px-6 py-3">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={tratamientoTemp}
-                onChange={(e) => setTratamientoTemp(e.target.value)}
-                className="px-2 py-1 rounded text-black text-sm"
-                placeholder="Ej: Lesión hombro"
-              />
-              <button
-                onClick={handleGuardarTratamiento}
-                disabled={guardando}
-                className="p-1 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50"
-                title="Guardar"
-              >
-                <Check size={16} />
-              </button>
-              <button
-                onClick={() => {
-                  setEditandoTratamiento(false);
-                  setTratamientoTemp(grupo.especialidad || "");
-                }}
-                className="p-1 bg-red-600 hover:bg-red-700 rounded"
-                title="Cancelar"
-              >
-                <X size={16} />
-              </button>
+              <h3 className="text-lg font-semibold">
+                Tratamiento: 
+              </h3>
+              {editandoTratamiento ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={tratamientoTemp}
+                    onChange={(e) => setTratamientoTemp(e.target.value)}
+                    className="px-2 py-1 rounded text-black text-sm"
+                    placeholder="Ej: Lesión hombro"
+                  />
+                  <button
+                    onClick={handleGuardarTratamiento}
+                    disabled={guardando}
+                    className="p-1 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50"
+                    title="Guardar"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditandoTratamiento(false);
+                      setTratamientoTemp(grupo.especialidad || "");
+                    }}
+                    className="p-1 bg-red-600 hover:bg-red-700 rounded"
+                    title="Cancelar"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <span>{grupo.especialidad || "Sin especialidad"}</span>
+                  <button
+                    onClick={() => setEditandoTratamiento(true)}
+                    className="p-1 hover:bg-white/20 rounded"
+                    title="Editar nombre del tratamiento"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                </>
+              )}
+              {grupo.especialista && (
+                <span className="ml-2">- {grupo.especialista.nombre} {grupo.especialista.apellido}</span>
+              )}
             </div>
-          ) : (
-            <>
-              <span>{grupo.especialidad || "Sin especialidad"}</span>
-              <button
-                onClick={() => setEditandoTratamiento(true)}
-                className="p-1 hover:bg-white/20 rounded"
-                title="Editar nombre del tratamiento"
-              >
-                <Edit2 size={16} />
-              </button>
-            </>
-          )}
-          {grupo.especialista && (
-            <span className="ml-2">- {grupo.especialista.nombre} {grupo.especialista.apellido}</span>
-          )}
+            
+            {/* ✅ NUEVO: Botón de Evaluación Inicial */}
+            <button
+              onClick={() => setModalEvaluacionAbierto(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+              title="Ver/Editar Evaluación Inicial"
+            >
+              <ClipboardList size={18} />
+              <span className="text-sm font-medium">Evaluación Inicial</span>
+            </button>
+          </div>
+          <p className="text-sm opacity-90">
+            Inicio: {formatearFecha(grupo.fecha_inicio)} | 
+            Total sesiones: {grupo.total_sesiones} | 
+            Modalidad: {grupo.tipo_plan === 'particular' ? 'Particular' : 'Obra Social'}
+          </p>
         </div>
-        <p className="text-sm opacity-90">
-          Inicio: {formatearFecha(grupo.fecha_inicio)} | 
-          Total sesiones: {grupo.total_sesiones} | 
-          Modalidad: {grupo.tipo_plan === 'particular' ? 'Particular' : 'Obra Social'}
-        </p>
-      </div>
 
       {/* Tabla de sesiones */}
       <div className="overflow-x-auto">
@@ -436,6 +460,22 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
           onClick: () => setDialogConfirmacion({ open: false, id_turno: null, accion: null }),
         }}
       />
-    </div>
+      </div>
+      
+      {/* ✅ NUEVO: Modal de Evaluación Inicial */}
+      <EvaluacionInicialModal
+        isOpen={modalEvaluacionAbierto}
+        onClose={() => setModalEvaluacionAbierto(false)}
+        idGrupo={grupo.id_grupo}
+        paciente={{
+          nombre: grupo.paciente?.nombre || '',
+          apellido: grupo.paciente?.apellido || '',
+          dni: grupo.paciente?.dni || '',
+          telefono: grupo.paciente?.telefono || '',
+          direccion: grupo.paciente?.direccion || '',
+          fecha_nacimiento: grupo.paciente?.fecha_nacimiento || ''
+        }}
+      />
+    </>
   );
 }

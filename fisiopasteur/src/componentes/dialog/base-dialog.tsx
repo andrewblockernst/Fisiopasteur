@@ -6,7 +6,7 @@ import { Check, AlertTriangle, Info, X, AlertCircle } from 'lucide-react';
 import Button from '../boton';
 
 export type DialogType = 'success' | 'warning' | 'info' | 'error' | 'custom';
-export type DialogSize = 'sm' | 'md' | 'lg';
+export type DialogSize = 'sm' | 'md' | 'lg' | 'xl';
 
 interface BaseDialogProps {
   type?: DialogType;
@@ -36,6 +36,7 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
   size = 'md',
   title,
   message,
+  children,
   primaryButton,
   secondaryButton,
   onClose,
@@ -149,6 +150,9 @@ return (
             <h3 className="dialog-title">{title}</h3>
             <div className="dialog-message">{message}</div>
 
+            {/* Contenido personalizado (children) */}
+            {children && <div className="dialog-children">{children}</div>}
+
             <div className="dialog-buttons">
               {secondaryButton && (
                 <Button
@@ -195,7 +199,7 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
   }
 
   .dialog-container {
-    width: ${props => props.size === 'sm' ? '320px' : props.size === 'lg' ? '800px' : '400px'};
+    width: ${props => props.size === 'sm' ? '320px' : props.size === 'lg' ? '800px' : props.size === 'xl' ? '1000px' : '400px'};
     max-width: 95vw;
     max-height: 90vh;
     background-color: ${props => props.$colors.light};
@@ -259,6 +263,11 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
     line-height: 1.6;
     word-break: break-word;
     white-space: pre-wrap;
+  }
+
+  .dialog-children {
+    margin-bottom: 1.5rem;
+    text-align: left;
   }
 
   .dialog-buttons {
