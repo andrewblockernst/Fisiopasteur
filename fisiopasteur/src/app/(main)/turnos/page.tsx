@@ -10,7 +10,9 @@ export default async function TurnosPage({
   // ✅ Await searchParams (Next.js 15 requirement)
   const params = await searchParams;
 
-  const hoy = new Date().toISOString().split('T')[0];
+  // ✅ Obtener fecha actual en hora local (no UTC)
+  const ahora = new Date();
+  const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
   
   // Parse especialidad_id to number if present
   const especialidadParam = Array.isArray(params?.especialidad) ? params.especialidad[0] : params?.especialidad;

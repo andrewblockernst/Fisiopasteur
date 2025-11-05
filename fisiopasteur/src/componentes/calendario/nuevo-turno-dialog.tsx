@@ -625,19 +625,34 @@ useEffect(() => {
   const generarOpcionesHora = (): { value: string; label: string; disponible: boolean }[] => {
     const opciones = [];
     
+    // Comparar fechas de forma robusta
+    const ahora = new Date();
+    const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    
+    // Convertir fecha seleccionada a objeto Date (sin hora)
+    const fechaSeleccionadaObj = formData.fecha 
+      ? new Date(formData.fecha + 'T00:00:00')
+      : null;
+    
+    const esHoy = fechaSeleccionadaObj 
+      ? fechaSeleccionadaObj.getTime() === hoy.getTime()
+      : false;
+    
     for (let h = 7; h <= 21; h++) {
       for (let m = 0; m < 60; m += 15) {
         const hora = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
         const disponible = esHoraDisponible(hora);
         
-        if (formData.fecha === new Date().toISOString().split('T')[0]) {
-          const ahora = new Date();
+        // ✅ SOLO filtrar horas pasadas si la fecha seleccionada es HOY
+        if (esHoy) {
           const [horaNum, minNum] = hora.split(':').map(Number);
+          
+          // Crear fecha completa con la hora del turno
           const horaTurno = new Date();
           horaTurno.setHours(horaNum, minNum, 0, 0);
           
           if (horaTurno <= ahora) {
-            continue;
+            continue; // Saltar horas que ya pasaron (solo para HOY)
           }
         }
         
