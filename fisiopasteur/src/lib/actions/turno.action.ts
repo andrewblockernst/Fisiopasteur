@@ -946,10 +946,9 @@ export async function obtenerEspecialistas() {
 
     // ✅ Combinar usuarios con sus especialidades (nuevo formato)
     const especialistas = usuariosOrg.map(usuarioOrg => {
-      // @ts-ignore - usuario y rol son joins
-      const usuario = usuarioOrg.usuario;
-      // @ts-ignore
-      const rol = usuarioOrg.rol;
+      // ✅ CORRECCIÓN: Los joins retornan arrays, acceder al primer elemento
+      const usuario = Array.isArray(usuarioOrg.usuario) ? usuarioOrg.usuario[0] : usuarioOrg.usuario;
+      const rol = Array.isArray(usuarioOrg.rol) ? usuarioOrg.rol[0] : usuarioOrg.rol;
       
       return {
         id_usuario: usuarioOrg.id_usuario,
@@ -1155,7 +1154,8 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
       .select(`
         *,
         especialista:id_especialista(id_usuario, nombre, apellido),
-        especialidad:id_especialidad(id_especialidad, nombre)
+        especialidad:id_especialidad(id_especialidad, nombre),
+        paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, direccion, fecha_nacimiento)
       `)
       .eq("id_paciente", pacienteId)
       .not("id_grupo_tratamiento", "is", null)
@@ -1198,6 +1198,7 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
           // ✅ PRIORIDAD: nombre del grupo de tratamiento > nombre de especialidad
           especialidad: (grupoId ? gruposMap.get(grupoId) : null) || turno.especialidad?.nombre || "Sin especialidad",
           especialista: turno.especialista,
+          paciente: turno.paciente, // ✅ Agregar datos del paciente
           fecha_inicio: turno.fecha,
           tipo_plan: turno.tipo_plan,
           total_sesiones: 0,
