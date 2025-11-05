@@ -218,19 +218,22 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
     }) || [];
 
   // ✅ FUNCIÓN: Calcular número de turno en el paquete (talonario)
-  // ⚠️ IMPORTANTE: Usa TODOS los turnos del paciente, no solo los filtrados por fecha
+  // ⚠️ IMPORTANTE: Solo agrupa turnos que pertenecen al MISMO grupo de tratamiento
   // ⚠️ INCLUYE cancelados en el conteo para que mantengan su número original
   const calcularNumeroTalonario = (turno: any) => {
     if (!turno.id_paciente || !turno.id_especialidad || !turno.fecha) return null;
     
+    // ✅ NUEVO: Solo mostrar número si el turno pertenece a un grupo
+    if (!turno.id_grupo_tratamiento) return null;
+    
     // Si aún está cargando, no mostrar número
     if (cargandoTurnos) return null;
 
-    // Usar todosLosTurnos - INCLUIR cancelados para mantener numeración
+    // ✅ CORREGIDO: Filtrar por id_grupo_tratamiento en lugar de solo especialidad
     const turnosMismoPaquete = todosLosTurnos.filter(t => 
       t.id_paciente === turno.id_paciente &&
-      t.id_especialidad === turno.id_especialidad &&
-      !esTurnoPilates(t) // Solo excluir Pilates, NO cancelados
+      t.id_grupo_tratamiento === turno.id_grupo_tratamiento && // ✅ Mismo grupo de tratamiento
+      !esTurnoPilates(t) // Solo excluir Pilates
     ).sort((a, b) => {
       const fechaA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
       const fechaB = new Date(`${b.fecha}T${b.hora || '00:00'}`);

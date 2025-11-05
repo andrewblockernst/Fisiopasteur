@@ -905,9 +905,14 @@ export async function obtenerEspecialistas() {
       .in("id_rol", ROLES_ESPECIALISTAS) // Solo Admin (1) y Especialistas (2), excluye Programadores (3)
       .eq("activo", true);
 
-    if (errorUsuarios || !usuariosOrg) {
-      console.error("Error al obtener usuarios:", errorUsuarios);
-      return { success: false, error: errorUsuarios?.message || "No se encontraron usuarios" };
+    if (errorUsuarios) {
+      console.error("❌ Error al obtener usuarios:", errorUsuarios);
+      return { success: false, error: errorUsuarios.message };
+    }
+
+    if (!usuariosOrg || usuariosOrg.length === 0) {
+      console.warn("⚠️ No se encontraron usuarios en la organización");
+      return { success: true, data: [] }; // ✅ Retornar array vacío en lugar de error
     }
 
     // ✅ NUEVO MODELO: Obtener especialidades por id_usuario_organizacion
@@ -968,8 +973,11 @@ export async function obtenerEspecialistas() {
 
     return { success: true, data: especialistas };
   } catch (error) {
-    console.error("Error inesperado:", error);
-    return { success: false, error: "Error inesperado" };
+    console.error("❌ Error inesperado en obtenerEspecialistas:", error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Error desconocido" 
+    };
   }
 }
 
@@ -1148,7 +1156,7 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
     // ✅ Normalizar a número (convertir si es string)
     const pacienteId = typeof id_paciente === 'string' ? parseInt(id_paciente, 10) : id_paciente;
     
-    // 1️⃣ Primero obtener los turnos
+    // 1️⃣ Obtener TODOS los turnos del paciente (con y sin grupo)
     const { data, error } = await supabase
       .from("turno")
       .select(`
@@ -1158,7 +1166,6 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
         paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, direccion, fecha_nacimiento)
       `)
       .eq("id_paciente", pacienteId)
-      .not("id_grupo_tratamiento", "is", null)
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -1187,18 +1194,21 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
       gruposTratamiento?.map(g => [g.id_grupo, g.nombre]) || []
     );
 
-    // 5️⃣ Agrupar turnos por id_grupo_tratamiento
+    // 5️⃣ Agrupar turnos por id_grupo_tratamiento O generar grupos individuales
     const gruposHistorial = new Map();
     
     data?.forEach(turno => {
-      const grupoId = turno.id_grupo_tratamiento;
+      const grupoId = turno.id_grupo_tratamiento || `individual-${turno.id_turno}`; // ✅ Crear ID único para turnos sin grupo
+      
       if (!gruposHistorial.has(grupoId)) {
         gruposHistorial.set(grupoId, {
           id_grupo: grupoId,
-          // ✅ PRIORIDAD: nombre del grupo de tratamiento > nombre de especialidad
-          especialidad: (grupoId ? gruposMap.get(grupoId) : null) || turno.especialidad?.nombre || "Sin especialidad",
+          // ✅ PRIORIDAD: nombre del grupo > nombre de especialidad
+          especialidad: turno.id_grupo_tratamiento 
+            ? (gruposMap.get(turno.id_grupo_tratamiento) || turno.especialidad?.nombre || "Sin especialidad")
+            : turno.especialidad?.nombre || "Sin especialidad", // Turnos individuales usan especialidad
           especialista: turno.especialista,
-          paciente: turno.paciente, // ✅ Agregar datos del paciente
+          paciente: turno.paciente,
           fecha_inicio: turno.fecha,
           tipo_plan: turno.tipo_plan,
           total_sesiones: 0,
@@ -1221,6 +1231,7 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
     return { success: false, error: "Error inesperado" };
   }
 }
+
 
 /**
  * Actualizar evolución clínica de un turno

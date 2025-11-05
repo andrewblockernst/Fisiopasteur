@@ -100,6 +100,7 @@ export type TurnoWithRelations = {
   id_especialista: string | null;
   id_paciente: number | null;
   id_organizacion: string | null;
+  id_grupo_tratamiento?: string;
   dificultad: 'principiante' | 'intermedio' | 'avanzado' | null;
   paciente: {
     id_paciente: number;
