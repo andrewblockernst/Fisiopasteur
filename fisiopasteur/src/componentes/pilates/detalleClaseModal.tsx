@@ -200,7 +200,7 @@ export function DetalleClaseModal({
       });
       
       if (resultado.success && resultado.data) {
-        const turnosClase = resultado.data.filter(turno => 
+        const turnosClase = ((resultado as any).data as any[]).filter(turno => 
           turno.fecha === fechaClase && 
           turno.hora?.slice(0, 5) === horaClase &&
           turno.id_especialista === primeraClase.id_especialista

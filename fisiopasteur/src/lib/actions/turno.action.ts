@@ -14,7 +14,10 @@ type TurnoUpdate = Database["public"]["Tables"]["turno"]["Update"];
 // =====================================
 
 // Obtener un turno específico por ID
-export async function obtenerTurno(id: number) {
+export async function obtenerTurno(id: number): Promise<
+  | { success: true; data: any }
+  | { success: false; error: string }
+> {
   const supabase = await createClient();
   
   try {

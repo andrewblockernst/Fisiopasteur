@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    const notificaciones = notificacionesResult.data;
+    const notificaciones = notificacionesResult.data as any[];
     console.log(`📋 Procesando ${notificaciones.length} notificaciones pendientes...`);
 
     let enviadas = 0;

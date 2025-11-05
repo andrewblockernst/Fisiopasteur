@@ -83,7 +83,7 @@ export function EvaluacionInicialModal({
     const resultado = await obtenerEvaluacionInicial(idGrupo);
     
     if (resultado.success && resultado.data) {
-      setFormData(resultado.data);
+      setFormData((resultado as any).data);
     }
     
     setCargando(false);
