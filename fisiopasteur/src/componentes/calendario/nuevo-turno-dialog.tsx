@@ -800,13 +800,13 @@ useEffect(() => {
       }
       
       // Crear grupo de tratamiento
-      const { data: grupo, error: errorGrupo } = await supabase
-        .from('grupo_tratamiento')
+      const { data: grupo, error: errorGrupo } = await (supabase
+        .from('grupo_tratamiento') as any)
         .insert({
           id_paciente: parseInt(formData.id_paciente),
           id_especialista: formData.id_especialista,
           id_especialidad: parseInt(formData.id_especialidad),
-          id_organizacion: usuarioOrg.id_organizacion,
+          id_organizacion: (usuarioOrg as any).id_organizacion,
           nombre: formData.titulo_tratamiento,
           fecha_inicio: formData.fecha,
           tipo_plan: formData.tipo_plan,
@@ -826,7 +826,7 @@ useEffect(() => {
       }
       
       if (grupo) {
-        id_grupo_tratamiento = grupo.id_grupo;
+        id_grupo_tratamiento = (grupo as any).id_grupo;
       }
     }
     
@@ -923,7 +923,7 @@ useEffect(() => {
 
         if (resultado.success && resultado.data) {
           exitosos++;
-          turnosCreados.push(resultado.data);
+          turnosCreados.push((resultado as any).data);
         } else {
           fallidos++;
           console.error('Error creando turno:', resultado.error);

@@ -597,7 +597,7 @@ export type Database = {
           activo: boolean | null
           apellido: string
           color: string | null
-          contrase├▒a: string
+          contraseña: string
           created_at: string | null
           email: string
           id_especialidad: number | null
@@ -610,7 +610,7 @@ export type Database = {
           activo?: boolean | null
           apellido: string
           color?: string | null
-          contrase├▒a: string
+          contraseña: string
           created_at?: string | null
           email: string
           id_especialidad?: number | null
@@ -623,7 +623,7 @@ export type Database = {
           activo?: boolean | null
           apellido?: string
           color?: string | null
-          contrase├▒a?: string
+          contraseña?: string
           created_at?: string | null
           email?: string
           id_especialidad?: number | null
