@@ -1,12 +1,14 @@
 "use client";
 
-import { getEspecialistas, getEspecialidades } from "@/lib/actions/especialista.action";
+import { getEspecialistas } from "@/lib/actions/especialista.action";
+import { getEspecialidades } from "@/lib/actions/especialidad.action";
 import Button from "@/componentes/boton";
 import { EspecialistasTable } from "@/componentes/especialista/especialista-listado";
 import { NuevoEspecialistaDialog } from "@/componentes/especialista/nuevo-especialista-dialog";
+import { GestionEspecialidadesDialog } from "@/componentes/especialista/gestion-especialidades-dialog";
 import { useState, useEffect } from "react";
 import type { Tables } from "@/types/database.types";
-import { ArrowLeft, Plus, Search, Filter } from "lucide-react";
+import { ArrowLeft, Plus, Search, Filter, GraduationCap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/usePerfil";
 
@@ -52,14 +54,12 @@ export default function EspecialistasPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [showDialog, setShowDialog] = useState(false);
+  const [showEspecialidadesDialog, setShowEspecialidadesDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<Filter>("activos");
   const [especialistas, setEspecialistas] = useState<EspecialistaConDatos[]>([]);
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
-  // const [showDialog, setShowDialog] = useState(false);
-  // const [loading, setLoading] = useState(true);
-  // const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
@@ -91,6 +91,27 @@ export default function EspecialistasPage() {
       setEspecialistas(updatedEspecialistas);
     } catch (error) {
       console.error("Error reloading specialists:", error);
+    }
+  };
+
+  const handleEspecialidadesDialogClose = async () => {
+    setShowEspecialidadesDialog(false);
+    // Recargar especialidades
+    try {
+      const updatedEspecialidades = await getEspecialidades();
+      setEspecialidades(updatedEspecialidades);
+    } catch (error) {
+      console.error("Error reloading specialties:", error);
+    }
+  };
+
+  const handleEspecialidadesUpdated = async () => {
+    // Recargar especialidades cuando se actualizan
+    try {
+      const updatedEspecialidades = await getEspecialidades();
+      setEspecialidades(updatedEspecialidades);
+    } catch (error) {
+      console.error("Error reloading specialties:", error);
     }
   };
 
@@ -337,9 +358,16 @@ export default function EspecialistasPage() {
               </div>
             </div>
 
-            {/* Lado derecho: Botón Nuevo Especialista - Solo para Admin y Programadores */}
+            {/* Lado derecho: Botones - Solo para Admin y Programadores */}
             {user?.puedeGestionarTurnos && (
-              <div className="flex items-center">
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="secondary"
+                  onClick={() => setShowEspecialidadesDialog(true)}
+                  className="whitespace-nowrap px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-2"
+                >
+                  Especialidades
+                </Button>
                 <Button 
                   variant="primary"
                   onClick={() => setShowDialog(true)}
@@ -395,7 +423,12 @@ export default function EspecialistasPage() {
         especialidades={especialidades}
       />
 
-      
+      <GestionEspecialidadesDialog
+        isOpen={showEspecialidadesDialog}
+        onClose={handleEspecialidadesDialogClose}
+        especialidades={especialidades}
+        onEspecialidadesUpdated={handleEspecialidadesUpdated}
+      />
     </div>
   );
 }
