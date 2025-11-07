@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from 'path';
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -17,8 +16,6 @@ const nextConfig: NextConfig = {
     domains: ['qasrvhpdcerymjtvcfed.supabase.co'] 
   },
   reactStrictMode: true,
-  // Configurar el directorio raíz para file tracing (silenciar warning de múltiples lockfiles)
-  outputFileTracingRoot: path.join(__dirname, '../../'),
 };
 
 export default nextConfig;
