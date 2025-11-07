@@ -2,20 +2,8 @@ import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEsp
 import TurnosPageContainer from "@/componentes/turnos/turnos-page-container";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 
-export default async function TurnosPage({ 
-  searchParams 
-}: { 
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }> 
-}) {
-  // ✅ No hacer await a searchParams directamente, usar directamente
-  // const params = await searchParams;
-  const params = searchParams instanceof Promise 
-    ? await Promise.race([
-        searchParams,
-        new Promise(resolve => setTimeout(() => resolve({}), 100))
-      ]) as any
-    : searchParams;
-
+// Helper function to parse search params
+function parseSearchParams(params: { [key: string]: string | string[] | undefined }) {
   const hoy = new Date().toISOString().split('T')[0];
   
   // Parse especialidad_id to number if present
