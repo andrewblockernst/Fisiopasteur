@@ -7,8 +7,14 @@ export default async function TurnosPage({
 }: { 
   searchParams: Promise<{ [key: string]: string | string[] | undefined }> 
 }) {
-  // ✅ Await searchParams (Next.js 15 requirement)
-  const params = await searchParams;
+  // ✅ No hacer await a searchParams directamente, usar directamente
+  // const params = await searchParams;
+  const params = searchParams instanceof Promise 
+    ? await Promise.race([
+        searchParams,
+        new Promise(resolve => setTimeout(() => resolve({}), 100))
+      ]) as any
+    : searchParams;
 
   const hoy = new Date().toISOString().split('T')[0];
   

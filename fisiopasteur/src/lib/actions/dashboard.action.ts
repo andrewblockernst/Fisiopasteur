@@ -8,19 +8,20 @@ type Box = Database["public"]["Tables"]["box"]["Row"];
 type Notificacion = Database["public"]["Tables"]["notificacion"]["Row"];
 
 export interface KPIsDashboard {
-  turnosHoy: number;
-  turnosAtendidosSemana: number;
-  cancelacionesMes: number;
-  notificacionesEnviadas: number;
+  // turnosHoy: number;
+  Programados: number;
+  Atendidos: number;
+  Cancelaciones: number;
+  Ingresos: number;
 }
 
 export interface KPIHistorico {
   fecha: string;
   hora?: string; // Para cuando se agrupa por hora (filtro "hoy")
-  turnosHoy: number;
-  turnosAtendidos: number;
-  cancelaciones: number;
-  notificacionesEnviadas: number;
+  Programados: number;
+  Atendidos: number;
+  Cancelaciones: number;
+  Ingresos: number;
 }
 
 export type PeriodoFiltro = "hoy" | "semana" | "mes";
@@ -78,12 +79,12 @@ export async function obtenerKPIsConHistorial(
     const fechaFinStr = fechaFin.toISOString().split("T")[0];
 
     // Para "hoy", obtener también la hora
-    let selectFields = "fecha, estado, id_turno";
+    let selectFields = "fecha, estado, id_turno, precio"; // tipo_plan, id_especialista, id_especialidad, 
     if (periodo === "hoy") {
-      selectFields = "fecha, hora, estado, id_turno";
+      selectFields = "fecha, hora, estado, id_turno, precio"; // tipo_plan, id_especialista, id_especialidad,
     }
 
-    // Obtener turnos en el rango
+    // Obtener turnos en el rango (con precio)
     const { data: turnos, error: errorTurnos } = await supabase
       .from("turno")
       .select(selectFields)
@@ -91,15 +92,7 @@ export async function obtenerKPIsConHistorial(
       .lte("fecha", fechaFinStr)
       .neq("id_especialidad", 4); // EXCLUYE PILATES
 
-    // Obtener notificaciones en el rango
-    const { data: notificaciones, error: errorNotificaciones } = await supabase
-      .from("notificacion")
-      .select("fecha_envio, id_notificacion")
-      .gte("fecha_envio", fechaInicioStr)
-      .lte("fecha_envio", fechaFinStr)
-      .eq("estado", "enviado");
-
-    if (errorTurnos || errorNotificaciones) {
+    if (errorTurnos) {
       throw new Error("Error al obtener datos históricos");
     }
 
@@ -114,45 +107,37 @@ export async function obtenerKPIsConHistorial(
         datosMap.set(clave, {
           fecha: horaStr,
           hora: `${horaStr}:00`,
-          turnosHoy: 0,
-          turnosAtendidos: 0,
-          cancelaciones: 0,
-          notificacionesEnviadas: 0,
+          Programados: 0,
+          Atendidos: 0,
+          Cancelaciones: 0,
+          Ingresos: 0,
         });
       }
 
       // Procesar turnos agrupados por hora
-      (turnos || []).forEach((turno: any) => {
+      for (const turno of turnos as any[] || []) {
         if (turno.hora) {
           const hora = turno.hora.split(":")[0];
           const clave = `${turno.fecha}T${hora}`;
           const dato = datosMap.get(clave);
           if (dato) {
-            dato.turnosHoy++;
             if (turno.estado === "atendido") {
-              dato.turnosAtendidos++;
+              dato.Atendidos++;
             } else if (turno.estado === "cancelado") {
-              dato.cancelaciones++;
+              dato.Cancelaciones++;
+            } else if (turno.estado === "programado") {
+              dato.Programados++;
             }
-          }
-        }
-      });
 
-      // Procesar notificaciones agrupadas por hora
-      (notificaciones || []).forEach((notif: any) => {
-        if (notif.fecha_envio) {
-          const fechaHoraArray = notif.fecha_envio.split("T");
-          if (fechaHoraArray.length > 1) {
-            const fecha = fechaHoraArray[0];
-            const hora = fechaHoraArray[1].split(":")[0];
-            const clave = `${fecha}T${hora}`;
-            const dato = datosMap.get(clave);
-            if (dato) {
-              dato.notificacionesEnviadas++;
+            if (turno.precio) {
+              dato.Ingresos += turno.precio;
             }
+            
+            // await asignarIngresos(dato, turno, supabase);
+
           }
         }
-      });
+      }
     } else {
       // Inicializar todas las fechas del rango con 0
       for (let i = 0; i < daysToGet; i++) {
@@ -161,37 +146,38 @@ export async function obtenerKPIsConHistorial(
         const fechaStr = fecha.toISOString().split("T")[0];
         datosMap.set(fechaStr, {
           fecha: fechaStr,
-          turnosHoy: 0,
-          turnosAtendidos: 0,
-          cancelaciones: 0,
-          notificacionesEnviadas: 0,
+          Programados: 0,
+          Atendidos: 0,
+          Cancelaciones: 0,
+          Ingresos: 0,
         });
       }
 
       // Procesar turnos agrupados por fecha
-      (turnos || []).forEach((turno: any) => {
+      for (const turno of turnos as any[] || []) {
         const fechaStr = turno.fecha;
         const dato = datosMap.get(fechaStr);
         if (dato) {
-          dato.turnosHoy++;
           if (turno.estado === "atendido") {
-            dato.turnosAtendidos++;
+            dato.Atendidos++;
           } else if (turno.estado === "cancelado") {
-            dato.cancelaciones++;
+            dato.Cancelaciones++;
+          } else if (turno.estado === "programado") {
+            dato.Programados++;
           }
-        }
-      });
 
-      // Procesar notificaciones agrupadas por fecha
-      (notificaciones || []).forEach((notif: any) => {
-        if (notif.fecha_envio) {
-          const fechaStr = notif.fecha_envio.split("T")[0];
-          const dato = datosMap.get(fechaStr);
-          if (dato) {
-            dato.notificacionesEnviadas++;
+          if (turno.precio) {
+            dato.Ingresos += turno.precio;
           }
+
+          // await asignarIngresos(dato, turno, supabase);
+
+          console.log(`Ingresos asignados para turno ${turno.id_turno}: $${dato.Ingresos}`);
+
+          console.log(dato)
+
         }
-      });
+      };
     }
 
     // Convertir a array y calcular totales
@@ -200,10 +186,11 @@ export async function obtenerKPIsConHistorial(
     );
 
     const total: KPIsDashboard = {
-      turnosHoy: datos.reduce((sum, d) => sum + d.turnosHoy, 0),
-      turnosAtendidosSemana: datos.reduce((sum, d) => sum + d.turnosAtendidos, 0),
-      cancelacionesMes: datos.reduce((sum, d) => sum + d.cancelaciones, 0),
-      notificacionesEnviadas: datos.reduce((sum, d) => sum + d.notificacionesEnviadas, 0),
+      // turnosHoy: datos.reduce((sum, d) => sum + d.turnosHoy, 0),
+      Programados: datos.reduce((sum, d) => sum + d.Programados, 0),
+      Atendidos: datos.reduce((sum, d) => sum + d.Atendidos, 0),
+      Cancelaciones: datos.reduce((sum, d) => sum + d.Cancelaciones, 0),
+      Ingresos: datos.reduce((sum, d) => sum + d.Ingresos, 0),
     };
 
     return { datos, total };
@@ -212,84 +199,131 @@ export async function obtenerKPIsConHistorial(
     return {
       datos: [],
       total: {
-        turnosHoy: 0,
-        turnosAtendidosSemana: 0,
-        cancelacionesMes: 0,
-        notificacionesEnviadas: 0,
+        // turnosHoy: 0,
+        Programados: 0,
+        Atendidos: 0,
+        Cancelaciones: 0,
+        Ingresos: 0,
       },
     };
   }
 }
 
+// async function asignarIngresos(dato: KPIHistorico, turno: any, supabase: any) {
+  
+
+//   try {
+
+//     console.log(turno)
+
+//     if (turno.tipo_plan && 
+//     turno.id_especialidad && 
+//     turno.id_especialista && 
+//     turno.estado !== "cancelado") {
+
+//       console.log("Asignando ingresos para turno:", turno.id_turno);
+    
+//     const { data: precioData, error: errorPrecio } = await supabase
+//       .from("usuario_especialidad")
+//       .select("precio_particular, precio_obra_social")
+//       .eq("id_usuario", turno.id_especialista)
+//       .eq("id_especialidad", turno.id_especialidad)
+//       .single();
+
+//     if (errorPrecio) {
+//       console.warn("Error al obtener precios:", errorPrecio);
+//       return;
+//     }
+
+//     let precio = 0
+//     if (turno.tipo_plan === "particular" && precioData?.precio_particular) {
+//       precio = precioData.precio_particular;
+//     } else if (turno.tipo_plan === "obra_social" && precioData?.precio_obra_social) {
+//       precio = precioData.precio_obra_social;
+//     }
+
+//     dato.Ingresos += precio;
+
+//     console.log(
+//       `✅ Ingreso asignado: $${precio} para turno ${turno.id_turno} (${turno.tipo_plan})`
+//     );
+//   }
+//   } catch (error) {
+//     console.error("Error al asignar ingresos:", error);
+//   }
+// }
+
 // ✅ Obtener KPIs principales del dashboard
-export async function obtenerKPIsDashboard(): Promise<KPIsDashboard> {
-  const supabase = await createClient();
+// export async function obtenerKPIsDashboard(): Promise<KPIsDashboard> {
+//   const supabase = await createClient();
 
-  try {
-    const hoy = new Date().toISOString().split("T")[0];
-    const inicioSemana = new Date();
-    inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
-    const finSemana = new Date();
+//   try {
+//     const hoy = new Date().toISOString().split("T")[0];
+//     const inicioSemana = new Date();
+//     inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
+//     const finSemana = new Date();
 
-    const inicioMes = new Date();
-    inicioMes.setDate(1);
+//     const inicioMes = new Date();
+//     inicioMes.setDate(1);
 
-    // 1️⃣ Turnos de hoy
-    const { data: turnosHoyData, error: errorTurnosHoy } = await supabase
-      .from("turno")
-      .select("id_turno", { count: "exact" })
-      .eq("fecha", hoy)
-    //   .neq("id_especialidad", 4); // Excluir Pilates
+//     // 1️⃣ Turnos de hoy
+//     const { data: programadosData, error: errorProgramados } = await supabase
+//       .from("turno")
+//       .select("id_turno", { count: "exact" })
+//       .eq("fecha", hoy);
 
-    // 2️⃣ Turnos atendidos esta semana
-    const { data: atendidosSemanaData, error: errorAtendidos } = await supabase
-      .from("turno")
-      .select("id_turno", { count: "exact" })
-      .gte("fecha", inicioSemana.toISOString().split("T")[0])
-      .lte("fecha", finSemana.toISOString().split("T")[0])
-      .eq("estado", "atendido")
-    //   .neq("id_especialidad", 4);
+//     // 2️⃣ Turnos atendidos esta semana
+//     const { data: atendidosData, error: errorAtendidos } = await supabase
+//       .from("turno")
+//       .select("id_turno", { count: "exact" })
+//       .gte("fecha", inicioSemana.toISOString().split("T")[0])
+//       .lte("fecha", finSemana.toISOString().split("T")[0])
+//       .eq("estado", "atendido");
 
-    // 3️⃣ Cancelaciones del mes
-    const { data: cancelacionesMesData, error: errorCancelaciones } = await supabase
-      .from("turno")
-      .select("id_turno", { count: "exact" })
-      .gte("fecha", inicioMes.toISOString().split("T")[0])
-      .eq("estado", "cancelado")
-    //   .neq("id_especialidad", 4);
+//     // 3️⃣ Cancelaciones del mes
+//     const { data: cancelacionesData, error: errorCancelaciones } = await supabase
+//       .from("turno")
+//       .select("id_turno", { count: "exact" })
+//       .gte("fecha", inicioMes.toISOString().split("T")[0])
+//       .eq("estado", "cancelado");
 
-    // 4️⃣ Notificaciones enviadas
-    const { data: notificacionesData, error: errorNotificaciones } = await supabase
-      .from("notificacion")
-      .select("id_notificacion", { count: "exact" })
-      .eq("estado", "enviado");
+//     // 4️⃣ Ingresos del mes (suma de precios de turnos atendidos)
+//     const { data: ingresosData, error: errorIngresos } = await supabase
+//       .from("turno")
+//       .select("precio")
+//       .gte("fecha", inicioMes.toISOString().split("T")[0])
+//       .in("estado", ["atendido", "programado"])
+//       .not("precio", "is", null);
 
-    if (errorTurnosHoy || errorAtendidos || errorCancelaciones || errorNotificaciones) {
-      console.error("Error al obtener KPIs:", {
-        errorTurnosHoy,
-        errorAtendidos,
-        errorCancelaciones,
-        errorNotificaciones,
-      });
-      throw new Error("Error al obtener KPIs");
-    }
+//     if (errorProgramados || errorAtendidos || errorCancelaciones || errorIngresos) {
+//       console.error("Error al obtener KPIs:", {
+//         errorProgramados,
+//         errorAtendidos,
+//         errorCancelaciones,
+//         errorIngresos,
+//       });
+//       throw new Error("Error al obtener KPIs");
+//     }
 
-    return {
-      turnosHoy: turnosHoyData?.length || 0,
-      turnosAtendidosSemana: atendidosSemanaData?.length || 0,
-      cancelacionesMes: cancelacionesMesData?.length || 0,
-      notificacionesEnviadas: notificacionesData?.length || 0,
-    };
-  } catch (error) {
-    console.error("❌ Error en obtenerKPIsDashboard:", error);
-    return {
-      turnosHoy: 0,
-      turnosAtendidosSemana: 0,
-      cancelacionesMes: 0,
-      notificacionesEnviadas: 0,
-    };
-  }
-}
+//     // Calcular ingresos totales
+//     const ingresosTotal = (ingresosData || []).reduce((sum: number, item: any) => sum + (item.precio || 0), 0);
+
+//     return {
+//       Programados: programadosData?.length || 0,
+//       Atendidos: atendidosData?.length || 0,
+//       Cancelaciones: cancelacionesData?.length || 0,
+//       Ingresos: ingresosTotal,
+//     };
+//   } catch (error) {
+//     console.error("❌ Error en obtenerKPIsDashboard:", error);
+//     return {
+//       Programados: 0,
+//       Atendidos: 0,
+//       Cancelaciones: 0,
+//       Ingresos: 0,
+//     };
+//   }
+// }
 
 // ✅ Obtener próximos turnos del día
 export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
