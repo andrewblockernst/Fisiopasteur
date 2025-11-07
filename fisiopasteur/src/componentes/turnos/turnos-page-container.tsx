@@ -108,6 +108,9 @@ export default function TurnosPageContainer({
         fecha={selectedDate}
         onDateChange={handleDateChange}
         onTurnoCreated={handleTurnoCreated}
+        especialistas={especialistas}
+        especialidades={especialidades}
+        initialFilters={initialFilters}
       />
     );
   }

@@ -36,25 +36,26 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Formatear la respuesta
+    // Formatear la respuesta con type assertion para evitar errores de tipos
+    const turnoData = turno as any;
     return NextResponse.json({
       success: true,
       hasTurno: true,
       turno: {
-        id: turno.id_turno,
-        fecha: turno.fecha,
-        hora: turno.hora,
-        estado: turno.estado,
+        id: turnoData.id_turno,
+        fecha: turnoData.fecha,
+        hora: turnoData.hora,
+        estado: turnoData.estado,
         paciente: {
-          nombre: turno.paciente?.nombre,
-          apellido: turno.paciente?.apellido
+          nombre: turnoData.paciente?.nombre,
+          apellido: turnoData.paciente?.apellido
         },
         especialista: {
-          nombre: turno.especialista?.nombre,
-          apellido: turno.especialista?.apellido
+          nombre: turnoData.especialista?.nombre,
+          apellido: turnoData.especialista?.apellido
         },
         especialidad: {
-          nombre: turno.especialidad?.nombre
+          nombre: turnoData.especialidad?.nombre
         }
       }
     });

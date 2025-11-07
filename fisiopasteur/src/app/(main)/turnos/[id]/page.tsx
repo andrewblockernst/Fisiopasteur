@@ -17,11 +17,15 @@ export default async function TurnoDetailPage({ params }: TurnoDetailPageProps) 
 
   const resultado = await obtenerTurno(turnoId);
   
-  if (!resultado.success || !resultado.data) {
+  if (!resultado.success) {
     notFound();
   }
 
-  const turno = resultado.data;
+  const turno = resultado.data as TurnoWithRelations;
+  
+  if (!turno) {
+    notFound();
+  }
 
   // Calcular número de talonario
   let numeroTalonario: string | null = null;
@@ -34,7 +38,7 @@ export default async function TurnoDetailPage({ params }: TurnoDetailPageProps) 
 
     if (resultadoTurnos.success && resultadoTurnos.data) {
       // Filtrar por misma especialidad y no cancelados
-      const turnosPaquete = resultadoTurnos.data
+      const turnosPaquete = (resultadoTurnos.data as TurnoWithRelations[])
         .filter(t => 
           t.id_especialidad === turno.id_especialidad &&
           t.estado !== 'cancelado'

@@ -22,17 +22,29 @@ export default async function TurnosPage({
   const especialidadParam = Array.isArray(params?.especialidad) ? params.especialidad[0] : params?.especialidad;
   const especialidad_id = especialidadParam ? Number(especialidadParam) : undefined;
   
-  const filtros = {
+  return {
     fecha_desde: Array.isArray(params?.desde) ? params.desde[0] : (params?.desde ?? hoy),
     fecha_hasta: Array.isArray(params?.hasta) ? params.hasta[0] : (params?.hasta ?? hoy),
     especialista_id: Array.isArray(params?.especialista) ? params.especialista[0] : params?.especialista,
     especialidad_id,
     estado: Array.isArray(params?.estado) ? params.estado[0] : params?.estado,
   };
+}
+
+export default async function TurnosPage({ 
+  searchParams 
+}: { 
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }> // ✅ Mantener Promise<>
+}) {
+  // ✅ Await searchParams primero (Next.js 15 requirement)
+  const params = await searchParams;
+  
+  // ✅ Luego parsear los parámetros
+  const filtros = parseSearchParams(params);
 
   // Usar la función original sin filtro automático de usuario
   const [resTurnos, resEspecialistas, resEspecialidades, resBoxes] = await Promise.all([
-    obtenerTurnosConFiltros(filtros), // Cambiar de vuelta a esta función
+    obtenerTurnosConFiltros(filtros),
     obtenerEspecialistas(),
     obtenerEspecialidades(),
     obtenerBoxes(),

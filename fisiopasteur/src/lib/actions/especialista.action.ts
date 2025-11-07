@@ -630,13 +630,19 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
 }
 
 // Obtener especialidades para el formulario
-export async function getEspecialidades() {
+// DEPRECADO: Usar getEspecialidades de especialidad.action.ts
+export async function getEspecialidadesLegacy() {
   try {
     const supabase = await createClient();
+    
+    // Obtener contexto organizacional
+    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    const { orgId } = await getAuthContext();
     
     const { data, error } = await supabase
       .from("especialidad")
       .select("*")
+      .eq("id_organizacion", orgId)
       .order("nombre");
 
     if (error) {
