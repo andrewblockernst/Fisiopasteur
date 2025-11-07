@@ -1,0 +1,19 @@
+# Ignorar node_modules y archivos de cache
+node_modules
+.next
+.cache
+.turbo
+
+# Ignorar archivos de configuración local
+.env.local
+.env*.local
+
+# Ignorar archivos de test
+test-*.js
+*.test.js
+*.test.ts
+*.test.tsx
+
+# Ignorar documentación
+*.md
+!README.md
