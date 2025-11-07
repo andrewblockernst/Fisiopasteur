@@ -838,7 +838,26 @@ useEffect(() => {
     const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
 
     const turnosParaCrear = [];
-    let sesionesCreadas = 0;
+    
+    // ✅ PRIMERO: SIEMPRE agregar el turno inicial (el día seleccionado en el formulario)
+    const esPasadoPrimerTurno = esFechaHoraPasada(formData.fecha, formData.hora);
+    
+    if (!esPasadoPrimerTurno) {
+      turnosParaCrear.push({
+        fecha: formData.fecha,
+        hora: formData.hora + ':00',
+        id_especialista: formData.id_especialista,
+        id_paciente: parseInt(formData.id_paciente),
+        id_especialidad: formData.id_especialidad ? parseInt(formData.id_especialidad) : null,
+        id_box: formData.id_box ? parseInt(formData.id_box) : null,
+        observaciones: formData.observaciones || null,
+        estado: "programado" as const,
+        tipo_plan: formData.tipo_plan,
+      });
+    }
+
+    // ✅ SEGUNDO: Generar los turnos de repetición (numeroSesiones - 1 porque ya creamos el primero)
+    let sesionesCreadas = esPasadoPrimerTurno ? 0 : 1; // Ya contamos el primer turno si no es pasado
     let semanaActual = 0;
 
     while (sesionesCreadas < numeroSesiones && semanaActual < 52) {
@@ -853,11 +872,15 @@ useEffect(() => {
 
         const fechaTurno = new Date(fechaBaseParsed);
         
-        const esPrimerTurno = diferenciaDias === 0 && semanaActual === 0;
+        // ✅ IMPORTANTE: Saltar el día base de la primera semana (ya lo agregamos arriba)
+        const esPrimeraSemanaYDiaBase = semanaActual === 0 && diferenciaDias === 0;
         
-        if (!esPrimerTurno) {
-          fechaTurno.setDate(fechaTurno.getDate() + (semanaActual * 7) + diferenciaDias);
+        if (esPrimeraSemanaYDiaBase) {
+          continue; // Saltar este, ya lo agregamos como primer turno
         }
+        
+        // Calcular fecha del turno de repetición
+        fechaTurno.setDate(fechaTurno.getDate() + (semanaActual * 7) + diferenciaDias);
 
         const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
         
@@ -866,11 +889,7 @@ useEffect(() => {
         if (mantenerHorario) {
           horarioTurno = formData.hora;
         } else {
-          if (esPrimerTurno) {
-            horarioTurno = formData.hora;
-          } else {
-            horarioTurno = horariosPorDia[diaSeleccionado] || '09:00';
-          }
+          horarioTurno = horariosPorDia[diaSeleccionado] || '09:00';
         }
 
         const esPasado = esFechaHoraPasada(fechaFormateada, horarioTurno);
