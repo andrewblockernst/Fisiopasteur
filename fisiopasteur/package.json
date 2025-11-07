@@ -14,6 +14,8 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.51.0",
+    "@tanstack/react-query": "^5.90.5",
+    "@tanstack/react-query-devtools": "^5.90.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.13",
@@ -21,6 +23,7 @@
     "next": "^15.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "recharts": "^3.3.0",
     "styled-components": "^6.1.19",
     "tailwind-merge": "^3.3.1",
     "zustand": "^5.0.8"
