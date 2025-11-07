@@ -60,7 +60,10 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
   }>({ open: false, id_turno: null, accion: null });
 
   const formatearFecha = (fecha: string) => {
-    return format(new Date(fecha), "dd/MM/yyyy", { locale: es });
+    // ✅ FIX: Parsear fecha sin convertir a UTC para evitar problemas de zona horaria
+    const [year, month, day] = fecha.split('-').map(Number);
+    const fechaLocal = new Date(year, month - 1, day);
+    return format(fechaLocal, "dd/MM/yyyy", { locale: es });
   };
 
   const estadoLabel = (estado: string) => {
