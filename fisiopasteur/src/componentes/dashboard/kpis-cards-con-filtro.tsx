@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Clock, CheckCircle, XCircle, MessageSquare } from "lucide-react";
+import { Clock, CheckCircle, XCircle, DollarSign } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   obtenerKPIsConHistorial,
@@ -16,9 +16,10 @@ interface KPICardMetricsProps {
   icono: React.ReactNode;
   color: string;
   datos: KPIHistorico[];
-  dataKey: "turnosHoy" | "turnosAtendidos" | "cancelaciones" | "notificacionesEnviadas";
+  dataKey: "Programados" | "Atendidos" | "Cancelaciones" | "Ingresos";
   descripcion: string;
   periodo: PeriodoFiltro;
+  esMoneda?: boolean;
 }
 
 function KPICardWithChart({
@@ -30,6 +31,7 @@ function KPICardWithChart({
   dataKey,
   descripcion,
   periodo,
+  esMoneda = false,
 }: KPICardMetricsProps) {
   // Determinar formato del eje X según período
   const tickFormatter = (value: string) => {
@@ -38,9 +40,28 @@ function KPICardWithChart({
       return `${value}:00`;
     } else {
       // Para semana y mes, mostrar fecha abreviada
-      return new Date(value).toLocaleDateString("es-ES", { month: "short", day: "numeric" });
+      return new Date(value + "T00:00:00").toLocaleDateString("es-ES", { month: "short", day: "numeric" });
     }
   };
+
+  const formatearMoneda = (valor: number) => {
+    return new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(valor);
+  };
+
+  const interval = (value: string) => {
+    if (periodo === "hoy") {
+      return 22; // Mostrar cada hora
+    } else if (periodo === "semana") {
+      return 5; // Mostrar cada día
+    } else {
+      return Math.max(1, new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - 2);
+    }
+  }
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -49,7 +70,7 @@ function KPICardWithChart({
         <div>
           <p className="text-sm font-medium text-gray-600 mb-2">{titulo}</p>
           <div className="flex items-baseline gap-2">
-            <p className={`text-3xl font-bold ${color}`}>{valor}</p>
+            <p className={`text-3xl font-bold ${color}`}>{esMoneda ? formatearMoneda(valor) : valor}</p>
             <p className="text-xs text-gray-500">{descripcion}</p>
           </div>
         </div>
@@ -61,18 +82,20 @@ function KPICardWithChart({
       {/* Gráfico */}
       <div className="w-full h-48 mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={datos} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <BarChart data={datos} margin={{ top: 10, right: 15, left: 15, bottom: 20 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
             <XAxis
               dataKey="fecha"
               tick={{ fontSize: 12 }}
               tickFormatter={tickFormatter}
-              interval={periodo === "hoy" ? 23 : periodo === "semana" ? 6 : 28} // Mostrar cada 24 horas para "hoy"
+              tickLine={false}
+              tickCount={2}
+              interval={periodo === "hoy" ? 22 : periodo === "semana" ? 5 : 28} // Mostrar cada 24 horas para "hoy"
             />
             {/* <YAxis tick={{ fontSize: 12 }} /> */}
             <Tooltip
               contentStyle={{ backgroundColor: "#f3f4f6", border: "1px solid #e5e7eb" }}
-              formatter={(value) => [value, titulo]}
+              formatter={(value) => [esMoneda ? formatearMoneda(value as number) : value, titulo]}
               labelFormatter={(label) => `${label}${periodo === "hoy" ? ":00" : ""}`}
             />
             <Bar 
@@ -81,10 +104,10 @@ function KPICardWithChart({
                 color.includes("blue") ? "#2563eb" :
                 color.includes("green") ? "#16a34a" :
                 color.includes("orange") ? "#ea580c" :
-                color.includes("purple") ? "#9333ea" :
+                color.includes("yellow") ? "#cb9610ff" :
                 "#6b7280"
               } 
-              radius={[4, 4, 0, 0]} 
+              radius={[0, 0, 0, 0]} 
             />
           </BarChart>
         </ResponsiveContainer>
@@ -101,10 +124,10 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("hoy");
   const [datos, setDatos] = useState<KPIHistorico[]>([]);
   const [totales, setTotales] = useState<KPIsDashboard>({
-    turnosHoy: 0,
-    turnosAtendidosSemana: 0,
-    cancelacionesMes: 0,
-    notificacionesEnviadas: 0,
+    Programados: 0,
+    Atendidos: 0,
+    Cancelaciones: 0,
+    Ingresos: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -177,47 +200,48 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICardWithChart
-          titulo="Turnos"
-          valor={totales.turnosHoy}
+          titulo="Programados"
+          valor={totales.Programados}
           icono={<Clock className="w-6 h-6 text-blue-600" />}
           color="text-blue-600"
           datos={datos}
-          dataKey="turnosHoy"
-          descripcion="Programados"
+          dataKey="Programados"
+          descripcion=""
           periodo={periodo}
         />
 
         <KPICardWithChart
           titulo="Atendidos"
-          valor={totales.turnosAtendidosSemana}
+          valor={totales.Atendidos}
           icono={<CheckCircle className="w-6 h-6 text-green-600" />}
           color="text-green-600"
           datos={datos}
-          dataKey="turnosAtendidos"
-          descripcion="Atendidos"
+          dataKey="Atendidos"
+          descripcion=""
           periodo={periodo}
         />
 
         <KPICardWithChart
           titulo="Cancelaciones"
-          valor={totales.cancelacionesMes}
+          valor={totales.Cancelaciones}
           icono={<XCircle className="w-6 h-6 text-orange-600" />}
           color="text-orange-600"
           datos={datos}
-          dataKey="cancelaciones"
-          descripcion="Cancelados"
+          dataKey="Cancelaciones"
+          descripcion=""
           periodo={periodo}
         />
 
         <KPICardWithChart
-          titulo="Notificaciones"
-          valor={totales.notificacionesEnviadas}
-          icono={<MessageSquare className="w-6 h-6 text-purple-600" />}
-          color="text-purple-600"
+          titulo="Ingresos"
+          valor={totales.Ingresos}
+          icono={<DollarSign className="w-6 h-6 text-yellow-600" />}
+          color="text-yellow-600"
           datos={datos}
-          dataKey="notificacionesEnviadas"
-          descripcion="Enviadas"
+          dataKey="Ingresos"
+          descripcion="Total"
           periodo={periodo}
+          esMoneda={true}
         />
       </div>
     </div>
