@@ -10,6 +10,7 @@ import EditarTurnoModal from "./editar-turno-modal";
 import type { TurnoWithRelations } from "@/types";
 import { MoreVertical, CheckCircle, XCircle, Edit, Trash, AlertCircle } from "lucide-react";
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { ConfirmDialog } from "@/componentes/dialog/confirm-dialog";
 
 export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }) {
 
@@ -24,6 +25,10 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
   // ============= ESTADO PARA MODAL DE EDICIÓN =============
   const [turnoParaEditar, setTurnoParaEditar] = useState<TurnoWithRelations | null>(null);
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
+
+  // ============= ESTADO PARA MODAL DE CONFIRMACIÓN =============
+  const [confirmDialogAbierto, setConfirmDialogAbierto] = useState(false);
+  const [turnoParaEliminar, setTurnoParaEliminar] = useState<TurnoWithRelations | null>(null);
 
   // ============= ESTADO PARA TURNOS COMPLETOS (PARA CÁLCULO DE TALONARIO) =============
   const [todosLosTurnos, setTodosLosTurnos] = useState<TurnoWithRelations[]>([]);
@@ -65,16 +70,21 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
   };
 
   const handleEliminar = async (turno: TurnoWithRelations) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar este turno? Esta acción no se puede deshacer.")) {
-      return;
-    }
+    // Abrir modal de confirmación
+    setTurnoParaEliminar(turno);
+    setConfirmDialogAbierto(true);
+  };
 
-    const resultado = await eliminarTurno(turno.id_turno);
+  const confirmarEliminacion = async () => {
+    if (!turnoParaEliminar) return;
+
+    const resultado = await eliminarTurno(turnoParaEliminar.id_turno);
     
     if (resultado.success) {
       toast.addToast({
         variant: "success",
         message: "Turno eliminado",
+        description: "El turno se eliminó correctamente"
       });
       router.refresh();
     } else {
@@ -83,6 +93,9 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
         message: resultado.error || "Error al eliminar turno",
       });
     }
+    
+    // Limpiar estado
+    setTurnoParaEliminar(null);
   };
 
   const handleEditar = (turno: TurnoWithRelations) => {
@@ -205,19 +218,22 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
     }) || [];
 
   // ✅ FUNCIÓN: Calcular número de turno en el paquete (talonario)
-  // ⚠️ IMPORTANTE: Usa TODOS los turnos del paciente, no solo los filtrados por fecha
+  // ⚠️ IMPORTANTE: Solo agrupa turnos que pertenecen al MISMO grupo de tratamiento
   // ⚠️ INCLUYE cancelados en el conteo para que mantengan su número original
   const calcularNumeroTalonario = (turno: any) => {
     if (!turno.id_paciente || !turno.id_especialidad || !turno.fecha) return null;
     
+    // ✅ NUEVO: Solo mostrar número si el turno pertenece a un grupo
+    if (!turno.id_grupo_tratamiento) return null;
+    
     // Si aún está cargando, no mostrar número
     if (cargandoTurnos) return null;
 
-    // Usar todosLosTurnos - INCLUIR cancelados para mantener numeración
+    // ✅ CORREGIDO: Filtrar por id_grupo_tratamiento en lugar de solo especialidad
     const turnosMismoPaquete = todosLosTurnos.filter(t => 
       t.id_paciente === turno.id_paciente &&
-      t.id_especialidad === turno.id_especialidad &&
-      !esTurnoPilates(t) // Solo excluir Pilates, NO cancelados
+      t.id_grupo_tratamiento === turno.id_grupo_tratamiento && // ✅ Mismo grupo de tratamiento
+      !esTurnoPilates(t) // Solo excluir Pilates
     ).sort((a, b) => {
       const fechaA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
       const fechaB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
@@ -414,6 +430,21 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
         }}
       />
     )}
+
+    {/* Modal de Confirmación de Eliminación */}
+    <ConfirmDialog
+      isOpen={confirmDialogAbierto}
+      onClose={() => {
+        setConfirmDialogAbierto(false);
+        setTurnoParaEliminar(null);
+      }}
+      onConfirm={confirmarEliminacion}
+      title="Eliminar Turno"
+      message="¿Estás seguro de que deseas eliminar este turno? Esta acción no se puede deshacer."
+      confirmText="Eliminar"
+      cancelText="Cancelar"
+      variant="danger"
+    />
   </>
   );
 }

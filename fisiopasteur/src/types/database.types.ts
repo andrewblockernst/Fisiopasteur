@@ -75,6 +75,147 @@ export type Database = {
           },
         ]
       }
+      evaluacion_inicial: {
+        Row: {
+          antecedentes_familiares: boolean | null
+          antecedentes_familiares_quien: string | null
+          artritis: boolean | null
+          cirugias: string | null
+          created_at: string | null
+          dbt: boolean | null
+          deporte_cual: string | null
+          diagnostico_eco: boolean | null
+          diagnostico_observaciones: string | null
+          diagnostico_rm: boolean | null
+          diagnostico_rx: boolean | null
+          diagnostico_tac: boolean | null
+          diagrama_dolor: Json | null
+          diu: boolean | null
+          embarazada: boolean | null
+          fracturas: string | null
+          fuma: boolean | null
+          id_evaluacion: string
+          id_grupo: string
+          id_organizacion: string
+          medico_actual: string | null
+          menopausia: boolean | null
+          momento_mas_dolor: string | null
+          numero_afiliado: string | null
+          objetivos_tratamiento: string | null
+          obra_social: string | null
+          otras_afecciones: string | null
+          realiza_deportes: boolean | null
+          ta: string | null
+          tiempo_con_dolor: string | null
+          toma_alcohol: boolean | null
+          toma_medicamentos: string | null
+          trabajo_actual: string | null
+          trabajo_anterior: boolean | null
+          trabajo_anterior_cual: string | null
+          tratamiento_fk_anterior: boolean | null
+          traumatismo: boolean | null
+          traumatismo_descripcion: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          antecedentes_familiares?: boolean | null
+          antecedentes_familiares_quien?: string | null
+          artritis?: boolean | null
+          cirugias?: string | null
+          created_at?: string | null
+          dbt?: boolean | null
+          deporte_cual?: string | null
+          diagnostico_eco?: boolean | null
+          diagnostico_observaciones?: string | null
+          diagnostico_rm?: boolean | null
+          diagnostico_rx?: boolean | null
+          diagnostico_tac?: boolean | null
+          diagrama_dolor?: Json | null
+          diu?: boolean | null
+          embarazada?: boolean | null
+          fracturas?: string | null
+          fuma?: boolean | null
+          id_evaluacion?: string
+          id_grupo: string
+          id_organizacion: string
+          medico_actual?: string | null
+          menopausia?: boolean | null
+          momento_mas_dolor?: string | null
+          numero_afiliado?: string | null
+          objetivos_tratamiento?: string | null
+          obra_social?: string | null
+          otras_afecciones?: string | null
+          realiza_deportes?: boolean | null
+          ta?: string | null
+          tiempo_con_dolor?: string | null
+          toma_alcohol?: boolean | null
+          toma_medicamentos?: string | null
+          trabajo_actual?: string | null
+          trabajo_anterior?: boolean | null
+          trabajo_anterior_cual?: string | null
+          tratamiento_fk_anterior?: boolean | null
+          traumatismo?: boolean | null
+          traumatismo_descripcion?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          antecedentes_familiares?: boolean | null
+          antecedentes_familiares_quien?: string | null
+          artritis?: boolean | null
+          cirugias?: string | null
+          created_at?: string | null
+          dbt?: boolean | null
+          deporte_cual?: string | null
+          diagnostico_eco?: boolean | null
+          diagnostico_observaciones?: string | null
+          diagnostico_rm?: boolean | null
+          diagnostico_rx?: boolean | null
+          diagnostico_tac?: boolean | null
+          diagrama_dolor?: Json | null
+          diu?: boolean | null
+          embarazada?: boolean | null
+          fracturas?: string | null
+          fuma?: boolean | null
+          id_evaluacion?: string
+          id_grupo?: string
+          id_organizacion?: string
+          medico_actual?: string | null
+          menopausia?: boolean | null
+          momento_mas_dolor?: string | null
+          numero_afiliado?: string | null
+          objetivos_tratamiento?: string | null
+          obra_social?: string | null
+          otras_afecciones?: string | null
+          realiza_deportes?: boolean | null
+          ta?: string | null
+          tiempo_con_dolor?: string | null
+          toma_alcohol?: boolean | null
+          toma_medicamentos?: string | null
+          trabajo_actual?: string | null
+          trabajo_anterior?: boolean | null
+          trabajo_anterior_cual?: string | null
+          tratamiento_fk_anterior?: boolean | null
+          traumatismo?: boolean | null
+          traumatismo_descripcion?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluacion_inicial_id_grupo_fkey"
+            columns: ["id_grupo"]
+            isOneToOne: false
+            referencedRelation: "grupo_tratamiento"
+            referencedColumns: ["id_grupo"]
+          },
+          {
+            foreignKeyName: "evaluacion_inicial_id_organizacion_fkey"
+            columns: ["id_organizacion"]
+            isOneToOne: false
+            referencedRelation: "organizacion"
+            referencedColumns: ["id_organizacion"]
+          },
+        ]
+      }
       evolucion_clinica: {
         Row: {
           created_at: string | null
