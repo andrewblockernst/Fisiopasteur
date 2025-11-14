@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from "react";
 import { CalendarioTurnos } from "@/componentes/calendario/calendario-turnos";
@@ -7,59 +7,42 @@ import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import { useTurnoStore, type TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
 import { useAuth } from "@/hooks/usePerfil";
-import { Calendar, Users, Clock, ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Button from "../boton";
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
+import { useTurnos, useInvalidateTurnos } from "@/hooks/useTurnosQuery";
 
-interface CalendarioClientProps {
-  turnosIniciales: TurnoConDetalles[];
+interface CalendarioClientQueryProps {
   especialistas: any[];
   pacientes: any[];
 }
 
 const BRAND = '#9C1838';
 
-export function CalendarioClient({ 
-  turnosIniciales, 
+export function CalendarioClientQuery({ 
   especialistas, 
   pacientes 
-}: CalendarioClientProps) {
+}: CalendarioClientQueryProps) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  
+  // ✅ React Query - obtener turnos con caché
+  const { data: turnos = [], isLoading: turnosLoading } = useTurnos();
+  const invalidateTurnos = useInvalidateTurnos();
+  
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedDayTurnos, setSelectedDayTurnos] = useState<TurnoConDetalles[]>([]);
   const [especialistaFiltro, setEspecialistaFiltro] = useState<string>("");
   const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
-  const [goToTodaySignal, setGoToTodaySignal] = useState(0);
-  const [vistaCalendario, setVistaCalendario] = useState<'mes' | 'semana' | 'dia'>('mes');
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  const { 
-    turnos, 
-    loading, 
-    setLoading, 
-    setTurnos, 
-    getTurnosHoy, 
-    getTurnosProximos,
-    getTurnosByDate
-  } = useTurnoStore();
-  
+  const { getTurnosByDate } = useTurnoStore();
   const { showServerActionResponse } = useToastStore();
-
-  // Efecto para establecer turnos iniciales y marcar como cargado
-  useEffect(() => {
-    if (turnosIniciales) {
-      setTurnos(turnosIniciales);
-      setLoading(false); // ✅ Marcar explícitamente como cargado
-    }
-  }, [turnosIniciales, setTurnos, setLoading]);
 
   // Efecto para mostrar skeleton loader en la carga inicial
   useEffect(() => {
-    // Mostrar skeleton por 400ms en la primera carga
     const timer = setTimeout(() => {
       setIsInitialLoad(false);
     }, 400);
@@ -70,10 +53,7 @@ export function CalendarioClient({
   // Aplicar filtro automático por especialista al cargar
   useEffect(() => {
     if (!authLoading && user && !especialistaFiltro) {
-      // Verificar si el usuario es especialista activo
       const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
-      
-      // Aplicar filtro si no puede gestionar turnos O si puede gestionar pero también es especialista activo
       const debeAplicarFiltro = !user.puedeGestionarTurnos || (user.puedeGestionarTurnos && esEspecialistaActivo);
       
       if (debeAplicarFiltro && user.id_usuario) {
@@ -99,16 +79,10 @@ export function CalendarioClient({
     setIsCreateModalOpen(true);
   };
 
-  const handleGoToToday = () => {
-    setGoToTodaySignal(prev => prev + 1);
-  };
-
-  const handleVistaChange = (vista: 'mes' | 'semana' | 'dia') => {
-    setVistaCalendario(vista);
-  };
-
   const handleSuccessfulTurnoCreation = () => {
     setIsCreateModalOpen(false);
+    // ✅ Invalidar caché para refrescar los datos
+    invalidateTurnos();
     showServerActionResponse({
       success: true,
       message: 'Turno creado exitosamente',
@@ -117,8 +91,8 @@ export function CalendarioClient({
     });
   };
 
-  // ✅ Mostrar skeleton solo durante la carga inicial
-  if (isInitialLoad) {
+  // ✅ Mostrar skeleton solo durante la carga inicial o mientras carga datos
+  if (isInitialLoad || turnosLoading) {
     return (
       <UnifiedSkeletonLoader 
         type="calendar" 
@@ -132,9 +106,6 @@ export function CalendarioClient({
   const turnosFiltrados = especialistaFiltro 
     ? turnos.filter(turno => turno.id_especialista === especialistaFiltro)
     : turnos;
-
-  const turnosHoy = getTurnosHoy();
-  const turnosProximos = getTurnosProximos();
 
   return (
     <div className="min-h-screen text-black">
@@ -155,16 +126,14 @@ export function CalendarioClient({
 
       {/* Desktop Header */}
       <div className="hidden sm:block">
-  <div className="max-w-[1800px] mx-auto p-4 sm:p-6 lg:px-8 lg:pt-8">
-          <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 ">
+        <div className="max-w-[1800px] mx-auto p-4 sm:p-6 lg:px-8 lg:pt-8">
+          <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
             <h2 className="text-2xl sm:text-3xl font-bold">Calendario</h2>
-            {/* Controles Desktop */}
-            
           </div>
         </div>
       </div>
 
-      {/* Mobile Filter (solo visible en mobile) */}
+      {/* Mobile Filter */}
       <div className="sm:hidden px-4 py-3 bg-gray-50 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <select
@@ -220,7 +189,7 @@ export function CalendarioClient({
           setHoraSeleccionada('');
         }}
         fechaSeleccionada={selectedDate}
-        horaSeleccionada={horaSeleccionada} // Pasar la hora preseleccionada
+        horaSeleccionada={horaSeleccionada}
         especialistas={especialistas}
         pacientes={pacientes}
         onTurnoCreated={handleSuccessfulTurnoCreation}
@@ -238,4 +207,4 @@ export function CalendarioClient({
   );
 }
 
-export default CalendarioClient;
+export default CalendarioClientQuery;
