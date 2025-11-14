@@ -79,8 +79,11 @@ export default function EspecialistasPage() {
       }
     };
 
-    loadData();
-  }, [filter]); // Se ejecuta al montar y cuando cambia el filtro
+    // ✅ Solo cargar si auth ya está listo
+    if (!authLoading) {
+      loadData();
+    }
+  }, [filter, authLoading]); // ✅ Agregar authLoading como dependencia
 
   const handleDialogClose = async () => {
     setShowDialog(false);
@@ -135,7 +138,8 @@ export default function EspecialistasPage() {
     return passFilterEstado && passFilterBusqueda;
   });
 
-  if (loading || authLoading) {
+  // ✅ Mostrar skeleton mientras cargan los datos
+  if (loading) {
     return (
       <div className="min-h-screen text-black">
         {/* Mobile Header Skeleton */}
