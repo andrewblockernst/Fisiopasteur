@@ -49,13 +49,19 @@ export function CalendarioTurnos({
   const [fechaActual, setFechaActual] = useState(new Date());
   const [vistaInternal, setVistaInternal] = useState<VistaCalendario>('mes');
   const vista = vistaProp ?? vistaInternal;
-  const [isMobile, setIsMobile] = useState(false);
+  // ✅ Inicializar con valor por defecto basado en window (evita undefined en SSR)
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false; // Default para SSR
+  });
   const { getTurnosByDate } = useTurnoStore();
 
   useEffect(() => {
     // Solo se ejecuta en el cliente
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
+    checkMobile(); // ✅ Verificar inmediatamente al montar
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
