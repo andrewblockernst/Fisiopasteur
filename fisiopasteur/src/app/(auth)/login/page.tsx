@@ -7,17 +7,43 @@ import { createClient } from "@/lib/supabase/client";
 import Head from "next/head";
 import Link from "next/link";
 import Boton from "@/componentes/boton"; 
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setPasswordError(null);
+    setEmailError(null);
+
+    // Validaciones
+    let hasError = false;
+
+    if (!email.trim()) {
+      setEmailError("Por favor, completa el correo electrónico");
+      hasError = true;
+    }
+
+    if (!password.trim()) {
+      setPasswordError("Por favor, completa la contraseña");
+      hasError = true;
+    } else if (password.length < 6) {
+      setPasswordError("La contraseña debe tener al menos 6 caracteres");
+      hasError = true;
+    }
+
+    if (hasError) {
+      setLoading(false);
+      return;
+    }
 
     // Crear el cliente aquí
     const supabase = createClient();
@@ -57,10 +83,20 @@ export default function LoginPage() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailError(null);
+                  }}
                   placeholder="Ej. usuario@gmail.com"
-                  className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 placeholder: text-black"
+                  className={`mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 placeholder:text-black ${
+                    emailError 
+                      ? 'border-red-500 focus:ring-red-500' 
+                      : 'border-gray-300 focus:ring-red-500'
+                  }`}
                 />
+                {emailError && (
+                  <p className="text-red-500 text-sm mt-1">{emailError}</p>
+                )}
               </div>
 
               <div>
@@ -71,10 +107,20 @@ export default function LoginPage() {
                   id="password"
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setPasswordError(null);
+                  }}
                   placeholder="Ej. 12345678"
-                  className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 placeholder: text-black"
+                  className={`mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 placeholder:text-black ${
+                    passwordError 
+                      ? 'border-red-500 focus:ring-red-500' 
+                      : 'border-gray-300 focus:ring-red-500'
+                  }`}
                 />
+                {passwordError && (
+                  <p className="text-red-500 text-sm mt-1">{passwordError}</p>
+                )}
               </div>
 
               {error && <p className="text-[var(--brand)] text-sm">{error}</p>}
