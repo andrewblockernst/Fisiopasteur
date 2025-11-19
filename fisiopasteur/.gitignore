@@ -50,3 +50,8 @@ next-env.d.ts
 # vscode
 .vscode/
 .env*.local
+
+# EXPORTS DE BASE DE DATOS
+schema.sql
+*.sql
+!supabase/migrations/*.sql
