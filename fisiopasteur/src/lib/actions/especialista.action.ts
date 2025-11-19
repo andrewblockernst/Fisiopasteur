@@ -63,43 +63,60 @@ export async function getEspecialistas({ incluirInactivos = false } = {}) {
       throw new Error("Error al obtener especialistas");
     }
 
-    // Obtener especialidades de cada usuario EN ESTA ORGANIZACIÓN
-    const especialistasConEspecialidades = await Promise.all(
-      (usuariosOrg || []).map(async (usuarioOrg) => {
-        const { data: especialidades } = await supabase
-          .from("usuario_especialidad")
-          .select(`
-            precio_particular,
-            precio_obra_social,
-            activo,
-            especialidad:id_especialidad(
-              id_especialidad,
-              nombre
-            )
-          `)
-          .eq("id_usuario_organizacion", usuarioOrg.id_usuario_organizacion)
-          .eq("activo", true);
+    if (!usuariosOrg || usuariosOrg.length === 0) {
+      return [];
+    }
 
-        return {
-          id_usuario: usuarioOrg.usuario?.id_usuario,
-          id_usuario_organizacion: usuarioOrg.id_usuario_organizacion,
-          nombre: usuarioOrg.usuario?.nombre,
-          apellido: usuarioOrg.usuario?.apellido,
-          email: usuarioOrg.usuario?.email,
-          telefono: usuarioOrg.usuario?.telefono,
-          color: usuarioOrg.usuario?.color, // ✅ Color del especialista individual, no de la org
-          activo: usuarioOrg.activo,
-          id_rol: usuarioOrg.rol?.id,
-          rol: usuarioOrg.rol,
-          especialidades: especialidades?.map(e => ({
-            ...e.especialidad,
-            precio_particular: e.precio_particular,
-            precio_obra_social: e.precio_obra_social
-          })).filter(e => e.id_especialidad) || [],
-          usuario_especialidad: especialidades || []
-        };
-      })
-    );
+    // ✅ OPTIMIZACIÓN: Una sola query para obtener TODAS las especialidades de TODOS los especialistas
+    const usuariosOrgIds = (usuariosOrg as any[]).map((u: any) => u.id_usuario_organizacion);
+    
+    const { data: todasEspecialidades } = await supabase
+      .from("usuario_especialidad")
+      .select(`
+        id_usuario_organizacion,
+        precio_particular,
+        precio_obra_social,
+        activo,
+        especialidad:id_especialidad(
+          id_especialidad,
+          nombre
+        )
+      `)
+      .in("id_usuario_organizacion", usuariosOrgIds)
+      .eq("activo", true);
+
+    // ✅ Agrupar especialidades por id_usuario_organizacion
+    const especialidadesPorUsuario = (todasEspecialidades || []).reduce((acc, item: any) => {
+      if (!acc[item.id_usuario_organizacion]) {
+        acc[item.id_usuario_organizacion] = [];
+      }
+      acc[item.id_usuario_organizacion].push(item);
+      return acc;
+    }, {} as Record<number, any[]>);
+
+    // ✅ Mapear especialistas con sus especialidades (sin Promise.all innecesario)
+    const especialistasConEspecialidades = (usuariosOrg as any[]).map((usuarioOrg: any) => {
+      const especialidades = especialidadesPorUsuario[usuarioOrg.id_usuario_organizacion] || [];
+      
+      return {
+        id_usuario: usuarioOrg.usuario?.id_usuario,
+        id_usuario_organizacion: usuarioOrg.id_usuario_organizacion,
+        nombre: usuarioOrg.usuario?.nombre,
+        apellido: usuarioOrg.usuario?.apellido,
+        email: usuarioOrg.usuario?.email,
+        telefono: usuarioOrg.usuario?.telefono,
+        color: usuarioOrg.usuario?.color, // ✅ Color del especialista individual, no de la org
+        activo: usuarioOrg.activo,
+        id_rol: usuarioOrg.rol?.id,
+        rol: usuarioOrg.rol,
+        especialidades: especialidades.map(e => ({
+          ...e.especialidad,
+          precio_particular: e.precio_particular,
+          precio_obra_social: e.precio_obra_social
+        })).filter(e => e.id_especialidad),
+        usuario_especialidad: especialidades
+      };
+    });
 
     return especialistasConEspecialidades;
   } catch (error) {
