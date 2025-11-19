@@ -73,8 +73,10 @@ export function CalendarioClient({
       // Verificar si el usuario es especialista activo
       const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
       
-      // Aplicar filtro si no puede gestionar turnos O si puede gestionar pero también es especialista activo
-      const debeAplicarFiltro = !user.puedeGestionarTurnos || (user.puedeGestionarTurnos && esEspecialistaActivo);
+      // ✅ LÓGICA CORREGIDA:
+      // Solo aplicar filtro si el usuario NO puede gestionar turnos (es solo especialista)
+      // Los Admin y Programadores SIEMPRE pueden ver "Todos los especialistas"
+      const debeAplicarFiltro = !user.puedeGestionarTurnos && esEspecialistaActivo;
       
       if (debeAplicarFiltro && user.id_usuario) {
         setEspecialistaFiltro(user.id_usuario);

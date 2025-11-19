@@ -32,12 +32,12 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
       const currentEspecialistaParam = params.get('especialista');
       const verTodosParam = params.get('ver_todos');
       
-      // Aplicar filtro automático si:
-      // 1. No puede gestionar turnos (solo especialistas), O
-      // 2. Puede gestionar pero también aparece en la lista de especialistas (es especialista activo)
+      // ✅ LÓGICA CORREGIDA:
+      // Solo aplicar filtro automático si el usuario NO puede gestionar turnos (es solo especialista)
+      // Los Admin y Programadores SIEMPRE pueden ver "Todos los especialistas"
       const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
       
-      const debeAplicarFiltro = !user.puedeGestionarTurnos || (user.puedeGestionarTurnos && esEspecialistaActivo);
+      const debeAplicarFiltro = !user.puedeGestionarTurnos && esEspecialistaActivo;
       
       // ✅ SOLO aplicar si NO hay ningún parámetro en la URL (primera carga)
       if (debeAplicarFiltro && !currentEspecialistaParam && !verTodosParam && user.id_usuario) {
@@ -158,10 +158,11 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
     setTipoFiltro("");
     setValorFiltro("");
     
-    // Determinar si el usuario necesita el parámetro ver_todos
+    // ✅ LÓGICA CORREGIDA: Solo especialistas necesitan ver_todos
+    // Admin y Programadores pueden acceder directamente sin parámetro
     const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user?.id_usuario);
     
-    const necesitaVerTodos = !user?.puedeGestionarTurnos || (user?.puedeGestionarTurnos && esEspecialistaActivo);
+    const necesitaVerTodos = !user?.puedeGestionarTurnos && esEspecialistaActivo;
     
     if (necesitaVerTodos) {
       router.push("/turnos?ver_todos=1");

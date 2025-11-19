@@ -54,7 +54,8 @@ export function CalendarioClientQuery({
   useEffect(() => {
     if (!authLoading && user && !especialistaFiltro) {
       const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
-      const debeAplicarFiltro = !user.puedeGestionarTurnos || (user.puedeGestionarTurnos && esEspecialistaActivo);
+      // ✅ LÓGICA CORREGIDA: Admin y Programadores SIEMPRE pueden ver "Todos"
+      const debeAplicarFiltro = !user.puedeGestionarTurnos && esEspecialistaActivo;
       
       if (debeAplicarFiltro && user.id_usuario) {
         setEspecialistaFiltro(user.id_usuario);
