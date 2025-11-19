@@ -63,7 +63,7 @@ async function checkDocumentoExists(documento: string, excludeId?: number): Prom
   let query = supabase
     .from("paciente")
     .select("id_paciente")
-    .eq("documento", documento);
+    .eq("dni", documento);
 
   if (excludeId) {
     query = query.neq("id_paciente", excludeId);
@@ -330,7 +330,7 @@ export async function updatePaciente(id: number, formData: FormData) {
         if (error.details?.includes("dni")) {
           throw new Error("Ya existe otro paciente con este DNI");
         }
-        if (error.details?.includes("telefono")) {
+        if (error.details?.includes("teléfono")) {
           throw new Error("Ya existe otro paciente con este número de teléfono");
         }
       }
@@ -360,6 +360,7 @@ export async function deletePaciente(id: number) {
       .from("turno")
       .select("id_turno")
       .eq("id_paciente", id)
+      .eq("estado", "pendiente")
       .eq("id_organizacion", orgId) // ✅ Verificar en la misma org
       .limit(1);
 
@@ -368,12 +369,11 @@ export async function deletePaciente(id: number) {
     }
 
 
-
     const { error } = await supabase
       .from("paciente")
       .update({ activo: false })
-      .eq("id_paciente", id)
-      .eq("id_organizacion", orgId); // ✅ Asegurar que solo elimina de su org
+      .eq("id_paciente", id) .eq("id_organizacion", orgId); // ✅ Asegurar que solo elimina de su org
+
 
     if (error) {
       console.error("Error deleting paciente:", error);

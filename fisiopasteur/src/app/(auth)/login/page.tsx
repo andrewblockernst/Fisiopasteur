@@ -56,7 +56,21 @@ export default function LoginPage() {
     setLoading(false);
 
     if (error) {
-      setError(error.message);
+      // Traducir mensajes de error comunes de Supabase al español
+      let mensajeError = error.message;
+      
+      if (error.message.toLowerCase().includes('invalid login credentials') || 
+          error.message.toLowerCase().includes('invalid credentials')) {
+        mensajeError = "Credenciales de inicio de sesión no validas";
+      } else if (error.message.toLowerCase().includes('email not confirmed')) {
+        mensajeError = "Por favor, confirma tu correo electrónico";
+      } else if (error.message.toLowerCase().includes('user not found')) {
+        mensajeError = "Usuario no encontrado";
+      } else if (error.message.toLowerCase().includes('too many requests')) {
+        mensajeError = "Demasiados intentos. Por favor, intenta más tarde";
+      }
+      
+      setError(mensajeError);
     } else {
       router.push("/inicio");
     }
