@@ -69,9 +69,9 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
   const estadoLabel = (estado: string) => {
     const estados: Record<string, string> = {
       programado: "Programado",
+      pendiente: "Pendiente",
       atendido: "Atendido",
-      cancelado: "Cancelado",
-      vencido: "Vencido"
+      cancelado: "Cancelado"
     };
     return estados[estado] || estado;
   };
@@ -297,11 +297,11 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
             {grupo.turnos.map((turno, index) => {
               // ✅ Determinar color de fondo según estado
               const bgColor = turno.estado === 'atendido' 
-                ? 'bg-green-50 hover:bg-green-100' 
+                ? 'bg-green-50 hover:bg-green-100 border-l-4 border-l-green-500' 
                 : turno.estado === 'cancelado'
-                  ? 'bg-red-50 hover:bg-red-100'
-                  : turno.estado === 'confirmado'
-                    ? 'bg-blue-50 hover:bg-blue-100'
+                  ? 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500'
+                  : turno.estado === 'pendiente'
+                    ? 'bg-yellow-50 hover:bg-yellow-100 border-l-4 border-l-yellow-500'
                     : 'hover:bg-gray-50';
               
               return (
@@ -395,7 +395,7 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
                 </td>
                 {/* Acciones */}
                 <td className="px-4 py-3">
-                  {turno.estado === 'programado' && (
+                  {(turno.estado === 'programado' || turno.estado === 'pendiente') && (
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => abrirConfirmacion(turno.id_turno, 'confirmar')}

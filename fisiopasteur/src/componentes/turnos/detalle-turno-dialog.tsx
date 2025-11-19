@@ -165,23 +165,6 @@ export function DetalleTurnoDialog({
     return (
       <div className="space-y-4 md:space-y-5 max-h-[65vh] md:max-h-[70vh] overflow-y-auto px-1">
         
-        {/* ⚠️ ALERTA para turnos vencidos */}
-        {turno.estado === 'vencido' && (
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-yellow-800 mb-1">
-                  Turno Vencido
-                </h4>
-                <p className="text-xs text-yellow-700">
-                  Este turno ya pasó y no fue confirmado. Por favor, indica si fue atendido o cancelado usando el menú de acciones.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Estado del turno */}
         <div className={`${estadoConfig.bg} border ${estadoConfig.border} p-3 md:p-4 rounded-lg`}>
           <div className="flex items-center gap-2 mb-2">

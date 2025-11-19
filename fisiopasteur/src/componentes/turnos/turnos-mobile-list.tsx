@@ -424,14 +424,14 @@ export default function TurnosMobileList({
                     Programado
                   </button>
                   <button
-                    onClick={() => setFiltroEstado('vencido')}
+                    onClick={() => setFiltroEstado('pendiente')}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      filtroEstado === 'vencido'
+                      filtroEstado === 'pendiente'
                         ? 'bg-yellow-600 text-white'
                         : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
                     }`}
                   >
-                    Vencido
+                    Pendiente
                   </button>
                   <button
                     onClick={() => setFiltroEstado('atendido')}
@@ -622,7 +622,7 @@ function TurnoCard({
         
         {/* Estado */}
         <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${getEstadoColor(turno.estado || 'programado')}`}>
-          {turno.estado === 'vencido' ? '⚠️ VENCIDO' : (turno.estado || 'programado').replace('_', ' ').toUpperCase()}
+          {(turno.estado || 'programado').replace('_', ' ').toUpperCase()}
         </span>
       </div>
 
