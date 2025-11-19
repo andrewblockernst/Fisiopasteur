@@ -9,7 +9,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import type { Tables, EspecialistaWithSpecialties } from "@/types";
-import { actualizarTurnosVencidos } from '@/lib/actions/turno.action';
+import { actualizarTurnosPendientes } from '@/lib/actions/turno.action';
 
 interface TurnosPageContainerProps {
   turnos: TurnoConDetalles[];
@@ -39,25 +39,26 @@ export default function TurnosPageContainer({
   const [selectedDate, setSelectedDate] = useState(initialFilters.fecha_desde);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // ⏰ Efecto para verificar y actualizar turnos vencidos automáticamente
+  // ⏰ Efecto para verificar y actualizar turnos pendientes automáticamente
   useEffect(() => {
-    const verificarTurnosVencidos = async () => {
+    const verificarTurnosPendientes = async () => {
       try {
-        const resultado = await actualizarTurnosVencidos();
+        const resultado = await actualizarTurnosPendientes();
         
         if (resultado.success && resultado.data && resultado.data.length > 0) {
+          console.log(`✅ ${resultado.data.length} turnos actualizados a pendiente`);
           router.refresh();
         }
       } catch (error) {
-        console.error('❌ Error verificando turnos vencidos:', error);
+        console.error('❌ Error verificando turnos pendientes:', error);
       }
     };
 
     // Verificar al cargar el componente
-    verificarTurnosVencidos();
+    verificarTurnosPendientes();
 
     // Verificar cada 5 minutos (300000 ms)
-    const intervalo = setInterval(verificarTurnosVencidos, 300000);
+    const intervalo = setInterval(verificarTurnosPendientes, 300000);
 
     // Limpiar intervalo al desmontar
     return () => clearInterval(intervalo);

@@ -158,13 +158,13 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
   const getRowClassName = (turno: any) => {
     let baseClass = "border-t hover:bg-gray-50 transition-colors";
     if (turno.estado === 'atendido') {
-      baseClass += " bg-green-100";
+      baseClass += " bg-green-100 border-l-4 border-l-green-500";
     }
     if (turno.estado === 'cancelado') {
-      baseClass += " bg-red-100";
+      baseClass += " bg-red-100 border-l-4 border-l-red-500";
     }
-    // ✅ Turnos vencidos con fondo amarillo + borde para destacar
-    if (turno.estado === 'vencido') {
+    // ✅ Turnos pendientes (pasados sin actualizar) con fondo amarillo para destacar
+    if (turno.estado === 'pendiente') {
       baseClass += " bg-yellow-50 border-l-4 border-l-yellow-500";
     }
     return baseClass;
@@ -191,11 +191,11 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
   const turnosOrdenados = turnos
     ?.filter(turno => !esTurnoPilates(turno)) // Filtrar Pilates
     ?.sort((a, b) => {
-      // Prioridad por estado: programado (0), vencido (1), atendido (2), cancelado (3)
+      // Prioridad por estado: pendiente (0), programado (1), atendido (2), cancelado (3)
       const prioridadEstado = (estado: string) => {
         switch (estado?.toLowerCase()) {
-          case 'programado': return 0;
-          case 'vencido': return 1; // ✅ NUEVO: Vencidos tienen prioridad alta para que se vean
+          case 'pendiente': return 0; // ⚠️ Los pendientes primero para que se vean
+          case 'programado': return 1;
           case 'atendido': return 2;
           case 'cancelado': return 3;
           case '': return 4;
@@ -328,23 +328,8 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
                       </DropdownMenu.Trigger>
 
                       <DropdownMenu.Content align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
-                        {/* ⚠️ ALERTA para turnos vencidos */}
-                        {t.estado === 'vencido' && (
-                          <>
-                            <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-200">
-                              <div className="flex items-start gap-2">
-                                <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs text-yellow-800">
-                                  Turno vencido. Confirma si fue atendido o cancelado.
-                                </p>
-                              </div>
-                            </div>
-                            <div className="h-px bg-gray-200 my-1" />
-                          </>
-                        )}
-
                         {/* Marcar como Atendido */}
-                        {(t.estado === 'programado' || t.estado === 'vencido') && (
+                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
                           <DropdownMenu.Item
                             className="w-full px-4 py-2 text-left text-sm hover:bg-green-50 flex items-center gap-2 text-green-600 cursor-pointer outline-none"
                             onSelect={() => handleMarcarAtendido(t)}
@@ -355,7 +340,7 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
                         )}
 
                         {/* Cancelar Turno */}
-                        {(t.estado === 'programado' || t.estado === 'vencido') && (
+                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
                           <DropdownMenu.Item
                             className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer outline-none"
                             onSelect={() => handleCancelar(t)}
@@ -366,7 +351,7 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
                         )}
 
                         {/* Separador */}
-                        {(t.estado === 'programado' || t.estado === 'vencido') && (
+                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
                           <div className="h-px bg-gray-200 my-1" />
                         )}
 
