@@ -476,6 +476,17 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
 
     if (errorUsuario) {
       console.error("Error updating especialista:", errorUsuario);
+      
+      // ✅ Detectar error de email duplicado
+      if (errorUsuario.code === '23505' || errorUsuario.message?.includes('duplicate') || errorUsuario.message?.includes('email')) {
+        return {
+          success: false,
+          message: 'Email ya en uso',
+          toastType: 'error',
+          description: 'El email ya está en uso. Por favor, usa otro correo electrónico.'
+        };
+      }
+      
       return {
         success: false,
         message: 'Error al actualizar especialista',
