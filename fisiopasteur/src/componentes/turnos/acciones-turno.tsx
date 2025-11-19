@@ -137,14 +137,14 @@ export default function AccionesTurno({ turno, onDone }: Props) {
   };
 
   const esPasado = turnoYaPaso();
-  const esVencido = turno.estado === 'vencido';
   const esProgramado = turno.estado === 'programado';
+  const esPendiente = turno.estado === 'pendiente';
   const esAtendido = turno.estado === 'atendido';
   const esCancelado = turno.estado === 'cancelado';
 
   // ✅ Determinar qué acciones están disponibles
-  const puedeMarcarAtendido = (esProgramado || esVencido) && !esAtendido;
-  const puedeCancelar = (esProgramado || esVencido) && !esCancelado && !esAtendido;
+  const puedeMarcarAtendido = (esProgramado || esPendiente) && !esAtendido;
+  const puedeCancelar = (esProgramado || esPendiente) && !esCancelado && !esAtendido;
   const puedeEditar = !esAtendido; // Solo no se puede editar si ya fue atendido
   const puedeEliminar = true; // Siempre se puede eliminar
 
@@ -158,28 +158,9 @@ export default function AccionesTurno({ turno, onDone }: Props) {
             disabled={isPending}
           >
             <EllipsisVertical className="w-5 h-5 text-gray-600" />
-            {/* ✅ Indicador visual para turnos vencidos */}
-            {esVencido && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-            )}
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Content sideOffset={4} align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
-          
-          {/* ⚠️ ALERTA para turnos vencidos */}
-          {esVencido && (
-            <>
-              <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-200">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-yellow-800">
-                    Turno vencido. Confirma si fue atendido o cancelado.
-                  </p>
-                </div>
-              </div>
-              <div className="h-px bg-gray-200 my-1" />
-            </>
-          )}
 
           {/* Marcar como Atendido */}
           {puedeMarcarAtendido && (
