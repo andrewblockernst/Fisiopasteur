@@ -99,7 +99,7 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
         {/* Estado del turno */}
         <div className="text-center space-y-3">
           <span className={`inline-block px-4 py-2 rounded-xl text-sm font-medium border ${getEstadoColor(turno.estado || 'programado')}`}>
-            {turno.estado === 'vencido' ? '⚠️ VENCIDO' : (turno.estado || 'programado').replace('_', ' ').toUpperCase()}
+            {(turno.estado || 'programado').replace('_', ' ').toUpperCase()}
           </span>
           
           {/* Número de talonario si existe */}

@@ -161,8 +161,13 @@ export type SelectOption = {
 
 /**
  * Tipos de estado válidos para turnos
+ * - programado: Turno agendado (azul)
+ * - pendiente: Turno pasado sin actualizar (amarillo) - asignado automáticamente
+ * - atendido: Confirmado por especialista (verde)
+ * - cancelado: Marcado como cancelado (rojo)
+ * - eliminado: Turno eliminado (soft delete, no se muestra en ninguna parte)
  */
-export type EstadoTurno = 'programado' | 'en_curso' | 'atendido' | 'cancelado' | 'no_asistio';
+export type EstadoTurno = 'programado' | 'pendiente' | 'atendido' | 'cancelado' | 'eliminado';
 
 /**
  * Tipos de plan de pago para turnos

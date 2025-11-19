@@ -39,6 +39,7 @@ export async function obtenerTurno(id: number): Promise<
       `)
       .eq("id_turno", id)
       .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .single();
 
     if (error) {
@@ -77,6 +78,7 @@ export async function obtenerTurnos(filtros?: {
         box:id_box(id_box, numero)
       `)
       .eq("id_organizacion", orgId) // ✅ Filtrar por organización
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -144,6 +146,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
         box:id_box(id_box, numero)
       `)
       .eq("id_organizacion", orgId) // ✅ Filtrar por organización
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -459,7 +462,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
   }
 }
 
-// Eliminar un turno
+// Eliminar un turno (soft delete - cambia estado a "eliminado")
 export async function eliminarTurno(id: number) {
   const supabase = await createClient();
   
@@ -471,7 +474,7 @@ export async function eliminarTurno(id: number) {
     // Verificar que el turno pertenece a esta organización antes de eliminar
     const { data: turnoVerificado, error: errorVerificar } = await supabase
       .from("turno")
-      .select("id_turno")
+      .select("id_turno, estado")
       .eq("id_turno", id)
       .eq("id_organizacion", orgId)
       .single();
@@ -480,29 +483,22 @@ export async function eliminarTurno(id: number) {
       return { success: false, error: "Turno no encontrado o no pertenece a esta organización" };
     }
 
-    // Primero eliminar todas las notificaciones asociadas al turno
-    const { error: notificacionesError } = await supabase
-      .from("notificacion")
-      .delete()
-      .eq("id_turno", id)
-      .eq("id_organizacion", orgId); // ✅ También filtrar notificaciones por org
-
-    if (notificacionesError) {
-      console.error("Error al eliminar notificaciones del turno:", notificacionesError);
-      return { success: false, error: `Error eliminando notificaciones: ${notificacionesError.message}` };
-    }
-
-    // Luego eliminar el turno
+    // ✅ SOFT DELETE: Cambiar estado a "eliminado" en lugar de borrar
     const { error: turnoError } = await supabase
       .from("turno")
-      .delete()
+      .update({ 
+        estado: "eliminado",
+        updated_at: new Date().toISOString()
+      })
       .eq("id_turno", id)
-      .eq("id_organizacion", orgId); // ✅ Asegurar que solo elimina de su org
+      .eq("id_organizacion", orgId);
 
     if (turnoError) {
       console.error("Error al eliminar turno:", turnoError);
       return { success: false, error: turnoError.message };
     }
+
+    console.log(`✅ Turno ${id} marcado como eliminado (soft delete)`);
 
     revalidatePath("/turnos");
     revalidatePath("/pilates");
@@ -535,8 +531,8 @@ export async function marcarComoAtendido(id_turno: number) {
       };
     }
 
-    // ✅ Solo permitir desde programado o vencido
-    const estadosPermitidos = ['programado', 'vencido'];
+    // ✅ Permitir marcar como atendido desde programado o pendiente
+    const estadosPermitidos = ['programado', 'pendiente'];
     if (!turnoActual.estado || !estadosPermitidos.includes(turnoActual.estado)) {
       return {
         success: false,
@@ -547,7 +543,7 @@ export async function marcarComoAtendido(id_turno: number) {
     // Actualizar a atendido
     const { error } = await supabase
       .from('turno')
-      .update({ 
+      .update({
         estado: 'atendido',
         updated_at: new Date().toISOString()
       })
@@ -579,7 +575,7 @@ export async function marcarComoAtendido(id_turno: number) {
 
 /**
  * ✅ Cancelar turno
- * Permite cambiar desde: programado, vencido
+ * Permite cambiar desde: programado o pendiente
  */
 export async function cancelarTurno(id: number, motivo?: string) {
   const supabase = await createClient();
@@ -603,8 +599,8 @@ export async function cancelarTurno(id: number, motivo?: string) {
       };
     }
 
-    // ✅ Solo permitir desde programado o vencido
-    const estadosPermitidos = ['programado', 'vencido'];
+    // ✅ Permitir cancelar desde programado o pendiente
+    const estadosPermitidos = ['programado', 'pendiente'];
     if (!turnoActual.estado || !estadosPermitidos.includes(turnoActual.estado)) {
       return {
         success: false,
@@ -667,6 +663,7 @@ export async function obtenerAgendaEspecialista(
       .eq("id_especialista", especialista_id!)
       .eq("fecha", fecha)
       .neq("estado", "cancelado")
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .neq("id_especialidad", 4) // Excluir turnos de Pilates
       .order("hora", { ascending: true });
 
@@ -704,7 +701,8 @@ export async function verificarDisponibilidadPilates(
       .eq("fecha", fecha)
       .eq("hora", hora)
       .eq("id_especialidad", 4)
-      .neq("estado", "cancelado");
+      .neq("estado", "cancelado")
+      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
     if (error) {
       console.error("Error verificando disponibilidad Pilates:", error);
@@ -741,7 +739,8 @@ export async function verificarDisponibilidad(
       .eq("fecha", fecha)
       .eq("id_especialista", especialista_id!)
       .eq("hora", hora)
-      .neq("estado", "cancelado");
+      .neq("estado", "cancelado")
+      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
     if (box_id) {
       query = query.eq("id_box", box_id);
@@ -795,6 +794,7 @@ export async function verificarDisponibilidadParaActualizacion(
       .eq("fecha", fecha)
       .eq("id_especialista", especialista_id)
       .neq("estado", "cancelado")
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .neq("id_turno", turno_excluir)
       .eq("hora", hora);
 
@@ -869,6 +869,7 @@ export async function obtenerProximoTurnoPorTelefono(telefono: string) {
       .eq("id_paciente", paciente.id_paciente)
       .gte("fecha", hoy)
       .neq("estado", "cancelado")
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true })
       .limit(1)
@@ -1110,7 +1111,8 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
   try {
     let query = supabase
       .from("turno")
-      .select("estado, created_at, fecha, id_especialista");
+      .select("estado, created_at, fecha, id_especialista")
+      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
     if (fecha_desde) {
       query = query.gte("fecha", fecha_desde);
@@ -1180,6 +1182,7 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
         paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, direccion, fecha_nacimiento)
       `)
       .eq("id_paciente", pacienteId)
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -1529,86 +1532,6 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
 }
 
 // =====================================
-// ⏰ ACTUALIZAR TURNOS VENCIDOS
-// =====================================
-
-/**
- * ✅ Función para marcar como "vencido" los turnos programados cuya fecha/hora ya pasó
- * Se ejecuta automáticamente cada vez que se carga la página de turnos
- */
-export async function actualizarTurnosVencidos() {
-  const supabase = await createClient();
-  
-  try {
-    // ✅ Obtener fecha y hora actual en zona horaria local (Argentina GMT-3)
-    const ahora = new Date();
-    
-    // Obtener turnos "programado" que ya pasaron
-    const { data: turnosProgramados, error: fetchError } = await supabase
-      .from('turno')
-      .select('id_turno, fecha, hora, id_paciente, id_especialista')
-      .eq('estado', 'programado');
-
-    if (fetchError) {
-      console.error('❌ Error obteniendo turnos programados:', fetchError);
-      return { success: false, error: fetchError.message };
-    }
-
-    if (!turnosProgramados || turnosProgramados.length === 0) {
-      return { success: true, data: [], mensaje: 'No hay turnos programados' };
-    }
-
-    // ✅ Filtrar los que ya pasaron usando comparación correcta con zona horaria
-    const turnosVencidos = turnosProgramados.filter(turno => {
-      // Parsear fecha y hora del turno (formato: "2025-11-03" y "10:00:00")
-      const [año, mes, dia] = turno.fecha.split('-').map(Number);
-      const [hora, minuto] = turno.hora.split(':').map(Number);
-      
-      // Crear Date en zona horaria local (no UTC)
-      const fechaHoraTurno = new Date(año, mes - 1, dia, hora, minuto);
-      
-      return fechaHoraTurno < ahora;
-    });
-
-    if (turnosVencidos.length === 0) {
-      return { success: true, data: [], mensaje: 'No hay turnos vencidos' };
-    }
-
-    // Actualizar a estado "vencido"
-    const idsVencidos = turnosVencidos.map(t => t.id_turno);
-    
-    const { error: updateError } = await supabase
-      .from('turno')
-      .update({ 
-        estado: 'vencido',
-        updated_at: new Date().toISOString()
-      })
-      .in('id_turno', idsVencidos);
-
-    if (updateError) {
-      console.error('❌ Error actualizando turnos vencidos:', updateError);
-      return { success: false, error: updateError.message };
-    }    
-    // Revalidar las rutas para que se actualice la UI
-    revalidatePath('/turnos');
-    revalidatePath('/inicio');
-    
-    return { 
-      success: true, 
-      data: turnosVencidos,
-      mensaje: `${turnosVencidos.length} turno(s) actualizado(s) a vencido`
-    };
-
-  } catch (error) {
-    console.error('❌ Error en actualizarTurnosVencidos:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Error desconocido'
-    };
-  }
-}
-
-// =====================================
 // 🏥 GRUPOS DE TRATAMIENTO
 // =====================================
 
@@ -1662,6 +1585,66 @@ export async function actualizarGrupoTratamiento(
     return { success: true, data };
   } catch (error: any) {
     console.error('❌ Error inesperado:', error);
+    return { success: false, error: error.message || 'Error inesperado' };
+  }
+}
+
+// =====================================
+// ⏰ ACTUALIZACIÓN AUTOMÁTICA DE ESTADOS
+// =====================================
+
+/**
+ * Actualiza turnos programados que ya pasaron de fecha/hora a estado "pendiente"
+ * Solo actualiza turnos en estado "programado"
+ */
+export async function actualizarTurnosPendientes() {
+  const supabase = await createClient();
+  
+  try {
+    const ahora = new Date();
+    const fechaActual = ahora.toISOString().split('T')[0]; // YYYY-MM-DD
+    const horaActual = ahora.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+
+    // Buscar turnos programados que ya pasaron
+    const { data: turnosPasados, error } = await supabase
+      .from('turno')
+      .select('id_turno, fecha, hora')
+      .eq('estado', 'programado')
+      .or(`fecha.lt.${fechaActual},and(fecha.eq.${fechaActual},hora.lt.${horaActual})`);
+
+    if (error) {
+      console.error('❌ Error buscando turnos pasados:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (!turnosPasados || turnosPasados.length === 0) {
+      return { success: true, data: [], message: 'No hay turnos para actualizar' };
+    }
+
+    // Actualizar todos los turnos pasados a "pendiente"
+    const { data: turnosActualizados, error: errorActualizar } = await supabase
+      .from('turno')
+      .update({ estado: 'pendiente' })
+      .in('id_turno', turnosPasados.map(t => t.id_turno))
+      .select();
+
+    if (errorActualizar) {
+      console.error('❌ Error actualizando turnos a pendiente:', errorActualizar);
+      return { success: false, error: errorActualizar.message };
+    }
+
+    console.log(`✅ ${turnosActualizados?.length || 0} turnos actualizados a pendiente`);
+    
+    // Revalidar las rutas de turnos
+    revalidatePath('/turnos');
+    
+    return { 
+      success: true, 
+      data: turnosActualizados,
+      message: `${turnosActualizados?.length || 0} turnos actualizados a pendiente`
+    };
+  } catch (error: any) {
+    console.error('❌ Error inesperado actualizando turnos pendientes:', error);
     return { success: false, error: error.message || 'Error inesperado' };
   }
 }
