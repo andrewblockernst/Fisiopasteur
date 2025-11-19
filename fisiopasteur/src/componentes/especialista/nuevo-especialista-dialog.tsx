@@ -251,7 +251,7 @@ function EspecialistaFormForDialog({
         {/* Teléfono - movido aquí */}
         <div>
           <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
-        Contacto*
+        Contacto
           </label>
           <input
         type="tel"
