@@ -64,7 +64,6 @@ export default function EspecialistasPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        setLoading(true);
         const incluirInactivos = filter !== "activos";
         const [especialistasData, especialidadesData] = await Promise.all([
           getEspecialistas({ incluirInactivos }),
@@ -79,11 +78,8 @@ export default function EspecialistasPage() {
       }
     };
 
-    // ✅ Solo cargar si auth ya está listo
-    if (!authLoading) {
-      loadData();
-    }
-  }, [filter, authLoading]); // ✅ Agregar authLoading como dependencia
+    loadData();
+  }, [filter]); // ✅ Solo depende de filter, igual que pacientes
 
   const handleDialogClose = async () => {
     setShowDialog(false);
