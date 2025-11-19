@@ -39,6 +39,7 @@ export async function obtenerTurno(id: number): Promise<
       `)
       .eq("id_turno", id)
       .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .single();
 
     if (error) {
@@ -77,6 +78,7 @@ export async function obtenerTurnos(filtros?: {
         box:id_box(id_box, numero)
       `)
       .eq("id_organizacion", orgId) // ✅ Filtrar por organización
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -144,6 +146,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
         box:id_box(id_box, numero)
       `)
       .eq("id_organizacion", orgId) // ✅ Filtrar por organización
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 
@@ -459,7 +462,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
   }
 }
 
-// Eliminar un turno
+// Eliminar un turno (soft delete - cambia estado a "eliminado")
 export async function eliminarTurno(id: number) {
   const supabase = await createClient();
   
@@ -471,7 +474,7 @@ export async function eliminarTurno(id: number) {
     // Verificar que el turno pertenece a esta organización antes de eliminar
     const { data: turnoVerificado, error: errorVerificar } = await supabase
       .from("turno")
-      .select("id_turno")
+      .select("id_turno, estado")
       .eq("id_turno", id)
       .eq("id_organizacion", orgId)
       .single();
@@ -480,29 +483,22 @@ export async function eliminarTurno(id: number) {
       return { success: false, error: "Turno no encontrado o no pertenece a esta organización" };
     }
 
-    // Primero eliminar todas las notificaciones asociadas al turno
-    const { error: notificacionesError } = await supabase
-      .from("notificacion")
-      .delete()
-      .eq("id_turno", id)
-      .eq("id_organizacion", orgId); // ✅ También filtrar notificaciones por org
-
-    if (notificacionesError) {
-      console.error("Error al eliminar notificaciones del turno:", notificacionesError);
-      return { success: false, error: `Error eliminando notificaciones: ${notificacionesError.message}` };
-    }
-
-    // Luego eliminar el turno
+    // ✅ SOFT DELETE: Cambiar estado a "eliminado" en lugar de borrar
     const { error: turnoError } = await supabase
       .from("turno")
-      .delete()
+      .update({ 
+        estado: "eliminado",
+        updated_at: new Date().toISOString()
+      })
       .eq("id_turno", id)
-      .eq("id_organizacion", orgId); // ✅ Asegurar que solo elimina de su org
+      .eq("id_organizacion", orgId);
 
     if (turnoError) {
       console.error("Error al eliminar turno:", turnoError);
       return { success: false, error: turnoError.message };
     }
+
+    console.log(`✅ Turno ${id} marcado como eliminado (soft delete)`);
 
     revalidatePath("/turnos");
     revalidatePath("/pilates");
@@ -667,6 +663,7 @@ export async function obtenerAgendaEspecialista(
       .eq("id_especialista", especialista_id!)
       .eq("fecha", fecha)
       .neq("estado", "cancelado")
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .neq("id_especialidad", 4) // Excluir turnos de Pilates
       .order("hora", { ascending: true });
 
@@ -704,7 +701,8 @@ export async function verificarDisponibilidadPilates(
       .eq("fecha", fecha)
       .eq("hora", hora)
       .eq("id_especialidad", 4)
-      .neq("estado", "cancelado");
+      .neq("estado", "cancelado")
+      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
     if (error) {
       console.error("Error verificando disponibilidad Pilates:", error);
@@ -741,7 +739,8 @@ export async function verificarDisponibilidad(
       .eq("fecha", fecha)
       .eq("id_especialista", especialista_id!)
       .eq("hora", hora)
-      .neq("estado", "cancelado");
+      .neq("estado", "cancelado")
+      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
     if (box_id) {
       query = query.eq("id_box", box_id);
@@ -795,6 +794,7 @@ export async function verificarDisponibilidadParaActualizacion(
       .eq("fecha", fecha)
       .eq("id_especialista", especialista_id)
       .neq("estado", "cancelado")
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .neq("id_turno", turno_excluir)
       .eq("hora", hora);
 
@@ -869,6 +869,7 @@ export async function obtenerProximoTurnoPorTelefono(telefono: string) {
       .eq("id_paciente", paciente.id_paciente)
       .gte("fecha", hoy)
       .neq("estado", "cancelado")
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true })
       .limit(1)
@@ -1110,7 +1111,8 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
   try {
     let query = supabase
       .from("turno")
-      .select("estado, created_at, fecha, id_especialista");
+      .select("estado, created_at, fecha, id_especialista")
+      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
     if (fecha_desde) {
       query = query.gte("fecha", fecha_desde);
@@ -1180,6 +1182,7 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
         paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, direccion, fecha_nacimiento)
       `)
       .eq("id_paciente", pacienteId)
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
 

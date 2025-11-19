@@ -405,6 +405,8 @@ export default function FiltrosTurnos({ especialistas, especialidades, boxes, in
         isOpen={openNew} 
         onClose={() => setOpenNew(false)}
         onTurnoCreated={() => window.location.reload()}
+        especialistas={especialistas}
+        pacientes={[]}
       />
     </div>
   );

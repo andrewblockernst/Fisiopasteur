@@ -10,7 +10,7 @@ import EditarTurnoModal from "./editar-turno-modal";
 import type { TurnoWithRelations } from "@/types";
 import { MoreVertical, CheckCircle, XCircle, Edit, Trash, AlertCircle } from "lucide-react";
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ConfirmDialog } from "@/componentes/dialog/confirm-dialog";
+import BaseDialog from "@/componentes/dialog/base-dialog";
 
 export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }) {
 
@@ -94,7 +94,8 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
       });
     }
     
-    // Limpiar estado
+    // Cerrar modal y limpiar estado
+    setConfirmDialogAbierto(false);
     setTurnoParaEliminar(null);
   };
 
@@ -417,18 +418,28 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
     )}
 
     {/* Modal de Confirmación de Eliminación */}
-    <ConfirmDialog
+    <BaseDialog
+      type="error"
+      size="sm"
+      title="Eliminar Turno"
+      message="¿Estás seguro de que deseas eliminar este turno? Esta acción no se puede deshacer."
       isOpen={confirmDialogAbierto}
       onClose={() => {
         setConfirmDialogAbierto(false);
         setTurnoParaEliminar(null);
       }}
-      onConfirm={confirmarEliminacion}
-      title="Eliminar Turno"
-      message="¿Estás seguro de que deseas eliminar este turno? Esta acción no se puede deshacer."
-      confirmText="Eliminar"
-      cancelText="Cancelar"
-      variant="danger"
+      showCloseButton
+      primaryButton={{
+        text: "Eliminar",
+        onClick: confirmarEliminacion,
+      }}
+      secondaryButton={{
+        text: "Cancelar",
+        onClick: () => {
+          setConfirmDialogAbierto(false);
+          setTurnoParaEliminar(null);
+        },
+      }}
     />
   </>
   );
