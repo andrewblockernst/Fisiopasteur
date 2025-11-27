@@ -8,47 +8,50 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  // ✅ MEJORADO: Rutas que NUNCA deben ser interceptadas
+  // ✅ Rutas que NUNCA deben ser interceptadas
   const staticPaths = [
     '/_next/static',
     '/_next/image', 
     '/favicon.ico',
     '/favicon.svg',
     '/_vercel',
-    '/api', // ✅ Permitir todas las API routes
+    '/api',
   ];
 
-  // ✅ Verificar rutas estáticas/API PRIMERO
   if (staticPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     return response;
   }
 
-  // ✅ Rutas públicas (landing page)
+  // ✅ Rutas públicas (landing + auth)
   const publicPaths = [
+    '/landing',      
     '/login',
     '/not-found',
     '/centro-de-ayuda',
     '/recuperarContra',
     '/restablecerContra',
     '/seleccionar-organizacion',
-    '/', // Landing page
     '/success',
     '/failure',
     '/pending',
   ];
 
-  const isPublicPath = publicPaths.some(path => 
-    request.nextUrl.pathname.startsWith(path) || request.nextUrl.pathname === path
-  );
+  // ✅ Verificar si la ruta es pública
+  const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
 
-  // ✅ Si es ruta pública, permitir acceso
+  // ✅ Si es ruta pública, permitir acceso SIN autenticación
   if (isPublicPath) {
     return response;
   }
 
+  // ✅ Si es la raíz /, redirigir a /landing
+  if (request.nextUrl.pathname === '/') {
+    return NextResponse.redirect(new URL('/landing', request.url));
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!, // ✅ Usar las públicas
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, // ✅ Usar las públicas  
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
@@ -96,8 +99,8 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // ✅ Si no hay usuario autenticado, redirigir a login
-  if (!user && request.nextUrl.pathname !== '/login') {
+  // ✅ Si no hay usuario autenticado, redirigir a LOGIN
+  if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -106,12 +109,9 @@ export async function middleware(request: NextRequest) {
   // ========================================
   
   if (user) {
-    // Verificar si el usuario tiene una organización seleccionada
     const orgCookie = request.cookies.get('org_actual')?.value;
 
-    // Si NO tiene organización seleccionada, verificar cuántas tiene
     if (!orgCookie) {
-      // Consultar organizaciones del usuario
       const { data: userOrgs } = await supabase
         .from('usuario_organizacion')
         .select('id_organizacion, organizacion:id_organizacion(nombre, activo)')
@@ -119,28 +119,23 @@ export async function middleware(request: NextRequest) {
         .eq('activo', true);
 
       if (userOrgs && userOrgs.length > 0) {
-        // Si tiene una sola organización, setearla automáticamente
         if (userOrgs.length === 1) {
           response.cookies.set('org_actual', userOrgs[0].id_organizacion, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 30, // 30 días
+            maxAge: 60 * 60 * 24 * 30,
             path: '/',
           });
         } else {
-          // Si tiene múltiples organizaciones, redirigir al selector
           if (request.nextUrl.pathname !== '/seleccionar-organizacion') {
             return NextResponse.redirect(new URL('/seleccionar-organizacion', request.url));
           }
         }
       } else {
-        // Usuario no tiene organizaciones asignadas - esto es un problema
         console.error(`Usuario ${user.id} no tiene organizaciones asignadas`);
-        // Podríamos redirigir a una página de "sin acceso" o logout
       }
     } else {
-      // Verificar que la org_actual sigue siendo válida para este usuario
       const { data: orgAccess } = await supabase
         .from('usuario_organizacion')
         .select('activo')
@@ -149,10 +144,8 @@ export async function middleware(request: NextRequest) {
         .eq('activo', true)
         .single();
 
-      // Si ya no tiene acceso a esa organización, limpiar cookie y re-evaluar
       if (!orgAccess) {
         response.cookies.delete('org_actual');
-        // En el próximo request se evaluará de nuevo
       }
     }
   }
@@ -162,11 +155,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * ✅ MEJORADO: Excluir más específicamente archivos estáticos
-     */
     '/((?!_next/static|_next/image|_next/webpack-hmr|favicon\\.ico|favicon\\.svg|api|.*\\.(?:css|js|png|jpg|jpeg|gif|webp|svg|woff|woff2|ttf|eot)$).*)',
   ],
 }
-
-// hola como andan.
