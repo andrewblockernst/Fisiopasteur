@@ -7,6 +7,7 @@ import { OcupacionBoxes } from '@/componentes/dashboard/ocupacion-boxes';
 import {
   obtenerProximosTurnos,
   obtenerOcupacionBoxes,
+  obtenerNombreOrganizacion,
   type ProximoTurno,
   type OcupacionBox,
 } from '@/lib/actions/dashboard.action';
@@ -14,19 +15,22 @@ import {
 export default function Inicio() {
   const [proximosTurnos, setProximosTurnos] = useState<ProximoTurno[]>([]);
   const [ocupacionBoxes, setOcupacionBoxes] = useState<OcupacionBox[]>([]);
+  const [nombreOrganizacion, setNombreOrganizacion] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const cargarDatos = async () => {
       setLoading(true);
       try {
-        const [turnosData, boxesData] = await Promise.all([
+        const [turnosData, boxesData, nombreOrganizacionData] = await Promise.all([
           obtenerProximosTurnos(),
           obtenerOcupacionBoxes(),
+          obtenerNombreOrganizacion(),
         ]);
 
         setProximosTurnos(turnosData);
         setOcupacionBoxes(boxesData);
+        setNombreOrganizacion(nombreOrganizacionData);
       } catch (error) {
         console.error('Error cargando datos del dashboard:', error);
       } finally {
@@ -47,7 +51,7 @@ export default function Inicio() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Bienvenido a Fisiopasteur</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Bienvenido a {nombreOrganizacion}</h1>
           <p className="text-gray-600 mt-2">Panel de control para especialistas y administradores</p>
         </div>
 
@@ -62,10 +66,6 @@ export default function Inicio() {
           <OcupacionBoxes boxes={ocupacionBoxes} isLoading={loading} />
         </div>
 
-        {/* Nota de actualización */}
-        <div className="text-center text-sm text-gray-500 mt-8">
-          ⚡ Los datos se actualizan automáticamente cada 5 minutos
-        </div>
       </div>
     </div>
   );
