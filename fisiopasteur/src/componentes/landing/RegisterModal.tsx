@@ -48,8 +48,6 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
     setLoading(true);
 
     try {
-      // ✅ Simplemente pasar los datos al componente padre
-      // No registramos en DB todavía, solo validamos
       onRegisterComplete({
         nombre: formData.nombre,
         apellido: formData.apellido,
@@ -104,7 +102,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
               required
               value={formData.nombre}
               onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold placeholder:text-gray-400 placeholder:font-normal"
               placeholder="Juan"
             />
           </div>
@@ -118,7 +116,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
               required
               value={formData.apellido}
               onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold placeholder:text-gray-400 placeholder:font-normal"
               placeholder="Pérez"
             />
           </div>
@@ -132,7 +130,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
               required
               value={formData.nombreOrganizacion}
               onChange={(e) => setFormData({ ...formData, nombreOrganizacion: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold placeholder:text-gray-400 placeholder:font-normal"
               placeholder="Ej: Clínica Salud, Consultorio Norte"
             />
           </div>
@@ -146,7 +144,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
               required
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold placeholder:text-gray-400 placeholder:font-normal"
               placeholder="juan@ejemplo.com"
             />
           </div>
@@ -160,7 +158,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
               required
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold placeholder:text-gray-400 placeholder:font-normal"
               placeholder="Mínimo 6 caracteres"
             />
           </div>
@@ -174,7 +172,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
               required
               value={formData.confirmPassword}
               onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-bold placeholder:text-gray-400 placeholder:font-normal"
               placeholder="Repetir contraseña"
             />
           </div>
