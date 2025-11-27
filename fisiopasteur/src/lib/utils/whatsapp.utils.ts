@@ -126,3 +126,5 @@ export function calcularTiemposRecordatorioLegacy(fecha: string, hora: string): 
     recordatorio2h: recordatorios['2h']
   };
 }
+
+//A VER QUE ONDA
