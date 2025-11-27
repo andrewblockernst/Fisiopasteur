@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function SuccessPage() {
+export default function SuccessContent() {
   const searchParams = useSearchParams();
   const [countdown, setCountdown] = useState(5);
   const TURNOS_APP_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
@@ -24,7 +24,7 @@ export default function SuccessPage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [searchParams]);
+  }, [searchParams, TURNOS_APP_URL]);
 
   return (
     <div className="min-h-screen bg-green-50 flex items-center justify-center">
