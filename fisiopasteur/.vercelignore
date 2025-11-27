@@ -1,6 +1,5 @@
 # Ignorar node_modules y archivos de cache
 node_modules
-.next
 .cache
 .turbo
 
@@ -14,6 +13,7 @@ test-*.js
 *.test.ts
 *.test.tsx
 
-# Ignorar documentación
+# Ignorar documentación interna
+docs/
 *.md
 !README.md
