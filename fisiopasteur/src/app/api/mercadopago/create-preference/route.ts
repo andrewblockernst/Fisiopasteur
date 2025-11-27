@@ -35,9 +35,9 @@ export async function POST(request: NextRequest) {
         },
       ],
       back_urls: {
-        success: `${process.env.NEXT_PUBLIC_SITE_URL}/success`,
-        failure: `${process.env.NEXT_PUBLIC_SITE_URL}/failure`,
-        pending: `${process.env.NEXT_PUBLIC_SITE_URL}/pending`,
+        success: `${process.env.NEXT_PUBLIC_SITE_URL}/landing/success`,
+        failure: `${process.env.NEXT_PUBLIC_SITE_URL}/landing/failure`,
+        pending: `${process.env.NEXT_PUBLIC_SITE_URL}/landing/pending`,
       },
       auto_return: "approved" as const,
       notification_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/mercadopago/webhook`,
