@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
+import { getAuthContext } from "@/lib/utils/auth-context";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type Box = Database["public"]["Tables"]["box"]["Row"];
@@ -47,11 +48,34 @@ export interface OcupacionBox {
   maxTurnosEstimados: number;
 }
 
+export async function obtenerNombreOrganizacion(): Promise<string> {
+  const supabase = await createClient();
+  const { orgId } = await getAuthContext();
+
+  try {
+    const { data, error } = await supabase
+      .from("organizacion")
+      .select("nombre")
+      .eq("id_organizacion", orgId)
+      .single();
+
+    if (error) {
+      throw new Error("Error al obtener nombre de la organización");
+    }
+
+    return data?.nombre || "Fisiopasteur";
+  } catch (error) {
+    console.error("❌ Error en obtenerNombreOrganizacion:", error);
+    return "Fisiopasteur";
+  }
+}
+
 // ✅ Obtener KPIs por periodo con historial
 export async function obtenerKPIsConHistorial(
   periodo: PeriodoFiltro
 ): Promise<{ datos: KPIHistorico[]; total: KPIsDashboard }> {
   const supabase = await createClient();
+  const { orgId } = await getAuthContext();
 
   try {
     const hoy = new Date();
@@ -82,15 +106,16 @@ export async function obtenerKPIsConHistorial(
     let selectFields = "fecha, estado, id_turno, precio"; // tipo_plan, id_especialista, id_especialidad, 
     if (periodo === "hoy") {
       selectFields = "fecha, hora, estado, id_turno, precio"; // tipo_plan, id_especialista, id_especialidad,
-    }
-
+    }    
+  
     // Obtener turnos en el rango (con precio)
     const { data: turnos, error: errorTurnos } = await supabase
       .from("turno")
       .select(selectFields)
       .gte("fecha", fechaInicioStr)
       .lte("fecha", fechaFinStr)
-      .neq("id_especialidad", 4); // EXCLUYE PILATES
+      .neq("id_especialidad", 4) // EXCLUYE PILATES
+      .eq("id_organizacion", orgId);
 
     if (errorTurnos) {
       throw new Error("Error al obtener datos históricos");
@@ -209,125 +234,10 @@ export async function obtenerKPIsConHistorial(
   }
 }
 
-// async function asignarIngresos(dato: KPIHistorico, turno: any, supabase: any) {
-  
-
-//   try {
-
-//     console.log(turno)
-
-//     if (turno.tipo_plan && 
-//     turno.id_especialidad && 
-//     turno.id_especialista && 
-//     turno.estado !== "cancelado") {
-
-//       console.log("Asignando ingresos para turno:", turno.id_turno);
-    
-//     const { data: precioData, error: errorPrecio } = await supabase
-//       .from("usuario_especialidad")
-//       .select("precio_particular, precio_obra_social")
-//       .eq("id_usuario", turno.id_especialista)
-//       .eq("id_especialidad", turno.id_especialidad)
-//       .single();
-
-//     if (errorPrecio) {
-//       console.warn("Error al obtener precios:", errorPrecio);
-//       return;
-//     }
-
-//     let precio = 0
-//     if (turno.tipo_plan === "particular" && precioData?.precio_particular) {
-//       precio = precioData.precio_particular;
-//     } else if (turno.tipo_plan === "obra_social" && precioData?.precio_obra_social) {
-//       precio = precioData.precio_obra_social;
-//     }
-
-//     dato.Ingresos += precio;
-
-//     console.log(
-//       `✅ Ingreso asignado: $${precio} para turno ${turno.id_turno} (${turno.tipo_plan})`
-//     );
-//   }
-//   } catch (error) {
-//     console.error("Error al asignar ingresos:", error);
-//   }
-// }
-
-// ✅ Obtener KPIs principales del dashboard
-// export async function obtenerKPIsDashboard(): Promise<KPIsDashboard> {
-//   const supabase = await createClient();
-
-//   try {
-//     const hoy = new Date().toISOString().split("T")[0];
-//     const inicioSemana = new Date();
-//     inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
-//     const finSemana = new Date();
-
-//     const inicioMes = new Date();
-//     inicioMes.setDate(1);
-
-//     // 1️⃣ Turnos de hoy
-//     const { data: programadosData, error: errorProgramados } = await supabase
-//       .from("turno")
-//       .select("id_turno", { count: "exact" })
-//       .eq("fecha", hoy);
-
-//     // 2️⃣ Turnos atendidos esta semana
-//     const { data: atendidosData, error: errorAtendidos } = await supabase
-//       .from("turno")
-//       .select("id_turno", { count: "exact" })
-//       .gte("fecha", inicioSemana.toISOString().split("T")[0])
-//       .lte("fecha", finSemana.toISOString().split("T")[0])
-//       .eq("estado", "atendido");
-
-//     // 3️⃣ Cancelaciones del mes
-//     const { data: cancelacionesData, error: errorCancelaciones } = await supabase
-//       .from("turno")
-//       .select("id_turno", { count: "exact" })
-//       .gte("fecha", inicioMes.toISOString().split("T")[0])
-//       .eq("estado", "cancelado");
-
-//     // 4️⃣ Ingresos del mes (suma de precios de turnos atendidos)
-//     const { data: ingresosData, error: errorIngresos } = await supabase
-//       .from("turno")
-//       .select("precio")
-//       .gte("fecha", inicioMes.toISOString().split("T")[0])
-//       .in("estado", ["atendido", "programado"])
-//       .not("precio", "is", null);
-
-//     if (errorProgramados || errorAtendidos || errorCancelaciones || errorIngresos) {
-//       console.error("Error al obtener KPIs:", {
-//         errorProgramados,
-//         errorAtendidos,
-//         errorCancelaciones,
-//         errorIngresos,
-//       });
-//       throw new Error("Error al obtener KPIs");
-//     }
-
-//     // Calcular ingresos totales
-//     const ingresosTotal = (ingresosData || []).reduce((sum: number, item: any) => sum + (item.precio || 0), 0);
-
-//     return {
-//       Programados: programadosData?.length || 0,
-//       Atendidos: atendidosData?.length || 0,
-//       Cancelaciones: cancelacionesData?.length || 0,
-//       Ingresos: ingresosTotal,
-//     };
-//   } catch (error) {
-//     console.error("❌ Error en obtenerKPIsDashboard:", error);
-//     return {
-//       Programados: 0,
-//       Atendidos: 0,
-//       Cancelaciones: 0,
-//       Ingresos: 0,
-//     };
-//   }
-// }
-
 // ✅ Obtener próximos turnos del día
 export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
   const supabase = await createClient();
+  const { orgId } = await getAuthContext();
 
   try {
     const hoy = new Date().toISOString().split("T")[0];
@@ -348,7 +258,8 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
       .eq("estado", "programado")
       .gt("hora", new Date().toLocaleTimeString("en-US", { hour12: false }))
     //   .neq("id_especialidad", 4) // Excluir Pilates
-      .order("hora", { ascending: true });
+      .order("hora", { ascending: true })
+      .eq("id_organizacion", orgId);
 
     if (error) {
       console.error("Error al obtener próximos turnos:", error);
@@ -376,6 +287,7 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
 // ✅ Obtener ocupación de boxes
 export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
   const supabase = await createClient();
+  const { orgId } = await getAuthContext();
 
   try {
     const hoy = new Date().toISOString().split("T")[0];
@@ -383,7 +295,8 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
     // 1️⃣ Obtener todos los boxes
     const { data: boxes, error: errorBoxes } = await supabase
       .from("box")
-      .select("id_box, numero");
+      .select("id_box, numero")
+      .eq("id_organizacion", orgId);
 
     if (errorBoxes) throw errorBoxes;
 
@@ -393,7 +306,8 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
       .select("id_box, id_turno")
       .eq("fecha", hoy)
     //   .neq("id_especialidad", 4)
-      .in("estado", ["programado", "atendido"]);
+      .in("estado", ["programado", "atendido"])
+      .eq("id_organizacion", orgId);
 
     if (errorTurnos) throw errorTurnos;
 
