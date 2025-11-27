@@ -15,26 +15,26 @@ export async function middleware(request: NextRequest) {
     '/favicon.ico',
     '/favicon.svg',
     '/_vercel',
-    '/api',
+    '/api', // ✅ Permitir todas las API routes
   ];
 
-  // ✅ Verificar archivos estáticos PRIMERO
-  const isStaticPath = staticPaths.some(path => 
-    request.nextUrl.pathname.startsWith(path)
-  );
-
-  if (isStaticPath) {
-    return response; // Dejar pasar sin verificar auth
+  // ✅ Verificar rutas estáticas/API PRIMERO
+  if (staticPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
+    return response;
   }
 
-  // ✅ Rutas públicas que no requieren autenticación (incluye selector de org)
+  // ✅ Rutas públicas (landing page)
   const publicPaths = [
     '/login',
     '/not-found',
     '/centro-de-ayuda',
     '/recuperarContra',
     '/restablecerContra',
-    '/seleccionar-organizacion', // ✅ Nuevo: para usuarios multi-org
+    '/seleccionar-organizacion',
+    '/', // Landing page
+    '/success',
+    '/failure',
+    '/pending',
   ];
 
   const isPublicPath = publicPaths.some(path => 
@@ -165,7 +165,7 @@ export const config = {
     /*
      * ✅ MEJORADO: Excluir más específicamente archivos estáticos
      */
-    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon\\.ico|favicon\\.svg|.*\\.(?:css|js|png|jpg|jpeg|gif|webp|svg|woff|woff2|ttf|eot)$).*)',
+    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon\\.ico|favicon\\.svg|api|.*\\.(?:css|js|png|jpg|jpeg|gif|webp|svg|woff|woff2|ttf|eot)$).*)',
   ],
 }
 
