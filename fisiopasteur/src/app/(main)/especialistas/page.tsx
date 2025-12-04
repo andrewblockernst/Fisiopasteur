@@ -6,9 +6,10 @@ import Button from "@/componentes/boton";
 import { EspecialistasTable } from "@/componentes/especialista/especialista-listado";
 import { NuevoEspecialistaDialog } from "@/componentes/especialista/nuevo-especialista-dialog";
 import { GestionEspecialidadesDialog } from "@/componentes/especialista/gestion-especialidades-dialog";
+import { GestionBoxesDialog } from "@/componentes/especialista/gestion-boxes-dialog";
 import { useState, useEffect } from "react";
 import type { Tables } from "@/types/database.types";
-import { ArrowLeft, Plus, Search, Filter, GraduationCap } from "lucide-react";
+import { ArrowLeft, Plus, Search, Filter, GraduationCap, Box } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/usePerfil";
 
@@ -55,6 +56,7 @@ export default function EspecialistasPage() {
   const { user, loading: authLoading } = useAuth();
   const [showDialog, setShowDialog] = useState(false);
   const [showEspecialidadesDialog, setShowEspecialidadesDialog] = useState(false);
+  const [showBoxesDialog, setShowBoxesDialog] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<Filter>("activos");
@@ -363,6 +365,13 @@ export default function EspecialistasPage() {
               <div className="flex items-center gap-2">
                 <Button 
                   variant="secondary"
+                  onClick={() => setShowBoxesDialog(true)}
+                  className="whitespace-nowrap px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-2"
+                >
+                  Boxes
+                </Button>
+                <Button 
+                  variant="secondary"
                   onClick={() => setShowEspecialidadesDialog(true)}
                   className="whitespace-nowrap px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-2"
                 >
@@ -428,6 +437,15 @@ export default function EspecialistasPage() {
         onClose={handleEspecialidadesDialogClose}
         especialidades={especialidades}
         onEspecialidadesUpdated={handleEspecialidadesUpdated}
+      />
+
+      <GestionBoxesDialog
+        isOpen={showBoxesDialog}
+        onClose={() => setShowBoxesDialog(false)}
+        onBoxesUpdated={() => {
+          // Podrías recargar datos si es necesario
+          console.log('Boxes actualizados');
+        }}
       />
     </div>
   );
