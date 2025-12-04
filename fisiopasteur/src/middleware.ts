@@ -44,9 +44,9 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // ✅ Si es la raíz /, redirigir a /landing
+  // ✅ Si es la raíz /, redirigir a /login
   if (request.nextUrl.pathname === '/') {
-    return NextResponse.redirect(new URL('/landing', request.url));
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   const supabase = createServerClient(
