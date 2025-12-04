@@ -257,7 +257,11 @@ export async function createPaciente(formData: FormData) {
       throw new Error("Error al crear paciente: " + error.message);
     }
 
-    revalidatePath("/paciente");
+    // ✅ Revalidación no bloqueante para evitar problemas de loading
+    Promise.resolve().then(() => {
+      revalidatePath("/paciente");
+    }).catch(err => console.error('Error revalidating path:', err));
+    
     return data;
   } catch (error: any) {
     console.error("Error in createPaciente:", error);
@@ -338,7 +342,11 @@ export async function updatePaciente(id: number, formData: FormData) {
       throw new Error(error.message || "Error al actualizar paciente");
     }
 
-    revalidatePath("/pacients");
+    // ✅ Revalidación no bloqueante
+    Promise.resolve().then(() => {
+      revalidatePath("/pacients");
+    }).catch(err => console.error('Error revalidating path:', err));
+    
     return data;
   } catch (error: any) {
     console.error("Error in updatePaciente:", error);
