@@ -180,7 +180,16 @@ export function NuevoTurnoModal({
     }
     
     const cargarDatos = async () => {
-      setLoading(true);
+      // ✅ Solo mostrar loading si realmente no hay NINGÚN dato crítico
+      const noHayDatosCriticos = 
+        especialidades.length === 0 || 
+        boxes.length === 0 ||
+        (especialistasProp.length === 0 && especialistas.length === 0);
+      
+      if (noHayDatosCriticos) {
+        setLoading(true);
+      }
+      
       try {
         const promises = [];
         
@@ -732,11 +741,15 @@ useEffect(() => {
     setShowNuevoPacienteDialog(false);
   };
 
-  const handlePatientCreated = () => {
-    if (pacientesProp.length === 0) {
-      obtenerPacientes().then(res => {
-        if (res.success) setPacientes(res.data || []);
-      });
+  const handlePatientCreated = async () => {
+    // ✅ Recargar la lista de pacientes después de crear uno nuevo
+    try {
+      const res = await obtenerPacientes();
+      if (res.success && res.data) {
+        setPacientes(res.data);
+      }
+    } catch (error) {
+      console.error('Error recargando pacientes:', error);
     }
   };
 
