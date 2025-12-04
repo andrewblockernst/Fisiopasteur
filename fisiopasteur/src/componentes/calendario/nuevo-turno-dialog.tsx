@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerAgendaEspecialista, obtenerTurnos, verificarDisponibilidad } from "@/lib/actions/turno.action";
@@ -15,6 +15,14 @@ import { UserPlus2, CalendarDays, Info } from "lucide-react";
 import type { TipoRecordatorio } from "@/lib/utils/whatsapp.utils";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
+
+// ✅ Cache simple para evitar llamadas repetidas
+const dataCache = {
+  especialidades: null as any[] | null,
+  boxes: null as any[] | null,
+  lastFetch: 0,
+  TTL: 5 * 60 * 1000, // 5 minutos
+};
 
 interface NuevoTurnoModalProps {
   isOpen: boolean;
@@ -92,7 +100,6 @@ export function NuevoTurnoModal({
 
   // Estados para el autocomplete de pacientes
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
-  const [pacientesFiltrados, setPacientesFiltrados] = useState<any[]>([]);
   const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null);
   const inputPacienteRef = useRef<HTMLInputElement>(null);
@@ -167,19 +174,22 @@ export function NuevoTurnoModal({
   useEffect(() => {
     if (!isOpen) return;
     
-    // ✅ Solo cargar si NO tenemos los datos básicos todavía
-    const necesitaCargar = 
-      especialidades.length === 0 || 
-      boxes.length === 0 ||
-      (especialistasProp.length === 0 && especialistas.length === 0) ||
-      (pacientesProp.length === 0 && pacientes.length === 0);
-    
-    if (!necesitaCargar) {
-      console.log('✅ Datos ya disponibles, no es necesario cargar');
-      return;
-    }
-    
     const cargarDatos = async () => {
+      const ahora = Date.now();
+      const cacheValido = ahora - dataCache.lastFetch < dataCache.TTL;
+      
+      // ✅ Solo cargar si NO tenemos los datos básicos todavía
+      const necesitaCargar = 
+        (!cacheValido && especialidades.length === 0) || 
+        (!cacheValido && boxes.length === 0) ||
+        (especialistasProp.length === 0 && especialistas.length === 0) ||
+        (pacientesProp.length === 0 && pacientes.length === 0);
+    
+      if (!necesitaCargar) {
+        console.log('✅ Datos ya disponibles o cache válido');
+        return;
+      }
+      
       // ✅ Solo mostrar loading si realmente no hay NINGÚN dato crítico
       const noHayDatosCriticos = 
         especialidades.length === 0 || 
@@ -207,26 +217,39 @@ export function NuevoTurnoModal({
           }));
         }
         
-        // Solo cargar especialidades si no las tenemos
-        if (especialidades.length === 0) {
+        // Solo cargar especialidades si no las tenemos o cache expirado
+        if (!cacheValido || especialidades.length === 0) {
           promises.push(
             obtenerEspecialidades().then(res => {
-              if (res.success) setEspecialidades(res.data || []);
+              if (res.success) {
+                const data = res.data || [];
+                setEspecialidades(data);
+                dataCache.especialidades = data;
+              }
             })
           );
+        } else if (dataCache.especialidades) {
+          setEspecialidades(dataCache.especialidades);
         }
         
-        // Solo cargar boxes si no los tenemos
-        if (boxes.length === 0) {
+        // Solo cargar boxes si no los tenemos o cache expirado
+        if (!cacheValido || boxes.length === 0) {
           promises.push(
             obtenerBoxes().then(res => {
-              if (res.success) setBoxes(res.data || []);
+              if (res.success) {
+                const data = res.data || [];
+                setBoxes(data);
+                dataCache.boxes = data;
+              }
             })
           );
+        } else if (dataCache.boxes) {
+          setBoxes(dataCache.boxes);
         }
         
         if (promises.length > 0) {
           await Promise.all(promises);
+          dataCache.lastFetch = ahora;
         }
       } catch (error) {
         console.error('Error cargando datos:', error);
@@ -238,24 +261,22 @@ export function NuevoTurnoModal({
     cargarDatos();
   }, [isOpen]);
 
-  // Filtrar pacientes según búsqueda
-  useEffect(() => {
+  // ✅ Optimizar búsqueda de pacientes con useMemo (sin useEffect innecesario)
+  const pacientesFiltrados = useMemo(() => {
     if (!busquedaPaciente.trim()) {
-      setPacientesFiltrados([]);
-      return;
+      return [];
     }
 
-    const filtrados = pacientes.filter(paciente => {
+    const busqueda = busquedaPaciente.toLowerCase();
+    return pacientes.filter(paciente => {
       const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
-      const busqueda = busquedaPaciente.toLowerCase();
       
       return nombreCompleto.includes(busqueda) ||
              paciente.nombre.toLowerCase().includes(busqueda) ||
              paciente.apellido.toLowerCase().includes(busqueda) ||
-             paciente.dni?.toString().includes(busqueda);
-    }).slice(0, 10);
-
-    setPacientesFiltrados(filtrados);
+             paciente.dni?.toString().includes(busqueda) ||
+             paciente.telefono?.toString().includes(busqueda);
+    }).slice(0, 10); // Limitar a 10 resultados para performance
   }, [busquedaPaciente, pacientes]);
 
   // Manejar clicks fuera del autocomplete
@@ -371,9 +392,10 @@ useEffect(() => {
     }
   }, [formData.id_especialista, especialistas, formData.id_especialidad]);
 
-  // Verificar horarios ocupados
+  // Verificar horarios ocupados con debounce
   useEffect(() => {
-    const verificarHorariosOcupados = async () => {
+    // ✅ Debounce para evitar llamadas excesivas
+    const timeoutId = setTimeout(async () => {
       if (!formData.id_especialista || !formData.fecha) {
         setHorasOcupadas([]);
         return;
@@ -410,9 +432,9 @@ useEffect(() => {
       } finally {
         setVerificandoDisponibilidad(false);
       }
-    };
+    }, 300); // Esperar 300ms antes de ejecutar
 
-    verificarHorariosOcupados();
+    return () => clearTimeout(timeoutId);
   }, [formData.id_especialista, formData.fecha]);
 
   // ✅ Cargar horarios disponibles por día
@@ -712,15 +734,15 @@ useEffect(() => {
   };
 
   // Manejar selección de paciente
-  const seleccionarPaciente = (paciente: any) => {
+  const seleccionarPaciente = useCallback((paciente: any) => {
     setPacienteSeleccionado(paciente);
     setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
     setFormData(prev => ({ ...prev, id_paciente: String(paciente.id_paciente) }));
     setMostrarListaPacientes(false);
-  };
+  }, []);
 
   // Manejar cambio en input de búsqueda
-  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBusquedaPacienteChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = e.target.value;
     setBusquedaPaciente(valor);
     
@@ -730,18 +752,14 @@ useEffect(() => {
       setMostrarListaPacientes(false);
     } else {
       setMostrarListaPacientes(true);
-      if (pacienteSeleccionado && !`${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`.toLowerCase().includes(valor.toLowerCase())) {
-        setPacienteSeleccionado(null);
-        setFormData(prev => ({ ...prev, id_paciente: '' }));
-      }
     }
-  };
+  }, []);
 
-  const handleNuevoPacienteClose = () => {
+  const handleNuevoPacienteClose = useCallback(() => {
     setShowNuevoPacienteDialog(false);
-  };
+  }, []);
 
-  const handlePatientCreated = async () => {
+  const handlePatientCreated = useCallback(async () => {
     // ✅ Recargar la lista de pacientes después de crear uno nuevo
     try {
       const res = await obtenerPacientes();
@@ -751,7 +769,7 @@ useEffect(() => {
     } catch (error) {
       console.error('Error recargando pacientes:', error);
     }
-  };
+  }, []);
 
   const handleSubmit = async () => {
   if (esHoraPasada) {
@@ -1065,7 +1083,7 @@ useEffect(() => {
 };
 
   // ✅ CERRAR FORZADO - Resetea todo el estado inmediatamente
-  const handleForceClose = () => {
+  const handleForceClose = useCallback(() => {
     // Cancelar todos los estados de carga
     setIsSubmitting(false);
     setLoading(false);
@@ -1099,7 +1117,7 @@ useEffect(() => {
     
     // Cerrar el modal
     onClose();
-  };
+  }, [onClose]);
 
   // Mostrar loading
   if (loading || authLoading) {
