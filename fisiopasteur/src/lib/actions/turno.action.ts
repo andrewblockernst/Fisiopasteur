@@ -296,63 +296,77 @@ export async function crearTurno(
 
     // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
     if (enviarNotificacion) {
-      try {
-        const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
-        const { 
-          registrarNotificacionConfirmacion, 
-          marcarNotificacionEnviada,
-          marcarNotificacionFallida
-        } = await import("@/lib/services/notificacion.service");
+      // ⚡ Ejecutar notificaciones en segundo plano (no blocking)
+      // Esto evita que un error o timeout en WhatsApp bloquee la creación del turno
+      Promise.resolve().then(async () => {
+        try {
+          const { registrarNotificacionConfirmacion } = await import("@/lib/services/notificacion.service");
 
-        if (turnoCreado.paciente?.telefono) {
-          const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
-          
-          // ✅ Registrar confirmación para que el cron la procese
-          // Esto evita problemas de rate limit al crear múltiples turnos seguidos
-          const notifConfirmacion = await registrarNotificacionConfirmacion(
-            turnoCreado.id_turno,
-            turnoCreado.paciente.telefono,
-            mensajeConfirmacion
-          );
+          if (turnoCreado.paciente?.telefono) {
+            const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
+            
+            // ✅ Registrar confirmación para que el cron la procese
+            // Timeout de 3 segundos para evitar bloqueos
+            await Promise.race([
+              registrarNotificacionConfirmacion(
+                turnoCreado.id_turno,
+                turnoCreado.paciente.telefono,
+                mensajeConfirmacion
+              ),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout registrando confirmación')), 3000)
+              )
+            ]);
 
-          if (notifConfirmacion.success && (notifConfirmacion as any).data) {
-            console.log(`📝 Confirmación registrada para procesamiento por cron: notificación ${(notifConfirmacion as any).data.id_notificacion}`);
-            // ⏰ El cron procesará esta confirmación en los próximos 2 minutos
-            // Esto respeta el rate limit de WaSender (1 mensaje cada 5 segundos)
+            // Programar recordatorios
+            const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+            const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
+            
+            // ✅ Por defecto: 1 día antes, 2 horas antes Y 1 hora antes
+            const tiposRecordatorio = recordatorios || ['1d', '2h', '1h'];
+            const tiemposRecordatorio = calcularTiemposRecordatorio(turnoCreado.fecha, turnoCreado.hora, tiposRecordatorio);
+            
+            const recordatoriosValidos = Object.entries(tiemposRecordatorio)
+              .filter(([_, fecha]) => fecha !== null)
+              .reduce((acc, [tipo, fecha]) => {
+                if (fecha) acc[tipo] = fecha;
+                return acc;
+              }, {} as Record<string, Date>);
+            
+            if (Object.keys(recordatoriosValidos).length > 0) {
+              const mensajeRecordatorio = `Recordatorio: Tu turno es el ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
+              // Timeout de 3 segundos
+              await Promise.race([
+                registrarNotificacionesRecordatorioFlexible(
+                  turnoCreado.id_turno,
+                  turnoCreado.paciente.telefono,
+                  mensajeRecordatorio,
+                  recordatoriosValidos
+                ),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Timeout registrando recordatorios')), 3000)
+                )
+              ]);
+            }
           }
-
-          // Programar recordatorios
-          const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
-          const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
-          
-          // ✅ Por defecto: 1 día antes, 2 horas antes Y 1 hora antes
-          const tiposRecordatorio = recordatorios || ['1d', '2h', '1h'];
-          const tiemposRecordatorio = calcularTiemposRecordatorio(turnoCreado.fecha, turnoCreado.hora, tiposRecordatorio);
-          
-          const recordatoriosValidos = Object.entries(tiemposRecordatorio)
-            .filter(([_, fecha]) => fecha !== null)
-            .reduce((acc, [tipo, fecha]) => {
-              if (fecha) acc[tipo] = fecha;
-              return acc;
-            }, {} as Record<string, Date>);
-          
-          if (Object.keys(recordatoriosValidos).length > 0) {
-            const mensajeRecordatorio = `Recordatorio: Tu turno es el ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
-            await registrarNotificacionesRecordatorioFlexible(
-              turnoCreado.id_turno,
-              turnoCreado.paciente.telefono,
-              mensajeRecordatorio,
-              recordatoriosValidos
-            );
-          }
+        } catch (botError) {
+          // Log del error pero no afecta el resultado de la creación
+          console.error("Error en notificaciones WhatsApp (turno ya creado):", botError);
         }
-      } catch (botError) {
-        console.error("Error en integración WhatsApp (turno creado exitosamente):", botError);
-      }
+      }).catch(err => {
+        // Catch para evitar unhandled promise rejection
+        console.error("Error crítico en proceso de notificaciones:", err);
+      });
     }
 
-    revalidatePath("/turnos");
-    revalidatePath("/pilates");
+    // ✅ Revalidar rutas pero sin esperar (non-blocking)
+    Promise.resolve().then(async () => {
+      const { revalidatePath } = await import("next/cache");
+      revalidatePath("/turnos", "page");
+      revalidatePath("/pilates", "page");
+      revalidatePath("/calendario", "page");
+    }).catch(() => {/* ignore revalidation errors */});
+
     return { success: true, data: turnoCreado };
   } catch (error) {
     console.error("Error inesperado:", error);
