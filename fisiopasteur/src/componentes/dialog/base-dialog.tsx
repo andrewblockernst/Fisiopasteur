@@ -26,6 +26,7 @@ interface BaseDialogProps {
   };
   onClose?: () => void;
   showCloseButton?: boolean;
+  closeButtonAlert?: string; // ✅ Texto de alerta junto al botón X
   customIcon?: React.ReactNode;
   customColor?: string;
   isOpen?: boolean;
@@ -41,6 +42,7 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
   secondaryButton,
   onClose,
   showCloseButton = false,
+  closeButtonAlert,
   customIcon,
   customColor,
   isOpen = true
@@ -142,9 +144,16 @@ return (
         <div className="dialog-container">
           <div className="dialog-content">
             {showCloseButton && onClose && (
-              <button onClick={handleClose} className="dialog-close-button">
-                <X size={20} />
-              </button>
+              <div className="dialog-close-container">
+                {closeButtonAlert && (
+                  <span className="dialog-close-alert">
+                    {closeButtonAlert}
+                  </span>
+                )}
+                <button onClick={handleClose} className="dialog-close-button">
+                  <X size={20} />
+                </button>
+              </div>
             )}
 
             <h3 className="dialog-title">{title}</h3>
@@ -230,10 +239,34 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
   }
 
   // ...existing styles...
-  .dialog-close-button {
+  .dialog-close-container {
     position: absolute;
     top: 1rem;
     right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    z-index: 10;
+  }
+
+  .dialog-close-alert {
+    font-size: 0.75rem;
+    color: ${props => props.$colors.dark};
+    background-color: ${props => props.$colors.medium}15;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    white-space: nowrap;
+    animation: fadeInOut 3s ease-in-out infinite;
+    font-weight: 500;
+  }
+
+  @media (max-width: 639px) {
+    .dialog-close-alert {
+      display: none; // Ocultar en móvil por espacio
+    }
+  }
+
+  .dialog-close-button {
     background: none;
     border: none;
     color: ${props => props.$colors.dark};
@@ -241,6 +274,7 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
     padding: 0.25rem;
     border-radius: 0.375rem;
     transition: background-color 0.2s ease;
+    flex-shrink: 0;
   }
 
   .dialog-close-button:hover {
@@ -285,6 +319,11 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
   @keyframes fadeOut {
     from { opacity: 1; }
     to { opacity: 0; }
+  }
+
+  @keyframes fadeInOut {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
   }
 
   @keyframes scaleIn {

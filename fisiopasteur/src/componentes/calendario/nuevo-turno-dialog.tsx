@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerAgendaEspecialista, obtenerTurnos, verificarDisponibilidad } from "@/lib/actions/turno.action";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
@@ -58,10 +59,7 @@ export function NuevoTurnoModal({
   especialistas: especialistasProp = [],
   pacientes: pacientesProp = []
 }: NuevoTurnoModalProps) {
-  // 🔍 LOG DE DEBUGGING - Ver qué datos recibe el modal
-  useEffect(() => {
-  }, [isOpen, fechaSeleccionada, horaSeleccionada, especialistasProp, pacientesProp]);
-
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
     fecha: '',
@@ -116,12 +114,48 @@ export function NuevoTurnoModal({
   const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
   const [hayConflictos, setHayConflictos] = useState(false);
 
-  // Dialog para mensajes
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
     open: false, 
     type: 'success', 
     message: '' 
   });
+
+  // ✅ LIMPIAR ESTADO AL CERRAR EL MODAL
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset de estados críticos para evitar loading infinito
+      setIsSubmitting(false);
+      setVerificandoDisponibilidad(false);
+      setVerificandoBoxes(false);
+      setValidandoDisponibilidad(false);
+      setCargandoHorarios(false);
+      
+      // Reset del formulario después de un pequeño delay para evitar flash visual
+      setTimeout(() => {
+        setFormData({
+          fecha: '',
+          hora: '',
+          id_especialista: '',
+          id_especialidad: '',
+          tipo_plan: 'particular' as 'particular' | 'obra_social',
+          id_paciente: '',
+          id_box: '',
+          observaciones: '',
+          precio: '',
+          recordatorios: ['1d', '2h'] as TipoRecordatorio[],
+          titulo_tratamiento: '',
+        });
+        setHorasOcupadas([]);
+        setHorariosOcupados([]);
+        setHayConflictos(false);
+        setMostrarRepeticion(false);
+        setDiasSeleccionados([]);
+        setNumeroSesiones(10);
+        setBusquedaPaciente('');
+        setPacienteSeleccionado(null);
+      }, 300);
+    }
+  }, [isOpen]);
 
   // ✅ VALIDAR SI LA FECHA Y HORA SELECCIONADAS ESTÁN EN EL PASADO
   const esHoraPasada = formData.fecha && formData.hora 
@@ -751,16 +785,21 @@ useEffect(() => {
           description: 'El turno se creó exitosamente',
         });
 
+        // ✅ Limpiar estado y refrescar
+        setIsSubmitting(false);
         onTurnoCreated?.();
         onClose();
+        
+        // ✅ Forzar refresh del router para actualizar cache
+        router.refresh();
       } else {
         addToast({
           variant: 'error',
           message: 'Error al crear turno',
           description: resultado.error || 'No se pudo crear el turno',
         });
+        setIsSubmitting(false);
       }
-      setIsSubmitting(false);
       return;
     }
 
@@ -988,11 +1027,17 @@ useEffect(() => {
       });
     }
 
+    // ✅ Limpiar estado y refrescar
+    setIsSubmitting(false);
     onTurnoCreated?.();
     
+    // ✅ Forzar refresh del router
+    router.refresh();
+    
+    // Cerrar modal después de un delay breve
     setTimeout(() => {
       onClose();
-    }, 1000);
+    }, 500);
 
   } catch (error) {
     console.error('Error al crear turno:', error);
@@ -1001,10 +1046,46 @@ useEffect(() => {
       message: 'Error inesperado',
       description: 'Ocurrió un problema al crear el turno',
     });
-  } finally {
     setIsSubmitting(false);
   }
 };
+
+  // ✅ CERRAR FORZADO - Resetea todo el estado inmediatamente
+  const handleForceClose = () => {
+    // Cancelar todos los estados de carga
+    setIsSubmitting(false);
+    setLoading(false);
+    setVerificandoDisponibilidad(false);
+    setVerificandoBoxes(false);
+    setValidandoDisponibilidad(false);
+    setCargandoHorarios(false);
+    
+    // Reset del formulario
+    setFormData({
+      fecha: '',
+      hora: '',
+      id_especialista: '',
+      id_especialidad: '',
+      tipo_plan: 'particular' as 'particular' | 'obra_social',
+      id_paciente: '',
+      id_box: '',
+      observaciones: '',
+      precio: '',
+      recordatorios: ['1d', '2h'] as TipoRecordatorio[],
+      titulo_tratamiento: '',
+    });
+    setHorasOcupadas([]);
+    setHorariosOcupados([]);
+    setHayConflictos(false);
+    setMostrarRepeticion(false);
+    setDiasSeleccionados([]);
+    setNumeroSesiones(10);
+    setBusquedaPaciente('');
+    setPacienteSeleccionado(null);
+    
+    // Cerrar el modal
+    onClose();
+  };
 
   // Mostrar loading
   if (loading || authLoading) {
@@ -1023,7 +1104,8 @@ useEffect(() => {
           />
         }
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={handleForceClose}
+        showCloseButton
         customColor="#9C1838"
         message={<Loading size={48} text="Cargando datos..." />}
       />
@@ -1046,7 +1128,7 @@ useEffect(() => {
           />
         }
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={handleForceClose}
         showCloseButton
         customColor="#9C1838"
         message={
@@ -1434,7 +1516,7 @@ useEffect(() => {
                     {diasSeleccionados.length > 0 && (
                       <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                         <div className="flex items-start gap-2 text-green-800">
-                          <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                          <Info className="w-4 h-4 shrink-0 mt-0.5" />
                           <div className="text-sm flex-1">
                             <strong>{numeroSesiones} sesiones</strong>
                             <div className="text-xs text-green-600 mt-1 space-y-0.5">
@@ -1489,7 +1571,7 @@ useEffect(() => {
                           <ul className="space-y-1 text-xs md:text-sm text-red-700">
                             {horariosOcupados.map((horario, index) => (
                               <li key={index} className="flex items-center gap-1">
-                                <span className="w-1 h-1 bg-red-500 rounded-full flex-shrink-0"></span>
+                                <span className="w-1 h-1 bg-red-500 rounded-full shrink-0"></span>
                                 {horario}
                               </li>
                             ))}
