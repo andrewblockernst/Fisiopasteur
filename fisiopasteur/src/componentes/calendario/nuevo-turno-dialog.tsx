@@ -122,7 +122,8 @@ export function NuevoTurnoModal({
 
   // ✅ LIMPIAR ESTADO AL CERRAR EL MODAL
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen && !showNuevoPacienteDialog) {
+      // Solo resetear si NO estamos en el diálogo de nuevo paciente
       // Reset de estados críticos para evitar loading infinito
       setIsSubmitting(false);
       setVerificandoDisponibilidad(false);
@@ -155,7 +156,7 @@ export function NuevoTurnoModal({
         setPacienteSeleccionado(null);
       }, 300);
     }
-  }, [isOpen]);
+  }, [isOpen, showNuevoPacienteDialog]);
 
   // ✅ VALIDAR SI LA FECHA Y HORA SELECCIONADAS ESTÁN EN EL PASADO
   const esHoraPasada = formData.fecha && formData.hora 
