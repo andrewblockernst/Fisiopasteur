@@ -8,14 +8,14 @@ interface NuevoPacienteDialogProps {
     isOpen: boolean;
     onClose: () => void;
     handleToast: (toast: Omit<ToastItem, 'id'>) => void;
-    onPatientCreated?: () => void;
+    onPatientCreated?: (paciente?: any) => void;
 }
 
 export function NuevoPacienteDialog({ isOpen, onClose, handleToast, onPatientCreated }: NuevoPacienteDialogProps) {
-    const onSuccess = () => {
+    const onSuccess = (paciente?: any) => {
         handleToast({message: "Paciente creado exitosamente", variant: "success"});
         if (onPatientCreated) {
-            onPatientCreated();
+            onPatientCreated(paciente);
         }
         onClose();
     }
@@ -61,7 +61,7 @@ export function NuevoPacienteDialog({ isOpen, onClose, handleToast, onPatientCre
 }
 
 interface PacienteFormWrapperProps {
-    onSuccess: () => void;
+    onSuccess: (paciente?: any) => void;
     onError: (error: unknown) => void;
     onCancel: () => void;
 }
@@ -88,7 +88,7 @@ import { getPhoneInputHint, isValidPhoneNumber } from "@/lib/utils/phone.utils";
 
 interface PacienteFormForDialogProps {
     mode: "create" | "edit";
-    onSuccess: () => void;
+    onSuccess: (paciente?: any) => void;
     onError: (error: unknown) => void;
     onCancel: () => void;
 }
@@ -128,8 +128,8 @@ function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteF
 
         try {
             setIsSubmitting(true);
-            await createPaciente(formData);
-            onSuccess();
+            const pacienteCreado = await createPaciente(formData);
+            onSuccess(pacienteCreado);
         } catch (error: any) {
             if (error?.digest?.includes('NEXT_REDIRECT')) {
                 onSuccess();

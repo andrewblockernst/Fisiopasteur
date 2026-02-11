@@ -176,6 +176,7 @@ export async function getOrganizacionActual(
 export async function setOrganizacionActual(orgId: string): Promise<{ success: boolean; error?: string }> {
   try {
     const cookieStore = await cookies();
+    const supabase = await createClient();
     
     // Setear cookie con la organización (expira en 30 días)
     cookieStore.set(ORG_COOKIE_NAME, orgId, {
@@ -185,6 +186,16 @@ export async function setOrganizacionActual(orgId: string): Promise<{ success: b
       maxAge: 60 * 60 * 24 * 30, // 30 días
       path: "/",
     });
+
+    // ✅ Actualizar JWT con org_id para optimización del middleware
+    try {
+      await supabase.auth.updateUser({
+        data: { org_actual: orgId }
+      });
+    } catch (jwtError) {
+      console.error("Error al actualizar JWT con org_id:", jwtError);
+      // No fallar toda la operación si falla la actualización del JWT
+    }
 
     return { success: true };
   } catch (error) {
@@ -200,7 +211,19 @@ export async function setOrganizacionActual(orgId: string): Promise<{ success: b
 export async function clearOrganizacionActual(): Promise<{ success: boolean }> {
   try {
     const cookieStore = await cookies();
+    const supabase = await createClient();
+    
     cookieStore.delete(ORG_COOKIE_NAME);
+    
+    // ✅ Limpiar org_actual del JWT
+    try {
+      await supabase.auth.updateUser({
+        data: { org_actual: null }
+      });
+    } catch (jwtError) {
+      console.error("Error al limpiar JWT org_id:", jwtError);
+    }
+    
     return { success: true };
   } catch (error) {
     console.error("Error al limpiar organización actual:", error);

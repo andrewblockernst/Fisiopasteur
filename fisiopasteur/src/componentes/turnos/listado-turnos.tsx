@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import { DetalleTurnoDialog } from "@/componentes/turnos/detalle-turno-dialog";
 import { obtenerTurnos, marcarComoAtendido, cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
 import { useToastStore } from "@/stores/toast-store";

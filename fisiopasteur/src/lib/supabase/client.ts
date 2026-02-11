@@ -1,12 +1,20 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { Database } from '@/types/database.types'
 
-// Crear cliente de Supabase para el navegador
-export const createClient = () =>
-  createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+// ✅ Instancia singleton del cliente Supabase
+let supabaseInstance: ReturnType<typeof createBrowserClient<Database>> | null = null;
 
-// Agregar esta línea para que funcione el import en login
-export const supabase = createClient()
+// Función que retorna la instancia única del cliente
+export const getSupabaseClient = () => {
+  if (!supabaseInstance) {
+    supabaseInstance = createBrowserClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  return supabaseInstance;
+};
+
+// Export para compatibilidad con código existente
+export const supabase = getSupabaseClient();
+export const createClient = getSupabaseClient; // Alias
