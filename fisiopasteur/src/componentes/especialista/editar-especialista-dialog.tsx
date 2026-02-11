@@ -8,7 +8,7 @@ import { useToastStore } from '@/stores/toast-store';
 
 type Especialidad = Tables<"especialidad">;
 
-// ✅ Tipo que coincide con getEspecialistas()
+//Tipo que coincide con getEspecialistas()
 type EspecialistaConDatos = {
   id_usuario: string;
   id_usuario_organizacion: string;
