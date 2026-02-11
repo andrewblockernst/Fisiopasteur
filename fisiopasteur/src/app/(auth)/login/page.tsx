@@ -1,21 +1,29 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client"; 
+import { useState, useEffect } from "react";
+import { getSupabaseClient } from "@/lib/supabase/client"; 
 import Head from "next/head";
 import Link from "next/link";
-import Boton from "@/componentes/boton"; 
+import Boton from "@/componentes/boton";
+import { useAuth } from "@/hooks/usePerfil"; 
 
 export default function LoginPage() {
-  const router = useRouter();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+
+  // ✅ Redirigir automáticamente cuando el usuario esté autenticado
+  useEffect(() => {
+    if (isAuthenticated && !authLoading && user) {
+      console.log('✅ Login: Usuario autenticado, redirigiendo a /inicio');
+      window.location.href = '/inicio';
+    }
+  }, [isAuthenticated, authLoading, user]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,34 +53,42 @@ export default function LoginPage() {
       return;
     }
 
-    // Crear el cliente aquí
-    const supabase = createClient();
-    
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setLoading(false);
-
-    if (error) {
-      // Traducir mensajes de error comunes de Supabase al español
-      let mensajeError = error.message;
+    try {
+      // Usar el cliente singleton
+      const supabase = getSupabaseClient();
       
-      if (error.message.toLowerCase().includes('invalid login credentials') || 
-          error.message.toLowerCase().includes('invalid credentials')) {
-        mensajeError = "Credenciales de inicio de sesión no validas";
-      } else if (error.message.toLowerCase().includes('email not confirmed')) {
-        mensajeError = "Por favor, confirma tu correo electrónico";
-      } else if (error.message.toLowerCase().includes('user not found')) {
-        mensajeError = "Usuario no encontrado";
-      } else if (error.message.toLowerCase().includes('too many requests')) {
-        mensajeError = "Demasiados intentos. Por favor, intenta más tarde";
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setLoading(false);
+        // Traducir mensajes de error comunes de Supabase al español
+        let mensajeError = error.message;
+        
+        if (error.message.toLowerCase().includes('invalid login credentials') || 
+            error.message.toLowerCase().includes('invalid credentials')) {
+          mensajeError = "Credenciales de inicio de sesión no validas";
+        } else if (error.message.toLowerCase().includes('email not confirmed')) {
+          mensajeError = "Por favor, confirma tu correo electrónico";
+        } else if (error.message.toLowerCase().includes('user not found')) {
+          mensajeError = "Usuario no encontrado";
+        } else if (error.message.toLowerCase().includes('too many requests')) {
+          mensajeError = "Demasiados intentos. Por favor, intenta más tarde";
+        }
+        
+        setError(mensajeError);
+        return;
       }
-      
-      setError(mensajeError);
-    } else {
-      router.push("/inicio");
+
+      // ✅ Login exitoso - hard redirect para cargar todo el estado limpio
+      console.log('✅ Login exitoso, redirigiendo a /inicio...');
+      window.location.href = '/inicio';
+    } catch (err) {
+      console.error('Error inesperado en login:', err);
+      setError('Error inesperado. Por favor, intenta nuevamente.');
+      setLoading(false);
     }
   };
 
@@ -142,10 +158,14 @@ export default function LoginPage() {
               <Boton
                 variant="primary"
                 type="submit"
-                disabled={loading}
+                disabled={loading || authLoading}
                 className="w-full"
               >
-                {loading ? "Cargando..." : "Iniciar Sesión"}
+                {loading 
+                  ? "Autenticando..." 
+                  : authLoading 
+                  ? "Cargando perfil..." 
+                  : "Iniciar Sesión"}
               </Boton>
 
               <div className="text-center">

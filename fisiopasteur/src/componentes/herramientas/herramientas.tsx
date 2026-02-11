@@ -14,14 +14,34 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { handleCerrarSesion } from '@/lib/actions/logOut.action';
+import { cerrarSesionServer } from '@/lib/actions/logOut.action';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 const Herramientas = () => {
   const router = useRouter();
 
   const onCerrarSesion = async () => {
-    await handleCerrarSesion(router);
-  };
+    try {
+      console.log('🔐 Cerrando sesión...');
+      
+      // 1. SignOut en el cliente para limpiar localStorage/sessionStorage
+      // const supabase = getSupabaseClient();
+      // await supabase.auth.signOut();
+      
+      // 2. SignOut en el servidor para limpiar cookies
+      await cerrarSesionServer();
+      
+      console.log('✅ Logout exitoso, redirigiendo...');
+      
+      // 3. Hard redirect para forzar recarga completa sin estado stale
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('❌ Error en onCerrarSesion:', error);
+      // Aun si falla, intentar redirigir
+      window.location.href = '/login';
+    }
+  }
+  
 
   return (
     <aside className="hidden lg:flex fixed top-1/2 left-0 -translate-y-1/2 bg-[#9C1838] py-6 px-2 flex-col items-center gap-6 shadow-lg rounded-r-lg z-50">
