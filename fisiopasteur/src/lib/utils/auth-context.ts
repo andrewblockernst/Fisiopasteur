@@ -8,6 +8,9 @@ import { cookies } from "next/headers";
  * Esta función debe ser llamada al inicio de cada server action
  * para establecer el contexto organizacional del request
  * 
+ * OPTIMIZADO: Lee del JWT en lugar de consultar BD (0 queries vs 1 query)
+ * El middleware ya validó el acceso a la organización
+ * 
  * @returns Usuario autenticado con su organización actual
  * @throws Error si no hay usuario o no tiene organización
  */
@@ -25,25 +28,15 @@ export async function getAuthContext(): Promise<{
     throw new Error("No autenticado. Por favor inicia sesión.");
   }
 
-  // 2. Obtener organización actual desde cookie
+  // 2. Leer org_actual del JWT (ya validado por middleware)
+  const orgIdFromToken = user.user_metadata?.org_actual;
+
+  // 3. Fallback a cookie si no está en el JWT (casos edge)
   const cookieStore = await cookies();
-  const orgId = cookieStore.get("org_actual")?.value;
+  const orgId = orgIdFromToken || cookieStore.get("org_actual")?.value;
 
   if (!orgId) {
     throw new Error("No hay organización seleccionada. Por favor selecciona una organización.");
-  }
-
-  // 3. Verificar que el usuario tiene acceso a esta organización
-  const { data: orgAccess, error: orgError } = await supabase
-    .from("usuario_organizacion")
-    .select("activo")
-    .eq("id_usuario", user.id)
-    .eq("id_organizacion", orgId)
-    .eq("activo", true)
-    .single();
-
-  if (orgError || !orgAccess) {
-    throw new Error("No tienes acceso a esta organización.");
   }
 
   return {
