@@ -9,10 +9,12 @@ import {
   Palette, Stethoscope, Award, Briefcase
 } from 'lucide-react';
 import Button from '../boton';
-import { handleCerrarSesion } from '@/lib/actions/logOut.action';
+import { cerrarSesionServer } from '@/lib/actions/logOut.action';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import EditarPerfilDialog from './editarperfil-dialog';
 import { formatoNumeroTelefono, formatARS } from '@/lib/utils';
 import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
+import { useAuth } from '@/hooks/usePerfil';
 
 interface PerfilClienteProps {
   perfil: PerfilCompleto;
@@ -24,7 +26,16 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const { addToast } = useToastStore();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  // ✅ Redirigir automáticamente cuando el usuario cierra sesión
+  useEffect(() => {
+    if (!isAuthenticated && !authLoading && !user) {
+      console.log('👋 Usuario desautenticado, redirigiendo a login...');
+      window.location.href = '/login';
+    }
+  }, [isAuthenticated, authLoading, user]);
 
   // Estado de precios reales por especialidad
   const [precios, setPrecios] = useState<Record<number, { precio_particular: number; precio_obra_social: number; activo: boolean }>>({});
@@ -80,8 +91,22 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
 
   const handleBack = () => router.push('/inicio');
 
-  const onCerrarSesion = () => {
-    handleCerrarSesion(router);
+  const onCerrarSesion = async () => {
+    try {
+      console.log('🔐 Cerrando sesión...');
+      // 1. SignOut en el cliente para limpiar localStorage/sessionStorage
+      // const supabase = getSupabaseClient();
+      // await supabase.auth.signOut();
+      // 2. SignOut en el servidor para limpiar cookies
+      await cerrarSesionServer();
+      
+      console.log('✅ Logout exitoso, redirigiendo...');
+      // 3. Hard redirect
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('❌ Error al cerrar sesión:', error);
+      window.location.href = '/login';
+    }
   };
 
   // Mostrar skeleton loader mientras cargan los precios
