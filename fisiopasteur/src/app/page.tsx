@@ -48,10 +48,28 @@
 //   );
 // }
 
-import { redirect } from "next/navigation";
+
+
+
+// import { redirect } from "next/navigation";
+
+// export default function Home() {
+//   // Como el middleware ya filtró a los usuarios logueados enviándolos a /inicio,
+//   // si alguien llega aquí, asumimos que debe iniciar sesión.
+//   redirect('/login');
+// }
+
+
+import { Suspense } from "react";
 
 export default function Home() {
-  // Como el middleware ya filtró a los usuarios logueados enviándolos a /inicio,
-  // si alguien llega aquí, asumimos que debe iniciar sesión.
-  redirect('/login');
+  // El middleware ya maneja toda la lógica de redirección
+  // Este componente nunca debería renderizarse en realidad
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <div className="flex items-center justify-center min-h-screen">
+        <p>Redirigiendo...</p>
+      </div>
+    </Suspense>
+  );
 }
