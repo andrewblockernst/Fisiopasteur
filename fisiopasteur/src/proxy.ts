@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { X } from 'lucide-react';
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function proxy(request: NextRequest) {
@@ -70,20 +71,54 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // Verificar usuario autenticado
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user;
+  let session;
+
+  try {
+    const { data: { session: currentSession}, error } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error('[Middleware] Error obteniendo sesión:', error);
+    }
+
+    session = currentSession;
+    user = session?.user;
+
+    console.log('[Middleware Debug]', {
+      path: request.nextUrl.pathname,
+      hasSession: !!session,
+      hasUser: !!user,
+      userEmail: user?.email || 'none',
+      cookies: request.cookies.getAll().map(c => c.name)
+    });
+
+    console.log('[Middleware] Path:', request.nextUrl.pathname);
+    console.log('[Middleware] User:', user ? user.email : 'No autenticado');
+  } catch (err) {
+    console.error('[Middleware] Error en auth.getSession():', err);
+  }
+
 
   // Ruta raiz - redirigir según estado de autenticación
   if (request.nextUrl.pathname === '/') {
-    return NextResponse.redirect(new URL(user ? '/inicio' : '/login', request.url));
+    if (user) {
+      console.log('[Middleware] Ruta / con usuario autenticado → Redirigiendo a /inicio');
+      return NextResponse.redirect(new URL('/inicio', request.url));
+    } else {
+      console.log('[Middleware] Ruta / sin usuario → Redirigiendo a /login');
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    
   }
 
   // Usuario NO autenticado
   if (!user) {
-    if (isPublicPath) return response; // Dejar pasar a login, etc.
-    // Guardar la URL original para redirigir después del login (opcional pero útil)
+    if (isPublicPath) {
+      console.log('[Middleware] Ruta pública sin autenticación → Permitir acceso');
+      return response;
+    }
+    
+    console.log('[Middleware] Ruta protegida sin autenticación → Redirigir a login');
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect_to', request.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
@@ -92,6 +127,7 @@ export async function proxy(request: NextRequest) {
   // CASO C: Usuario Autenticado intentando acceder a login/landing
   // A veces queremos redirigirlos al dashboard si ya están logueados
   if (['/login', '/landing', '/recuperarContra'].includes(request.nextUrl.pathname)) {
+    console.log('[Middleware] Usuario autenticado en ruta de auth → Redirigir a /inicio');
     return NextResponse.redirect(new URL('/inicio', request.url));
   }
 
@@ -118,41 +154,46 @@ export async function proxy(request: NextRequest) {
       }
     } else {
       // 3. Solo consultar DB si NO hay org_id en el token (primera vez o sin org asignada)
-      const { data: userOrgs } = await supabase
-        .from('usuario_organizacion')
-        .select('id_organizacion')
-        .eq('id_usuario', user.id)
-        .eq('activo', true);
+      try {
+        const { data: userOrgs } = await supabase
+          .from('usuario_organizacion')
+          .select('id_organizacion')
+          .eq('id_usuario', user.id)
+          .eq('activo', true);
 
-      if (userOrgs && userOrgs.length > 0) {
-        if (userOrgs.length === 1) {
-          // Una sola organización: setear cookie y actualizar JWT
-          const orgId = userOrgs[0].id_organizacion;
-          
-          response.cookies.set('org_actual', orgId, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 30,
-            path: '/',
-          });
+        if (userOrgs && userOrgs.length > 0) {
+          if (userOrgs.length === 1) {
+            // Una sola organización: setear cookie y actualizar JWT
+            const orgId = userOrgs[0].id_organizacion;
+            
+            response.cookies.set('org_actual', orgId, {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'lax',
+              maxAge: 60 * 60 * 24 * 30,
+              path: '/',
+            });
 
-          // Actualizar JWT para futuras requests (fire and forget)
-          supabase.auth.updateUser({
-            data: { org_actual: orgId }
-          }).catch(err => console.error('Error actualizando JWT:', err));
+            // Actualizar JWT para futuras requests (fire and forget)
+            supabase.auth.updateUser({
+              data: { org_actual: orgId }
+            }).catch(err => console.error('Error actualizando JWT:', err));
           
-        } else {
-          // Múltiples organizaciones: redirigir a selector
-          if (request.nextUrl.pathname !== '/seleccionar-organizacion') {
-            return NextResponse.redirect(new URL('/seleccionar-organizacion', request.url));
+
+          } else {
+            // Múltiples organizaciones: redirigir a selector
+            if (request.nextUrl.pathname !== '/seleccionar-organizacion') {
+              return NextResponse.redirect(new URL('/seleccionar-organizacion', request.url));
+            }
           }
+        } else {
+          console.error(`Usuario ${user.id} no tiene organizaciones asignadas`);
         }
-      } else {
-        console.error(`Usuario ${user.id} no tiene organizaciones asignadas`);
+      } catch (err) {
+        console.error('Error obteniendo organizaciones del usuario:', err);
       }
     }
-  }
+  } 
 
   return response
 }
