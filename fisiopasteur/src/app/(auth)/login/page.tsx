@@ -7,9 +7,11 @@ import Head from "next/head";
 import Link from "next/link";
 import Boton from "@/componentes/boton";
 import { useAuth } from "@/hooks/usePerfil"; 
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const { isAuthenticated, loading: authLoading, user } = useAuth();
+  const [checkingAuth, setCheckingAuth] = useState(true); // Nuevo estado para verificación inicial
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -17,13 +19,45 @@ export default function LoginPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
 
+
+  const router = useRouter();
+
+   // ✅ Verificación inicial de autenticación MÁS RÁPIDA
+  useEffect(() => {
+    let mounted = true;
+
+    const checkAuth = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user && mounted) {
+          console.log('✅ LoginPage: Usuario ya autenticado, redirigiendo...');
+          router.replace('/inicio');
+        }
+      } catch (err) {
+        console.error('Error verificando auth:', err);
+      } finally {
+        if (mounted) {
+          setCheckingAuth(false);
+        }
+      }
+    };
+
+    checkAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
+
   // ✅ Redirigir automáticamente cuando el usuario esté autenticado
   useEffect(() => {
-    if (isAuthenticated && !authLoading && user) {
+    if (isAuthenticated && !authLoading && !checkingAuth) {
       console.log('✅ Login: Usuario autenticado, redirigiendo a /inicio');
       window.location.href = '/inicio';
     }
-  }, [isAuthenticated, authLoading, user]);
+  }, [isAuthenticated, authLoading, checkingAuth]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
