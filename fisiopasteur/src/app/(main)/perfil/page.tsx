@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: 'Gestiona tu información personal y profesional',
 };
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Renderizar dinámicamente en cada request
 
 export default function PerfilPage() {
   return <PerfilServidor />;
