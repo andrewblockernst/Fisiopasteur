@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { X } from 'lucide-react';
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: request.headers,
