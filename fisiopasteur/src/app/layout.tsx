@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import PatronFondo from "@/componentes/patron-fondo";
 import { GlobalToastContainer } from "@/componentes/notificacion/toast/global-toast-container";
 import { QueryProvider } from "@/lib/query-client";

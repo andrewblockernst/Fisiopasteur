@@ -117,11 +117,11 @@ export async function obtenerTurnos(filtros?: {
 export async function obtenerTurnosConFiltros(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
-  especialista_id?: string;
-  especialidad_id?: number;
+  especialista_ids?: string[];
+  especialidad_ids?: string[];
   hora_desde?: string;
   hora_hasta?: string;
-  estado?: string;
+  estados?: string[];
 }) {
   const supabase = await createClient();
   
@@ -158,14 +158,14 @@ export async function obtenerTurnosConFiltros(filtros?: {
       query = query.lte("fecha", filtros.fecha_hasta);
     }
     
-    // Filtro por especialista específico
-    if (typeof filtros?.especialista_id === "string") {
-      query = query.eq("id_especialista", filtros.especialista_id);
+    // Filtro por especialistas (múltiples valores)
+    if (filtros?.especialista_ids && filtros.especialista_ids.length > 0) {
+      query = query.in("id_especialista", filtros.especialista_ids);
     }
     
-    // Filtro por especialidad del turno
-    if (filtros?.especialidad_id) {
-      query = query.eq("id_especialidad", filtros.especialidad_id);
+    // Filtro por especialidades (múltiples valores)
+    if (filtros?.especialidad_ids && filtros.especialidad_ids.length > 0) {
+      query = query.in("id_especialidad", filtros.especialidad_ids);
     } else {
       // Si NO se especifica especialidad, EXCLUIR Pilates (id_especialidad = 4)
       query = query.neq("id_especialidad", 4);
@@ -179,9 +179,9 @@ export async function obtenerTurnosConFiltros(filtros?: {
       query = query.lte("hora", filtros.hora_hasta);
     }
     
-    // Filtro por estado
-    if (filtros?.estado) {
-      query = query.eq("estado", filtros.estado);
+    // Filtro por estados (múltiples valores)
+    if (filtros?.estados && filtros.estados.length > 0) {
+      query = query.in("estado", filtros.estados);
     }
 
     const { data, error } = await query;
