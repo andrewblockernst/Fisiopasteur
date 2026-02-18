@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { obtenerTurnosConFiltros } from '@/lib/actions/turno.action';
 import type { TurnoConDetalles } from '@/stores/turno-store';
 
@@ -15,12 +15,20 @@ export const turnoKeys = {
 
 /**
  * Hook para obtener todos los turnos con caché
+ * @param options - Opciones del query
+ * @param options.filters - Filtros de busqueda para turnos
+ * @param options.initialData - Datos iniciales del servidor (SSR)
  */
-export function useTurnos() {
+export function useTurnos(options?: {
+  filters?: Record<string, any>;
+  // initialData?: TurnoConDetalles[];
+}) {
+  const filters = options?.filters;
+
   return useQuery({
-    queryKey: turnoKeys.lists(),
+    queryKey: turnoKeys.list(filters),
     queryFn: async () => {
-      const result = await obtenerTurnosConFiltros();
+      const result = await obtenerTurnosConFiltros(filters);
       if (!result.success) {
         throw new Error(result.error || 'Error al obtener turnos');
       }
@@ -49,6 +57,8 @@ export function useTurnos() {
       
       return turnos;
     },
+    // placeholderData: keepPreviousData, // ✅ Mantiene datos viejos mientras carga los nuevos
+    // initialData: options?.initialData, // ✅ Datos iniciales del servidor
     staleTime: 5 * 60 * 1000, // 5 minutos
     gcTime: 10 * 60 * 1000, // 10 minutos en caché
   });
