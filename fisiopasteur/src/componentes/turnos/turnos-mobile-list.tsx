@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Calendar, 
@@ -56,7 +56,7 @@ export default function TurnosMobileList({
   const [filtroEstado, setFiltroEstado] = useState(initialFilters.estado || 'todos');
 
   // ✨ Función para calcular el número de talonario
-  const calcularNumeroTalonario = (turno: TurnoConDetalles): string | null => {
+  const calcularNumeroTalonario = useCallback((turno: TurnoConDetalles): string | null => {
     if (!turno.id_paciente || !turno.id_especialidad) return null;
 
     // Filtrar turnos del mismo paciente y especialidad (sin importar mes/año)
@@ -81,10 +81,10 @@ export default function TurnosMobileList({
     const total = turnosOrdenados.length;
 
     return `${posicion}/${total}`;
-  };
+  }, [turnos]);
 
   // Función para aplicar filtros (navegar con query params)
-  const aplicarFiltros = () => {
+  const aplicarFiltros = useCallback(() => {
     const params = new URLSearchParams();
     
     if (fechaDesde) params.set('desde', fechaDesde);
@@ -95,10 +95,10 @@ export default function TurnosMobileList({
     
     router.push(`/turnos?${params.toString()}`);
     setShowFilters(false);
-  };
+  }, [fechaDesde, fechaHasta, especialistaId, especialidadId, filtroEstado, router]);
 
   // Función para limpiar filtros y aplicar inmediatamente
-  const limpiarFiltros = () => {
+  const limpiarFiltros = useCallback(() => {
     // Obtener fecha de hoy
     const ahora = new Date();
     const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
@@ -110,86 +110,112 @@ export default function TurnosMobileList({
     
     router.push(`/turnos?${params.toString()}`);
     setShowFilters(false);
-  };
+  }, [router]);
 
   // Contar filtros activos
-  const contarFiltrosActivos = () => {
+  const contarFiltrosActivos = useMemo(() => {
     let count = 0;
     if (especialistaId) count++;
     if (especialidadId) count++;
     if (filtroEstado !== 'todos') count++;
     return count;
-  };
+  }, [especialistaId, especialidadId, filtroEstado]);
 
   // Filtrar turnos por término de búsqueda (el filtrado por estado/especialista/etc se hace en el servidor)
-  const turnosFiltrados = turnos.filter(turno => {
-    // Filtro de búsqueda local
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      const pacienteNombre = turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}`.toLowerCase() : '';
-      const especialistaNombre = turno.especialista ? `${turno.especialista.nombre} ${turno.especialista.apellido}`.toLowerCase() : '';
+  const turnosFiltrados = useMemo(() => {
+    return turnos.filter(turno => {
+      // Filtro de búsqueda local
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const pacienteNombre = turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}`.toLowerCase() : '';
+        const especialistaNombre = turno.especialista ? `${turno.especialista.nombre} ${turno.especialista.apellido}`.toLowerCase() : '';
+        
+        const matchesBusqueda = pacienteNombre.includes(searchLower) || especialistaNombre.includes(searchLower);
+        if (!matchesBusqueda) return false;
+      }
       
-      const matchesBusqueda = pacienteNombre.includes(searchLower) || especialistaNombre.includes(searchLower);
-      if (!matchesBusqueda) return false;
-    }
-    
-    return true;
-  });
-
-  // Agrupar turnos por hora
-  const turnosAgrupados = turnosFiltrados.reduce((groups, turno) => {
-    const hora = turno.hora;
-    if (!groups[hora]) {
-      groups[hora] = [];
-    }
-    groups[hora].push(turno);
-    return groups;
-  }, {} as Record<string, TurnoConDetalles[]>);
-
-  // Ordenar horas
-  const horasOrdenadas = Object.keys(turnosAgrupados).sort();
-
-  const getEstadoColor = (estado: string) => {
-    switch (estado.toLowerCase()) {
-      case 'programado':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'vencido':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'atendido':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'en_curso':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'completado':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'cancelado':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'no_asistio':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const formatDate = (fecha: string) => {
-    const date = new Date(fecha);
-    return date.toLocaleDateString('es-AR', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+      return true;
     });
-  };
+  }, [turnos, searchTerm]);
 
-  const formatTime = (hora: string) => {
-    const [hours, minutes] = hora.split(':');
-    const date = new Date();
-    date.setHours(parseInt(hours), parseInt(minutes));
-    return date.toLocaleTimeString('es-AR', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true
-    });
-  };
+  // Agrupar turnos primero por fecha, luego por hora
+  const turnosAgrupadosPorFecha = useMemo(() => {
+    return turnosFiltrados.reduce((groups, turno) => {
+      const fecha = turno.fecha;
+      if (!groups[fecha]) {
+        groups[fecha] = {};
+      }
+      
+      const hora = turno.hora;
+      if (!groups[fecha][hora]) {
+        groups[fecha][hora] = [];
+      }
+      groups[fecha][hora].push(turno);
+      
+      return groups;
+    }, {} as Record<string, Record<string, TurnoConDetalles[]>>);
+  }, [turnosFiltrados]);
+
+  // Ordenar fechas
+  const fechasOrdenadas = useMemo(() => {
+    return Object.keys(turnosAgrupadosPorFecha).sort();
+  }, [turnosAgrupadosPorFecha]);
+
+  const formatDate = useMemo( () => {
+    return (fecha: string) => {
+      const [year, month, day] = fecha.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return date.toLocaleDateString('es-AR', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    };
+  }, [])
+
+  const formatTime = useMemo(() => {
+    return (hora: string) => {
+      const [hours, minutes] = hora.split(':');
+      const date = new Date();
+      date.setHours(parseInt(hours), parseInt(minutes));
+      return date.toLocaleTimeString('es-AR', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true
+      });
+    };
+  }, []);
+
+  // Callback para manejar clicks en tarjetas de turno
+  const handleTurnoClick = useCallback((turnoId: string) => {
+    router.push(`/turnos/${turnoId}`);
+  }, [router]);
+
+  // Callbacks para los cambios de estado de filtros
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchTerm(value);
+  }, []);
+
+  const handleFechaDesdeChange = useCallback((value: string) => {
+    setFechaDesde(value);
+  }, []);
+
+  const handleFechaHastaChange = useCallback((value: string) => {
+    setFechaHasta(value);
+  }, []);
+
+  const handleEspecialistaChange = useCallback((value: string) => {
+    setEspecialistaId(value);
+  }, []);
+
+  const handleEspecialidadChange = useCallback((value: string) => {
+    setEspecialidadId(value);
+  }, []);
+
+  const handleEstadoChange = useCallback((value: string) => {
+    setFiltroEstado(value);
+  }, []);
 
   return (
   <div className="min-h-screen bg-neutral-50 text-black">
@@ -227,9 +253,9 @@ export default function TurnosMobileList({
             className="p-2 border border-neutral-300 rounded-lg hover:bg-neutral-50 active:bg-neutral-100 transition-colors relative"
           >
             <Filter className="w-5 h-5" />
-            {contarFiltrosActivos() > 0 && (
+            {contarFiltrosActivos > 0 && (
               <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#9C1838] text-white rounded-full text-xs flex items-center justify-center font-bold">
-                {contarFiltrosActivos()}
+                {contarFiltrosActivos}
               </span>
             )}
           </button>
@@ -242,20 +268,15 @@ export default function TurnosMobileList({
             type="text"
             placeholder="Buscar por paciente o especialista..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
           />
-        </div>
-
-        {/* Info de fecha */}
-        <div className="mt-3 text-sm text-neutral-600 capitalize">
-          {formatDate(fecha)} • {turnosFiltrados.length} turnos
         </div>
       </div>
 
       {/* Contenido */}
   <div className="px-4 pb-20 text-black">
-        {horasOrdenadas.length === 0 ? (
+        {fechasOrdenadas.length === 0 ? (
           <div className="text-center py-12">
             <Calendar className="w-16 h-16 text-neutral-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-neutral-700 mb-2">
@@ -266,30 +287,47 @@ export default function TurnosMobileList({
             </p>
           </div>
         ) : (
-          <div className="space-y-6 pt-4">
-            {horasOrdenadas.map((hora) => (
-              <div key={hora} className="space-y-3">
-                {/* Header de hora */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center min-w-[80px] px-3 h-8 bg-[#9C1838] text-white rounded-lg text-sm font-medium whitespace-nowrap">
-                    {formatTime(hora)}
+          <div className="space-y-8 pt-4">
+            {fechasOrdenadas.map((fechaActual) => {
+              const horasEnFecha = Object.keys(turnosAgrupadosPorFecha[fechaActual]).sort();
+              const totalTurnosFecha = horasEnFecha.reduce((sum, hora) => sum + turnosAgrupadosPorFecha[fechaActual][hora].length, 0);
+              
+              return (
+                <div key={fechaActual} className="space-y-4">
+                  {/* Header de fecha */}
+                  <div className="text-sm text-neutral-600 capitalize font-medium sticky top-16 bg-neutral-50 py-2 z-10">
+                    {formatDate(fechaActual)} • {totalTurnosFecha} turno{totalTurnosFecha !== 1 ? 's' : ''}
                   </div>
-                  <div className="flex-1 h-px bg-neutral-200" />
-                </div>
 
-                {/* Turnos para esta hora */}
-                <div className="space-y-3">
-                  {turnosAgrupados[hora].map((turno) => (
-                    <TurnoCard 
-                      key={turno.id_turno} 
-                      turno={turno}
-                      numeroTalonario={calcularNumeroTalonario(turno)}
-                      onClick={() => router.push(`/turnos/${turno.id_turno}`)} 
-                    />
-                  ))}
+                  {/* Turnos agrupados por hora para esta fecha */}
+                  <div className="space-y-6">
+                    {horasEnFecha.map((hora) => (
+                      <div key={`${fechaActual}-${hora}`} className="space-y-3">
+                        {/* Header de hora */}
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center min-w-[80px] px-3 h-8 bg-[#9C1838] text-white rounded-lg text-sm font-medium whitespace-nowrap">
+                            {formatTime(hora)}
+                          </div>
+                          <div className="flex-1 h-px bg-neutral-200" />
+                        </div>
+
+                        {/* Turnos para esta hora */}
+                        <div className="space-y-3">
+                          {turnosAgrupadosPorFecha[fechaActual][hora].map((turno) => (
+                            <TurnoCard 
+                              key={turno.id_turno} 
+                              turno={turno}
+                              numeroTalonario={calcularNumeroTalonario(turno)}
+                              onClick={() => handleTurnoClick(turno.id_turno)} 
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -341,7 +379,7 @@ export default function TurnosMobileList({
                     <input
                       type="date"
                       value={fechaDesde}
-                      onChange={(e) => setFechaDesde(e.target.value)}
+                      onChange={(e) => handleFechaDesdeChange(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                     />
                   </div>
@@ -350,7 +388,7 @@ export default function TurnosMobileList({
                     <input
                       type="date"
                       value={fechaHasta}
-                      onChange={(e) => setFechaHasta(e.target.value)}
+                      onChange={(e) => handleFechaHastaChange(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                     />
                   </div>
@@ -364,7 +402,7 @@ export default function TurnosMobileList({
                 </label>
                 <select
                   value={especialistaId}
-                  onChange={(e) => setEspecialistaId(e.target.value)}
+                  onChange={(e) => handleEspecialistaChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 >
                   <option value="">Todos los especialistas</option>
@@ -383,7 +421,7 @@ export default function TurnosMobileList({
                 </label>
                 <select
                   value={especialidadId}
-                  onChange={(e) => setEspecialidadId(e.target.value)}
+                  onChange={(e) => handleEspecialidadChange(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 >
                   <option value="">Todas las especialidades</option>
@@ -404,7 +442,7 @@ export default function TurnosMobileList({
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => setFiltroEstado('todos')}
+                    onClick={() => handleEstadoChange('todos')}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       filtroEstado === 'todos'
                         ? 'bg-gray-700 text-white'
@@ -414,7 +452,7 @@ export default function TurnosMobileList({
                     Todos
                   </button>
                   <button
-                    onClick={() => setFiltroEstado('programado')}
+                    onClick={() => handleEstadoChange('programado')}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       filtroEstado === 'programado'
                         ? 'bg-blue-600 text-white'
@@ -424,7 +462,7 @@ export default function TurnosMobileList({
                     Programado
                   </button>
                   <button
-                    onClick={() => setFiltroEstado('pendiente')}
+                    onClick={() => handleEstadoChange('pendiente')}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       filtroEstado === 'pendiente'
                         ? 'bg-yellow-600 text-white'
@@ -434,7 +472,7 @@ export default function TurnosMobileList({
                     Pendiente
                   </button>
                   <button
-                    onClick={() => setFiltroEstado('atendido')}
+                    onClick={() => handleEstadoChange('atendido')}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       filtroEstado === 'atendido'
                         ? 'bg-green-600 text-white'
@@ -444,7 +482,7 @@ export default function TurnosMobileList({
                     Atendido
                   </button>
                   <button
-                    onClick={() => setFiltroEstado('cancelado')}
+                    onClick={() => handleEstadoChange('cancelado')}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       filtroEstado === 'cancelado'
                         ? 'bg-red-600 text-white'
@@ -457,7 +495,7 @@ export default function TurnosMobileList({
               </div>
 
               {/* Resumen de filtros activos */}
-              {contarFiltrosActivos() > 0 && (
+              {contarFiltrosActivos > 0 && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-900 font-medium mb-1">Filtros activos:</p>
                   <div className="space-y-1 text-xs text-blue-800">
@@ -507,10 +545,7 @@ export default function TurnosMobileList({
       <NuevoTurnoModal
         isOpen={showNuevoTurnoModal}
         onClose={() => setShowNuevoTurnoModal(false)}
-        onTurnoCreated={() => {
-          setShowNuevoTurnoModal(false);
-          if (onTurnoCreated) onTurnoCreated();
-        }}
+        onTurnoCreated={onTurnoCreated}
         fechaSeleccionada={new Date(fecha)}
       />
     </div>
@@ -526,11 +561,11 @@ function TurnoCard({
   numeroTalonario: string | null;
   onClick: () => void;
 }) {
-  const getEstadoColor = (estado: string) => {
+  const getEstadoColor = useMemo(() => (estado: string) => {
     switch (estado.toLowerCase()) {
       case 'programado':
         return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'vencido':
+      case 'pendiente':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'atendido':
         return 'bg-green-100 text-green-800 border-green-200';
@@ -545,9 +580,9 @@ function TurnoCard({
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
-  };
+  }, []);
 
-  const getCardBackgroundColor = (estado: string) => {
+  const getCardBackgroundColor = useMemo(() => (estado: string) => {
     switch (estado.toLowerCase()) {
       case 'vencido':
         return 'bg-yellow-50';
@@ -558,7 +593,7 @@ function TurnoCard({
       default:
         return 'bg-white';
     }
-  };
+  }, []);
 
   return (
     <div
@@ -603,28 +638,30 @@ function TurnoCard({
         </div>
       )}
 
-      {/* Detalles adicionales */}
-      <div className="flex items-center justify-between mt-3">
-        <div className="flex items-center gap-4 text-sm text-neutral-600">
-          {turno.box && (
+          {/* Detalles adicionales */}
+          <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center gap-4 text-sm text-neutral-600">
+              {turno.box && (
             <div className="flex items-center gap-1">
               <MapPin className="w-4 h-4" />
               <span>Box {turno.box.numero}</span>
             </div>
-          )}
-          {turno.paciente?.telefono && (
+              )}
+              {turno.paciente?.telefono && (
             <div className="flex items-center gap-1">
               <Phone className="w-4 h-4" />
               <span>{turno.paciente.telefono}</span>
             </div>
-          )}
-        </div>
-        
-        {/* Estado */}
-        <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${getEstadoColor(turno.estado || 'programado')}`}>
-          {(turno.estado || 'programado').replace('_', ' ').toUpperCase()}
-        </span>
-      </div>
+              )}
+            </div>
+          </div>
+
+          {/* Estado */}
+          <div className="flex justify-end mt-2">
+            <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${getEstadoColor(turno.estado || 'programado')}`}>
+              {(turno.estado || 'programado').replace('_', ' ').toUpperCase()}
+            </span>
+          </div>
 
       {/* Observaciones */}
       {turno.observaciones && (

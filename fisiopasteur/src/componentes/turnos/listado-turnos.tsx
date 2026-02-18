@@ -10,10 +10,11 @@ import type { TurnoWithRelations } from "@/types";
 import { MoreVertical, CheckCircle, XCircle, Edit, Trash, AlertCircle } from "lucide-react";
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import BaseDialog from "@/componentes/dialog/base-dialog";
+import UnifiedSkeletonLoader from "../unified-skeleton-loader";
 
-export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }) {
+export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, isMobile }: { turnos: TurnoWithRelations[], invalidateTurnos: () => void, turnosLoading: boolean, isMobile: boolean }) {
 
-  const router = useRouter();
+  // const router = useRouter();
   const toast = useToastStore();
   
   // ============= ESTADO PARA MODAL DE DETALLE =============
@@ -42,7 +43,8 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
         variant: "success",
         message: "Turno marcado como atendido",
       });
-      router.refresh();
+      // router.refresh();
+      invalidateTurnos(); // ✅ Solo invalidar el query de turnos para refrescar datos
     } else {
       toast.addToast({
         variant: "error",
@@ -59,7 +61,8 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
         variant: "success",
         message: "Turno cancelado",
       });
-      router.refresh();
+      // router.refresh();
+      invalidateTurnos(); // ✅ Solo invalidar el query de turnos para refrescar datos
     } else {
       toast.addToast({
         variant: "error",
@@ -85,7 +88,8 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
         message: "Turno eliminado",
         description: "El turno se eliminó correctamente"
       });
-      router.refresh();
+      // router.refresh();f
+      invalidateTurnos(); // ✅ Invalidar el query de turnos para refrescar datos
     } else {
       toast.addToast({
         variant: "error",
@@ -256,20 +260,33 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
     setModalDetalleAbierto(true);
   };
 
+  if (turnosLoading) {
+    return (
+      <UnifiedSkeletonLoader
+        type={isMobile ? "list" : "table"}
+        rows={5}
+        columns={6}
+        showHeader={false}
+        showFilters={false}
+        showSearch={false}
+      />
+    );
+  }
+
   return (
     <>
-      <div className="block bg-white shadow-md rounded-lg overflow-visible  space-y-4">
-        <div className="overflow-x-auto overflow-y-visible">
+      <div className="block bg-white shadow-md rounded-lg overflow-hidden h-full">
+        <div className="overflow-x-auto overflow-y-auto max-h-full">
           <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Especialista</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Especialidad</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">N°</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Acciones</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Hora</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialista</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialidad</th>
+              <th className="px-4 py-1 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">N°</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider w-14">Acciones</th>
             </tr>
           </thead>
 
@@ -283,16 +300,16 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
                 className={`${getRowClassName(t)} cursor-pointer hover:bg-gray-100 transition-colors`}
                 onClick={() => abrirDetalleTurno(t)}
               >
-                <td className={`p-3 ${getTextStyle(t)}`}>
+                <td className={`px-4 py-1 text-sm ${getTextStyle(t)}`}>
                   {formatearFecha(t.fecha)}
                 </td>
-                <td className={`p-3 font-mono ${getTextStyle(t)}`}>
+                <td className={`px-4 py-1 text-sm font-mono ${getTextStyle(t)}`}>
                   {formatearHora(t.hora)}
                 </td>
-                <td className={`p-3 ${getTextStyle(t)}`}>
+                <td className={`px-4 py-1 text-sm ${getTextStyle(t)}`}>
                   {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : "Sin asignar"}
                 </td>
-                <td className={`p-3 ${getTextStyle(t)}`}>
+                <td className={`px-4 py-1 text-sm ${getTextStyle(t)}`}>
                   {t.especialista ? (
                     <span className="inline-flex items-center gap-2">
                       <span 
@@ -303,11 +320,11 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
                     </span>
                   ) : "Sin asignar"}
                 </td>
-                <td className={`p-3 ${getTextStyle(t)}`}>
+                <td className={`px-4 py-1 text-sm ${getTextStyle(t)}`}>
                   {t.especialidad ? t.especialidad.nombre : "Sin asignar"}
                 </td>
                 {/* ✅ COLUMNA: Número de talonario */}
-                <td className="p-3 text-center text-black">
+                <td className="px-4 py-1 text-center text-black text-sm">
                   {numeroTalonario ? (
                     <span className="text-xs font-semibold">{numeroTalonario}</span>
                   ) : (
@@ -315,7 +332,7 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
                   )}
                 </td>
                 {/* ✅ COLUMNA DE ACCIONES - Evitar propagación del click */}
-                <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
                   {t.id_paciente && (
                     <DropdownMenu.Root>
                       <DropdownMenu.Trigger asChild>
@@ -382,7 +399,7 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
             )})}
             {(!turnosOrdenados || turnosOrdenados.length === 0) && (
               <tr>
-                <td className="p-8 text-center text-gray-500" colSpan={7}>
+                <td className="p-6 text-center text-gray-500" colSpan={7}>
                   <div className="flex flex-col items-center gap-2">
                     <span>No hay turnos para mostrar</span>
                   </div>
@@ -400,7 +417,7 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
       onClose={() => setModalDetalleAbierto(false)}
       turno={turnoSeleccionado}
       numeroTalonario={numeroTalonarioSeleccionado}
-      onTurnoActualizado={() => router.refresh()}
+      onTurnoActualizado={() => invalidateTurnos()}
     />
 
     {/* Modal de Edición del Turno */}
@@ -411,7 +428,7 @@ export default function TurnosTable({ turnos }: { turnos: TurnoWithRelations[] }
         onClose={() => setModalEditarAbierto(false)}
         onSaved={() => {
           setModalEditarAbierto(false);
-          router.refresh();
+          invalidateTurnos();
         }}
       />
     )}
