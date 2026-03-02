@@ -19,6 +19,9 @@ function parseSearchParams(params: { [key: string]: string | string[] | undefine
     especialista_ids: toArray(params?.especialistas),
     especialidad_ids: toArray(params?.especialidades),
     estados: toArray(params?.estados),
+    paciente_id: params?.paciente_id
+      ? parseInt(Array.isArray(params.paciente_id) ? params.paciente_id[0] : params.paciente_id)
+      : undefined,
   };
 }
 

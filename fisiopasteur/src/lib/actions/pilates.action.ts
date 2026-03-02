@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { Tables } from "@/types/database.types";
+import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
 
 type Especialista = {
   id_usuario: number;
@@ -13,7 +14,14 @@ export async function obtenerEspecialistasPilates(): Promise<{ success: boolean;
   const supabase = createClient();
 
   try {
-    // Buscar en usuario_especialidad los especialistas con especialidad 4 (Pilates)
+    const idPilates = await obtenerIdPilates(supabase);
+
+    if (!idPilates) {
+      console.warn("Especialidad Pilates no encontrada");
+      return { success: true, data: [] };
+    }
+
+    // Buscar en usuario_especialidad los especialistas con especialidad Pilates
     const { data, error } = await supabase
       .from("usuario_especialidad")
       .select(`
@@ -25,7 +33,7 @@ export async function obtenerEspecialistasPilates(): Promise<{ success: boolean;
           email
         )
       `)
-      .eq("id_especialidad", 4);
+      .eq("id_especialidad", idPilates);
 
     if (error) {
       console.error("Error al obtener especialistas de pilates:", error);

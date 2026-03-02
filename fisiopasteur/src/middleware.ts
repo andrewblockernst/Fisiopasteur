@@ -1,5 +1,4 @@
 import { createServerClient } from '@supabase/ssr'
-import { X } from 'lucide-react';
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
@@ -72,30 +71,19 @@ export async function middleware(request: NextRequest) {
   )
 
   let user;
-  let session;
 
   try {
-    const { data: { session: currentSession}, error } = await supabase.auth.getSession();
+    // ✅ getUser() verifica el token contra el servidor de Supabase Auth,
+    // a diferencia de getSession() que solo lee cookies sin validarlas.
+    const { data: { user: currentUser }, error } = await supabase.auth.getUser();
 
     if (error) {
-      console.error('[Middleware] Error obteniendo sesión:', error);
+      console.error('[Middleware] Error obteniendo usuario:', error);
     }
 
-    session = currentSession;
-    user = session?.user;
-
-    console.log('[Middleware Debug]', {
-      path: request.nextUrl.pathname,
-      hasSession: !!session,
-      hasUser: !!user,
-      userEmail: user?.email || 'none',
-      cookies: request.cookies.getAll().map(c => c.name)
-    });
-
-    console.log('[Middleware] Path:', request.nextUrl.pathname);
-    console.log('[Middleware] User:', user ? user.email : 'No autenticado');
+    user = currentUser;
   } catch (err) {
-    console.error('[Middleware] Error en auth.getSession():', err);
+    console.error('[Middleware] Error en auth.getUser():', err);
   }
 
 
