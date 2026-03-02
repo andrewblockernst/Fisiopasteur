@@ -708,7 +708,7 @@ export default function FiltrosTurnos({
         onClose={() => setOpenNew(false)}
         onTurnoCreated={onTurnoCreated}
         especialistas={especialistas}
-        pacientes={[]}
+        // pacientes={[]}
       />
     </div>
   );
