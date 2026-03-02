@@ -7,17 +7,15 @@ import type { Database } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthContext } from "@/lib/utils/auth-context";
+import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
+import { es } from "date-fns/locale";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
 type TurnoUpdate = Database["public"]["Tables"]["turno"]["Update"];
 type SupabaseClientType = SupabaseClient<Database>;
 
-// =====================================
-// 📋 FUNCIONES BÁSICAS DE TURNOS
-// =====================================
 
-// Obtener un turno específico por ID
 export async function obtenerTurno(id: number): Promise<
   | { success: true; data: any }
   | { success: false; error: string }
@@ -96,8 +94,11 @@ export async function obtenerTurnos(filtros?: {
       query = query.eq("estado", filtros.estado);
     }
 
-    // Siempre excluir turnos de Pilates (id_especialidad = 4)
-    query = query.neq("id_especialidad", 4);
+    const idPilates = await obtenerIdPilates(supabase as SupabaseClientType, orgId);
+
+    if (idPilates) {
+      query = query.neq("id_especialidad", idPilates);
+    }
 
     const { data, error } = await query;
 
@@ -122,6 +123,8 @@ export async function obtenerTurnosConFiltros(filtros?: {
   hora_desde?: string;
   hora_hasta?: string;
   estados?: string[];
+  paciente_id?: number;
+  es_pilates?: boolean;
 }) {
   const supabase = await createClient();
   
@@ -163,12 +166,15 @@ export async function obtenerTurnosConFiltros(filtros?: {
       query = query.in("id_especialista", filtros.especialista_ids);
     }
     
+    const idPilates = await obtenerIdPilates(supabase as SupabaseClientType, orgId);
+
     // Filtro por especialidades (múltiples valores)
     if (filtros?.especialidad_ids && filtros.especialidad_ids.length > 0) {
       query = query.in("id_especialidad", filtros.especialidad_ids);
-    } else {
-      // Si NO se especifica especialidad, EXCLUIR Pilates (id_especialidad = 4)
-      query = query.neq("id_especialidad", 4);
+    } else if (!filtros?.es_pilates && idPilates) {
+      query = query.neq("id_especialidad", idPilates);
+    } else if (filtros?.es_pilates === true && idPilates) {
+      query = query.eq("id_especialidad", idPilates);
     }
     
     // Filtros de horario
@@ -182,6 +188,11 @@ export async function obtenerTurnosConFiltros(filtros?: {
     // Filtro por estados (múltiples valores)
     if (filtros?.estados && filtros.estados.length > 0) {
       query = query.in("estado", filtros.estados);
+    }
+
+    // Filtro por pacientes (múltiples IDs)
+    if (filtros?.paciente_id) {
+      query = query.eq("id_paciente", filtros.paciente_id);
     }
 
     const { data, error } = await query;
@@ -204,11 +215,13 @@ export async function obtenerTurnosConFiltros(filtros?: {
 
 // Crear un nuevo turno
 export async function crearTurno(
-  datos: Omit<TurnoInsert, 'id_organizacion'> & { id_organizacion?: string; titulo_tratamiento?: string | null }, 
+  datos: Omit<TurnoInsert, 'id_organizacion'> & { id_organizacion?: string; titulo_tratamiento?: string | null, es_pilates?: boolean;}, 
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
   enviarNotificacion: boolean = true,
-  id_grupo_tratamiento?: string
+  id_grupo_tratamiento?: string,
 ) {
+
+  // console.log('Iniciando creación de turno con datos:', datos, 'y recordatorios:', recordatorios);
 
   try {
     const supabase = await createClient();
@@ -216,17 +229,23 @@ export async function crearTurno(
     // ✅ MULTI-ORG: Obtener contexto organizacional
     // const { getAuthContext } = await import("@/lib/utils/auth-context");
     const { orgId } = await getAuthContext();
+    let idPilates;
+
+    if (datos.es_pilates) {
+      idPilates =  await obtenerIdPilates(supabase as SupabaseClientType, orgId);
+    }
 
     // ============= CREAR GRUPO DE TRATAMIENTO SI HAY TÍTULO =============
     if (datos.titulo_tratamiento && !id_grupo_tratamiento && datos.id_paciente && datos.id_especialista) {
       const nuevoGrupo: Database["public"]["Tables"]["grupo_tratamiento"]["Insert"] = {
         id_paciente: datos.id_paciente,
         id_especialista: datos.id_especialista,
-        id_especialidad: datos.id_especialidad ?? undefined,
+        id_especialidad: idPilates ?? datos.id_especialidad ?? undefined,
         id_organizacion: orgId,
         nombre: datos.titulo_tratamiento,
         fecha_inicio: datos.fecha,
         tipo_plan: datos.tipo_plan ?? 'particular',
+        
       };
 
       const { data: grupo, error: errorGrupo } = await supabase
@@ -243,17 +262,22 @@ export async function crearTurno(
     }
 
     // ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
+    // ✅ Usar idPilates como especialidad cuando es_pilates=true, independientemente de lo que envíe el frontend
+    const especialidadIdEfectiva = (idPilates && datos.es_pilates) ? idPilates : (datos.id_especialidad ?? undefined);
+
     if (datos.fecha && datos.hora && datos.id_especialista) {
       const disponibilidad = await verificarDisponibilidad(
         datos.fecha,
         datos.hora,
         datos.id_especialista,
         datos.id_box || undefined,
-        datos.id_especialidad ?? undefined
+        especialidadIdEfectiva
       );
       
       if (!disponibilidad.success || !disponibilidad.disponible) {
-        if (datos.id_especialidad === 4) {
+        
+
+        if (datos.es_pilates && idPilates) {
           return { 
             success: false, 
             error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4` 
@@ -268,11 +292,17 @@ export async function crearTurno(
     }
 
     // ✅ MULTI-ORG: Inyectar id_organizacion en los datos del turno
+    // Extraer campos que NO pertenecen a la tabla turno antes de insertar
+    const { es_pilates: _esPilates, titulo_tratamiento: _tituloTratamiento, ...datosTurno } = datos;
     const turnoConOrg: TurnoInsert = {
-      ...datos,
+      ...datosTurno,
+      // ✅ Si es Pilates y el frontend no envió id_especialidad, usar el ID resuelto dinámicamente
+      ...(especialidadIdEfectiva && { id_especialidad: especialidadIdEfectiva }),
       id_organizacion: orgId,
       ...(id_grupo_tratamiento && { id_grupo_tratamiento })
     };
+
+    // console.log("Creando turno con datos:", turnoConOrg);
 
     // ✅ AHORA datos es TurnoInsert puro, sin recordatorios
     const { data, error } = await supabase
@@ -419,8 +449,9 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
           );
           
           if (!disponibilidad.success || !disponibilidad.disponible) {
-            // Mensaje específico para Pilates
-            if (especialidadId === 4) {
+            const idPilates = await obtenerIdPilates(supabase as SupabaseClientType, orgId);
+
+            if (idPilates && especialidadId === idPilates) {
               return { 
                 success: false, 
                 error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4` 
@@ -666,6 +697,9 @@ export async function obtenerAgendaEspecialista(
   const supabase = await createClient();
   
   try {
+    const { orgId } = await getAuthContext();
+    const idPilates = await obtenerIdPilates(supabase as SupabaseClientType, orgId);
+
     const { data, error } = await supabase
       .from("turno")
       .select(`
@@ -678,8 +712,13 @@ export async function obtenerAgendaEspecialista(
       .eq("fecha", fecha)
       .neq("estado", "cancelado")
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
-      .neq("id_especialidad", 4) // Excluir turnos de Pilates
+      .neq("id_especialidad", idPilates) // ✅ Excluir Pilates de la agenda normal
       .order("hora", { ascending: true });
+
+    // let resultadoData = data;
+    // if (idPilates && Array.isArray(data)) {
+    //   resultadoData = data.filter((turno: any) => turno.id_especialidad !== idPilates);
+    // }
 
     if (error) {
       console.error("Error al obtener agenda:", error);
@@ -708,13 +747,24 @@ export async function verificarDisponibilidadPilates(
 ) {
   const supabase = await createClient();
   try {
-    // Buscar CUALQUIER turno de Pilates (especialidad_id = 4) en esa fecha y hora
+    const { orgId } = await getAuthContext();
+    const idPilates = await obtenerIdPilates(supabase as SupabaseClientType, orgId);
+
+    if (!idPilates) {
+      return {
+        success: true,
+        disponible: true,
+        conflictos: 0,
+        turnosExistentes: []
+      };
+    }
+
     const { data, error } = await supabase
       .from("turno")
       .select("id_turno, id_especialista, estado, hora")
       .eq("fecha", fecha)
       .eq("hora", hora)
-      .eq("id_especialidad", 4)
+      .eq("id_especialidad", idPilates)
       .neq("estado", "cancelado")
       .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
@@ -747,6 +797,9 @@ export async function verificarDisponibilidad(
 ) {
   const supabase = await createClient();
   try {
+    const { orgId } = await getAuthContext();
+    const idPilates = await obtenerIdPilates(supabase as SupabaseClientType, orgId);
+
     let query = supabase
       .from("turno")
       .select("id_turno, estado, hora, id_especialidad")
@@ -767,8 +820,8 @@ export async function verificarDisponibilidad(
     }
 
     // ============= LÓGICA ESPECIAL PARA PILATES =============
-    if (especialidad_id === 4) {
-      const pilatesTurnos = data.filter(t => t.id_especialidad === 4);
+    if (idPilates && especialidad_id === idPilates) {
+      const pilatesTurnos = data.filter(t => t.id_especialidad === idPilates);
       const disponible = pilatesTurnos.length < 4;
 
       return {
@@ -802,6 +855,9 @@ export async function verificarDisponibilidadParaActualizacion(
   const supabase = await createClient();
   
   try {
+    const { orgId } = await getAuthContext();
+    const idPilates = await obtenerIdPilates(supabase as SupabaseClientType, orgId);
+
     let query = supabase
       .from("turno")
       .select("id_turno, id_especialidad")
@@ -824,8 +880,8 @@ export async function verificarDisponibilidadParaActualizacion(
     }
 
     // ============= LÓGICA ESPECIAL PARA PILATES =============
-    if (especialidad_id === 4) {
-      const pilatesTurnos = data.filter(t => t.id_especialidad === 4);
+    if (idPilates && especialidad_id === idPilates) {
+      const pilatesTurnos = data.filter(t => t.id_especialidad === idPilates);
       const disponible = pilatesTurnos.length < 4;
       
       return { 
@@ -1442,6 +1498,7 @@ export async function crearTurnosEnLote(turnos: Array<{
 
     const turnosCreados = [];
     const errores = [];
+    const idPilates = await obtenerIdPilates(orgId);
 
     // Crear turnos uno por uno
     for (const turnoData of turnos) {
@@ -1454,7 +1511,7 @@ export async function crearTurnosEnLote(turnos: Array<{
             id_especialista: turnoData.id_especialista,
             fecha: turnoData.fecha,
             hora: turnoData.hora_inicio,
-            id_especialidad: 4,
+            id_especialidad: idPilates ? idPilates : null, // ✅ Asignar especialidad Pilates si existe
             estado: turnoData.estado || 'programado',
             tipo_plan: 'particular',
             dificultad: turnoData.dificultad || 'principiante',

@@ -92,44 +92,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             queryOrg = queryOrg.eq('id_organizacion', currentOrgId);
           }
 
-          let { data: orgData, error: orgError } = await queryOrg.limit(1);
+          let orgData;
 
-          if (orgError) {
-            console.error('❌ useAuth: Error en query usuario_organizacion:', orgError);
-            error = orgError;
-          } else if (!orgData || orgData.length === 0) {
-            console.warn('⚠️ useAuth: No se encontró usuario_organizacion');
+          console.log('🔄 useAuth: Buscando usuario por email...');
+          const { data: usuarioData, error: usuarioError } = await supabase
+            .from('usuario')
+            .select('id_usuario')
+            .eq('email', sessionUser.email)
+            .eq('activo', true)
+            .single();
 
-            // FALLBACK: Si no hay org_actual, buscar por email del usuario
-            console.log('🔄 useAuth: Buscando usuario por email...');
-            const { data: usuarioData, error: usuarioError } = await supabase
-              .from('usuario')
-              .select('id_usuario')
-              .eq('email', sessionUser.email)
-              .eq('activo', true)
-              .single();
+          if (usuarioError) {
+            console.error('❌ useAuth: Error buscando usuario:', usuarioError);
+          } else if (usuarioData && 'id_usuario' in usuarioData) {
+            console.log('👤 useAuth: Usuario encontrado, buscando org activa...');
 
-            if (usuarioError) {
-              console.error('❌ useAuth: Error buscando usuario:', usuarioError);
-            } else if (usuarioData && 'id_usuario' in usuarioData) {
-              console.log('👤 useAuth: Usuario encontrado, buscando org activa...');
-              const { data: orgFallback, error: orgFallbackError } = await supabase
-                .from('usuario_organizacion')
-                .select('id_usuario_organizacion, id_rol, id_organizacion, id_usuario, activo')
-                .eq('id_usuario', (usuarioData as any).id_usuario)
-                .eq('activo', true)
-                .limit(1);
+            const queryOrgUser = queryOrg.eq('id_usuario', (usuarioData as any).id_usuario);
+            const { data: orgDataQuery, error: orgDataError } = await queryOrgUser.limit(1);
+
+            if (orgDataError) {
+              console.error('❌ useAuth: Error en consulta usuario_organizacion:', orgDataError);
+              error = orgDataError;
+
+              let { data: orgDataFallback, error: orgFallbackError } = await queryOrg.limit(1)
 
               if (orgFallbackError) {
-                console.error('❌ useAuth: Error en fallback usuario_organizacion:', orgFallbackError);
-                error = orgFallbackError;
-              } else if (orgFallback && orgFallback.length > 0) {
-                // Reemplazar orgData con el fallback encontrado
-                orgData = orgFallback;
-                console.log('✅ useAuth: Org encontrada en fallback');
+                console.error('❌ useAuth: Error en consulta usuario_organizacion fallback:', orgFallbackError);
               }
+
+              orgData = orgDataFallback;
+
+            } else if (orgDataQuery && orgDataQuery.length > 0) {
+              console.log('✅ useAuth: Org encontrada para usuario:', orgDataQuery);
+              orgData = orgDataQuery;
             }
-          }
+          }      
 
           if (orgData && orgData.length > 0) {
             const org = orgData[0] as any; // Type assertion para evitar errores de TypeScript
