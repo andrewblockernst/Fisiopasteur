@@ -4,6 +4,7 @@ import PilatesCalendarioSemanal from "@/componentes/pilates/componenteSemanal";
 import { NuevoTurnoPilatesModal } from "@/componentes/pilates/nuevoTurnoPilatesDialog";
 import { DetalleClaseModal } from "@/componentes/pilates/detalleClaseModal";
 import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerPacientes } from "@/lib/actions/turno.action";
+import { getIdPilates, esPilates } from "@/lib/constants/especialidades";
 import { addDays, format, startOfWeek } from "date-fns";
 import { useToastStore } from '@/stores/toast-store';
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
@@ -34,6 +35,7 @@ export default function PilatesPage() {
   const [pacientes, setPacientes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState(1); // CAMBIO TEMPORAL PARA PROBAR COMO ADMIN
+  const [idPilates, setIdPilates] = useState<number | null>(null); // ID dinámico de Pilates
 
   // ============= TOAST PARA MENSAJES =============
   const { addToast } = useToastStore();
@@ -47,8 +49,10 @@ export default function PilatesPage() {
       const res = await obtenerTurnosConFiltros({ 
         fecha_desde: desde, 
         fecha_hasta: hasta,
-        especialidad_id: 4 // Filtrar solo turnos de Pilates
+        especialidad_ids: [String(idPilates)]
       });
+
+      console.log('Turnos obtenidos:', res);
       
       if (res.success && Array.isArray(res.data)) {
         
@@ -70,25 +74,47 @@ export default function PilatesPage() {
     }
   };
 
-  // ============= CARGAR TURNOS CUANDO CAMBIA LA SEMANA O LOS ESPECIALISTAS =============
+  // ============= CARGAR TURNOS CUANDO CAMBIA LA SEMANA, ESPECIALISTAS O ID DE PILATES =============
   useEffect(() => {
-    if (especialistas.length > 0) {
+    if (especialistas.length > 0 && idPilates) {
       cargarTurnos();
     }
-  }, [semanaBase, especialistas]);
+  }, [semanaBase, especialistas, idPilates]);
 
   // ============= CARGAR DATOS INICIALES =============
   useEffect(() => {
     const cargarDatos = async () => {
       setLoading(true);
       try {
-        // Cargar especialistas de Pilates
+        // Cargar todas las especialidades para encontrar el ID de Pilates dinámicamente
         const resEspecialistas = await obtenerEspecialistas();
         if (resEspecialistas.success && Array.isArray(resEspecialistas.data)) {
-          const pilates = resEspecialistas.data.filter((e: any) => {
-            const principal = e.especialidad?.id_especialidad === 4;
+          // Buscar el ID de Pilates por nombre
+            const todosEspecialistas = resEspecialistas.data;
+            const EspecialidadesEspecialistas = Array.from(
+            new Set(
+              todosEspecialistas.flatMap((e: any) => {
+              const especialidades = [];
+              if (e.especialidad) especialidades.push(e.especialidad);
+              if (Array.isArray(e.usuario_especialidad)) {
+                especialidades.push(...e.usuario_especialidad.map((ue: any) => ue.especialidad));
+              }
+              return especialidades;
+              })
+            )
+            );
+          console.log('Especialidades encontradas en especialistas:', EspecialidadesEspecialistas);
+
+          const pilatesId = getIdPilates(EspecialidadesEspecialistas);
+
+          console.log('ID de Pilates encontrado:', pilatesId);
+          setIdPilates(pilatesId);
+          
+          // Filtrar solo especialistas de Pilates
+          const pilates = todosEspecialistas.filter((e: any) => {
+            const principal = esPilates(e.especialidad);
             const adicional = Array.isArray(e.usuario_especialidad)
-              ? e.usuario_especialidad.some((ue: any) => ue.especialidad?.id_especialidad === 4)
+              ? e.usuario_especialidad.some((ue: any) => esPilates(ue.especialidad))
               : false;
             return principal || adicional;
           });

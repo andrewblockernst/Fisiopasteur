@@ -48,7 +48,7 @@ export function DeletePacienteDialog({isOpen, onClose, paciente, handleToast}: D
                         ¿Estás seguro de que deseas eliminar al paciente "<b>{paciente.nombre + ' ' + paciente.apellido}</b>"?
                         <br />
                         <i style={{ marginTop: 12, display: "block", fontSize: 12, fontWeight: "bold" }}>
-                        Esta acción no se puede deshacer.
+                        Esta acción se puede deshacer.
                         </i>
                     </>
                 }

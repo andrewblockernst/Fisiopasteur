@@ -194,9 +194,10 @@ export function DetalleClaseModal({
       const resultado = await obtenerTurnosConFiltros({
         fecha_desde: fechaClase,
         fecha_hasta: fechaClase,
-        especialidad_id: 4,
+        // especialidad_id: 4,
         hora_desde: horaClase,
-        hora_hasta: horaClase
+        hora_hasta: horaClase,
+        es_pilates: true,
       });
       
       if (resultado.success && resultado.data) {
@@ -603,11 +604,12 @@ export function DetalleClaseModal({
           fecha,
           hora,
           id_especialista: especialistaSeleccionado,
-          id_especialidad: 4,
+          // id_especialidad: 4,
           id_paciente: pacienteId,
           estado: "programado",
           tipo_plan: "particular",
-          dificultad: dificultadSeleccionada
+          dificultad: dificultadSeleccionada,
+          es_pilates: true
         });
         
         if (!resultado.success) {
