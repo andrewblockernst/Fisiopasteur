@@ -23,6 +23,7 @@ interface TurnosPageContainerProps {
     especialista_ids: string[];
     especialidad_ids: string[];
     estados: string[];
+    paciente_id?: number;
   };
 }
 
@@ -55,18 +56,12 @@ export default function TurnosPageContainer({
       especialista_ids: especialistaIds.length > 0 ? especialistaIds : initialFilters.especialista_ids,
       especialidad_ids: especialidadIds.length > 0 ? especialidadIds : initialFilters.especialidad_ids,
       estados: estados.length > 0 ? estados : initialFilters.estados,
+      paciente_id: (() => {
+        const pacienteId = searchParams.get('paciente_id');
+        return pacienteId ? parseInt(pacienteId) : initialFilters.paciente_id;
+      })(),
     };
   }, [searchParams, initialFilters]);
-
-  // const shouldUseInitialData = useMemo(() => {
-  //   return (
-  //     filters.fecha_desde === initialFilters.fecha_desde &&
-  //     filters.fecha_hasta === initialFilters.fecha_hasta &&
-  //     (filters.especialista_id ?? '') === (initialFilters.especialista_id ?? '') &&
-  //     (filters.especialidad_id ?? null) === (initialFilters.especialidad_id ?? null) &&
-  //     (filters.estado ?? '') === (initialFilters.estado ?? '')
-  //   );
-  // }, [filters, initialFilters]);
 
   // ✅ React Query con datos iniciales del servidor (SSR + Client Cache)
   const { data: turnos = [], isLoading: turnosLoading } = useTurnos({
@@ -106,16 +101,6 @@ export default function TurnosPageContainer({
     return () => clearInterval(intervalo);
   }, [invalidateTurnos]);
 
-  // Efecto para mostrar skeleton loader en la carga inicial
-  // useEffect(() => {
-  //   // Mostrar skeleton por 300ms en la primera carga
-  //   const timer = setTimeout(() => {
-  //     setIsInitialLoad(false);
-  //   }, 300);
-    
-  //   return () => clearTimeout(timer);
-  // }, []);
-
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
     // Actualizar URL con la nueva fecha
@@ -129,20 +114,6 @@ export default function TurnosPageContainer({
     // ✅ Invalidar caché de React Query en lugar de router.refresh()
     invalidateTurnos();
   };
-
-  // Mostrar skeleton loader durante la carga inicial o mientras carga
-  // if (turnosLoading /* || isInitialLoad */) {
-  //   return (
-  //     <UnifiedSkeletonLoader
-  //       type={isMobile ? "list" : "table"}
-  //       rows={5}
-  //       columns={6}
-  //       showHeader={true}
-  //       showFilters={true}
-  //       showSearch={false}
-  //     />
-  //   );
-  // }
 
   if (isMobile) {
     return (
@@ -163,10 +134,10 @@ export default function TurnosPageContainer({
     <div className="min-h-screen text-black">
       {/* Contenido Principal */}
       <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8 flex flex-col h-[calc(100vh-2rem)] sm:h-[calc(100vh-3rem)]">
-        {/* Desktop Header */}
+        {/* Desktop Header
         <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-4">
           <h2 className="text-2xl sm:text-3xl font-bold">Turnos</h2>
-        </div>
+        </div> */}
 
         {/* Filtros y Búsqueda - Solo Desktop */}
         <div className="hidden sm:block rounded-lg mb-4">

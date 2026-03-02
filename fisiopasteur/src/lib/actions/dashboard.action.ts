@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 import { getAuthContext } from "@/lib/utils/auth-context";
+import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type Box = Database["public"]["Tables"]["box"]["Row"];
@@ -108,14 +109,20 @@ export async function obtenerKPIsConHistorial(
       selectFields = "fecha, hora, estado, id_turno, precio"; // tipo_plan, id_especialista, id_especialidad,
     }    
   
-    // Obtener turnos en el rango (con precio)
-    const { data: turnos, error: errorTurnos } = await supabase
+    const idPilates = await obtenerIdPilates(supabase, orgId);
+
+    let queryTurnos = supabase
       .from("turno")
       .select(selectFields)
       .gte("fecha", fechaInicioStr)
       .lte("fecha", fechaFinStr)
-      .neq("id_especialidad", 4) // EXCLUYE PILATES
       .eq("id_organizacion", orgId);
+
+    if (idPilates) {
+      queryTurnos = queryTurnos.neq("id_especialidad", idPilates);
+    }
+
+    const { data: turnos, error: errorTurnos } = await queryTurnos;
 
     if (errorTurnos) {
       throw new Error("Error al obtener datos históricos");
@@ -257,7 +264,7 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
       .eq("fecha", hoy)
       .eq("estado", "programado")
       .gt("hora", new Date().toLocaleTimeString("en-US", { hour12: false }))
-    //   .neq("id_especialidad", 4) // Excluir Pilates
+    //   .neq("id_especialidad", idPilates) // Excluir Pilates
       .order("hora", { ascending: true })
       .eq("id_organizacion", orgId);
 
@@ -305,7 +312,7 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
       .from("turno")
       .select("id_box, id_turno")
       .eq("fecha", hoy)
-    //   .neq("id_especialidad", 4)
+    //   .neq("id_especialidad", idPilates)
       .in("estado", ["programado", "atendido"])
       .eq("id_organizacion", orgId);
 

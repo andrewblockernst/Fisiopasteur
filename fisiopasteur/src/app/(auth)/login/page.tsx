@@ -152,7 +152,7 @@ export default function LoginPage() {
                     setEmailError(null);
                   }}
                   placeholder="Ej. usuario@gmail.com"
-                  className={`mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 placeholder:text-black ${
+                  className={`mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-black ${
                     emailError 
                       ? 'border-red-500 focus:ring-red-500' 
                       : 'border-gray-300 focus:ring-red-500'
@@ -176,7 +176,7 @@ export default function LoginPage() {
                     setPasswordError(null);
                   }}
                   placeholder="Ej. 12345678"
-                  className={`mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 placeholder:text-black ${
+                  className={`mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-black ${
                     passwordError 
                       ? 'border-red-500 focus:ring-red-500' 
                       : 'border-gray-300 focus:ring-red-500'
