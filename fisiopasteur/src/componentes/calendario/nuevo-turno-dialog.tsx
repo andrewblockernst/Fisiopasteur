@@ -29,7 +29,7 @@ interface NuevoTurnoModalProps {
   fechaSeleccionada?: Date | null;
   horaSeleccionada?: string | null;
   especialistas?: any[];
-  pacientes?: any[];
+  // pacientes?: any[];
 }
 
 // ✅ Días de la semana (SIN Sábado ni Domingo)
@@ -63,7 +63,7 @@ export function NuevoTurnoModal({
   fechaSeleccionada = null,
   horaSeleccionada = '',
   especialistas: especialistasProp = [],
-  pacientes: pacientesProp = []
+  // pacientes: pacientesProp = []
 }: NuevoTurnoModalProps) {
   const { user, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
@@ -82,7 +82,7 @@ export function NuevoTurnoModal({
 
   // Estados para datos cargados automáticamente
   const [especialistas, setEspecialistas] = useState<any[]>(especialistasProp);
-  const [pacientes, setPacientes] = useState<any[]>(pacientesProp);
+  const [pacientes, setPacientes] = useState<any[]>([]);
   const [especialidades, setEspecialidades] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
   const [boxesDisponibles, setBoxesDisponibles] = useState<any[]>([]);
@@ -212,11 +212,11 @@ export function NuevoTurnoModal({
         }
         
         // Solo cargar pacientes si no vienen por props Y no los tenemos
-        if (pacientesProp.length === 0 && pacientes.length === 0) {
-          promises.push(obtenerPacientes().then(res => {
-            if (res.success) setPacientes(res.data || []);
-          }));
-        }
+        // if (pacientesProp.length === 0 && pacientes.length === 0) {
+        //   promises.push(obtenerPacientes().then(res => {
+        //     if (res.success) setPacientes(res.data || []);
+        //   }));
+        // }
         
         // Solo cargar especialidades si no las tenemos o cache expirado
         if (!cacheValido || especialidades.length === 0) {

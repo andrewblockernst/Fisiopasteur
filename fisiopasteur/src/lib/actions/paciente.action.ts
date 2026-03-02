@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 import { normalizePhoneNumber } from "@/lib/utils/phone.utils";
+const { getAuthContext } = await import("@/lib/utils/auth-context");
 
 type Paciente = Tables<"paciente">;
 type PacienteInsert = TablesInsert<"paciente">;
@@ -105,7 +106,7 @@ export async function getPacientes(options?: {
   } = options || {};
 
   // ✅ MULTI-ORG: Obtener contexto organizacional
-  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  
   const { orgId } = await getAuthContext();
 
   let query = supabase
@@ -142,7 +143,7 @@ export async function getPaciente(id: number) {
   const supabase = await createClient();
   
   // ✅ MULTI-ORG: Obtener contexto organizacional
-  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  // const { getAuthContext } = await import("@/lib/utils/auth-context");
   const { orgId } = await getAuthContext();
   
   const { data, error } = await supabase
@@ -168,7 +169,7 @@ export async function searchPacientes(searchTerm: string) {
   const supabase = await createClient();
   
   // ✅ MULTI-ORG: Obtener contexto organizacional
-  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  // const { getAuthContext } = await import("@/lib/utils/auth-context");
   const { orgId } = await getAuthContext();
   
   const { data, error } = await supabase
@@ -192,7 +193,7 @@ export async function createPaciente(formData: FormData) {
   const supabase = await createClient();
 
   // ✅ MULTI-ORG: Obtener contexto organizacional
-  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  // const { getAuthContext } = await import("@/lib/utils/auth-context");
   const { orgId } = await getAuthContext();
 
   // ✅ Normalizar número de teléfono al formato internacional
@@ -275,7 +276,7 @@ export async function updatePaciente(id: number, formData: FormData) {
   const supabase = await createClient();
 
   // ✅ MULTI-ORG: Obtener contexto organizacional
-  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  // const { getAuthContext } = await import("@/lib/utils/auth-context");
   const { orgId } = await getAuthContext();
 
   // ✅ Normalizar número de teléfono al formato internacional
@@ -360,7 +361,7 @@ export async function deletePaciente(id: number) {
 
   try {
     // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
+    // const { getAuthContext } = await import("@/lib/utils/auth-context");
     const { orgId } = await getAuthContext();
 
     // Verificar si el paciente tiene turnos asociados
@@ -416,7 +417,7 @@ export async function agregarObservacion(idPaciente: number, observaciones: stri
   const supabase = await createClient();
 
   // ✅ MULTI-ORG: Obtener contexto organizacional
-  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  // const { getAuthContext } = await import("@/lib/utils/auth-context");
   const { orgId } = await getAuthContext();
 
   // 1. Buscar el último turno del paciente
@@ -512,7 +513,7 @@ export async function agregarEvolucionClinica(idTurno: number, observaciones: st
   const supabase = await createClient();
   
   // ✅ MULTI-ORG: Obtener contexto organizacional
-  const { getAuthContext } = await import("@/lib/utils/auth-context");
+  // const { getAuthContext } = await import("@/lib/utils/auth-context");
   const { orgId } = await getAuthContext();
   
   const { data, error } = await supabase

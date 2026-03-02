@@ -75,13 +75,23 @@ export async function middleware(request: NextRequest) {
   try {
     // ✅ getUser() verifica el token contra el servidor de Supabase Auth,
     // a diferencia de getSession() que solo lee cookies sin validarlas.
-    const { data: { user: currentUser }, error } = await supabase.auth.getUser();
+    // const { data: { user: currentUser }, error } = await supabase.auth.getUser();
 
-    if (error) {
-      console.error('[Middleware] Error obteniendo usuario:', error);
+    // if (error) {
+    //   console.error('[Middleware] Error obteniendo usuario:', error);
+    // }
+
+    // user = currentUser;
+    const { data: currentSession, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error('[Middleware] Error obteniendo sesión:', sessionError);
     }
 
-    user = currentUser;
+    if (currentSession && currentSession.session) {
+      user = currentSession.session.user;
+    }
+
+    
   } catch (err) {
     console.error('[Middleware] Error en auth.getUser():', err);
   }
