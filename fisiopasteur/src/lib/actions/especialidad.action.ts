@@ -18,15 +18,10 @@ type EspecialidadUpdate = Database["public"]["Tables"]["especialidad"]["Update"]
 export async function getEspecialidades() {
   try {
     const supabase = await createClient();
-    
-    // Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
 
     const { data, error } = await supabase
       .from("especialidad")
       .select("*")
-      .eq("id_organizacion", orgId)
       .order("nombre");
 
     if (error) {
@@ -52,10 +47,6 @@ export async function createEspecialidad(nombre: string) {
   const supabase = await createClient();
   
   try {
-    // Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
     // Validar que el nombre no esté vacío
     if (!nombre || nombre.trim().length === 0) {
       return {
@@ -65,44 +56,53 @@ export async function createEspecialidad(nombre: string) {
       };
     }
 
-    // Verificar que no exista una especialidad con el mismo nombre en esta organización
-    const { data: existente, error: errorCheck } = await supabase
-      .from("especialidad")
-      .select("id_especialidad")
-      .eq("id_organizacion", orgId)
-      .ilike("nombre", nombre.trim())
-      .maybeSingle();
+    // Verificar que no exista una especialidad con el mismo nombre
+    // const { data: existente, error: errorCheck } = await supabase
+    //   .from("especialidad")
+    //   .select("id_especialidad")
+    //   .ilike("nombre", nombre.trim())
+    //   .maybeSingle();
 
-    if (errorCheck) {
-      console.error("Error verificando especialidad:", errorCheck);
-      return {
-        success: false,
-        message: "Error al verificar especialidad",
-        description: errorCheck.message
-      };
-    }
+    // if (errorCheck) {
+    //   console.error("Error verificando especialidad:", errorCheck);
+    //   return {
+    //     success: false,
+    //     message: "Error al verificar especialidad",
+    //     description: errorCheck.message
+    //   };
+    // }
 
-    if (existente) {
-      return {
-        success: false,
-        message: "Especialidad duplicada",
-        description: "Ya existe una especialidad con ese nombre"
-      };
-    }
+    // if (existente) {
+    //   return {
+    //     success: false,
+    //     message: "Especialidad duplicada",
+    //     description: "Ya existe una especialidad con ese nombre"
+    //   };
+    // }
+
+    const nombreLimpio = nombre.trim();
 
     // Crear la especialidad
     const nuevaEspecialidad: EspecialidadInsert = {
-      nombre: nombre.trim(),
-      id_organizacion: orgId
+      nombre: nombreLimpio,
     };
 
     const { data, error } = await (supabase
       .from("especialidad") as any)
-      .insert(nuevaEspecialidad)
+      .insert({ nombre: nombreLimpio })
       .select()
       .single();
 
     if (error) {
+      if (error.code === "23505" || error.message.includes("duplicate key value violates unique constraint")) {
+        console.error("Error creating especialidad - duplicate name:", error);
+        return {
+          success: false,
+          message: "Especialidad duplicada",
+          description: "Ya existe una especialidad con ese nombre"
+        };
+      }
+
       console.error("Error creando especialidad:", error);
       return {
         success: false,
@@ -116,7 +116,7 @@ export async function createEspecialidad(nombre: string) {
     return {
       success: true,
       message: "Especialidad creada",
-      description: `${nombre} ha sido agregada exitosamente`,
+      description: `${nombreLimpio} ha sido agregada exitosamente`,
       data
     };
   } catch (error) {
@@ -140,10 +140,6 @@ export async function updateEspecialidad(id: number, nombre: string) {
   const supabase = await createClient();
   
   try {
-    // Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
     // Validar que el nombre no esté vacío
     if (!nombre || nombre.trim().length === 0) {
       return {
@@ -153,58 +149,75 @@ export async function updateEspecialidad(id: number, nombre: string) {
       };
     }
 
-    // Verificar que la especialidad exista y pertenezca a esta organización
-    const { data: especialidadActual, error: errorCheck } = await supabase
-      .from("especialidad")
-      .select("*")
-      .eq("id_especialidad", id)
-      .eq("id_organizacion", orgId)
-      .single();
+    // Verificar que la especialidad exista
+    // const { data: especialidadActual, error: errorCheck } = await supabase
+    //   .from("especialidad")
+    //   .select("*")
+    //   .eq("id_especialidad", id)
+    //   .single();
 
-    if (errorCheck || !especialidadActual) {
-      return {
-        success: false,
-        message: "Especialidad no encontrada",
-        description: "La especialidad no existe o no pertenece a tu organización"
-      };
-    }
+    // if (errorCheck || !especialidadActual) {
+    //   return {
+    //     success: false,
+    //     message: "Especialidad no encontrada",
+    //     description: "La especialidad no existe"
+    //   };
+    // }
 
-    // Verificar que no exista otra especialidad con el mismo nombre
-    const { data: duplicado, error: errorDuplicado } = await supabase
-      .from("especialidad")
-      .select("id_especialidad")
-      .eq("id_organizacion", orgId)
-      .ilike("nombre", nombre.trim())
-      .neq("id_especialidad", id)
-      .maybeSingle();
+    // // Verificar que no exista otra especialidad con el mismo nombre
+    // const { data: duplicado, error: errorDuplicado } = await supabase
+    //   .from("especialidad")
+    //   .select("id_especialidad")
+    //   .ilike("nombre", nombre.trim())
+    //   .neq("id_especialidad", id)
+    //   .maybeSingle();
 
-    if (errorDuplicado) {
-      console.error("Error verificando duplicado:", errorDuplicado);
-      return {
-        success: false,
-        message: "Error al verificar especialidad",
-        description: errorDuplicado.message
-      };
-    }
+    // if (errorDuplicado) {
+    //   console.error("Error verificando duplicado:", errorDuplicado);
+    //   return {
+    //     success: false,
+    //     message: "Error al verificar especialidad",
+    //     description: errorDuplicado.message
+    //   };
+    // }
 
-    if (duplicado) {
-      return {
-        success: false,
-        message: "Especialidad duplicada",
-        description: "Ya existe otra especialidad con ese nombre"
-      };
-    }
+    // if (duplicado) {
+    //   return {
+    //     success: false,
+    //     message: "Especialidad duplicada",
+    //     description: "Ya existe otra especialidad con ese nombre"
+    //   };
+    // }
+    const nombreLimpio = nombre.trim();
 
     // Actualizar la especialidad
     const { data, error } = await (supabase
       .from("especialidad") as any)
-      .update({ nombre: nombre.trim() })
+      .update({ nombre: nombreLimpio })
       .eq("id_especialidad", id)
-      .eq("id_organizacion", orgId)
       .select()
       .single();
 
     if (error) {
+      if (error.code === "23505" || error.message.includes("duplicate key value violates unique constraint")) {
+        console.error("Error updating especialidad - duplicate name:", error);
+        return {
+          success: false,
+          message: "Especialidad duplicada",
+          description: "Ya existe otra especialidad con ese nombre"
+        };
+      }
+
+      if (error.code === 'PGRST116') {
+        console.error("Error updating especialidad - not found:", error);
+        return {
+          success: false,
+          message: "Especialidad no encontrada",
+          description: "La especialidad que intentas editar ya no existe o fue eliminada."
+        };
+      }
+
+
       console.error("Error actualizando especialidad:", error);
       return {
         success: false,
@@ -218,7 +231,7 @@ export async function updateEspecialidad(id: number, nombre: string) {
     return {
       success: true,
       message: "Especialidad actualizada",
-      description: `${nombre} ha sido actualizada exitosamente`,
+      description: `Actualizada exitosamente a ${nombreLimpio}`,
       data
     };
   } catch (error) {
@@ -242,23 +255,18 @@ export async function deleteEspecialidad(id: number) {
   const supabase = await createClient();
   
   try {
-    // Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
-    // Verificar que la especialidad exista y pertenezca a esta organización
+    // Verificar que la especialidad exista
     const { data: especialidad, error: errorCheck } = await supabase
       .from("especialidad")
       .select("nombre")
       .eq("id_especialidad", id)
-      .eq("id_organizacion", orgId)
       .single();
 
     if (errorCheck || !especialidad) {
       return {
         success: false,
         message: "Especialidad no encontrada",
-        description: "La especialidad no existe o no pertenece a tu organización"
+        description: "La especialidad no existe"
       };
     }
 
@@ -292,7 +300,6 @@ export async function deleteEspecialidad(id: number) {
       .from("turno")
       .select("id_turno")
       .eq("id_especialidad", id)
-      .eq("id_organizacion", orgId)
       .limit(1)
       .maybeSingle();
 
@@ -317,8 +324,7 @@ export async function deleteEspecialidad(id: number) {
     const { error } = await supabase
       .from("especialidad")
       .delete()
-      .eq("id_especialidad", id)
-      .eq("id_organizacion", orgId);
+      .eq("id_especialidad", id);
 
     if (error) {
       console.error("Error eliminando especialidad:", error);

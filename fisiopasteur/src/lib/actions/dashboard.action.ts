@@ -2,7 +2,6 @@
 
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
-import { getAuthContext } from "@/lib/utils/auth-context";
 import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
@@ -50,25 +49,7 @@ export interface OcupacionBox {
 }
 
 export async function obtenerNombreOrganizacion(): Promise<string> {
-  const supabase = await createClient();
-  const { orgId } = await getAuthContext();
-
-  try {
-    const { data, error } = await supabase
-      .from("organizacion")
-      .select("nombre")
-      .eq("id_organizacion", orgId)
-      .single();
-
-    if (error) {
-      throw new Error("Error al obtener nombre de la organización");
-    }
-
-    return data?.nombre || "Fisiopasteur";
-  } catch (error) {
-    console.error("❌ Error en obtenerNombreOrganizacion:", error);
-    return "Fisiopasteur";
-  }
+  return "Fisiopasteur";
 }
 
 // ✅ Obtener KPIs por periodo con historial
@@ -76,7 +57,6 @@ export async function obtenerKPIsConHistorial(
   periodo: PeriodoFiltro
 ): Promise<{ datos: KPIHistorico[]; total: KPIsDashboard }> {
   const supabase = await createClient();
-  const { orgId } = await getAuthContext();
 
   try {
     const hoy = new Date();
@@ -109,14 +89,13 @@ export async function obtenerKPIsConHistorial(
       selectFields = "fecha, hora, estado, id_turno, precio"; // tipo_plan, id_especialista, id_especialidad,
     }    
   
-    const idPilates = await obtenerIdPilates(supabase, orgId);
+    const idPilates = await obtenerIdPilates(supabase);
 
     let queryTurnos = supabase
       .from("turno")
       .select(selectFields)
       .gte("fecha", fechaInicioStr)
-      .lte("fecha", fechaFinStr)
-      .eq("id_organizacion", orgId);
+      .lte("fecha", fechaFinStr);
 
     if (idPilates) {
       queryTurnos = queryTurnos.neq("id_especialidad", idPilates);
@@ -244,7 +223,6 @@ export async function obtenerKPIsConHistorial(
 // ✅ Obtener próximos turnos del día
 export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
   const supabase = await createClient();
-  const { orgId } = await getAuthContext();
 
   try {
     const hoy = new Date().toISOString().split("T")[0];
@@ -265,8 +243,7 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
       .eq("estado", "programado")
       .gt("hora", new Date().toLocaleTimeString("en-US", { hour12: false }))
     //   .neq("id_especialidad", idPilates) // Excluir Pilates
-      .order("hora", { ascending: true })
-      .eq("id_organizacion", orgId);
+      .order("hora", { ascending: true });
 
     if (error) {
       console.error("Error al obtener próximos turnos:", error);
@@ -294,7 +271,6 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
 // ✅ Obtener ocupación de boxes
 export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
   const supabase = await createClient();
-  const { orgId } = await getAuthContext();
 
   try {
     const hoy = new Date().toISOString().split("T")[0];
@@ -302,8 +278,7 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
     // 1️⃣ Obtener todos los boxes
     const { data: boxes, error: errorBoxes } = await supabase
       .from("box")
-      .select("id_box, numero")
-      .eq("id_organizacion", orgId);
+      .select("id_box, numero");
 
     if (errorBoxes) throw errorBoxes;
 
@@ -313,8 +288,7 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
       .select("id_box, id_turno")
       .eq("fecha", hoy)
     //   .neq("id_especialidad", idPilates)
-      .in("estado", ["programado", "atendido"])
-      .eq("id_organizacion", orgId);
+      .in("estado", ["programado", "atendido"]);
 
     if (errorTurnos) throw errorTurnos;
 
