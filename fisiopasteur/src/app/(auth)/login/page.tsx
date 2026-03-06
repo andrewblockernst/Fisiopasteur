@@ -8,6 +8,7 @@ import Link from "next/link";
 import Boton from "@/componentes/boton";
 import { useAuth } from "@/hooks/usePerfil"; 
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const { isAuthenticated, loading: authLoading, user } = useAuth();
@@ -18,6 +19,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
 
   const router = useRouter();
@@ -126,6 +128,12 @@ export default function LoginPage() {
     }
   };
 
+  useEffect(() => {
+    if (password.length !== 0) return;
+
+    setShowPassword(false);
+  }, [password]);
+
   return (
     <>
       <Head>
@@ -167,21 +175,39 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-sm font-medium text-black">
                   Contraseña
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setPasswordError(null);
-                  }}
-                  placeholder="Ej. 12345678"
-                  className={`mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-black ${
-                    passwordError 
-                      ? 'border-red-500 focus:ring-red-500' 
-                      : 'border-gray-300 focus:ring-red-500'
-                  }`}
-                />
+                <div className="relative mt-1">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setPasswordError(null);
+                    }}
+                    placeholder="Ej. 12345678"
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-black ${
+                      password.length > 0 ? 'pr-24' : ''
+                    } ${
+                      passwordError
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-red-500'
+                    }`}
+                  />
+                  {password.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-3 text-sm text-gray-700 hover:text-black"
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      
+                      {showPassword ?
+                        <EyeOff size={18} /> : 
+                        <Eye size={18} />
+                      }
+                    </button>
+                  )}
+                </div>
                 {passwordError && (
                   <p className="text-red-500 text-sm mt-1">{passwordError}</p>
                 )}

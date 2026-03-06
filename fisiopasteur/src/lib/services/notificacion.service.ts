@@ -14,25 +14,11 @@ type NotificacionRow = Database["public"]["Tables"]["notificacion"]["Row"];
 
 /**
  * Crear registro de notificación en la base de datos
- * ✅ MULTI-ORG: Requiere id_organizacion en datos
  */
 export async function crearNotificacion(datos: NotificacionInsert) {
   const supabase = await createClient();
   
   try {
-    // ✅ MULTI-ORG: Verificar que se incluya id_organizacion
-    if (!datos.id_organizacion) {
-      // Si no viene, intentar obtenerla del contexto
-      const { getCurrentOrgId } = await import("@/lib/utils/auth-context");
-      try {
-        const orgId = await getCurrentOrgId();
-        datos = { ...datos, id_organizacion: orgId };
-      } catch (error) {
-        console.error("Error obteniendo organización para notificación:", error);
-        return { success: false, error: "No se pudo determinar la organización" };
-      }
-    }
-
     const { data, error } = await supabase
       .from("notificacion")
       .insert(datos)
@@ -54,7 +40,6 @@ export async function crearNotificacion(datos: NotificacionInsert) {
 
 /**
  * Actualizar estado de una notificación
- * ✅ MULTI-ORG: Solo verifica organización si hay contexto autenticado (no en cron)
  */
 export async function actualizarEstadoNotificacion(
   id: number, 
@@ -69,28 +54,12 @@ export async function actualizarEstadoNotificacion(
       ...(fechaEnvio && { fecha_envio: fechaEnvio })
     };
 
-    // ✅ Intentar obtener contexto organizacional solo si está disponible
-    let orgId: string | undefined;
-    try {
-      const { getAuthContext } = await import("@/lib/utils/auth-context");
-      const context = await getAuthContext();
-      orgId = context.orgId;
-    } catch (error) {
-      // Si falla, es un cron sin autenticación - actualizar sin filtro de org
-      console.log("🤖 Actualizando notificación desde cron (sin verificación de org)");
-    }
-
-    let query = supabase
+    const { data, error } = await supabase
       .from("notificacion")
       .update(updateData)
-      .eq("id_notificacion", id);
-
-    // ✅ Solo verificar organización si tenemos orgId
-    if (orgId) {
-      query = query.eq("id_organizacion", orgId);
-    }
-
-    const { data, error } = await query.select("*").single();
+      .eq("id_notificacion", id)
+      .select("*")
+      .single();
 
     if (error) {
       console.error("Error actualizando notificación:", error);
@@ -111,15 +80,10 @@ export async function obtenerNotificacionesTurno(idTurno: number) {
   const supabase = await createClient();
   
   try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-    
     const { data, error } = await supabase
       .from("notificacion")
       .select("*")
       .eq("id_turno", idTurno)
-      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .order("fecha_programada", { ascending: true });
 
     if (error) {
@@ -136,29 +100,14 @@ export async function obtenerNotificacionesTurno(idTurno: number) {
 
 /**
  * Obtener notificaciones pendientes de enviar
- * ✅ MULTI-ORG: Cuando se llama desde CRON (sin orgId), procesa TODAS las organizaciones
- * ✅ Cuando se llama desde contexto autenticado (con orgId), filtra por organización
  */
-export async function obtenerNotificacionesPendientes(orgId?: string) {
+export async function obtenerNotificacionesPendientes() {
   const supabase = await createClient();
   
   try {
-    // ✅ Si no se pasa orgId, intentar obtenerlo del contexto (si existe)
-    let organizacionId = orgId;
-    if (!organizacionId) {
-      try {
-        const { getAuthContext } = await import("@/lib/utils/auth-context");
-        const context = await getAuthContext();
-        organizacionId = context.orgId;
-      } catch (error) {
-        // Si falla, es porque es un cron sin autenticación - procesamos todas las orgs
-        console.log("🤖 Cron sin autenticación: procesando notificaciones de todas las organizaciones");
-      }
-    }
-    
     const ahora = new Date().toISOString();
     
-    let query = supabase
+    const { data, error } = await supabase
       .from("notificacion")
       .select(`
         *,
@@ -172,16 +121,6 @@ export async function obtenerNotificacionesPendientes(orgId?: string) {
       .eq("estado", "pendiente")
       .lte("fecha_programada", ahora)
       .order("fecha_programada", { ascending: true });
-    
-    // ✅ Solo filtrar por organización si tenemos orgId
-    if (organizacionId) {
-      query = query.eq("id_organizacion", organizacionId);
-      console.log(`🔍 Filtrando notificaciones pendientes para organización: ${organizacionId}`);
-    } else {
-      console.log(`🔍 Obteniendo notificaciones pendientes de TODAS las organizaciones`);
-    }
-
-    const { data, error } = await query;
 
     if (error) {
       console.error("Error obteniendo notificaciones pendientes:", error);
@@ -202,33 +141,19 @@ export async function obtenerNotificacionesPendientes(orgId?: string) {
 
 /**
  * Registrar notificación de confirmación para un turno
- * ✅ MULTI-ORG: Incluye id_organizacion
  */
 export async function registrarNotificacionConfirmacion(
   idTurno: number, 
   telefono: string, 
-  mensaje: string,
-  orgId?: string // ✅ Opcional, se obtiene del contexto si no se pasa
+  mensaje: string
 ) {
-  // ✅ Si no se pasa orgId, obtenerlo del contexto
-  if (!orgId) {
-    const { getCurrentOrgId } = await import("@/lib/utils/auth-context");
-    try {
-      orgId = await getCurrentOrgId();
-    } catch (error) {
-      console.error("Error obteniendo organización:", error);
-      // Si no se puede obtener, crearNotificacion lo intentará también
-    }
-  }
-
   const notificacion: NotificacionInsert = {
     id_turno: idTurno,
     medio: 'whatsapp',
     mensaje: mensaje,
     telefono: telefono,
     estado: 'pendiente',
-    fecha_programada: new Date().toISOString(), // Inmediata
-    id_organizacion: orgId!, // ✅ Incluir organización
+    fecha_programada: new Date().toISOString(),
   };
 
   return await crearNotificacion(notificacion);
@@ -236,25 +161,13 @@ export async function registrarNotificacionConfirmacion(
 
 /**
  * Registrar notificaciones de recordatorio para un turno (versión flexible)
- * ✅ MULTI-ORG: Incluye id_organizacion
  */
 export async function registrarNotificacionesRecordatorioFlexible(
   idTurno: number,
   telefono: string,
   mensaje: string,
-  fechasRecordatorio: Record<string, Date>,
-  orgId?: string // ✅ Opcional, se obtiene del contexto si no se pasa
+  fechasRecordatorio: Record<string, Date>
 ) {
-  // ✅ Si no se pasa orgId, obtenerlo del contexto
-  if (!orgId) {
-    const { getCurrentOrgId } = await import("@/lib/utils/auth-context");
-    try {
-      orgId = await getCurrentOrgId();
-    } catch (error) {
-      console.error("Error obteniendo organización:", error);
-    }
-  }
-
   const resultados = [];
   
   console.log(`📝 Iniciando registro de ${Object.keys(fechasRecordatorio).length} notificaciones para turno ${idTurno}`);
@@ -268,7 +181,6 @@ export async function registrarNotificacionesRecordatorioFlexible(
         telefono: telefono,
         estado: 'pendiente',
         fecha_programada: fecha.toISOString(),
-        id_organizacion: orgId!, // ✅ Incluir organización
       };
       
       console.log(`  💾 Guardando notificación ${tipo}: fecha_programada=${fecha.toISOString()}, telefono=${telefono}`);
@@ -284,25 +196,13 @@ export async function registrarNotificacionesRecordatorioFlexible(
 
 /**
  * Registrar notificaciones de recordatorio para un turno (versión legacy)
- * ✅ MULTI-ORG: Incluye id_organizacion
  */
 export async function registrarNotificacionesRecordatorio(
   idTurno: number,
   telefono: string,
   mensaje: string,
-  fechasRecordatorio: { recordatorio24h?: Date; recordatorio2h?: Date },
-  orgId?: string // ✅ Opcional, se obtiene del contexto si no se pasa
+  fechasRecordatorio: { recordatorio24h?: Date; recordatorio2h?: Date }
 ) {
-  // ✅ Si no se pasa orgId, obtenerlo del contexto
-  if (!orgId) {
-    const { getCurrentOrgId } = await import("@/lib/utils/auth-context");
-    try {
-      orgId = await getCurrentOrgId();
-    } catch (error) {
-      console.error("Error obteniendo organización:", error);
-    }
-  }
-
   const resultados = [];
   
   // Recordatorio 24h antes
@@ -314,7 +214,6 @@ export async function registrarNotificacionesRecordatorio(
       telefono: telefono,
       estado: 'pendiente',
       fecha_programada: fechasRecordatorio.recordatorio24h.toISOString(),
-      id_organizacion: orgId!, // ✅ Incluir organización
     };
     
     const resultado24h = await crearNotificacion(notificacion24h);
@@ -330,7 +229,6 @@ export async function registrarNotificacionesRecordatorio(
       telefono: telefono,
       estado: 'pendiente',
       fecha_programada: fechasRecordatorio.recordatorio2h.toISOString(),
-      id_organizacion: orgId!, // ✅ Incluir organización
     };
     
     const resultado2h = await crearNotificacion(notificacion2h);
@@ -364,20 +262,14 @@ export async function marcarNotificacionFallida(idNotificacion: number) {
 
 /**
  * Obtener estadísticas de notificaciones
- * ✅ MULTI-ORG: Filtrar por organización
  */
 export async function obtenerEstadisticasNotificaciones(fechaDesde?: string, fechaHasta?: string) {
   const supabase = await createClient();
   
   try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-    
     let query = supabase
       .from("notificacion")
-      .select("estado, medio, fecha_envio, fecha_programada")
-      .eq("id_organizacion", orgId); // ✅ Filtrar por organización
+      .select("estado, medio, fecha_envio, fecha_programada");
 
     if (fechaDesde) {
       query = query.gte("fecha_programada", fechaDesde);
