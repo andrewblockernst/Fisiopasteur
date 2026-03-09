@@ -1,3 +1,24 @@
+-- ============================================================
+-- PASO 1: Agregar id_rol directamente en la tabla usuario
+-- ============================================================
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS id_rol integer REFERENCES rol(id);
+
+-- Migrar id_rol desde usuario_organizacion (tomar el primer registro activo de cada usuario)
+UPDATE usuario u
+SET id_rol = uo.id_rol
+FROM usuario_organizacion uo
+WHERE uo.id_usuario = u.id_usuario
+  AND uo.activo = true
+  AND u.id_rol IS NULL;
+
+-- Para usuarios sin registro activo, tomar cualquier registro
+UPDATE usuario u
+SET id_rol = uo.id_rol
+FROM usuario_organizacion uo
+WHERE uo.id_usuario = u.id_usuario
+  AND u.id_rol IS NULL;
+
+
 alter table "public"."box" drop constraint "box_numero_key";
 
 drop index if exists "public"."box_numero_key";

@@ -140,7 +140,8 @@ const AgregarBoton = () => {
         onClick={toggleMenu} // Deshabilitar clic si está cargando o no hay usuario
       >
         <div className={`transition-transform duration-300 ${isOpen ? 'rotate-45' : ''}`}>
-          {isOpen ? <X size={24} /> : <Plus size={24} />}
+          {/* {isOpen ? <X size={24} /> : <Plus size={24} />} */}
+          <Plus size={24} />
         </div>
         <span className="text-xs font-medium truncate">Agregar</span>
       </button>

@@ -42,13 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
     const supabase = getSupabaseClient();
 
-    // Timeout de seguridad
+    // Timeout de seguridad — INITIAL_SESSION dispara en < 100ms desde storage,
+    // así que 5s es más que suficiente como fallback ante errores imprevistos.
     const safetyTimeout = setTimeout(() => {
       if (mounted) {
         console.warn('⚠️ Auth loading timeout - forzando loading=false');
         setAuthState(prev => ({ ...prev, loading: false }));
       }
-    }, 15000);
+    }, 5000);
 
     const fetchUserProfile = async (sessionUser: any) => {
       if (fetchInProgressRef.current) return;
@@ -152,46 +153,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const initAuth = async () => {
-      try {
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError) {
-          if (mounted) setAuthState({ isAuthenticated: false, user: null, loading: false });
-          return;
-        }
-        if (user && mounted) {
-          await fetchUserProfile(user);
-        } else if (mounted) {
-          setAuthState({ isAuthenticated: false, user: null, loading: false });
-        }
-      } catch (error) {
-        if (mounted) setAuthState({ isAuthenticated: false, user: null, loading: false });
-      } finally {
-        clearTimeout(safetyTimeout);
-      }
-    };
-
-    initAuth();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
 
-        if (event === 'SIGNED_OUT') {
+        if (event === 'INITIAL_SESSION') {
+          // INITIAL_SESSION lee de cookies/localStorage — sin round-trip de red.
+          // La seguridad real la provee el middleware (server-side con getUser()).
+          // Esta es la inicialización principal: rápida y confiable en todos los entornos.
+          clearTimeout(safetyTimeout);
+          if (session?.user) {
+            await fetchUserProfile(session.user);
+          } else {
+            setAuthState({ isAuthenticated: false, user: null, loading: false });
+          }
+        } else if (event === 'SIGNED_OUT') {
           setAuthState({ isAuthenticated: false, user: null, loading: false });
         } else if (
           event === 'SIGNED_IN' ||
           event === 'TOKEN_REFRESHED' ||
           event === 'USER_UPDATED'
         ) {
-          // Estos eventos son disparados por operaciones reales de Supabase
-          // (login, refresh de token, actualización de usuario), por lo que
-          // session.user es confiable en este contexto.
           if (session?.user) await fetchUserProfile(session.user);
         }
-        // INITIAL_SESSION no se maneja aquí: usa session.user del localStorage
-        // sin validación server-side. La inicialización segura la hace
-        // initAuth() con getUser(), que valida el token contra el servidor.
       }
     );
 
