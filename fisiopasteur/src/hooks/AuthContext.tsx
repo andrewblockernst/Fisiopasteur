@@ -154,13 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initAuth = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) {
           if (mounted) setAuthState({ isAuthenticated: false, user: null, loading: false });
           return;
         }
-        if (session?.user && mounted) {
-          await fetchUserProfile(session.user);
+        if (user && mounted) {
+          await fetchUserProfile(user);
         } else if (mounted) {
           setAuthState({ isAuthenticated: false, user: null, loading: false });
         }
@@ -184,14 +184,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           event === 'TOKEN_REFRESHED' ||
           event === 'USER_UPDATED'
         ) {
+          // Estos eventos son disparados por operaciones reales de Supabase
+          // (login, refresh de token, actualización de usuario), por lo que
+          // session.user es confiable en este contexto.
           if (session?.user) await fetchUserProfile(session.user);
-        } else if (event === 'INITIAL_SESSION') {
-          if (session?.user) {
-            await fetchUserProfile(session.user);
-          } else {
-            setAuthState({ isAuthenticated: false, user: null, loading: false });
-          }
         }
+        // INITIAL_SESSION no se maneja aquí: usa session.user del localStorage
+        // sin validación server-side. La inicialización segura la hace
+        // initAuth() con getUser(), que valida el token contra el servidor.
       }
     );
 
