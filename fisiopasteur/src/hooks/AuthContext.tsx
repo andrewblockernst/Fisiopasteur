@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { ROLES, puedeGestionarTurnos } from '@/lib/constants/roles';
 
@@ -36,30 +36,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading: true
   });
 
-  const fetchInProgressRef = useRef(false);
-
   useEffect(() => {
     let mounted = true;
     const supabase = getSupabaseClient();
+    // Evita que dos eventos simultáneos lancen fetchUserProfile en paralelo.
+    // A diferencia del ref anterior, este flag se resetea correctamente en cada evento nuevo.
+    let profileLoadId = 0;
 
-    // Timeout de seguridad — INITIAL_SESSION dispara en < 100ms desde storage,
-    // así que 5s es más que suficiente como fallback ante errores imprevistos.
+    // El timeout solo detiene el spinner de carga. NO resetea isAuthenticated ni user,
+    // porque esos pueden haberse seteado correctamente por INITIAL_SESSION antes de
+    // que las queries de la DB terminen (ej: Supabase free tier con DB durmiendo).
     const safetyTimeout = setTimeout(() => {
       if (mounted) {
         console.warn('⚠️ Auth loading timeout - forzando loading=false');
         setAuthState(prev => ({ ...prev, loading: false }));
       }
-    }, 5000);
+    }, 20000);
 
-    const fetchUserProfile = async (sessionUser: any) => {
-      if (fetchInProgressRef.current) return;
-      fetchInProgressRef.current = true;
-
-      console.log('🔍 useAuth: Verificando sesión para', sessionUser);
+    const fetchUserProfile = async (sessionUser: any, loadId: number) => {
+      console.log('🔍 useAuth: Cargando perfil para', sessionUser?.email);
 
       try {
         if (!sessionUser?.email) {
-          setAuthState({ isAuthenticated: false, user: null, loading: false });
+          if (mounted && loadId === profileLoadId) {
+            setAuthState({ isAuthenticated: false, user: null, loading: false });
+          }
           return;
         }
 
@@ -71,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq('activo', true)
           .maybeSingle();
 
-        // ✅ Fallback: buscar por email si no encontró por ID
+        // Fallback: buscar por email si no encontró por ID
         if (!usuario && !usuarioError) {
           console.warn('⚠️ useAuth: No encontrado por ID, buscando por email:', sessionUser.email);
           const { data: usuarioPorEmail, error: emailError } = await supabase
@@ -83,13 +84,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (!emailError && usuarioPorEmail) {
             usuario = usuarioPorEmail;
-            console.log('✅ useAuth: Usuario encontrado por email, id_usuario en BD:', usuario.id_usuario);
+            console.log('✅ useAuth: Usuario encontrado por email:', (usuario as any).id_usuario);
           }
         }
 
+        // Si hay error de DB, mantener autenticado con info básica (ya seteada arriba)
         if (usuarioError) {
           console.error('❌ useAuth: Error obteniendo usuario:', usuarioError);
-          if (mounted) {
+          if (mounted && loadId === profileLoadId) {
             setAuthState({
               isAuthenticated: true,
               user: { id: sessionUser.id, email: sessionUser.email },
@@ -101,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (!usuario) {
           console.warn('⚠️ useAuth: Usuario no encontrado en BD para', sessionUser.email);
-          if (mounted) {
+          if (mounted && loadId === profileLoadId) {
             setAuthState({
               isAuthenticated: true,
               user: { id: sessionUser.id, email: sessionUser.email },
@@ -124,15 +126,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (rolResult) rolData = rolResult as any;
         }
 
-        if (mounted) {
+        if (mounted && loadId === profileLoadId) {
           setAuthState({
             isAuthenticated: true,
             user: {
               id: sessionUser.id,
               email: sessionUser.email,
-              id_usuario: usuario.id_usuario,
-              nombre: usuario.nombre,
-              apellido: usuario.apellido,
+              id_usuario: (usuario as any).id_usuario,
+              nombre: (usuario as any).nombre,
+              apellido: (usuario as any).apellido,
               id_rol: idRol ?? undefined,
               esAdmin: idRol === ROLES.ADMIN,
               esEspecialista: idRol === ROLES.ESPECIALISTA,
@@ -145,11 +147,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('❌ useAuth: Error en fetchUserProfile:', error);
-        if (mounted) {
-          setAuthState({ isAuthenticated: false, user: null, loading: false });
+        // Mantener isAuthenticated si ya estaba en true (sesión válida), solo detener loading
+        if (mounted && loadId === profileLoadId) {
+          setAuthState(prev => ({
+            ...prev,
+            loading: false,
+            // Si no había user todavía (error antes de cualquier set), marcar como no autenticado
+            isAuthenticated: prev.isAuthenticated,
+            user: prev.user,
+          }));
         }
-      } finally {
-        fetchInProgressRef.current = false;
       }
     };
 
@@ -158,23 +165,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!mounted) return;
 
         if (event === 'INITIAL_SESSION') {
-          // INITIAL_SESSION lee de cookies/localStorage — sin round-trip de red.
-          // La seguridad real la provee el middleware (server-side con getUser()).
-          // Esta es la inicialización principal: rápida y confiable en todos los entornos.
           clearTimeout(safetyTimeout);
           if (session?.user) {
-            await fetchUserProfile(session.user);
+            // ✅ CRÍTICO: Setear isAuthenticated:true INMEDIATAMENTE con datos básicos
+            // de la sesión (sin esperar las queries de DB). Esto evita que el safetyTimeout
+            // o cualquier otra condición de carrera marque al usuario como no autenticado
+            // mientras las queries de la DB (que pueden tardar en Supabase free tier) corren.
+            const currentLoadId = ++profileLoadId;
+            setAuthState({
+              isAuthenticated: true,
+              user: { id: session.user.id, email: session.user.email! },
+              loading: true
+            });
+            await fetchUserProfile(session.user, currentLoadId);
           } else {
             setAuthState({ isAuthenticated: false, user: null, loading: false });
           }
         } else if (event === 'SIGNED_OUT') {
+          profileLoadId++;
           setAuthState({ isAuthenticated: false, user: null, loading: false });
         } else if (
           event === 'SIGNED_IN' ||
           event === 'TOKEN_REFRESHED' ||
           event === 'USER_UPDATED'
         ) {
-          if (session?.user) await fetchUserProfile(session.user);
+          if (session?.user) {
+            const currentLoadId = ++profileLoadId;
+            // Para login (SIGNED_IN), si aún no hay user, mostrar estado de carga autenticado
+            setAuthState(prev => prev.user
+              ? { ...prev, loading: true }
+              : { isAuthenticated: true, user: { id: session.user!.id, email: session.user!.email! }, loading: true }
+            );
+            await fetchUserProfile(session.user, currentLoadId);
+          }
         }
       }
     );
