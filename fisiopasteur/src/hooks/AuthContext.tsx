@@ -160,6 +160,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // ✅ NUEVO: Failsafe manual. Si INITIAL_SESSION se pierde, esto destraba el loading.
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!mounted) return;
+      if (error || !session) {
+        clearTimeout(safetyTimeout);
+        // Si no hay sesión, asegurarnos de que quite el loading
+        setAuthState(prev => prev.loading ? { isAuthenticated: false, user: null, loading: false } : prev);
+      } else {
+        // Si hay sesión y el usuario aún no está seteado, disparamos la carga
+        setAuthState(prev => {
+          if (!prev.user) {
+            const currentLoadId = ++profileLoadId;
+            fetchUserProfile(session.user, currentLoadId);
+            return { isAuthenticated: true, user: { id: session.user.id, email: session.user.email! }, loading: true };
+          }
+          return prev;
+        });
+      }
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
