@@ -82,14 +82,23 @@ export async function middleware(request: NextRequest) {
     console.error('[Middleware] Error en auth.getUser():', err);
   }
 
+  // ✅ HELPER: Redirigir copiando las cookies actualizadas
+  const redirectWithCookies = (url: URL) => {
+    const redirectResponse = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value, cookie);
+    });
+    return redirectResponse;
+  };
+
   // Ruta raíz → redirigir según autenticación
   if (request.nextUrl.pathname === '/') {
     if (user) {
       console.log('[Middleware] Ruta / con usuario autenticado → Redirigiendo a /inicio');
-      return NextResponse.redirect(new URL('/inicio', request.url));
+      return redirectWithCookies(new URL('/inicio', request.url));
     } else {
       console.log('[Middleware] Ruta / sin usuario → Redirigiendo a /login');
-      return NextResponse.redirect(new URL('/login', request.url));
+      return redirectWithCookies(new URL('/login', request.url));
     }
   }
 
@@ -100,12 +109,12 @@ export async function middleware(request: NextRequest) {
     }
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect_to', request.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithCookies(loginUrl);
   }
 
   // Usuario autenticado intentando acceder a login/landing → redirigir al dashboard
   if (['/login', '/landing', '/recuperarContra'].includes(request.nextUrl.pathname)) {
-    return NextResponse.redirect(new URL('/inicio', request.url));
+    return redirectWithCookies(new URL('/inicio', request.url));
   }
 
   return response
