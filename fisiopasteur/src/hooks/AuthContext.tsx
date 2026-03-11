@@ -210,13 +210,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           event === 'USER_UPDATED'
         ) {
           if (session?.user) {
-            const currentLoadId = ++profileLoadId;
+            
             // Para login (SIGNED_IN), si aún no hay user, mostrar estado de carga autenticado
-            setAuthState(prev => prev.user
-              ? { ...prev, loading: true }
-              : { isAuthenticated: true, user: { id: session.user!.id, email: session.user!.email! }, loading: true }
-            );
-            await fetchUserProfile(session.user, currentLoadId);
+            setAuthState(prev => {
+              // ✅ Si ya tenemos a este usuario cargado, NO pongas loading en true
+              // ni vuelvas a consultar la DB por su perfil. El token se refrescó por debajo.
+              if (prev.user && prev.user.id === session.user.id) {
+                return prev; 
+              }
+
+              // Solo cargamos el perfil si es un usuario nuevo (ej. Login inicial)
+              const currentLoadId = ++profileLoadId;
+              fetchUserProfile(session.user, currentLoadId);
+              
+              return { 
+                isAuthenticated: true, 
+                user: { id: session.user.id, email: session.user.email! }, 
+                loading: true 
+              };
+            });        
           }
         }
       }
