@@ -18,7 +18,6 @@ type Especialidad = Tables<"especialidad">;
 // ✅ Tipo correcto que coincide con lo que devuelve getEspecialistas()
 type EspecialistaConDatos = {
   id_usuario: string;
-  id_usuario_organizacion: string;
   nombre: string;
   apellido: string;
   email: string;

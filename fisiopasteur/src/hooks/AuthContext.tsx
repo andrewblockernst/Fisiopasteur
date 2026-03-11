@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { ROLES, puedeGestionarTurnos } from '@/lib/constants/roles';
 
@@ -17,7 +17,6 @@ export interface Usuario {
   esProgramador?: boolean;
   puedeGestionarTurnos?: boolean;
   rol?: { id: number; nombre: string; jerarquia: number; };
-  orgId?: string;
 }
 
 export interface AuthState {
@@ -37,330 +36,210 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading: true
   });
 
-  // ✅ Ref para evitar llamadas concurrentes a fetchUserProfile
-  const fetchInProgressRef = useRef(false);
-
   useEffect(() => {
     let mounted = true;
-    // ✅ UNA SOLA instancia del cliente para toda la aplicación
     const supabase = getSupabaseClient();
+    // Evita que dos eventos simultáneos lancen fetchUserProfile en paralelo.
+    // A diferencia del ref anterior, este flag se resetea correctamente en cada evento nuevo.
+    let profileLoadId = 0;
 
-    // ✅ Timeout de seguridad: Si después de 15s no se cargó, forzar loading = false
+    // El timeout solo detiene el spinner de carga. NO resetea isAuthenticated ni user,
+    // porque esos pueden haberse seteado correctamente por INITIAL_SESSION antes de
+    // que las queries de la DB terminen (ej: Supabase free tier con DB durmiendo).
     const safetyTimeout = setTimeout(() => {
       if (mounted) {
         console.warn('⚠️ Auth loading timeout - forzando loading=false');
         setAuthState(prev => ({ ...prev, loading: false }));
       }
-    }, 15000);
+    }, 20000);
 
-    // Función para cargar el perfil del usuario
-    const fetchUserProfile = async (sessionUser: any) => {
-      // ✅ Evitar llamadas concurrentes
-      if (fetchInProgressRef.current) {
-        console.log('⏳ useAuth: fetchUserProfile ya en progreso, ignorando llamada duplicada');
-        return;
-      }
-      fetchInProgressRef.current = true;
+    const fetchUserProfile = async (sessionUser: any, loadId: number) => {
+      console.log('🔍 useAuth: Cargando perfil para', sessionUser?.email);
+
       try {
         if (!sessionUser?.email) {
-          console.warn('⚠️ useAuth: No email en sessionUser');
-          setAuthState({ isAuthenticated: false, user: null, loading: false });
+          if (mounted && loadId === profileLoadId) {
+            setAuthState({ isAuthenticated: false, user: null, loading: false });
+          }
           return;
         }
 
-        console.log('🔍 useAuth: Cargando perfil para', sessionUser.email);
+        // Consultar usuario directamente por id
+        let { data: usuario, error: usuarioError } = await supabase
+          .from('usuario')
+          .select('id_usuario, nombre, apellido, email, activo, id_rol')
+          .eq('id_usuario', sessionUser.id)
+          .eq('activo', true)
+          .maybeSingle();
 
-        // ✅ Leemos el ID directamente del JWT (user_metadata)
-        const currentOrgId = sessionUser.user_metadata?.org_actual;
-        console.log('🏢 useAuth: Org actual:', currentOrgId || 'no definida');
-
-        // ✅ ESTRATEGIA SIMPLIFICADA: Query en dos pasos para evitar problemas con !inner
-        let usuarioOrg: any = null;
-        let error: any = null;
-
-        try {
-          // PASO 1: Buscar en usuario_organizacion
-          console.log('📡 useAuth: Consultando usuario_organizacion...');
-
-          let queryOrg = supabase
-            .from('usuario_organizacion')
-            .select('id_usuario_organizacion, id_rol, id_organizacion, id_usuario, activo')
-            .eq('activo', true);
-
-          // Filtrar por org si existe
-          if (currentOrgId) {
-            queryOrg = queryOrg.eq('id_organizacion', currentOrgId);
-          }
-
-          let orgData;
-
-          console.log('🔄 useAuth: Buscando usuario por email...');
-          const { data: usuarioData, error: usuarioError } = await supabase
+        // Fallback: buscar por email si no encontró por ID
+        if (!usuario && !usuarioError) {
+          console.warn('⚠️ useAuth: No encontrado por ID, buscando por email:', sessionUser.email);
+          const { data: usuarioPorEmail, error: emailError } = await supabase
             .from('usuario')
-            .select('id_usuario')
+            .select('id_usuario, nombre, apellido, email, activo, id_rol')
             .eq('email', sessionUser.email)
             .eq('activo', true)
+            .maybeSingle();
+
+          if (!emailError && usuarioPorEmail) {
+            usuario = usuarioPorEmail;
+            console.log('✅ useAuth: Usuario encontrado por email:', (usuario as any).id_usuario);
+          }
+        }
+
+        // Si hay error de DB, mantener autenticado con info básica (ya seteada arriba)
+        if (usuarioError) {
+          console.error('❌ useAuth: Error obteniendo usuario:', usuarioError);
+          if (mounted && loadId === profileLoadId) {
+            setAuthState({
+              isAuthenticated: true,
+              user: { id: sessionUser.id, email: sessionUser.email },
+              loading: false
+            });
+          }
+          return;
+        }
+
+        if (!usuario) {
+          console.warn('⚠️ useAuth: Usuario no encontrado en BD para', sessionUser.email);
+          if (mounted && loadId === profileLoadId) {
+            setAuthState({
+              isAuthenticated: true,
+              user: { id: sessionUser.id, email: sessionUser.email },
+              loading: false
+            });
+          }
+          return;
+        }
+
+        const idRol: number | null = (usuario as any).id_rol ?? null;
+
+        // Obtener datos del rol si existe
+        let rolData: { id: number; nombre: string; jerarquia: number } | undefined;
+        if (idRol) {
+          const { data: rolResult } = await supabase
+            .from('rol')
+            .select('id, nombre, jerarquia')
+            .eq('id', idRol)
             .single();
-
-          if (usuarioError) {
-            console.error('❌ useAuth: Error buscando usuario:', usuarioError);
-          } else if (usuarioData && 'id_usuario' in usuarioData) {
-            console.log('👤 useAuth: Usuario encontrado, buscando org activa...');
-
-            const queryOrgUser = queryOrg.eq('id_usuario', (usuarioData as any).id_usuario);
-            const { data: orgDataQuery, error: orgDataError } = await queryOrgUser.limit(1);
-
-            if (orgDataError) {
-              console.error('❌ useAuth: Error en consulta usuario_organizacion:', orgDataError);
-              error = orgDataError;
-
-              let { data: orgDataFallback, error: orgFallbackError } = await queryOrg.limit(1)
-
-              if (orgFallbackError) {
-                console.error('❌ useAuth: Error en consulta usuario_organizacion fallback:', orgFallbackError);
-              }
-
-              orgData = orgDataFallback;
-
-            } else if (orgDataQuery && orgDataQuery.length > 0) {
-              console.log('✅ useAuth: Org encontrada para usuario:', orgDataQuery);
-              orgData = orgDataQuery;
-            }
-          }      
-
-          if (orgData && orgData.length > 0) {
-            const org = orgData[0] as any; // Type assertion para evitar errores de TypeScript
-            console.log('📋 useAuth: Datos org:', org);
-
-            // PASO 2: Obtener datos del usuario
-            const { data: userData, error: userError } = await supabase
-              .from('usuario')
-              .select('id_usuario, nombre, apellido, email, activo')
-              .eq('id_usuario', org.id_usuario)
-              .single();
-
-            if (userError) {
-              console.error('❌ useAuth: Error obteniendo usuario:', userError);
-              error = userError;
-            } else {
-              console.log('👤 useAuth: Datos usuario:', userData);
-
-              // PASO 3: Obtener datos del rol
-              const { data: rolData, error: rolError } = await supabase
-                .from('rol')
-                .select('id, nombre, jerarquia')
-                .eq('id', org.id_rol)
-                .single();
-
-              if (rolError) {
-                console.error('❌ useAuth: Error obteniendo rol:', rolError);
-                error = rolError;
-              } else {
-                console.log('🎭 useAuth: Datos rol:', rolData);
-              }
-
-              // Construir objeto usuarioOrg
-              usuarioOrg = {
-                id_usuario_organizacion: org.id_usuario_organizacion,
-                id_rol: org.id_rol,
-                id_organizacion: org.id_organizacion,
-                activo: org.activo,
-                usuario: userData,
-                rol: rolData
-              };
-            }
-          }
-        } catch (queryError: any) {
-          console.error('❌ useAuth: Error ejecutando queries:', queryError);
-          error = queryError;
+          if (rolResult) rolData = rolResult as any;
         }
 
-        if (error) {
-          console.error("❌ useAuth: Error en query:", error);
-          // ✅ En caso de error, establecer estado básico
-          if (mounted) {
-            setAuthState({
-              isAuthenticated: true,
-              user: {
-                id: sessionUser.id,
-                email: sessionUser.email,
-                esAdmin: false,
-                esEspecialista: false,
-                esProgramador: false,
-                puedeGestionarTurnos: false,
-                orgId: currentOrgId
-              },
-              loading: false
-            });
-          }
-          return;
-        }
-
-        // ✅ CRÍTICO: Verificar si no se encontraron datos
-        if (!usuarioOrg) {
-          console.warn('⚠️ useAuth: No se encontró usuario_organizacion para', sessionUser.email);
-          console.warn('   Esto puede significar:');
-          console.warn('   1. Usuario no tiene asignación a ninguna org');
-          console.warn('   2. El filtro de org_actual no coincide');
-          console.warn('   3. El usuario no está activo en la org');
-
-          if (mounted) {
-            setAuthState({
-              isAuthenticated: true,
-              user: {
-                id: sessionUser.id,
-                email: sessionUser.email,
-                esAdmin: false,
-                esEspecialista: false,
-                esProgramador: false,
-                puedeGestionarTurnos: false,
-                orgId: currentOrgId
-              },
-              loading: false
-            });
-          }
-          return;
-        }
-
-        // Mapeo de datos (simplificado)
-        if (usuarioOrg && usuarioOrg.usuario && mounted) {
-          const userData = usuarioOrg.usuario;
-          const rolData = usuarioOrg.rol;
-          const idRol = usuarioOrg.id_rol;
-
-          console.log('✅ useAuth: Usuario cargado exitosamente');
-          console.log('   ID Usuario:', userData.id_usuario);
-          console.log('   Rol:', rolData?.nombre || 'Sin rol');
-          console.log('   Permisos gestión turnos:', puedeGestionarTurnos(idRol));
-
+        if (mounted && loadId === profileLoadId) {
           setAuthState({
             isAuthenticated: true,
             user: {
               id: sessionUser.id,
               email: sessionUser.email,
-              id_usuario: userData.id_usuario,
-              nombre: userData.nombre,
-              apellido: userData.apellido,
-              id_rol: idRol,
+              id_usuario: (usuario as any).id_usuario,
+              nombre: (usuario as any).nombre,
+              apellido: (usuario as any).apellido,
+              id_rol: idRol ?? undefined,
               esAdmin: idRol === ROLES.ADMIN,
               esEspecialista: idRol === ROLES.ESPECIALISTA,
               esProgramador: idRol === ROLES.PROGRAMADOR,
-              puedeGestionarTurnos: puedeGestionarTurnos(idRol),
+              puedeGestionarTurnos: puedeGestionarTurnos(idRol ?? undefined),
               rol: rolData,
-              orgId: usuarioOrg.id_organizacion || currentOrgId
-            },
-            loading: false
-          });
-        } else if (mounted) {
-          console.warn('⚠️ useAuth: No se pudo cargar datos completos del usuario');
-          // Caso: Usuario autenticado pero sin rol en esta org (o org no seleccionada)
-          setAuthState({
-            isAuthenticated: true,
-            user: {
-              id: sessionUser.id,
-              email: sessionUser.email,
-              esAdmin: false,
-              esEspecialista: false,
-              esProgramador: false,
-              puedeGestionarTurnos: false,
-              orgId: currentOrgId
             },
             loading: false
           });
         }
       } catch (error) {
         console.error('❌ useAuth: Error en fetchUserProfile:', error);
-        // ✅ SIEMPRE establecer loading en false, incluso en errores
-        if (mounted) {
-          setAuthState({ isAuthenticated: false, user: null, loading: false });
+        // Mantener isAuthenticated si ya estaba en true (sesión válida), solo detener loading
+        if (mounted && loadId === profileLoadId) {
+          setAuthState(prev => ({
+            ...prev,
+            loading: false,
+            // Si no había user todavía (error antes de cualquier set), marcar como no autenticado
+            isAuthenticated: prev.isAuthenticated,
+            user: prev.user,
+          }));
         }
-      } finally {
-        fetchInProgressRef.current = false;
       }
     };
 
-    // Inicialización de autenticación
-    const initAuth = async () => {
-      try {
-        console.log('🔐 useAuth: Iniciando verificación de autenticación...');
-
-        // getSession() ya recupera el token del almacenamiento local y lo decodifica
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error('❌ useAuth: Error obteniendo sesión:', sessionError);
-          if (mounted) {
-            setAuthState({ isAuthenticated: false, user: null, loading: false });
-          }
-          return;
-        }
-
-        if (session?.user && mounted) {
-          console.log('✅ useAuth: Sesión encontrada para', session.user.email);
-          await fetchUserProfile(session.user);
-        } else if (mounted) {
-          console.log('ℹ️ useAuth: No hay sesión activa');
-          setAuthState({ isAuthenticated: false, user: null, loading: false });
-        }
-      } catch (error) {
-        console.error('❌ Error en initAuth:', error);
-        if (mounted) {
-          setAuthState({ isAuthenticated: false, user: null, loading: false });
-        }
-      } finally {
-        // Limpiar timeout si se completó antes
+    // ✅ NUEVO: Failsafe manual. Si INITIAL_SESSION se pierde, esto destraba el loading.
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!mounted) return;
+      if (error || !session) {
         clearTimeout(safetyTimeout);
+        // Si no hay sesión, asegurarnos de que quite el loading
+        setAuthState(prev => prev.loading ? { isAuthenticated: false, user: null, loading: false } : prev);
+      } else {
+        // Si hay sesión y el usuario aún no está seteado, disparamos la carga
+        setAuthState(prev => {
+          if (!prev.user) {
+            const currentLoadId = ++profileLoadId;
+            fetchUserProfile(session.user, currentLoadId);
+            return { isAuthenticated: true, user: { id: session.user.id, email: session.user.email! }, loading: true };
+          }
+          return prev;
+        });
       }
-    };
-    
-    
-    initAuth();
-    
+    });
 
-    // ✅ UNA SOLA suscripción para toda la aplicación
-    console.log('📡 Registrando suscripción a onAuthStateChange...');
-    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) {
-          console.log('⚠️ Evento de auth recibido pero componente desmontado:', event);
-          return;
-        }
+        if (!mounted) return;
 
-        console.log('🔄 useAuth: Auth state change:', event);
-        console.log('   Session:', session ? 'presente' : 'null');
-
-        // Escuchamos 'USER_UPDATED' por si cambias de org con updateUser()
-        if (event === 'SIGNED_OUT') {
-          console.log('👋 useAuth: Usuario deslogueado - actualizando estado');
-          setAuthState({ isAuthenticated: false, user: null, loading: false });
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        if (event === 'INITIAL_SESSION') {
+          clearTimeout(safetyTimeout);
           if (session?.user) {
-            console.log('👤 useAuth: Actualizando perfil de usuario');
-            await fetchUserProfile(session.user);
-          }
-        } else if (event === 'INITIAL_SESSION') {
-          // Manejar sesión inicial
-          if (session?.user) {
-            console.log('🔐 useAuth: Sesión inicial detectada');
-            await fetchUserProfile(session.user);
+            // ✅ CRÍTICO: Setear isAuthenticated:true INMEDIATAMENTE con datos básicos
+            // de la sesión (sin esperar las queries de DB). Esto evita que el safetyTimeout
+            // o cualquier otra condición de carrera marque al usuario como no autenticado
+            // mientras las queries de la DB (que pueden tardar en Supabase free tier) corren.
+            const currentLoadId = ++profileLoadId;
+            setAuthState({
+              isAuthenticated: true,
+              user: { id: session.user.id, email: session.user.email! },
+              loading: true
+            });
+            await fetchUserProfile(session.user, currentLoadId);
           } else {
-            console.log('ℹ️ useAuth: INITIAL_SESSION sin sesión activa');
             setAuthState({ isAuthenticated: false, user: null, loading: false });
+          }
+        } else if (event === 'SIGNED_OUT') {
+          profileLoadId++;
+          setAuthState({ isAuthenticated: false, user: null, loading: false });
+        } else if (
+          event === 'SIGNED_IN' ||
+          event === 'TOKEN_REFRESHED' ||
+          event === 'USER_UPDATED'
+        ) {
+          if (session?.user) {
+            
+            // Para login (SIGNED_IN), si aún no hay user, mostrar estado de carga autenticado
+            setAuthState(prev => {
+              // ✅ Si ya tenemos a este usuario cargado, NO pongas loading en true
+              // ni vuelvas a consultar la DB por su perfil. El token se refrescó por debajo.
+              if (prev.user && prev.user.id === session.user.id) {
+                return prev; 
+              }
+
+              // Solo cargamos el perfil si es un usuario nuevo (ej. Login inicial)
+              const currentLoadId = ++profileLoadId;
+              fetchUserProfile(session.user, currentLoadId);
+              
+              return { 
+                isAuthenticated: true, 
+                user: { id: session.user.id, email: session.user.email! }, 
+                loading: true 
+              };
+            });        
           }
         }
       }
     );
-    
-    console.log('✅ Suscripción registrada exitosamente');
 
-    // Cleanup
     return () => {
       mounted = false;
       clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
-  }, []); // ✅ Sin dependencias - se ejecuta una sola vez
+  }, []);
 
   return (
     <AuthContext.Provider value={authState}>

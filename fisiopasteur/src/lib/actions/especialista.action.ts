@@ -24,56 +24,49 @@ export interface ServerActionResponse {
 export async function getEspecialistas({ incluirInactivos = false } = {}) {
   try {
     const supabase = await createClient();
-    
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
 
-    // ✅ NUEVO MODELO: Consultar usuario_organizacion en lugar de usuario directamente
     let query = supabase
-      .from("usuario_organizacion")
+      .from("usuario")
       .select(`
-        id_usuario_organizacion,
-        color_calendario,
+        id_usuario,
+        nombre,
+        apellido,
+        email,
+        telefono,
+        color,
         activo,
-        usuario:id_usuario(
-          id_usuario,
-          nombre,
-          apellido,
-          email,
-          telefono,
-          color
-        ),
+        id_rol,
         rol:id_rol(
           id,
           nombre
         )
       `)
-      .eq("id_organizacion", orgId)
-      .in("id_rol", ROLES_ESPECIALISTAS); // Admin (1) y Especialistas (2)
+      .in("id_rol", ROLES_ESPECIALISTAS)
+      .order("nombre", { ascending: true })
+      .order("apellido", { ascending: true });
 
     if (!incluirInactivos) {
       query = query.eq("activo", true);
     }
 
-    const { data: usuariosOrg, error } = await query;
+    const { data: usuarios, error } = await query;
 
     if (error) {
       console.error("Error fetching especialistas:", error);
       throw new Error("Error al obtener especialistas");
     }
 
-    if (!usuariosOrg || usuariosOrg.length === 0) {
+    if (!usuarios || usuarios.length === 0) {
       return [];
     }
 
-    // ✅ OPTIMIZACIÓN: Una sola query para obtener TODAS las especialidades de TODOS los especialistas
-    const usuariosOrgIds = (usuariosOrg as any[]).map((u: any) => u.id_usuario_organizacion);
-    
+    // Una sola query para obtener TODAS las especialidades de TODOS los especialistas
+    const usuariosIds = usuarios.map((u: any) => u.id_usuario);
+
     const { data: todasEspecialidades } = await supabase
       .from("usuario_especialidad")
       .select(`
-        id_usuario_organizacion,
+        id_usuario,
         precio_particular,
         precio_obra_social,
         activo,
@@ -82,38 +75,36 @@ export async function getEspecialistas({ incluirInactivos = false } = {}) {
           nombre
         )
       `)
-      .in("id_usuario_organizacion", usuariosOrgIds)
+      .in("id_usuario", usuariosIds)
       .eq("activo", true);
 
-    // ✅ Agrupar especialidades por id_usuario_organizacion
+    // Agrupar especialidades por id_usuario
     const especialidadesPorUsuario = (todasEspecialidades || []).reduce((acc, item: any) => {
-      if (!acc[item.id_usuario_organizacion]) {
-        acc[item.id_usuario_organizacion] = [];
+      if (!acc[item.id_usuario]) {
+        acc[item.id_usuario] = [];
       }
-      acc[item.id_usuario_organizacion].push(item);
+      acc[item.id_usuario].push(item);
       return acc;
-    }, {} as Record<number, any[]>);
+    }, {} as Record<string, any[]>);
 
-    // ✅ Mapear especialistas con sus especialidades (sin Promise.all innecesario)
-    const especialistasConEspecialidades = (usuariosOrg as any[]).map((usuarioOrg: any) => {
-      const especialidades = especialidadesPorUsuario[usuarioOrg.id_usuario_organizacion] || [];
-      
+    const especialistasConEspecialidades = (usuarios as any[]).map((usuario: any) => {
+      const especialidades = especialidadesPorUsuario[usuario.id_usuario] || [];
+
       return {
-        id_usuario: usuarioOrg.usuario?.id_usuario,
-        id_usuario_organizacion: usuarioOrg.id_usuario_organizacion,
-        nombre: usuarioOrg.usuario?.nombre,
-        apellido: usuarioOrg.usuario?.apellido,
-        email: usuarioOrg.usuario?.email,
-        telefono: usuarioOrg.usuario?.telefono,
-        color: usuarioOrg.usuario?.color, // ✅ Color del especialista individual, no de la org
-        activo: usuarioOrg.activo,
-        id_rol: usuarioOrg.rol?.id,
-        rol: usuarioOrg.rol,
-        especialidades: especialidades.map(e => ({
+        id_usuario: usuario.id_usuario,
+        nombre: usuario.nombre,
+        apellido: usuario.apellido,
+        email: usuario.email,
+        telefono: usuario.telefono,
+        color: usuario.color,
+        activo: usuario.activo,
+        id_rol: usuario.id_rol,
+        rol: usuario.rol,
+        especialidades: especialidades.map((e: any) => ({
           ...e.especialidad,
           precio_particular: e.precio_particular,
           precio_obra_social: e.precio_obra_social
-        })).filter(e => e.id_especialidad),
+        })).filter((e: any) => e.id_especialidad),
         usuario_especialidad: especialidades
       };
     });
@@ -129,33 +120,24 @@ export async function getEspecialistas({ incluirInactivos = false } = {}) {
 export async function getEspecialista(id: string) {
   try {
     const supabase = await createClient();
-    
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-    
-    // ✅ NUEVO MODELO: Buscar en usuario_organizacion
-    const { data: usuarioOrg, error } = await supabase
-      .from("usuario_organizacion")
+
+    const { data: usuario, error } = await supabase
+      .from("usuario")
       .select(`
-        id_usuario_organizacion,
-        color_calendario,
+        id_usuario,
+        nombre,
+        apellido,
+        email,
+        telefono,
+        color,
         activo,
-        usuario:id_usuario(
-          id_usuario,
-          nombre,
-          apellido,
-          email,
-          telefono,
-          color
-        ),
+        id_rol,
         rol:id_rol(
           id,
           nombre
         )
       `)
       .eq("id_usuario", id)
-      .eq("id_organizacion", orgId)
       .in("id_rol", ROLES_ESPECIALISTAS)
       .single();
 
@@ -164,7 +146,6 @@ export async function getEspecialista(id: string) {
       throw new Error("Error al obtener especialista");
     }
 
-    // Obtener especialidades de este usuario EN ESTA ORGANIZACIÓN
     const { data: especialidades } = await supabase
       .from("usuario_especialidad")
       .select(`
@@ -176,26 +157,24 @@ export async function getEspecialista(id: string) {
           nombre
         )
       `)
-      .eq("id_usuario_organizacion", usuarioOrg.id_usuario_organizacion)
+      .eq("id_usuario", id)
       .eq("activo", true);
 
-    // Transformar los datos incluyendo precios
     const especialistaConEspecialidades = {
-      id_usuario: usuarioOrg.usuario?.id_usuario,
-      id_usuario_organizacion: usuarioOrg.id_usuario_organizacion,
-      nombre: usuarioOrg.usuario?.nombre,
-      apellido: usuarioOrg.usuario?.apellido,
-      email: usuarioOrg.usuario?.email,
-      telefono: usuarioOrg.usuario?.telefono,
-      color: usuarioOrg.usuario?.color, // ✅ Color del especialista individual
-      activo: usuarioOrg.activo,
-      id_rol: usuarioOrg.rol?.id,
-      rol: usuarioOrg.rol,
-      especialidades: especialidades?.map(e => ({
+      id_usuario: usuario.id_usuario,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      email: usuario.email,
+      telefono: usuario.telefono,
+      color: usuario.color,
+      activo: usuario.activo,
+      id_rol: (usuario as any).id_rol,
+      rol: (usuario as any).rol,
+      especialidades: especialidades?.map((e: any) => ({
         ...e.especialidad,
         precio_particular: e.precio_particular,
         precio_obra_social: e.precio_obra_social
-      })).filter(e => e.id_especialidad) || [],
+      })).filter((e: any) => e.id_especialidad) || [],
       usuario_especialidad: especialidades || []
     };
 
@@ -210,10 +189,6 @@ export async function getEspecialista(id: string) {
 export async function createEspecialista(formData: FormData): Promise<ServerActionResponse> {
   try {
     const supabase = await createClient();
-    
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
 
     const email = formData.get("email") as string;
     const nombre = formData.get("nombre") as string;
@@ -253,15 +228,17 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
       };
     }
 
-    // 2. Guardar en tabla usuario (incluyendo color)
+    // 2. Guardar en tabla usuario (con id_rol = 2 = Especialista)
     const especialistaData = {
       id_usuario: authUser.user.id,
       nombre,
       apellido,
       telefono: formData.get("telefono") as string || null,
       email,
-      color, // ✅ Guardar color del especialista
-      contraseña: '**AUTH**', // Placeholder, usa Supabase Auth
+      color,
+      contraseña: '**AUTH**',
+      id_rol: 2, // Rol Especialista
+      activo: true,
     };
 
     const { data: nuevoUsuario, error: errorUsuario } = await supabase
@@ -271,7 +248,6 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
       .single();
 
     if (errorUsuario) {
-      // Rollback: eliminar el usuario en Auth
       await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
       console.error("Error creando especialista en tabla usuario:", errorUsuario);
       return {
@@ -282,41 +258,14 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
       };
     }
 
-    // ✅ 3. NUEVO MODELO: Crear relación en usuario_organizacion
-    const { data: usuarioOrg, error: errorUsuarioOrg } = await supabase
-      .from("usuario_organizacion")
-      .insert({
-        id_usuario: nuevoUsuario.id_usuario,
-        id_organizacion: orgId,
-        id_rol: 2, // Rol Especialista
-        activo: true,
-        color_calendario: color
-      })
-      .select()
-      .single();
-
-    if (errorUsuarioOrg || !usuarioOrg) {
-      // Rollback: eliminar usuario y auth
-      await supabase.from("usuario").delete().eq("id_usuario", nuevoUsuario.id_usuario);
-      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
-      console.error("Error creando relación usuario_organizacion:", errorUsuarioOrg);
-      return {
-        success: false,
-        message: 'Error al vincular con organización',
-        toastType: 'error',
-        description: 'No se pudo vincular el especialista con la organización'
-      };
-    }
-
-    // ✅ 4. NUEVO MODELO: Relacionar especialidades con id_usuario_organizacion y precios
+    // 3. Relacionar especialidades con id_usuario y precios
     const especialidadesSeleccionadas: number[] = [];
     const preciosPorEspecialidad: Record<number, { particular: number; obraSocial: number }> = {};
-    
+
     for (const [key, value] of formData.entries()) {
       if (key.startsWith('especialidades[')) {
         especialidadesSeleccionadas.push(Number(value));
       } else if (key.startsWith('precios[')) {
-        // Extraer: precios[1][particular] o precios[1][obraSocial]
         const match = key.match(/precios\[(\d+)\]\[(particular|obraSocial)\]/);
         if (match) {
           const especialidadId = Number(match[1]);
@@ -334,7 +283,6 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
         const precios = preciosPorEspecialidad[idEspecialidad] || { particular: 0, obraSocial: 0 };
         return {
           id_usuario: nuevoUsuario.id_usuario,
-          id_usuario_organizacion: usuarioOrg.id_usuario_organizacion, // ✅ CLAVE
           id_especialidad: idEspecialidad,
           precio_particular: precios.particular,
           precio_obra_social: precios.obraSocial,
@@ -348,7 +296,6 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
 
       if (errorRelaciones) {
         // Rollback completo
-        await supabase.from("usuario_organizacion").delete().eq("id_usuario_organizacion", usuarioOrg.id_usuario_organizacion);
         await supabase.from("usuario").delete().eq("id_usuario", nuevoUsuario.id_usuario);
         await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
         console.error("Error asignando especialidades:", errorRelaciones);
@@ -363,7 +310,7 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
 
     revalidatePath("/especialista");
     revalidatePath("/especialistas");
-    
+
     return {
       success: true,
       message: 'Especialista creado exitosamente',
@@ -386,10 +333,6 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
 export async function updateEspecialista(id: string, formData: FormData): Promise<ServerActionResponse> {
   try {
     const supabase = await createClient();
-    
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
 
     const nombre = formData.get("nombre") as string;
     const apellido = formData.get("apellido") as string;
@@ -406,33 +349,14 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       };
     }
 
-    // ✅ NUEVO MODELO: Verificar que el especialista existe en la organización
-    const { data: usuarioOrg, error: errorVerificacion } = await supabase
-      .from("usuario_organizacion")
-      .select("id_usuario_organizacion, usuario:id_usuario(nombre, apellido)")
-      .eq("id_usuario", id)
-      .eq("id_organizacion", orgId)
-      .in("id_rol", ROLES_ESPECIALISTAS)
-      .single();
-
-    if (errorVerificacion || !usuarioOrg) {
-      return {
-        success: false,
-        message: 'Especialista no encontrado',
-        toastType: 'error',
-        description: 'El especialista que intentas actualizar no existe en esta organización'
-      };
-    }
-
     // Obtener especialidades seleccionadas y precios del FormData
     const especialidadesSeleccionadas: number[] = [];
     const preciosPorEspecialidad: Record<number, { particular: number; obraSocial: number }> = {};
-    
+
     for (const [key, value] of formData.entries()) {
       if (key.startsWith('especialidades[')) {
         especialidadesSeleccionadas.push(Number(value));
       } else if (key.startsWith('precios[')) {
-        // Extraer: precios[1][particular] o precios[1][obraSocial]
         const match = key.match(/precios\[(\d+)\]\[(particular|obraSocial)\]/);
         if (match) {
           const especialidadId = Number(match[1]);
@@ -445,29 +369,26 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       }
     }
 
+    console.log("Especialidades seleccionadas:", especialidadesSeleccionadas);
+    console.log("Precios por especialidad:", preciosPorEspecialidad);
+
     const updateData: EspecialistaUpdate = {
       nombre,
       apellido,
       email,
       telefono: formData.get("telefono") as string || null,
-      color, // ✅ Actualizar color del especialista
+      color,
     };
 
-    // Solo actualizar contraseña si se proporciona
-    const contraseña = formData.get("contraseña") as string;
-    const passwordPatch = contraseña && contraseña.trim() !== "" ? { contraseña: '**AUTH**' } : {}; // Placeholder
-
     // Si se proporciona una nueva contraseña, actualizarla en Supabase Auth primero
+    const contraseña = formData.get("contraseña") as string;
     if (contraseña && contraseña.trim() !== "") {
-      // Verificar si el usuario existe en Auth
       const { data: authUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(id);
-      
+
       if (getUserError || !authUser) {
         console.error("Usuario no encontrado en Auth:", getUserError);
-        // El usuario no existe en Auth, pero continuamos actualizando solo en la tabla
-        console.log("Continuando con actualización solo en tabla usuario (usuario no existe en Auth)");
+        console.log("Continuando con actualización solo en tabla usuario");
       } else {
-        // Usuario existe en Auth, actualizar contraseña
         const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
           id,
           { password: contraseña }
@@ -488,13 +409,12 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
     // Actualizar el usuario en la tabla
     const { error: errorUsuario } = await supabase
       .from("usuario")
-      .update({ ...updateData, ...passwordPatch })
+      .update(updateData)
       .eq("id_usuario", id);
 
     if (errorUsuario) {
       console.error("Error updating especialista:", errorUsuario);
-      
-      // ✅ Detectar error de email duplicado
+
       if (errorUsuario.code === '23505' || errorUsuario.message?.includes('duplicate') || errorUsuario.message?.includes('email')) {
         return {
           success: false,
@@ -503,7 +423,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
           description: 'El email ya está en uso. Por favor, usa otro correo electrónico.'
         };
       }
-      
+
       return {
         success: false,
         message: 'Error al actualizar especialista',
@@ -512,42 +432,58 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       };
     }
 
-    // ✅ NUEVO MODELO: Actualizar color en usuario_organizacion
-    if (color) {
-      const { error: errorColor } = await supabase
-        .from("usuario_organizacion")
-        .update({ color_calendario: color })
-        .eq("id_usuario_organizacion", usuarioOrg.id_usuario_organizacion);
-
-      if (errorColor) {
-        console.error("Error updating calendar color:", errorColor);
-        // No es crítico, continuar
-      }
-    }
-
-    // ✅ NUEVO MODELO: Eliminar relaciones existentes por id_usuario_organizacion
-    const { error: errorEliminar } = await supabase
+    // Obtener especialidades actuales del usuario
+    const { data: especialidadesActuales, error: errorConsulta } = await supabase
       .from("usuario_especialidad")
-      .delete()
-      .eq("id_usuario_organizacion", usuarioOrg.id_usuario_organizacion);
+      .select("id_especialidad")
+      .eq("id_usuario", id)
+      .eq("activo", true);
 
-    if (errorEliminar) {
-      console.error("Error deleting existing relations:", errorEliminar);
+    if (errorConsulta) {
+      console.error("Error consultando especialidades actuales:", errorConsulta);
       return {
         success: false,
-        message: 'Error al actualizar especialidades',
+        message: 'Error al consultar especialidades',
         toastType: 'error',
-        description: 'No se pudieron actualizar las especialidades'
+        description: 'No se pudieron consultar las especialidades actuales'
       };
     }
 
-    // ✅ NUEVO MODELO: Crear nuevas relaciones con id_usuario_organizacion y precios
-    if (especialidadesSeleccionadas.length > 0) {
-      const relacionesEspecialidades = especialidadesSeleccionadas.map(idEspecialidad => {
+    const idsActuales = (especialidadesActuales || []).map((e: any) => e.id_especialidad);
+    const idsNuevos = especialidadesSeleccionadas;
+
+    // Calcular diferencias
+    const idsAEliminar = idsActuales.filter((id: number) => !idsNuevos.includes(id));
+    const idsAAgregar = idsNuevos.filter((id: number) => !idsActuales.includes(id));
+
+    console.log("Especialidades a eliminar:", idsAEliminar);
+    console.log("Especialidades a agregar:", idsAAgregar);
+
+    // Eliminar solo las especialidades que fueron removidas
+    if (idsAEliminar.length > 0) {
+      const { error: errorEliminar } = await supabase
+        .from("usuario_especialidad")
+        .delete()
+        .eq("id_usuario", id)
+        .in("id_especialidad", idsAEliminar);
+
+      if (errorEliminar) {
+        console.error("Error eliminando especialidades:", errorEliminar);
+        return {
+          success: false,
+          message: 'Error al eliminar especialidades',
+          toastType: 'error',
+          description: 'No se pudieron eliminar las especialidades removidas'
+        };
+      }
+    }
+
+    // Agregar solo las especialidades nuevas
+    if (idsAAgregar.length > 0) {
+      const relacionesNuevas = idsAAgregar.map(idEspecialidad => {
         const precios = preciosPorEspecialidad[idEspecialidad] || { particular: 0, obraSocial: 0 };
         return {
           id_usuario: id,
-          id_usuario_organizacion: usuarioOrg.id_usuario_organizacion, // ✅ CLAVE
           id_especialidad: idEspecialidad,
           precio_particular: precios.particular,
           precio_obra_social: precios.obraSocial,
@@ -555,24 +491,24 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
         };
       });
 
-      const { error: errorRelaciones } = await supabase
+      const { error: errorAgregar } = await supabase
         .from("usuario_especialidad")
-        .insert(relacionesEspecialidades);
+        .insert(relacionesNuevas);
 
-      if (errorRelaciones) {
-        console.error("Error creating new relations:", errorRelaciones);
+      if (errorAgregar) {
+        console.error("Error agregando especialidades:", errorAgregar);
         return {
           success: false,
-          message: 'Error al asignar especialidades',
+          message: 'Error al agregar especialidades',
           toastType: 'error',
-          description: 'No se pudieron asignar las nuevas especialidades'
+          description: 'No se pudieron agregar las nuevas especialidades'
         };
       }
     }
 
     revalidatePath("/especialistas");
     revalidatePath("/especialista");
-    
+
     return {
       success: true,
       message: 'Especialista actualizado exitosamente',
@@ -595,34 +531,27 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
 export async function toggleEspecialistaActivo(id: string, activo: boolean): Promise<ServerActionResponse> {
   try {
     const supabase = await createClient();
-    
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
 
-    // ✅ NUEVO MODELO: Verificar que existe en la organización
-    const { data: usuarioOrg, error: errorVerificacion } = await supabase
-      .from("usuario_organizacion")
-      .select("id_usuario_organizacion, usuario:id_usuario(nombre, apellido)")
+    const { data: usuario, error: errorVerificacion } = await supabase
+      .from("usuario")
+      .select("id_usuario, nombre, apellido")
       .eq("id_usuario", id)
-      .eq("id_organizacion", orgId)
       .in("id_rol", ROLES_ESPECIALISTAS)
       .single();
 
-    if (errorVerificacion || !usuarioOrg) {
+    if (errorVerificacion || !usuario) {
       return {
         success: false,
         message: 'Especialista no encontrado',
         toastType: 'error',
-        description: 'El especialista que intentas modificar no existe en esta organización'
+        description: 'El especialista que intentas modificar no existe'
       };
     }
 
-    // ✅ NUEVO MODELO: Actualizar estado en usuario_organizacion (no en usuario)
     const { error } = await supabase
-      .from("usuario_organizacion")
+      .from("usuario")
       .update({ activo })
-      .eq("id_usuario_organizacion", usuarioOrg.id_usuario_organizacion);
+      .eq("id_usuario", id);
 
     if (error) {
       console.error("Error toggling especialista status:", error);
@@ -635,15 +564,12 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
     }
 
     revalidatePath("/especialistas");
-    
-    // @ts-ignore - usuarioOrg.usuario es el join con nombre/apellido
-    const usuario = usuarioOrg.usuario;
-    
+
     return {
       success: true,
       message: `Especialista ${activo ? 'activado' : 'inactivado'} exitosamente`,
       toastType: 'success',
-      description: `${usuario?.nombre || ''} ${usuario?.apellido || ''} ahora está ${activo ? 'activo' : 'inactivo'}`
+      description: `${usuario.nombre || ''} ${usuario.apellido || ''} ahora está ${activo ? 'activo' : 'inactivo'}`
     };
 
   } catch (error) {
@@ -657,20 +583,14 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
   }
 }
 
-// Obtener especialidades para el formulario
 // DEPRECADO: Usar getEspecialidades de especialidad.action.ts
 export async function getEspecialidadesLegacy() {
   try {
     const supabase = await createClient();
-    
-    // Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-    
+
     const { data, error } = await supabase
       .from("especialidad")
       .select("*")
-      .eq("id_organizacion", orgId)
       .order("nombre");
 
     if (error) {
@@ -685,116 +605,73 @@ export async function getEspecialidadesLegacy() {
   }
 }
 
-// interface PerfilCompleto {
-//   id_usuario: string;
-//   nombre: string;
-//   apellido: string;
-//   email: string;
-//   telefono: string | null;
-//   color: string | null;
-//   rol: {
-//     id: number;
-//     nombre: string;
-//     jerarquia: number;
-//   };
-//   especialidad_principal: {
-//     id_especialidad: number;
-//     nombre: string;
-//     precio_particular?: number | null;
-//     precio_obra_social?: number | null;
-    
-//   } | null;
-//   especialidades_adicionales: Array<{
-//     id_especialidad: number;
-//     nombre: string;
-//     precio_particular?: number | null;
-//     precio_obra_social?: number | null;
-//   }>;
-// }
-
 import { PerfilCompleto } from "./perfil.action";
 
 // obtener perfil de especialista
 export async function getPerfilEspecialista(id_especialista: string): Promise<PerfilCompleto | null> {
   try {
     const supabase = await createClient();
-    
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
 
-    // ✅ 1. NUEVO MODELO: Obtener usuario_organizacion con rol y color
-    const { data: usuarioOrg, error: userOrgError } = await supabase
-      .from('usuario_organizacion')
+    const { data: usuario, error: userError } = await supabase
+      .from('usuario')
       .select(`
-        id_usuario_organizacion,
-        color_calendario,
-        usuario:id_usuario (
-          id_usuario,
-          nombre,
-          apellido,
-          email,
-          telefono,
-          color
-        ),
-        rol:id_rol (
+        id_usuario,
+        nombre,
+        apellido,
+        email,
+        telefono,
+        color,
+        activo,
+        id_rol,
+        rol:id_rol(
           id,
           nombre,
           jerarquia
         )
       `)
       .eq('id_usuario', id_especialista)
-      .eq('id_organizacion', orgId)
       .single();
 
-      if (userOrgError || !usuarioOrg) {
-        console.error('Error consultando usuario_organizacion:', userOrgError);
-        throw new Error(`No se pudo obtener el perfil: ${userOrgError?.message || 'Usuario no encontrado en la organización'}`);
-      }
+    if (userError || !usuario) {
+      console.error('Error consultando usuario:', userError);
+      throw new Error(`No se pudo obtener el perfil: ${userError?.message || 'Usuario no encontrado'}`);
+    }
 
-      // @ts-ignore - usuario y rol son joins
-      const usuario = usuarioOrg.usuario;
-      const rol = usuarioOrg.rol;
+    const { data: especialidadesData, error: especialidadesError } = await supabase
+      .from('usuario_especialidad')
+      .select(`
+        precio_particular,
+        precio_obra_social,
+        especialidad:id_especialidad(
+          id_especialidad,
+          nombre
+        )
+      `)
+      .eq('id_usuario', id_especialista)
+      .eq('activo', true);
 
-      // ✅ 2. NUEVO MODELO: Obtener especialidades por id_usuario_organizacion
-      const { data: especialidadesData, error: especialidadesError } = await supabase
-        .from('usuario_especialidad')
-        .select(`
-          precio_particular,
-          precio_obra_social,
-          especialidad:id_especialidad (
-            id_especialidad,
-            nombre
-          )
-        `)
-        .eq('id_usuario_organizacion', usuarioOrg.id_usuario_organizacion)
-        .eq('activo', true);
+    const especialidadesAdicionales = especialidadesError
+      ? []
+      : (especialidadesData || [])
+          .map((item: any) => ({
+            id_especialidad: item.especialidad?.id_especialidad,
+            nombre: item.especialidad?.nombre,
+            precio_particular: item.precio_particular,
+            precio_obra_social: item.precio_obra_social
+          }))
+          .filter(esp => esp.id_especialidad);
 
-      // 3. Procesar especialidades con precios
-      const especialidadesAdicionales = especialidadesError
-        ? []
-        : (especialidadesData || [])
-            .map(item => ({
-              // @ts-ignore
-              id_especialidad: item.especialidad?.id_especialidad,
-              // @ts-ignore
-              nombre: item.especialidad?.nombre,
-              precio_particular: item.precio_particular,
-              precio_obra_social: item.precio_obra_social
-            }))
-            .filter(esp => esp.id_especialidad); // Filtrar elementos válidos
+    const especialidadPrincipalConPrecios = especialidadesAdicionales[0] || null;
 
-      // Primera especialidad como principal
-      const especialidadPrincipalConPrecios = especialidadesAdicionales[0] || null;
+    const rol = (usuario as any).rol;
 
-      // ✅ 4. Combinar datos con nuevo modelo
-      const perfil: PerfilCompleto = {
-      id_usuario: usuario?.id_usuario,
-      nombre: usuario?.nombre,
-      apellido: usuario?.apellido,
-      email: usuario?.email,
-      telefono: usuario?.telefono,
-      color: usuario?.color, // ✅ Color individual del especialista desde usuario.color
+    const perfil: PerfilCompleto = {
+      id_usuario: usuario.id_usuario,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      email: usuario.email,
+      telefono: usuario.telefono,
+      color: usuario.color,
       rol: {
         id: rol?.id || 1,
         nombre: rol?.nombre || 'usuario',
@@ -802,7 +679,7 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<Pe
       },
       especialidad_principal: especialidadPrincipalConPrecios,
       especialidades_adicionales: especialidadesAdicionales
-    };        
+    };
 
     return perfil;
 

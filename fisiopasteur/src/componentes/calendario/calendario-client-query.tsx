@@ -81,15 +81,14 @@ export function CalendarioClientQuery({
   };
 
   const handleSuccessfulTurnoCreation = () => {
-    setIsCreateModalOpen(false);
     // ✅ Invalidar caché para refrescar los datos
     invalidateTurnos();
-    showServerActionResponse({
-      success: true,
-      message: 'Turno creado exitosamente',
-      toastType: 'success',
-      description: 'El turno ha sido creado correctamente'
-    });
+    // showServerActionResponse({
+    //   success: true,
+    //   message: 'Turno creado exitosamente',
+    //   toastType: 'success',
+    //   description: 'El turno ha sido creado correctamente'
+    // });
   };
 
   // ✅ Mostrar skeleton solo durante la carga inicial o mientras carga datos
@@ -167,6 +166,7 @@ export function CalendarioClientQuery({
               setHoraSeleccionada(hora || '');
               setIsCreateModalOpen(true);
             }}
+            setIsCreateModalOpen={setIsCreateModalOpen}
             especialistas={especialistas}
             especialistaSeleccionado={especialistaFiltro}
             onEspecialistaChange={setEspecialistaFiltro}
@@ -192,7 +192,7 @@ export function CalendarioClientQuery({
         fechaSeleccionada={selectedDate}
         horaSeleccionada={horaSeleccionada}
         especialistas={especialistas}
-        pacientes={pacientes}
+        // pacientes={pacientes}
         onTurnoCreated={handleSuccessfulTurnoCreation}
       />
 
