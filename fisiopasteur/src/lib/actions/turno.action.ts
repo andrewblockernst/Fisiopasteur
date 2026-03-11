@@ -1143,7 +1143,7 @@ export async function obtenerPrecioEspecialidad(
   }
 }
 
-export async function obtenerPacientes(busqueda?: string, limit: number = 10) {
+export async function obtenerPacientes(busqueda?: string, limit?: number) {
   const supabase = await createClient();
   
   try {
@@ -1169,12 +1169,18 @@ export async function obtenerPacientes(busqueda?: string, limit: number = 10) {
 
     // CASO B: No hay búsqueda -> Traemos listado normal (Simple Select)
     else {
-      const result = await supabase
+      const query = supabase
         .from("paciente")
         .select("id_paciente, nombre, apellido, dni, telefono, email")
         .order("apellido")
         .order("nombre")
-        .limit(limit);
+
+      if (limit) {
+        query.limit(limit);
+      }
+
+      const result = await query;
+        
       data = result.data;
       error = result.error;
     }
