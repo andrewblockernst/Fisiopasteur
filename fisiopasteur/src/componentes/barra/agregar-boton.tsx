@@ -53,16 +53,20 @@ const AgregarBoton = () => {
 
   // Filtrar opciones según el rol del usuario
   const menuOptions = useMemo(() => {
-    if (loading || !user) return [];
+    // comento el if para que igual aparezca el + aunque no haya usuario o esté cargando, pero sin opciones al hacer clic
+    if (loading || !user) return []; 
     
     // Si puede gestionar el sistema (admin o programador), mostrar todas las opciones
-    if (user.puedeGestionarTurnos) {
+    if (user?.puedeGestionarTurnos) {
       return allMenuOptions;
     }
     
     // Si es especialista, filtrar solo las opciones que no requieren admin
     return allMenuOptions.filter(option => !option.requiresAdmin);
-  }, [user, loading]);  const toggleMenu = () => {
+  }, [user, loading]);  
+  
+  const toggleMenu = () => {
+    if (loading || !user) return; // Evitar abrir el menú si está cargando o no hay usuario
     setIsOpen(!isOpen);
   };
 
@@ -97,9 +101,9 @@ const AgregarBoton = () => {
   }, []);
 
   // No mostrar el botón si está cargando o no hay opciones disponibles
-  if (loading || menuOptions.length === 0) {
-    return null;
-  }
+  // if (loading || menuOptions.length === 0) {
+  //   return null;
+  // }
 
   return (
     <div className="relative" ref={menuRef}>
@@ -133,10 +137,11 @@ const AgregarBoton = () => {
       {/* Botón principal */}
       <button 
         className="text-white hover:scale-105 transition-all duration-200 flex flex-col items-center gap-1 min-w-0 relative"
-        onClick={toggleMenu}
+        onClick={toggleMenu} // Deshabilitar clic si está cargando o no hay usuario
       >
         <div className={`transition-transform duration-300 ${isOpen ? 'rotate-45' : ''}`}>
-          {isOpen ? <X size={24} /> : <Plus size={24} />}
+          {/* {isOpen ? <X size={24} /> : <Plus size={24} />} */}
+          <Plus size={24} />
         </div>
         <span className="text-xs font-medium truncate">Agregar</span>
       </button>

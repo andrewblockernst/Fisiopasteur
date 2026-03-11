@@ -90,7 +90,7 @@ export async function guardarPrecioUsuarioEspecialidad(
     }
 
     // Verificar si existe la fila
-    const { data: existente } = await supabase
+    let { data: existente, error: existenteError } = await supabase
       .from('usuario_especialidad')
       .select('id_usuario, id_especialidad')
       .eq('id_usuario', user.id)
@@ -131,85 +131,22 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
     // 1. Verificar autenticación
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (authError || !user) {
+    if (authError || !user) { 
       console.error('Error de autenticación:', authError);
       redirect('/login');
     }
 
-    // 1.1. Obtener ID de organización del usuario
-    const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
-    // 1.5. Verificar si el usuario existe por ID
-    const { data: existeUsuarioPorId, error: checkIdError } = await supabase
+    // 2. Obtener datos del usuario con rol
+    let { data: userData, error: userError } = await supabase
       .from('usuario')
-      .select('id_usuario, nombre, apellido, email')
-      .eq('id_usuario', user.id);
-
-    // 1.6. Si no existe por ID, buscar por email
-    if (!existeUsuarioPorId || existeUsuarioPorId.length === 0) {
-      const { data: existeUsuarioPorEmail, error: checkEmailError } = await supabase
-        .from('usuario')
-        .select('id_usuario, nombre, apellido, email')
-        .eq('email', user.email || '');
-
-      if (existeUsuarioPorEmail && existeUsuarioPorEmail.length > 0) {
-        // El usuario existe con el mismo email pero diferente id_usuario
-        // NO podemos cambiar el id_usuario porque puede tener turnos asociados
-        // En su lugar, registramos el conflicto y continuamos con el usuario existente
-        console.warn('⚠️ Usuario encontrado por email pero con ID diferente. Usando usuario existente:', {
-          authId: user.id,
-          dbId: existeUsuarioPorEmail[0].id_usuario,
-          email: user.email
-        });
-
-        // No intentar actualizar el id_usuario, usar el usuario existente
-        // El perfil se cargará usando el ID de Auth (que puede no coincidir)
-      } else {
-        // No existe el usuario, crear uno nuevo
-        
-        const { data: nuevoUsuario, error: createError } = await supabase
-          .from('usuario')
-          .insert({
-            id_usuario: user.id,
-            nombre: user.user_metadata?.nombre || 'Usuario',
-            apellido: user.user_metadata?.apellido || 'Nuevo',
-            email: user.email || '',
-            usuario: user.email?.split('@')[0] || 'usuario',
-            // Usar la columna real 'contraseña' (U+00F1) en la DB
-            contraseña: '',
-            id_rol: 1, // Rol por defecto
-            created_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('❌ Error creando usuario:', createError);
-          throw new Error(`Error creando usuario: ${createError.message}`);
-        }
-
-      }
-    }
-
-    // 2. Obtener datos del usuario desde usuario_organizacion (multi-org)
-    let userData = null;
-    let userError = null;
-
-    const { data: userOrgById, error: errorById } = await supabase
-      .from('usuario_organizacion')
       .select(`
-        id_usuario_organizacion,
-        activo,
-        color_calendario,
-        usuario:id_usuario (
-          id_usuario,
-          nombre,
-          apellido,
-          email,
-          telefono,
-          color
-        ),
+        id_usuario,
+        nombre,
+        apellido,
+        email,
+        telefono,
+        color,
+        id_rol,
         rol:id_rol (
           id,
           nombre,
@@ -217,82 +154,30 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
         )
       `)
       .eq('id_usuario', user.id)
-      .eq('id_organizacion', orgId)
-      .single();
-
-    if (userOrgById && !errorById) {
-      // Usuario encontrado en usuario_organizacion
-      userData = {
-        ...userOrgById.usuario,
-        rol: userOrgById.rol,
-        id_usuario_organizacion: userOrgById.id_usuario_organizacion,
-        color_calendario: userOrgById.color_calendario
-      };
-    } else {
-      // No encontrado por ID, buscar por email en usuario_organizacion
-      // Primero buscar usuario por email
-      const { data: usuarioByEmail } = await supabase
-        .from('usuario')
-        .select('id_usuario')
-        .eq('email', user.email || '')
-        .single();
-
-      if (usuarioByEmail) {
-        // Luego buscar en usuario_organizacion
-        const { data: userOrgByEmail, error: errorByEmail } = await supabase
-          .from('usuario_organizacion')
-          .select(`
-            id_usuario_organizacion,
-            activo,
-            color_calendario,
-            usuario:id_usuario (
-              id_usuario,
-              nombre,
-              apellido,
-              email,
-              telefono,
-              color
-            ),
-            rol:id_rol (
-              id,
-              nombre,
-              jerarquia
-            )
-          `)
-          .eq('id_usuario', usuarioByEmail.id_usuario)
-          .eq('id_organizacion', orgId)
-          .single();
-
-        if (userOrgByEmail && !errorByEmail) {
-          userData = {
-            ...userOrgByEmail.usuario,
-            rol: userOrgByEmail.rol,
-            id_usuario_organizacion: userOrgByEmail.id_usuario_organizacion,
-            color_calendario: userOrgByEmail.color_calendario
-          };
-          console.log('Usuario encontrado por email en org, usando perfil existente:', {
-            authId: user.id,
-            dbId: usuarioByEmail.id_usuario,
-            email: user.email
-          });
-        } else {
-          userError = errorById || errorByEmail;
-        }
-      } else {
-        userError = errorById;
-      }
-    }
-
-    if (userError && !userData) {
-      console.error('Error consultando usuario:', userError);
-      throw new Error(`No se pudo obtener el perfil: ${userError.message}`);
-    }
+      .maybeSingle();
 
     if (!userData) {
-      throw new Error('Usuario no encontrado en la base de datos');
+      console.warn('⚠️ perfil: no encontrado por ID, buscando por email');
+      const { data: byEmail, error: emailError } = await supabase
+        .from('usuario')
+        .select(`
+          id_usuario, nombre, apellido, email,
+          telefono, color, id_rol,
+          rol:id_rol ( id, nombre, jerarquia )
+        `)
+        .eq('email', user.email!)
+        .maybeSingle();
+
+      userData = byEmail;
+      userError = emailError;
     }
 
-    // 3. Obtener especialidades desde usuario_especialidad (usa id_usuario_organizacion)
+    if (userError || !userData) {
+      throw new Error(`No se pudo obtener el perfil: ${userError?.message}`);
+      throw new Error(`No se pudo obtener el perfil: ${userError?.message || 'Usuario no encontrado'}`);
+    }
+
+    // 3. Obtener especialidades del usuario
     const { data: especialidadesData, error: especialidadesError } = await supabase
       .from('usuario_especialidad')
       .select(`
@@ -301,7 +186,7 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
           nombre
         )
       `)
-      .eq('id_usuario_organizacion', userData.id_usuario_organizacion)
+      .eq('id_usuario', userData.id_usuario)
       .eq('activo', true);
 
     // 4. Construir lista de especialidades

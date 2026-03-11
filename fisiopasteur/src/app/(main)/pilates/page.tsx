@@ -103,7 +103,6 @@ export default function PilatesPage() {
               })
             )
             );
-          console.log('Especialidades encontradas en especialistas:', EspecialidadesEspecialistas);
 
           const pilatesId = getIdPilates(EspecialidadesEspecialistas);
 
@@ -111,15 +110,17 @@ export default function PilatesPage() {
           setIdPilates(pilatesId);
           
           // Filtrar solo especialistas de Pilates
-          const pilates = todosEspecialistas.filter((e: any) => {
+          const especialistasPilates = todosEspecialistas.filter((e: any) => {
             const principal = esPilates(e.especialidad);
             const adicional = Array.isArray(e.usuario_especialidad)
               ? e.usuario_especialidad.some((ue: any) => esPilates(ue.especialidad))
               : false;
             return principal || adicional;
           });
+
+          console.log('Especialistas de Pilates:', especialistasPilates);
           
-          setEspecialistas(pilates);
+          setEspecialistas(especialistasPilates);
         }
 
         // Cargar pacientes

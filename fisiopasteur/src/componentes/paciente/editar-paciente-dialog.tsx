@@ -3,11 +3,12 @@
 import { Tables } from "@/types/database.types";
 import BaseDialog from "../dialog/base-dialog";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { updatePaciente } from "@/lib/actions/paciente.action";
 import Button from "../boton";
 import { ToastItem } from "@/stores/toast-store";
 import { getPhoneInputHint, isValidPhoneNumber } from "@/lib/utils/phone.utils";
+import { te } from "date-fns/locale";
 
 type Paciente = Tables<'paciente'>;
 
@@ -97,6 +98,46 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [phoneInput, setPhoneInput] = useState(paciente.telefono || '');
+    const [hasChanges, setHasChanges] = useState(false);
+    const [formValues, setFormValues] = useState({
+        nombre: paciente.nombre,
+        apellido: paciente.apellido,
+        telefono: paciente.telefono,
+        email: paciente.email || '',
+        dni: paciente.dni || '',
+        fecha_nacimiento: paciente.fecha_nacimiento || '',
+        direccion: paciente.direccion || '',
+    });
+
+    const datosOriginales = useMemo(() => ({
+        nombre: paciente.nombre.trim().toLowerCase(),
+        apellido: paciente.apellido.trim().toLowerCase(),
+        telefono: paciente.telefono.trim(),
+        email: (paciente.email || '').trim().toLowerCase(),
+        dni: (paciente.dni || '').trim(),
+        fecha_nacimiento: paciente.fecha_nacimiento ? paciente.fecha_nacimiento.trim() : '',
+        direccion: (paciente.direccion || '').trim().toLowerCase(),
+    }), [paciente]);
+
+    // Detectar cambios en el formulario
+    useEffect(() => {
+        const cambiosDetectados = Object.entries(formValues).some(([key, value]) => {
+            const valorOriginal = (datosOriginales as any)[key];
+            
+            // Protección: si value es null/undefined, lo convertimos a string vacío
+            const valorString = value || ''; 
+            const valorLimpio = valorString.trim();
+
+            // Solo pasamos a minúsculas los campos que definimos así en datosOriginales
+            const camposEnMinuscula = ['nombre', 'apellido', 'email', 'direccion'];
+            const valorFinal = camposEnMinuscula.includes(key) 
+                ? valorLimpio.toLowerCase() 
+                : valorLimpio;
+
+            return valorFinal !== valorOriginal;
+        });
+        setHasChanges(cambiosDetectados);
+    }, [formValues, datosOriginales]);
 
     const validateForm = (formData: FormData): boolean => {
         const newErrors: Record<string, string> = {};
@@ -155,7 +196,9 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                         type="text"
                         id="nombre"
                         name="nombre"
-                        defaultValue={paciente.nombre}
+                        // defaultValue={paciente.nombre}
+                        value={formValues.nombre}
+                        onChange={(e) => setFormValues(prev => ({...prev, nombre: e.target.value}))}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.nombre ? "border-red-500" : "border-gray-300"
                         }`}
@@ -173,7 +216,8 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                         type="text"
                         id="apellido"
                         name="apellido"
-                        defaultValue={paciente.apellido}
+                        value={formValues.apellido}
+                        onChange={(e) => setFormValues(prev => ({...prev, apellido: e.target.value}))}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.apellido ? "border-red-500" : "border-gray-300"
                         }`}
@@ -192,7 +236,10 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                         id="telefono"
                         name="telefono"
                         value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
+                        onChange={(e) => {
+                            setPhoneInput(e.target.value);
+                            setFormValues(prev => ({...prev, telefono: e.target.value}))
+                        }}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.telefono ? "border-red-500" : "border-gray-300"
                         }`}
@@ -219,7 +266,9 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                         type="email"
                         id="email"
                         name="email"
-                        defaultValue={paciente.email || ''}
+                        // defaultValue={paciente.email || ''}
+                        value={formValues.email}
+                        onChange={(e) => setFormValues(prev => ({ ...prev, email:e.target.value}))}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.email ? "border-red-500" : "border-gray-300"
                         }`}
@@ -237,7 +286,9 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                         type="text"
                         id="dni"
                         name="dni"
-                        defaultValue={paciente.dni || ''}
+                        // defaultValue={paciente.dni || ''}
+                        value={formValues.dni}
+                        onChange={(e) => setFormValues(prev => ({ ...prev, dni: e.target.value}))}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.dni ? "border-red-500" : "border-gray-300"
                         }`}
@@ -255,7 +306,9 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                         type="date"
                         id="fecha_nacimiento"
                         name="fecha_nacimiento"
-                        defaultValue={paciente.fecha_nacimiento || ''}
+                        // defaultValue={paciente.fecha_nacimiento || ''}
+                        value={formValues.fecha_nacimiento}
+                        onChange={(e) => setFormValues(prev => ({ ...prev, fecha_nacimiento: e.target.value}))}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.fecha_nacimiento ? "border-red-500" : "border-gray-300"
                         }`}
@@ -274,7 +327,9 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                         type="text"
                         id="direccion"
                         name="direccion"
-                        defaultValue={paciente.direccion || ''}
+                        // defaultValue={paciente.direccion || ''}
+                        value={formValues.direccion}
+                        onChange={(e) => setFormValues(prev => ({ ...prev, direccion: e.target.value }))}
                         className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
                         errors.direccion ? "border-red-500" : "border-gray-300"
                         }`}
@@ -297,7 +352,7 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                 <Button
                 type="submit"
                 variant="primary"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !hasChanges}
                 >
                 {isSubmitting ? "Actualizando..." : "Actualizar Paciente"}
                 </Button>
