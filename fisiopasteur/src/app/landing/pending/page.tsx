@@ -1,6 +1,8 @@
+'use client';
+
 import React from 'react';
 
-const Pending: React.FC = () => {
+export default function Pending() {
   return (
     <div className="min-h-screen bg-yellow-50 flex items-center justify-center">
       <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8 text-center">
@@ -20,4 +22,6 @@ const Pending: React.FC = () => {
       </div>
     </div>
   );
-};
+}
+
+

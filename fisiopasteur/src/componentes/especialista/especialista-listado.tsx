@@ -15,7 +15,6 @@ type Especialidad = Tables<"especialidad">;
 // ✅ Tipo que coincide con getEspecialistas()
 type EspecialistaConDatos = {
   id_usuario: string;
-  id_usuario_organizacion: string;
   nombre: string;
   apellido: string;
   email: string;
@@ -162,7 +161,7 @@ export function EspecialistasTable({
                       disabled={isPending}
                       onClick={() => handleToggleActivo(especialista)}
                     >
-                      {especialista.activo ? "Inactivar" : "Activar"}
+                      {especialista.activo ? "Desactivar" : "Activar"}
                     </Button>
                   </td>
                 )}

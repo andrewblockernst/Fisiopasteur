@@ -121,10 +121,11 @@ function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteF
         return Object.keys(newErrors).length === 0;
     }
 
-    const handleSubmit = async (formData: FormData) => {
-        if (!validateForm(formData)) {
-            return;
-        }
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+
+        if (!validateForm(formData)) return;
 
         try {
             setIsSubmitting(true);
@@ -143,7 +144,7 @@ function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteF
     };
 
     return (
-        <form action={handleSubmit}>
+        <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 {/* Nombre */}

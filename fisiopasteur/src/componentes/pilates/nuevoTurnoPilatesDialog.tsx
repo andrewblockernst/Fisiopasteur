@@ -327,12 +327,12 @@ export function NuevoTurnoPilatesModal({
             fecha,
             hora: hora + ':00',
             id_especialista: formData.especialistaId,
-            id_especialidad: 4,
             id_paciente: pacienteId,
             estado: "programado",
             observaciones: formData.observaciones || null,
             tipo_plan: "particular",
-            dificultad: formData.dificultad
+            dificultad: formData.dificultad,                
+            es_pilates: true  
           });
           resultados.push(resultado);
         }
@@ -394,7 +394,8 @@ export function NuevoTurnoPilatesModal({
                 hora_inicio: hora,
                 hora_fin: (parseInt(hora.split(':')[0]) + 1).toString().padStart(2, '0') + ':00',
                 estado: 'programado',
-                dificultad: formData.dificultad
+                dificultad: formData.dificultad,
+                es_pilates: true
               });
             } else {
             }

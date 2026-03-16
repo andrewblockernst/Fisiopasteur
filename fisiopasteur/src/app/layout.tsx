@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import PatronFondo from "@/componentes/patron-fondo";
 import { GlobalToastContainer } from "@/componentes/notificacion/toast/global-toast-container";
 import { QueryProvider } from "@/lib/query-client";
@@ -16,7 +17,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning={true}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning={true} >
         <QueryProvider>
           <AuthProvider>
             <PatronFondo>

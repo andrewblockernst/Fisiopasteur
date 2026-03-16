@@ -13,6 +13,7 @@ interface CalendarioTurnosProps {
   onEspecialistaChange: (especialistaId: string) => void;
   onDayClick: (date: Date, turnos: TurnoConDetalles[]) => void;
   onCreateTurno: (date: Date, hora?: string) => void;
+  setIsCreateModalOpen?: (open: boolean) => void; // ✅ Nueva prop para controlar el modal desde el padre
 }
 
 type VistaCalendario = 'mes' | 'semana' | 'dia';
@@ -41,6 +42,7 @@ export function CalendarioTurnos({
   onEspecialistaChange,
   onDayClick,
   onCreateTurno,
+  setIsCreateModalOpen,
   vistaProp,
   onVistaChange,
   goToTodaySignal,
@@ -67,11 +69,15 @@ export function CalendarioTurnos({
   }, []);
 
   // Maneja el estado para abrir/cerrar el modal de creación de turno
-const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+// const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
 
     const handleCreateTurno = () => {
-    setIsCreateModalOpen(true);
+      if (setIsCreateModalOpen) {
+        setIsCreateModalOpen(true);
+      } else {
+        onCreateTurno(new Date());
+      }
   };
 
 

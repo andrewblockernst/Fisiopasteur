@@ -29,7 +29,7 @@ interface NuevoTurnoModalProps {
   fechaSeleccionada?: Date | null;
   horaSeleccionada?: string | null;
   especialistas?: any[];
-  pacientes?: any[];
+  // pacientes?: any[];
 }
 
 // ✅ Días de la semana (SIN Sábado ni Domingo)
@@ -63,7 +63,7 @@ export function NuevoTurnoModal({
   fechaSeleccionada = null,
   horaSeleccionada = '',
   especialistas: especialistasProp = [],
-  pacientes: pacientesProp = []
+  // pacientes: pacientesProp = []
 }: NuevoTurnoModalProps) {
   const { user, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
@@ -82,7 +82,7 @@ export function NuevoTurnoModal({
 
   // Estados para datos cargados automáticamente
   const [especialistas, setEspecialistas] = useState<any[]>(especialistasProp);
-  const [pacientes, setPacientes] = useState<any[]>(pacientesProp);
+  const [pacientes, setPacientes] = useState<any[]>([]);
   const [especialidades, setEspecialidades] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
   const [boxesDisponibles, setBoxesDisponibles] = useState<any[]>([]);
@@ -212,11 +212,11 @@ export function NuevoTurnoModal({
         }
         
         // Solo cargar pacientes si no vienen por props Y no los tenemos
-        if (pacientesProp.length === 0 && pacientes.length === 0) {
-          promises.push(obtenerPacientes().then(res => {
-            if (res.success) setPacientes(res.data || []);
-          }));
-        }
+        // if (pacientesProp.length === 0 && pacientes.length === 0) {
+        //   promises.push(obtenerPacientes().then(res => {
+        //     if (res.success) setPacientes(res.data || []);
+        //   }));
+        // }
         
         // Solo cargar especialidades si no las tenemos o cache expirado
         if (!cacheValido || especialidades.length === 0) {
@@ -423,39 +423,68 @@ useEffect(() => {
       }
 
       setVerificandoDisponibilidad(true);
+      // setHorasOcupadas([]);
+
       try {
         const res = await obtenerAgendaEspecialista(formData.id_especialista, formData.fecha);
         if (res.success && res.data) {
-          const ocupadas: string[] = [];
+          const ocupadas = new Set<string>();
+
+          console.log(` Horarios ocupados por los turnos en la fecha seleccionada (${formData.fecha}):`);
           
           res.data.forEach((turno: any) => {
-            if (turno.estado !== 'cancelado') {
+
+              
+            
               const [horas, minutos] = turno.hora.split(':').map(Number);
-              const inicioTurno = new Date();
-              inicioTurno.setHours(horas, minutos, 0, 0);
+              const inicioSlot = new Date(); // inicioTurno
+              inicioSlot.setHours(horas, minutos, 0, 0);
               
-              const duracionTurno = 60;
-              const finTurno = new Date(inicioTurno.getTime() + (duracionTurno * 60000));
+              // const duracionTurno = 60;
+              // const finTurno = new Date(inicioTurno.getTime() + (duracionTurno * 60000));
               
-              const inicioSlot = new Date(inicioTurno);
-              while (inicioSlot < finTurno) {
-                const horaStr = inicioSlot.toTimeString().slice(0, 5);
-                ocupadas.push(horaStr);
-                inicioSlot.setMinutes(inicioSlot.getMinutes() + 15);
-              }
+              // const inicioSlot = new Date(inicioTurno);
+              // while (inicioSlot < finTurno) {
+              //   const horaStr = inicioSlot.toTimeString().slice(0, 5);
+              //   ocupadas.push(horaStr);
+              //   inicioSlot.setMinutes(inicioSlot.getMinutes() + 15);
+              // }
+
+            // Un turno de 60 minutos equivale exactamente a 4 bloques de 15 min.
+            // Usar un bucle 'for' es más directo y un poco más eficiente que manejar tiempos.
+            for (let i = 0; i < 4; i++) {
+              const h = inicioSlot.getHours().toString().padStart(2, '0');
+              const m = inicioSlot.getMinutes().toString().padStart(2, '0');
+              
+              ocupadas.add(`${h}:${m}`);
+
+              console.log(`${h}:${m}`)
+
+
+              
+              // Sumamos 15 minutos para la siguiente iteración
+              inicioSlot.setMinutes(inicioSlot.getMinutes() + 15);
             }
+            
           });
           
-          setHorasOcupadas(ocupadas);
+          setHorasOcupadas(Array.from(ocupadas));
+          
         }
       } catch (error) {
         console.error('Error verificando horarios:', error);
       } finally {
         setVerificandoDisponibilidad(false);
+        
       }
     }, 300); // Esperar 300ms antes de ejecutar
 
-    return () => clearTimeout(timeoutId);
+   
+    return () => {
+      clearTimeout(timeoutId);
+      console.log(` Horarios ocupados actualizados:`, horasOcupadas);
+    }
+    
   }, [formData.id_especialista, formData.fecha]);
 
   // ✅ Cargar horarios disponibles por día
@@ -691,15 +720,20 @@ useEffect(() => {
   const esHoraDisponible = (hora: string): boolean => {
     if (!hora || horasOcupadas.length === 0) return true;
     
-    if (horasOcupadas.includes(hora)) return false;
-    
     const [horas, minutos] = hora.split(':').map(Number);
     const inicioNuevoTurno = new Date();
     inicioNuevoTurno.setHours(horas, minutos, 0, 0);
     
     for (let i = 0; i < 4; i++) {
-      const slotTiempo = new Date(inicioNuevoTurno.getTime() + (i * 15 * 60000));
-      const slotStr = slotTiempo.toTimeString().slice(0, 5);
+      // Creamos un clon de la fecha y le sumamos los minutos correspondientes
+      const slotTiempo = new Date(inicioNuevoTurno.getTime());
+      slotTiempo.setMinutes(slotTiempo.getMinutes() + (i * 15));
+
+      // Formateo seguro a mano
+    const h = slotTiempo.getHours().toString().padStart(2, '0');
+    const m = slotTiempo.getMinutes().toString().padStart(2, '0');
+    const slotStr = `${h}:${m}`;
+    
       if (horasOcupadas.includes(slotStr)) {
         return false;
       }

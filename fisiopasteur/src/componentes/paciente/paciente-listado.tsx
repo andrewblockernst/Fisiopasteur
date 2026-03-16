@@ -202,7 +202,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                 className="text-xs px-3 py-2 h-8 flex items-center justify-center"
                                 onClick={() => setDeletingPaciente(paciente)}
                                 >
-                                    Inactivar
+                                    Desactivar
                                 </Button>
                             )}
                             {!(paciente.activo) && (
