@@ -242,7 +242,6 @@ export default function ConsultaEspecialistaMobile() {
                         telefono: viewingEspecialista.telefono,
                         color: viewingEspecialista.color,
                         activo: true,
-                        id_usuario_organizacion: '',
                         id_rol: viewingEspecialista.rol.id,
                         rol: viewingEspecialista.rol,
                         especialidades: [

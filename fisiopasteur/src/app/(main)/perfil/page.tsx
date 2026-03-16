@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: 'Gestiona tu información personal y profesional',
 };
 
+export const revalidate = 0; // Renderizar dinámicamente en cada request
+
 export default function PerfilPage() {
   return <PerfilServidor />;
 }

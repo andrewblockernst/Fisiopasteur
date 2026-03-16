@@ -6,7 +6,7 @@ import type { TurnoConDetalles } from "@/stores/turno-store";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { mapearTurnoParaBot } from "@/lib/utils/whatsapp.utils";
-import { getBrandingConfig } from "./branding.service"; // ✅ MULTI-ORG: Importar servicio de branding
+import { getBrandingConfig } from './branding.service';
 
 // Configuración del bot
 const BOT_URL =
@@ -171,17 +171,15 @@ export async function enviarConfirmacionTurno(
     };
   }
 
-  // ✅ MULTI-ORG: Obtener branding de la organización del turno
-  let nombreOrganizacion = "Centro Médico";
-  if (turno.id_organizacion) {
-    try {
-      const brandingResult = await getBrandingConfig(turno.id_organizacion);
-      if (brandingResult.success && brandingResult.data) {
-        nombreOrganizacion = brandingResult.data.nombre;
-      }
-    } catch (error) {
-      console.warn("No se pudo obtener branding, usando nombre por defecto");
+  // Obtener branding de la clínica
+  let nombreOrganizacion = 'Centro Médico';
+  try {
+    const brandingResult = await getBrandingConfig();
+    if (brandingResult.success && brandingResult.data) {
+      nombreOrganizacion = brandingResult.data.nombre;
     }
+  } catch (error) {
+    console.warn('No se pudo obtener branding, usando nombre por defecto');
   }
 
   const datosBot = mapearTurnoParaBot(turno, nombreOrganizacion);
@@ -215,17 +213,15 @@ export async function enviarRecordatorioTurno(
     };
   }
 
-  // ✅ MULTI-ORG: Obtener branding de la organización del turno
-  let nombreOrganizacion = "Centro Médico";
-  if (turno.id_organizacion) {
-    try {
-      const brandingResult = await getBrandingConfig(turno.id_organizacion);
-      if (brandingResult.success && brandingResult.data) {
-        nombreOrganizacion = brandingResult.data.nombre;
-      }
-    } catch (error) {
-      console.warn("No se pudo obtener branding, usando nombre por defecto");
+  // Obtener branding de la clínica
+  let nombreOrganizacion = 'Centro Médico';
+  try {
+    const brandingResult = await getBrandingConfig();
+    if (brandingResult.success && brandingResult.data) {
+      nombreOrganizacion = brandingResult.data.nombre;
     }
+  } catch (error) {
+    console.warn('No se pudo obtener branding, usando nombre por defecto');
   }
 
   const datosBot = mapearTurnoParaBot(turno, nombreOrganizacion);

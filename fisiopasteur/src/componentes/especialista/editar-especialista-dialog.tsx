@@ -1,6 +1,6 @@
  "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import Image from "next/image";
 import type { Tables } from "@/types/database.types";
@@ -11,7 +11,6 @@ type Especialidad = Tables<"especialidad">;
 //Tipo que coincide con getEspecialistas()
 type EspecialistaConDatos = {
   id_usuario: string;
-  id_usuario_organizacion: string;
   nombre: string;
   apellido: string;
   email: string;
@@ -125,7 +124,55 @@ function EspecialistaEditFormForDialog({
     [...new Set(especialista.especialidades?.map((e: { id_especialidad: number }) => e.id_especialidad) || [])]
   );
   const [selectedColor, setSelectedColor] = useState(especialista.color || "#3B82F6");
+  const [hasChanges, setHasChanges] = useState(false);
+  const [formValues, setFormValues] = useState({
+    nombre: especialista.nombre,
+    apellido: especialista.apellido,
+    email: especialista.email,
+    telefono: especialista.telefono || "",
+    contraseña: ""
+  });
   const { showServerActionResponse } = useToastStore();
+
+  // Datos originales normalizados
+  const datosOriginales = useMemo(() => ({
+    nombre: especialista.nombre.trim().toLowerCase(),
+    apellido: especialista.apellido.trim().toLowerCase(),
+    email: especialista.email.trim().toLowerCase(),
+    telefono: (especialista.telefono || "").trim(),
+    color: especialista.color || "#3B82F6",
+    especialidades: [...new Set(especialista.especialidades?.map((e: { id_especialidad: number }) => e.id_especialidad) || [])].sort()
+  }), [especialista]);
+
+  // Detectar cambios
+  useEffect(() => {
+    // Normalizar valores actuales
+    const valoresActualesNormalizados = {
+      nombre: formValues.nombre.trim().toLowerCase(),
+      apellido: formValues.apellido.trim().toLowerCase(),
+      email: formValues.email.trim().toLowerCase(),
+      telefono: formValues.telefono.trim(),
+      color: selectedColor,
+      especialidades: [...selectedEspecialidades].sort()
+    };
+
+    // Comparar cada campo
+    const cambioEnNombre = valoresActualesNormalizados.nombre !== datosOriginales.nombre;
+    const cambioEnApellido = valoresActualesNormalizados.apellido !== datosOriginales.apellido;
+    const cambioEnEmail = valoresActualesNormalizados.email !== datosOriginales.email;
+    const cambioEnTelefono = valoresActualesNormalizados.telefono !== datosOriginales.telefono;
+    const cambioEnColor = valoresActualesNormalizados.color !== datosOriginales.color;
+    const cambioEnContraseña = formValues.contraseña.trim() !== "";
+    
+    // Comparar arrays de especialidades (sin importar orden)
+    const cambioEnEspecialidades = JSON.stringify(valoresActualesNormalizados.especialidades) !== JSON.stringify(datosOriginales.especialidades);
+
+    const hayCambios = cambioEnNombre || cambioEnApellido || cambioEnEmail || 
+                       cambioEnTelefono || cambioEnColor || cambioEnContraseña || 
+                       cambioEnEspecialidades;
+
+    setHasChanges(hayCambios);
+  }, [formValues, selectedColor, selectedEspecialidades, datosOriginales.nombre, datosOriginales.apellido, datosOriginales.email, datosOriginales.telefono, datosOriginales.color, datosOriginales.especialidades]);
 
   const validateForm = (formData: FormData): boolean => {
     const newErrors: Record<string, string> = {};
@@ -153,6 +200,7 @@ function EspecialistaEditFormForDialog({
       formData.append(`especialidades[${index}]`, especialidadId.toString());
     });
 
+
     // Agregar color seleccionado
     formData.set("color", selectedColor);
 
@@ -166,6 +214,8 @@ function EspecialistaEditFormForDialog({
     });
 
     try {
+      console.log("Actualizando especialista con data: ", formData);
+
       const result = await updateEspecialista(especialista.id_usuario, formData);
       
       console.log('Resultado de actualización:', result);
@@ -226,7 +276,8 @@ function EspecialistaEditFormForDialog({
             type="text"
             id="nombre"
             name="nombre"
-            defaultValue={especialista.nombre}
+            value={formValues.nombre}
+            onChange={(e) => setFormValues(prev => ({ ...prev, nombre: e.target.value }))}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
               errors.nombre ? "border-red-500" : "border-gray-300"
             }`}
@@ -244,7 +295,8 @@ function EspecialistaEditFormForDialog({
             type="text"
             id="apellido"
             name="apellido"
-            defaultValue={especialista.apellido}
+            value={formValues.apellido}
+            onChange={(e) => setFormValues(prev => ({ ...prev, apellido: e.target.value }))}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
               errors.apellido ? "border-red-500" : "border-gray-300"
             }`}
@@ -262,7 +314,8 @@ function EspecialistaEditFormForDialog({
             type="email"
             id="email"
             name="email"
-            defaultValue={especialista.email}
+            value={formValues.email}
+            onChange={(e) => setFormValues(prev => ({ ...prev, email: e.target.value }))}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
               errors.email ? "border-red-500" : "border-gray-300"
             }`}
@@ -280,6 +333,8 @@ function EspecialistaEditFormForDialog({
             type="password"
             id="contraseña"
             name="contraseña"
+            value={formValues.contraseña}
+            onChange={(e) => setFormValues(prev => ({ ...prev, contraseña: e.target.value }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
             placeholder="Nueva contraseña (opcional)"
           />
@@ -294,7 +349,8 @@ function EspecialistaEditFormForDialog({
             type="tel"
             id="telefono"
             name="telefono"
-            defaultValue={especialista.telefono || ""}
+            value={formValues.telefono}
+            onChange={(e) => setFormValues(prev => ({ ...prev, telefono: e.target.value }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
             placeholder="+54 9 11 1234-5678"
           />
@@ -382,7 +438,7 @@ function EspecialistaEditFormForDialog({
         <Button
           type="submit"
           variant="primary"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !hasChanges}
         >
           {isSubmitting ? "Actualizando..." : "Actualizar Especialista"}
         </Button>

@@ -6,29 +6,22 @@ import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAuthContext } from "@/lib/utils/auth-context";
+import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
+import { es } from "date-fns/locale";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
 type TurnoUpdate = Database["public"]["Tables"]["turno"]["Update"];
 type SupabaseClientType = SupabaseClient<Database>;
 
-// =====================================
-// 📋 FUNCIONES BÁSICAS DE TURNOS
-// =====================================
 
-// Obtener un turno específico por ID
 export async function obtenerTurno(id: number): Promise<
   | { success: true; data: any }
   | { success: false; error: string }
 > {
   const supabase = await createClient();
   
-  try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    const { orgId } = await getAuthContext();
-
-    const { data, error } = await supabase
+  try {    const { data, error } = await supabase
       .from("turno")
       .select(`
         *,
@@ -38,7 +31,6 @@ export async function obtenerTurno(id: number): Promise<
         box:id_box(id_box, numero)
       `)
       .eq("id_turno", id)
-      .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .single();
 
@@ -63,12 +55,7 @@ export async function obtenerTurnos(filtros?: {
 }) {
   const supabase = await createClient();
   
-  try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
-    let query = supabase
+  try {    let query = supabase
       .from("turno")
       .select(`
         *,
@@ -77,7 +64,6 @@ export async function obtenerTurnos(filtros?: {
         especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero)
       `)
-      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
@@ -96,8 +82,11 @@ export async function obtenerTurnos(filtros?: {
       query = query.eq("estado", filtros.estado);
     }
 
-    // Siempre excluir turnos de Pilates (id_especialidad = 4)
-    query = query.neq("id_especialidad", 4);
+    const idPilates = await obtenerIdPilates();
+
+    if (idPilates) {
+      query = query.neq("id_especialidad", idPilates);
+    }
 
     const { data, error } = await query;
 
@@ -117,20 +106,17 @@ export async function obtenerTurnos(filtros?: {
 export async function obtenerTurnosConFiltros(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
-  especialista_id?: string;
-  especialidad_id?: number;
+  especialista_ids?: string[];
+  especialidad_ids?: string[];
   hora_desde?: string;
   hora_hasta?: string;
-  estado?: string;
+  estados?: string[];
+  paciente_id?: number;
+  es_pilates?: boolean;
 }) {
   const supabase = await createClient();
   
-  try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
-    let query = supabase
+  try {    let query = supabase
       .from("turno")
       .select(`
         *,
@@ -145,7 +131,6 @@ export async function obtenerTurnosConFiltros(filtros?: {
         especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero)
       `)
-      .eq("id_organizacion", orgId) // ✅ Filtrar por organización
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
@@ -158,17 +143,20 @@ export async function obtenerTurnosConFiltros(filtros?: {
       query = query.lte("fecha", filtros.fecha_hasta);
     }
     
-    // Filtro por especialista específico
-    if (typeof filtros?.especialista_id === "string") {
-      query = query.eq("id_especialista", filtros.especialista_id);
+    // Filtro por especialistas (múltiples valores)
+    if (filtros?.especialista_ids && filtros.especialista_ids.length > 0) {
+      query = query.in("id_especialista", filtros.especialista_ids);
     }
     
-    // Filtro por especialidad del turno
-    if (filtros?.especialidad_id) {
-      query = query.eq("id_especialidad", filtros.especialidad_id);
-    } else {
-      // Si NO se especifica especialidad, EXCLUIR Pilates (id_especialidad = 4)
-      query = query.neq("id_especialidad", 4);
+    const idPilates = await obtenerIdPilates();
+
+    // Filtro por especialidades (múltiples valores)
+    if (filtros?.especialidad_ids && filtros.especialidad_ids.length > 0) {
+      query = query.in("id_especialidad", filtros.especialidad_ids);
+    } else if (!filtros?.es_pilates && idPilates) {
+      query = query.neq("id_especialidad", idPilates);
+    } else if (filtros?.es_pilates === true && idPilates) {
+      query = query.eq("id_especialidad", idPilates);
     }
     
     // Filtros de horario
@@ -179,9 +167,14 @@ export async function obtenerTurnosConFiltros(filtros?: {
       query = query.lte("hora", filtros.hora_hasta);
     }
     
-    // Filtro por estado
-    if (filtros?.estado) {
-      query = query.eq("estado", filtros.estado);
+    // Filtro por estados (múltiples valores)
+    if (filtros?.estados && filtros.estados.length > 0) {
+      query = query.in("estado", filtros.estados);
+    }
+
+    // Filtro por pacientes (múltiples IDs)
+    if (filtros?.paciente_id) {
+      query = query.eq("id_paciente", filtros.paciente_id);
     }
 
     const { data, error } = await query;
@@ -204,29 +197,31 @@ export async function obtenerTurnosConFiltros(filtros?: {
 
 // Crear un nuevo turno
 export async function crearTurno(
-  datos: Omit<TurnoInsert, 'id_organizacion'> & { id_organizacion?: string; titulo_tratamiento?: string | null }, 
+  datos: TurnoInsert & { titulo_tratamiento?: string | null; es_pilates?: boolean },
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
   enviarNotificacion: boolean = true,
-  id_grupo_tratamiento?: string
+  id_grupo_tratamiento?: string,
 ) {
+
+  // console.log('Iniciando creación de turno con datos:', datos, 'y recordatorios:', recordatorios);
 
   try {
     const supabase = await createClient();
-    
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
+    let idPilates; // : string | null = null
+
+    if (datos.es_pilates) {
+      idPilates =  await obtenerIdPilates();
+    }
 
     // ============= CREAR GRUPO DE TRATAMIENTO SI HAY TÍTULO =============
     if (datos.titulo_tratamiento && !id_grupo_tratamiento && datos.id_paciente && datos.id_especialista) {
       const nuevoGrupo: Database["public"]["Tables"]["grupo_tratamiento"]["Insert"] = {
         id_paciente: datos.id_paciente,
         id_especialista: datos.id_especialista,
-        id_especialidad: datos.id_especialidad ?? undefined,
-        id_organizacion: orgId,
-        nombre: datos.titulo_tratamiento,
+        id_especialidad: idPilates ?? datos.id_especialidad ?? undefined,        nombre: datos.titulo_tratamiento,
         fecha_inicio: datos.fecha,
         tipo_plan: datos.tipo_plan ?? 'particular',
+        
       };
 
       const { data: grupo, error: errorGrupo } = await supabase
@@ -243,17 +238,22 @@ export async function crearTurno(
     }
 
     // ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
+    // ✅ Usar idPilates como especialidad cuando es_pilates=true, independientemente de lo que envíe el frontend
+    const especialidadIdEfectiva = (idPilates && datos.es_pilates) ? idPilates : (datos.id_especialidad ?? undefined);
+
     if (datos.fecha && datos.hora && datos.id_especialista) {
       const disponibilidad = await verificarDisponibilidad(
         datos.fecha,
         datos.hora,
         datos.id_especialista,
         datos.id_box || undefined,
-        datos.id_especialidad ?? undefined
+        especialidadIdEfectiva
       );
       
       if (!disponibilidad.success || !disponibilidad.disponible) {
-        if (datos.id_especialidad === 4) {
+        
+
+        if (datos.es_pilates && idPilates) {
           return { 
             success: false, 
             error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4` 
@@ -265,14 +265,16 @@ export async function crearTurno(
           };
         }
       }
-    }
-
-    // ✅ MULTI-ORG: Inyectar id_organizacion en los datos del turno
+    }    // Extraer campos que NO pertenecen a la tabla turno antes de insertar
+    const { es_pilates: _esPilates, titulo_tratamiento: _tituloTratamiento, ...datosTurno } = datos;
     const turnoConOrg: TurnoInsert = {
-      ...datos,
-      id_organizacion: orgId,
-      ...(id_grupo_tratamiento && { id_grupo_tratamiento })
+      ...datosTurno,
+      // Si es Pilates y el frontend no envió id_especialidad, usar el ID resuelto dinámicamente
+      ...(especialidadIdEfectiva && { id_especialidad: especialidadIdEfectiva }),
+      ...(id_grupo_tratamiento && { id_grupo_tratamiento }),
     };
+
+    // console.log("Creando turno con datos:", turnoConOrg);
 
     // ✅ AHORA datos es TurnoInsert puro, sin recordatorios
     const { data, error } = await supabase
@@ -378,18 +380,12 @@ export async function crearTurno(
 export async function actualizarTurno(id: number, datos: TurnoUpdate) {
   const supabase = await createClient();
   
-  try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
-    // Si se cambia fecha/hora/especialista, verificar disponibilidad
+  try {    // Si se cambia fecha/hora/especialista, verificar disponibilidad
     if (datos.fecha || datos.hora || datos.id_especialista || datos.id_box !== undefined) {
       const turnoActual: any = await supabase
         .from("turno")
-        .select("fecha, hora, id_especialista, id_box, id_especialidad, id_organizacion")
+        .select("fecha, hora, id_especialista, id_box, id_especialidad")
         .eq("id_turno", id)
-        .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
         .single();
 
       if (turnoActual.data) {
@@ -419,8 +415,9 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
           );
           
           if (!disponibilidad.success || !disponibilidad.disponible) {
-            // Mensaje específico para Pilates
-            if (especialidadId === 4) {
+            const idPilates = await obtenerIdPilates();
+
+            if (idPilates && especialidadId === idPilates) {
               return { 
                 success: false, 
                 error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4` 
@@ -448,7 +445,6 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
       .from("turno")
       .update(datosUpdate)
       .eq("id_turno", id)
-      .eq("id_organizacion", orgId) // ✅ Asegurar que solo actualiza de su org
       .select(`
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
@@ -480,17 +476,11 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
 export async function eliminarTurno(id: number) {
   const supabase = await createClient();
   
-  try {
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
-    // Verificar que el turno pertenece a esta organización antes de eliminar
+  try {    // Verificar que el turno pertenece a esta organización antes de eliminar
     const { data: turnoVerificado, error: errorVerificar } = await supabase
       .from("turno")
       .select("id_turno, estado")
       .eq("id_turno", id)
-      .eq("id_organizacion", orgId)
       .single();
 
     if (errorVerificar || !turnoVerificado) {
@@ -505,7 +495,6 @@ export async function eliminarTurno(id: number) {
         updated_at: new Date().toISOString()
       })
       .eq("id_turno", id)
-      .eq("id_organizacion", orgId);
 
     if (turnoError) {
       console.error("Error al eliminar turno:", turnoError);
@@ -527,15 +516,11 @@ export async function marcarComoAtendido(id_turno: number) {
   const supabase = await createClient();
   
   try {
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
     // Verificar estado actual del turno
     const { data: turnoActual, error: errorGet } = await supabase
       .from('turno')
-      .select('id_turno, estado, id_organizacion')
+      .select('id_turno, estado')
       .eq('id_turno', id_turno)
-      .eq('id_organizacion', orgId)
       .single();
 
     if (errorGet || !turnoActual) {
@@ -562,7 +547,6 @@ export async function marcarComoAtendido(id_turno: number) {
         updated_at: new Date().toISOString()
       })
       .eq('id_turno', id_turno)
-      .eq('id_organizacion', orgId);
 
     if (error) {
       console.error('❌ Error al marcar turno como atendido:', error);
@@ -595,15 +579,11 @@ export async function cancelarTurno(id: number, motivo?: string) {
   const supabase = await createClient();
   
   try {
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
     // Verificar estado actual del turno
     const { data: turnoActual, error: errorGet } = await supabase
       .from('turno')
-      .select('id_turno, estado, id_organizacion')
+      .select('id_turno, estado')
       .eq('id_turno', id)
-      .eq('id_organizacion', orgId)
       .single();
 
     if (errorGet || !turnoActual) {
@@ -630,7 +610,6 @@ export async function cancelarTurno(id: number, motivo?: string) {
         updated_at: new Date().toISOString(),
       })
       .eq("id_turno", id)
-      .eq("id_organizacion", orgId)
       .select("*")
       .single();
 
@@ -665,7 +644,9 @@ export async function obtenerAgendaEspecialista(
 ) {
   const supabase = await createClient();
   
-  try {
+  try {    
+    const idPilates = await obtenerIdPilates();
+
     const { data, error } = await supabase
       .from("turno")
       .select(`
@@ -678,8 +659,13 @@ export async function obtenerAgendaEspecialista(
       .eq("fecha", fecha)
       .neq("estado", "cancelado")
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
-      .neq("id_especialidad", 4) // Excluir turnos de Pilates
+      .neq("id_especialidad", idPilates) // ✅ Excluir Pilates de la agenda normal
       .order("hora", { ascending: true });
+
+    // let resultadoData = data;
+    // if (idPilates && Array.isArray(data)) {
+    //   resultadoData = data.filter((turno: any) => turno.id_especialidad !== idPilates);
+    // }
 
     if (error) {
       console.error("Error al obtener agenda:", error);
@@ -707,14 +693,23 @@ export async function verificarDisponibilidadPilates(
   hora: string
 ) {
   const supabase = await createClient();
-  try {
-    // Buscar CUALQUIER turno de Pilates (especialidad_id = 4) en esa fecha y hora
+  try {    const idPilates = await obtenerIdPilates();
+
+    if (!idPilates) {
+      return {
+        success: true,
+        disponible: true,
+        conflictos: 0,
+        turnosExistentes: []
+      };
+    }
+
     const { data, error } = await supabase
       .from("turno")
       .select("id_turno, id_especialista, estado, hora")
       .eq("fecha", fecha)
       .eq("hora", hora)
-      .eq("id_especialidad", 4)
+      .eq("id_especialidad", idPilates)
       .neq("estado", "cancelado")
       .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
@@ -746,7 +741,10 @@ export async function verificarDisponibilidad(
   especialidad_id?: number
 ) {
   const supabase = await createClient();
+
   try {
+    const idPilates = await obtenerIdPilates();
+
     let query = supabase
       .from("turno")
       .select("id_turno, estado, hora, id_especialidad")
@@ -767,8 +765,8 @@ export async function verificarDisponibilidad(
     }
 
     // ============= LÓGICA ESPECIAL PARA PILATES =============
-    if (especialidad_id === 4) {
-      const pilatesTurnos = data.filter(t => t.id_especialidad === 4);
+    if (idPilates && especialidad_id === idPilates) {
+      const pilatesTurnos = data.filter(t => t.id_especialidad === idPilates);
       const disponible = pilatesTurnos.length < 4;
 
       return {
@@ -801,7 +799,8 @@ export async function verificarDisponibilidadParaActualizacion(
 ) {
   const supabase = await createClient();
   
-  try {
+  try {    const idPilates = await obtenerIdPilates();
+
     let query = supabase
       .from("turno")
       .select("id_turno, id_especialidad")
@@ -824,8 +823,8 @@ export async function verificarDisponibilidadParaActualizacion(
     }
 
     // ============= LÓGICA ESPECIAL PARA PILATES =============
-    if (especialidad_id === 4) {
-      const pilatesTurnos = data.filter(t => t.id_especialidad === 4);
+    if (idPilates && especialidad_id === idPilates) {
+      const pilatesTurnos = data.filter(t => t.id_especialidad === idPilates);
       const disponible = pilatesTurnos.length < 4;
       
       return { 
@@ -905,10 +904,7 @@ export async function obtenerProximoTurnoPorTelefono(telefono: string) {
 //   const supabase = await createClient();
   
 //   try {
-//     // ✅ MULTI-ORG: Obtener contexto organizacional
-//     // const { getAuthContext } = await import("@/lib/utils/auth-context");
-//     const { orgId } = await getAuthContext();
-
+//////
 //     // ✅ NUEVO MODELO: Consultar usuario_organizacion con roles permitidos
 //     const { data: usuariosOrg, error: errorUsuarios } = await supabase
 //       .from("usuario_organizacion")
@@ -930,7 +926,7 @@ export async function obtenerProximoTurnoPorTelefono(telefono: string) {
 //           jerarquia
 //         )
 //       `)
-//       .eq("id_organizacion", orgId)
+//
 //       .in("id_rol", ROLES_ESPECIALISTAS) // Solo Admin (1) y Especialistas (2), excluye Programadores (3)
 //       .eq("activo", true);
 
@@ -1014,22 +1010,17 @@ export async function obtenerEspecialistas() {
   const supabase = await createClient();
   
   try {
-    const { orgId } = await getAuthContext();
-
-    // Hacemos UNA sola consulta profunda
     const { data, error } = await supabase
-      .from("usuario_organizacion")
+      .from("usuario")
       .select(`
-        id_usuario_organizacion,
         id_usuario,
-        color_calendario,
+        nombre,
+        apellido,
+        email,
+        telefono,
+        color,
         activo,
-        usuario:id_usuario!inner (
-          nombre,
-          apellido,
-          email,
-          telefono
-        ),
+        id_rol,
         rol:id_rol (
           id,
           nombre,
@@ -1044,34 +1035,24 @@ export async function obtenerEspecialistas() {
           )
         )
       `)
-      .eq("id_organizacion", orgId)
-      .in("id_rol", ROLES_ESPECIALISTAS) 
+      .in("id_rol", ROLES_ESPECIALISTAS)
       .eq("activo", true)
-      // Filtramos también que las especialidades estén activas, si aplica
-      .eq("usuario_especialidad.activo", true); 
+      .eq("usuario_especialidad.activo", true);
 
     if (error) throw error;
 
-    // ✅ Transformación para coincidir con EspecialistaWithSpecialties
     const especialistas = data.map((item) => ({
       id_usuario: item.id_usuario,
-      // @ts-expect-error Supabase a veces retorna array u objeto, dependiendo de la relación
-      nombre: item.usuario?.nombre,
-      // @ts-expect-error
-      apellido: item.usuario?.apellido,
-      color: item.color_calendario,
-      // @ts-expect-error
-      email: item.usuario?.email,
-      // @ts-expect-error
-      telefono: item.usuario?.telefono,
+      nombre: item.nombre,
+      apellido: item.apellido,
+      color: item.color,
+      email: item.email,
+      telefono: item.telefono,
       activo: item.activo,
-      especialidad: null, // ✅ Requerido por EspecialistaWithSpecialties
-      // ✅ Mapear correctamente las especialidades
-      usuario_especialidad: (item.usuario_especialidad || []).map(ue => ({
+      especialidad: null,
+      usuario_especialidad: (item.usuario_especialidad || []).map((ue: any) => ({
         especialidad: {
-          // @ts-expect-error
           id_especialidad: ue.especialidad?.id_especialidad,
-          // @ts-expect-error
           nombre: ue.especialidad?.nombre
         }
       }))
@@ -1162,13 +1143,11 @@ export async function obtenerPrecioEspecialidad(
   }
 }
 
-export async function obtenerPacientes(busqueda?: string, limit: number = 10) {
+export async function obtenerPacientes(busqueda?: string, limit?: number) {
   const supabase = await createClient();
   
   try {
     // 1. Obtener contexto (Necesario para pasar el orgId a la función)
-    const { orgId } = await getAuthContext();
-
     let data;
     let error;
 
@@ -1178,21 +1157,30 @@ export async function obtenerPacientes(busqueda?: string, limit: number = 10) {
     if (busqueda && busqueda.length >= 2) {
       const result = await supabase.rpc('buscar_pacientes_smart', {
         search_term: busqueda,
-        org_id: orgId,
         max_rows: limit
       });
+
+      console.log("Resultado RPC buscar_pacientes_smart:", result);
+
       data = result.data;
       error = result.error;
     } 
+
+
     // CASO B: No hay búsqueda -> Traemos listado normal (Simple Select)
     else {
-      const result = await supabase
+      const query = supabase
         .from("paciente")
         .select("id_paciente, nombre, apellido, dni, telefono, email")
-        .eq("id_organizacion", orgId) // ⚠️ No olvidar esto nunca
         .order("apellido")
         .order("nombre")
-        .limit(limit);
+
+      if (limit) {
+        query.limit(limit);
+      }
+
+      const result = await query;
+        
       data = result.data;
       error = result.error;
     }
@@ -1435,31 +1423,24 @@ export async function crearTurnosEnLote(turnos: Array<{
   try {
     const supabase = await createClient();
     
-    // ✅ Obtener id_organizacion del usuario actual
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-
+    // ✅ Crear turnos en lote
     const turnosCreados = [];
     const errores = [];
+    const idPilates = await obtenerIdPilates();
 
     // Crear turnos uno por uno
     for (const turnoData of turnos) {
-      try {
-        // ✅ CORRECCIÓN: Agregar id_organizacion
-        const { data: turno, error } = await supabase
+      try {        const { data: turno, error } = await supabase
           .from("turno")
           .insert({
             id_paciente: parseInt(turnoData.id_paciente),
             id_especialista: turnoData.id_especialista,
             fecha: turnoData.fecha,
             hora: turnoData.hora_inicio,
-            id_especialidad: 4,
+            id_especialidad: idPilates ? idPilates : null, // ✅ Asignar especialidad Pilates si existe
             estado: turnoData.estado || 'programado',
             tipo_plan: 'particular',
-            dificultad: turnoData.dificultad || 'principiante',
-            id_organizacion: orgId // ✅ Inyectar orgId
-          })
+            dificultad: turnoData.dificultad || 'principiante',          })
           .select()
           .single();
 
@@ -1570,18 +1551,11 @@ async function procesarNotificacionesRepeticion(turnos: any[]) {
 // ✅ FUNCIÓN SIMPLIFICADA - Solo delega al servicio de WhatsApp
 async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
   try {
-    const supabase = await createClient();
-    
-    // ✅ MULTI-ORG: Obtener contexto organizacional
-    // const { getAuthContext } = await import("@/lib/utils/auth-context");
-    const { orgId } = await getAuthContext();
-    
-    // 1. Obtener datos del paciente
+    const supabase = await createClient();    // 1. Obtener datos del paciente
     const { data: paciente } = await supabase
       .from("paciente")
       .select("nombre, telefono")
       .eq("id_paciente", parseInt(id_paciente))
-      .eq("id_organizacion", orgId) // ✅ Verificar que pertenece a esta org
       .single();
 
     if (!paciente || !paciente.telefono) {
@@ -1597,9 +1571,7 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
         mensaje: `Confirmación de ${turnos.length} turnos de Pilates`,
         medio: "whatsapp",
         telefono: paciente.telefono,
-        estado: "pendiente",
-        id_organizacion: orgId // ✅ Inyectar orgId
-      })
+        estado: "pendiente",      })
       .select()
       .single();
 
@@ -1783,8 +1755,6 @@ export async function crearPaqueteSesiones(params: {
 }) {
   try {
     const supabase = await createClient();
-    const { orgId } = await getAuthContext();
-
     // ============= PASO 1: CREAR GRUPO DE TRATAMIENTO =============
     let id_grupo_tratamiento: string | undefined;
 
@@ -1792,9 +1762,7 @@ export async function crearPaqueteSesiones(params: {
       const nuevoGrupo: Database["public"]["Tables"]["grupo_tratamiento"]["Insert"] = {
         id_paciente: params.id_paciente,
         id_especialista: params.id_especialista,
-        id_especialidad: params.id_especialidad,
-        id_organizacion: orgId,
-        nombre: params.titulo_tratamiento,
+        id_especialidad: params.id_especialidad,        nombre: params.titulo_tratamiento,
         fecha_inicio: params.fechaBase,
         tipo_plan: params.tipo_plan,
       };
@@ -1850,9 +1818,7 @@ export async function crearPaqueteSesiones(params: {
         id_box: params.id_box || null,
         observaciones: params.observaciones || null,
         estado: "programado" as const,
-        tipo_plan: params.tipo_plan,
-        id_organizacion: orgId,
-        ...(id_grupo_tratamiento && { id_grupo_tratamiento })
+        tipo_plan: params.tipo_plan,        ...(id_grupo_tratamiento && { id_grupo_tratamiento })
       });
     }
 
@@ -1890,9 +1856,7 @@ export async function crearPaqueteSesiones(params: {
             id_box: params.id_box || null,
             observaciones: params.observaciones || null,
             estado: "programado" as const,
-            tipo_plan: params.tipo_plan,
-            id_organizacion: orgId,
-            ...(id_grupo_tratamiento && { id_grupo_tratamiento })
+            tipo_plan: params.tipo_plan,            ...(id_grupo_tratamiento && { id_grupo_tratamiento })
           });
           sesionesCreadas++;
         }
