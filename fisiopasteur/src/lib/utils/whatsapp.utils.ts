@@ -68,13 +68,15 @@ export function calcularTiemposRecordatorio(
   tiposRecordatorio: TipoRecordatorio[] = ['1d', '2h']
 ): Record<TipoRecordatorio, Date | null> {
   try {
-    // ✅ Crear fecha/hora del turno en zona horaria LOCAL
+    // ✅ Crear fecha/hora del turno en hora Argentina (UTC-3, sin DST)
     // Parsear componentes de fecha y hora
     const [year, month, day] = fecha.split('-').map(Number);
     const [hours, minutes] = hora.split(':').map(Number);
-    
-    // Crear Date en zona horaria local (no UTC)
-    const fechaTurno = new Date(year, month - 1, day, hours, minutes, 0);
+
+    // Argentina es UTC-3 (sin cambio de horario de verano).
+    // Convertir hora local Argentina → UTC sumando 3 horas.
+    const ARGENTINA_OFFSET_MS = 3 * 60 * 60 * 1000;
+    const fechaTurno = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0) + ARGENTINA_OFFSET_MS);
     const ahora = new Date();
     
     console.log(`📅 Calculando recordatorios para turno: ${fecha} ${hora}`);
