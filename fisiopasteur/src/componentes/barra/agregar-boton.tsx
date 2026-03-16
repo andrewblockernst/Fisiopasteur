@@ -96,22 +96,21 @@ const AgregarBoton = () => {
     };
   }, []);
 
-  // No mostrar el botón si está cargando o no hay opciones disponibles
-  if (loading || menuOptions.length === 0) {
-    return null;
-  }
+  // ✅ El botón SIEMPRE se renderiza, pero deshabilitado si está cargando o no hay usuario
+  // Esto evita que desaparezca durante transiciones de estado de autenticación
+  const isDisabled = loading || !user || menuOptions.length === 0;
 
   return (
     <div className="relative" ref={menuRef}>
       {/* Menú desplegable */}
       <div
         className={`absolute bottom-20 left-1/2 bg-white rounded-xl shadow-2xl border border-gray-200 py-4 min-w-[200px] z-50 transition-all duration-300
-          ${isOpen
+          ${isOpen && !isDisabled
             ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 scale-95 translate-y-8 pointer-events-none'}`}
         style={{
           transitionProperty: 'opacity, transform',
-          transform: isOpen
+          transform: isOpen && !isDisabled
             ? 'translate(-50%, 0) scale(1)'
             : 'translate(-50%, 2rem) scale(0.95)',
         }}
@@ -132,11 +131,17 @@ const AgregarBoton = () => {
 
       {/* Botón principal */}
       <button 
-        className="text-white hover:scale-105 transition-all duration-200 flex flex-col items-center gap-1 min-w-0 relative"
+        className={`flex flex-col items-center gap-1 min-w-0 relative transition-all duration-200
+          ${isDisabled 
+            ? 'text-gray-400 opacity-50 cursor-not-allowed' 
+            : 'text-white hover:scale-105'
+          }`}
         onClick={toggleMenu}
+        disabled={isDisabled}
+        title={isDisabled ? (loading ? 'Cargando...' : 'Sin permisos') : 'Agregar nuevo elemento'}
       >
-        <div className={`transition-transform duration-300 ${isOpen ? 'rotate-45' : ''}`}>
-          {isOpen ? <X size={24} /> : <Plus size={24} />}
+        <div className={`transition-transform duration-300 ${isOpen && !isDisabled ? 'rotate-45' : ''}`}>
+          {isOpen && !isDisabled ? <X size={24} /> : <Plus size={24} />}
         </div>
         <span className="text-xs font-medium truncate">Agregar</span>
       </button>
