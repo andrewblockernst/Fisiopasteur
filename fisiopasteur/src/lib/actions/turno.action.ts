@@ -1073,7 +1073,8 @@ export async function obtenerEspecialidades() {
     const { data, error } = await supabase
       .from("especialidad")
       .select("*")
-      .order("nombre");
+      .order("nombre")
+      .neq("nombre", "Pilates"); // ✅ Excluir Pilates del listado general de especialidades
 
     if (error) {
       console.error("Error al obtener especialidades:", error);
