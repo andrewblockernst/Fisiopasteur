@@ -60,11 +60,13 @@ const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recorda
 
 let recordatoriosInterval: NodeJS.Timeout | null = null
 
+const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app'
+
 // Función helper para fetch con timeout
-const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 25000) => {
+const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 10000) => {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
-    
+
     try {
         const response = await fetch(url, {
             ...options,
@@ -81,58 +83,134 @@ const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 2500
     }
 }
 
-// Iniciar sistema de recordatorios autónomo via API de Fisiopasteur
-const iniciarProcesadorRecordatorios = () => {
-    console.log('🚀 Iniciando sistema de recordatorios autónomos vía API...')
-    
-    const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app'
-    
-    // Función para procesar recordatorios llamando al endpoint de Vercel con timeout
-    const procesarRecordatoriosViaAPI = async () => {
-        try {
-            const startTime = Date.now()
-            console.log(`🔄 [${new Date().toISOString()}] Llamando al endpoint de recordatorios...`)
-            
-            const response = await fetchWithTimeout(
-                `${FISIOPASTEUR_URL}/api/cron/recordatorios`,
-                {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                },
-                25000 // Timeout de 25 segundos
-            )
-            
-            const duration = Date.now() - startTime
-            
-            if (!response.ok) {
-                console.error(`❌ Error en llamada API: ${response.status} (${duration}ms)`)
-                return
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+const formatearFecha = (fecha: string): string => {
+    const [year, month, day] = fecha.split('-')
+    return `${day}/${month}/${year}`
+}
+
+// Notificar a Vercel el resultado de cada envío
+const marcarNotificacion = async (id: number, estado: 'enviado' | 'fallido') => {
+    try {
+        await fetchWithTimeout(
+            `${FISIOPASTEUR_URL}/api/cron/notificacion/${id}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ estado }),
+            },
+            5000
+        )
+    } catch (error: any) {
+        console.error(`⚠️ No se pudo marcar notificación ${id} como ${estado}: ${error.message}`)
+    }
+}
+
+/**
+ * El bot obtiene la lista de recordatorios pendientes de Vercel,
+ * los envía directamente a WaSender respetando el rate limit de 5s,
+ * y notifica a Vercel el resultado de cada uno.
+ * Así el timeout de Vercel no afecta el procesamiento.
+ */
+const procesarRecordatoriosAutonomo = async () => {
+    try {
+        const startTime = Date.now()
+        console.log(`🔄 [${new Date().toISOString()}] Obteniendo recordatorios pendientes...`)
+
+        const response = await fetchWithTimeout(
+            `${FISIOPASTEUR_URL}/api/cron/recordatorios/pendientes`,
+            { method: 'GET', headers: { 'Content-Type': 'application/json' } },
+            10000
+        )
+
+        if (!response.ok) {
+            console.error(`❌ Error obteniendo pendientes: ${response.status}`)
+            return
+        }
+
+        const resultado = await response.json()
+        if (!resultado.success || !resultado.data) {
+            console.error(`❌ Respuesta inválida: ${resultado.error}`)
+            return
+        }
+
+        const pendientes: any[] = resultado.data
+        if (pendientes.length === 0) {
+            console.log(`✅ Sin recordatorios pendientes (${Date.now() - startTime}ms)`)
+            return
+        }
+
+        console.log(`📋 ${pendientes.length} recordatorio(s) a enviar`)
+
+        let enviados = 0
+        let fallidos = 0
+
+        for (let i = 0; i < pendientes.length; i++) {
+            const notif = pendientes[i]
+            const turno = notif.turno
+
+            if (!turno?.paciente?.telefono) {
+                console.error(`❌ Notificación ${notif.id_notificacion} sin teléfono — marcando fallida`)
+                await marcarNotificacion(notif.id_notificacion, 'fallido')
+                fallidos++
+                continue
             }
-            
-            const resultado = await response.json()
-            if (resultado.success) {
-                console.log(`✅ Recordatorios procesados vía API en ${duration}ms: ${JSON.stringify(resultado.data)}`)
-            } else {
-                console.error(`❌ Error en API de recordatorios (${duration}ms): ${resultado.message}`)
+
+            const turnoData: TurnoData = {
+                pacienteNombre: turno.paciente.nombre || 'Paciente',
+                pacienteApellido: turno.paciente.apellido || '',
+                telefono: turno.paciente.telefono,
+                fecha: formatearFecha(turno.fecha),
+                hora: (turno.hora || '').substring(0, 5),
+                profesional: turno.especialista
+                    ? `${turno.especialista.nombre} ${turno.especialista.apellido}`
+                    : 'Profesional',
+                especialidad: turno.especialidad?.nombre || 'Consulta',
+                turnoId: String(notif.id_turno),
             }
-        } catch (error: any) {
-            if (error.message.includes('Timeout')) {
-                console.error(`⏱️ Timeout al llamar al endpoint de recordatorios (>25s)`)
+
+            const mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
+
+            console.log(`📤 [${i + 1}/${pendientes.length}] Enviando recordatorio a ${turnoData.telefono}`)
+
+            const envio = await waSenderService.sendMessage({ to: turnoData.telefono, text: mensaje })
+
+            if (envio.success) {
+                console.log(`✅ Recordatorio ${notif.id_notificacion} enviado`)
+                await marcarNotificacion(notif.id_notificacion, 'enviado')
+                enviados++
             } else {
-                console.error('❌ Error llamando al endpoint de recordatorios:', error.message)
+                console.error(`❌ Falló recordatorio ${notif.id_notificacion}: ${envio.error}`)
+                await marcarNotificacion(notif.id_notificacion, 'fallido')
+                fallidos++
+            }
+
+            // ⏰ Rate limit WaSender Basic: 5s entre mensajes
+            if (i < pendientes.length - 1) {
+                console.log(`⏳ Esperando 5s (rate limit WaSender)...`)
+                await delay(5000)
             }
         }
+
+        console.log(`✨ Completado en ${Date.now() - startTime}ms: ${enviados} enviados, ${fallidos} fallidos`)
+
+    } catch (error: any) {
+        console.error('❌ Error en procesador de recordatorios:', error.message)
     }
-    
+}
+
+// Iniciar sistema de recordatorios autónomo
+const iniciarProcesadorRecordatorios = () => {
+    console.log('🚀 Iniciando sistema de recordatorios autónomos...')
+
     // Ejecutar inmediatamente
-    procesarRecordatoriosViaAPI()
-    
+    procesarRecordatoriosAutonomo()
+
     // Ejecutar cada 2 minutos
-    recordatoriosInterval = setInterval(procesarRecordatoriosViaAPI, 120000)
-    
-    console.log('✅ Sistema de recordatorios autónomos vía API iniciado (cada 2 minutos)')
+    recordatoriosInterval = setInterval(procesarRecordatoriosAutonomo, 120000)
+
+    console.log('✅ Sistema de recordatorios autónomos iniciado (cada 2 minutos)')
 }
 
 // Detener procesamiento de recordatorios
