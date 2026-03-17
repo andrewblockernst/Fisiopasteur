@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { getSupabaseClient } from '@/lib/supabase/client';
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
     user: null,
-    loading: true
+    loading: true,
   });
 
   useEffect(() => {
@@ -48,8 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // que las queries de la DB terminen (ej: Supabase free tier con DB durmiendo).
     const safetyTimeout = setTimeout(() => {
       if (mounted) {
-        console.warn('⚠️ Auth loading timeout - forzando loading=false');
-        setAuthState(prev => ({ ...prev, loading: false }));
+        console.warn("⚠️ Auth loading timeout - forzando loading=false");
+        setAuthState((prev) => ({ ...prev, loading: false }));
       }
     }, 20000);
 
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               puedeGestionarTurnos: puedeGestionarTurnos(idRol ?? undefined),
               rol: rolData,
             },
-            loading: false
+            loading: false,
           });
         }
       } catch (error) {
@@ -242,9 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={authState}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={authState}>{children}</AuthContext.Provider>
   );
 }
 
@@ -252,7 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth(): AuthState {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth debe usarse dentro de AuthProvider');
+    throw new Error("useAuth debe usarse dentro de AuthProvider");
   }
   return context;
 }
