@@ -302,53 +302,59 @@ export async function crearTurno(
       // Esto evita que un error o timeout en WhatsApp bloquee la creación del turno
       Promise.resolve().then(async () => {
         try {
-          const { registrarNotificacionConfirmacion } = await import("@/lib/services/notificacion.service");
+          const { registrarNotificacionConfirmacion, marcarNotificacionEnviada, registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
+          const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
 
           if (turnoCreado.paciente?.telefono) {
             const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
-            
-            // ✅ Registrar confirmación para que el cron la procese
-            // Timeout de 3 segundos para evitar bloqueos
-            await Promise.race([
-              registrarNotificacionConfirmacion(
-                turnoCreado.id_turno,
-                turnoCreado.paciente.telefono,
-                mensajeConfirmacion
-              ),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout registrando confirmación')), 3000)
-              )
-            ]);
 
-            // Programar recordatorios
+            // 1. Registrar confirmación en DB como pendiente (garantiza tracking y fallback)
+            const resultadoRegistro = await registrarNotificacionConfirmacion(
+              turnoCreado.id_turno,
+              turnoCreado.paciente.telefono,
+              mensajeConfirmacion
+            );
+
+            // 2. Enviar confirmación INMEDIATAMENTE al bot (sin esperar el cron)
+            try {
+              const resultadoBot = await Promise.race([
+                enviarConfirmacionTurno(turnoCreado as any),
+                new Promise<never>((_, reject) =>
+                  setTimeout(() => reject(new Error('Timeout enviando confirmación')), 10000)
+                )
+              ]);
+
+              // 3. Si se envió bien, marcar como enviado en DB para no reenviar por el cron
+              if (resultadoBot.status === 'success' && resultadoRegistro.success && resultadoRegistro.data) {
+                await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
+              }
+            } catch (e) {
+              // Si falla (bot caído, timeout, etc.), la notificación queda como 'pendiente'
+              // → el cron la reintentará en los próximos 2 minutos
+              console.warn('Confirmación directa falló, el cron reintentará:', e);
+            }
+
+            // 4. Programar recordatorios en DB (el scheduler los enviará a su tiempo)
             const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
-            const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
-            
-            // ✅ Por defecto: 1 día antes, 2 horas antes Y 1 hora antes
+
             const tiposRecordatorio = recordatorios || ['1d', '2h', '1h'];
             const tiemposRecordatorio = calcularTiemposRecordatorio(turnoCreado.fecha, turnoCreado.hora, tiposRecordatorio);
-            
+
             const recordatoriosValidos = Object.entries(tiemposRecordatorio)
               .filter(([_, fecha]) => fecha !== null)
               .reduce((acc, [tipo, fecha]) => {
                 if (fecha) acc[tipo] = fecha;
                 return acc;
               }, {} as Record<string, Date>);
-            
+
             if (Object.keys(recordatoriosValidos).length > 0) {
               const mensajeRecordatorio = `Recordatorio: Tu turno es el ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
-              // Timeout de 3 segundos
-              await Promise.race([
-                registrarNotificacionesRecordatorioFlexible(
-                  turnoCreado.id_turno,
-                  turnoCreado.paciente.telefono,
-                  mensajeRecordatorio,
-                  recordatoriosValidos
-                ),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Timeout registrando recordatorios')), 3000)
-                )
-              ]);
+              await registrarNotificacionesRecordatorioFlexible(
+                turnoCreado.id_turno,
+                turnoCreado.paciente.telefono,
+                mensajeRecordatorio,
+                recordatoriosValidos
+              );
             }
           }
         } catch (botError) {
