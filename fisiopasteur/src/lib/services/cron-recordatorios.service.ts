@@ -7,7 +7,6 @@ import {
 } from "@/lib/services/notificacion.service";
 import {
   enviarRecordatorioTurno,
-  enviarConfirmacionTurno,
 } from "@/lib/services/whatsapp-bot.service";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 
@@ -38,7 +37,7 @@ export async function procesarNotificacionesPendientes() {
       return { success: false, error: resultado.error };
     }
 
-    const notificacionesPendientes = resultado.data;
+    const notificacionesPendientes = resultado.data as any[];
     console.log(
       `📋 Encontradas ${notificacionesPendientes.length} notificaciones pendientes`,
     );
@@ -73,22 +72,30 @@ export async function procesarNotificacionesPendientes() {
         const turno = notificacion.turno as any;
         const turnoParaBot = turno as unknown as TurnoConDetalles;
 
-        // Detectar si es confirmación o recordatorio basándose en el mensaje
-        const esConfirmacion = !notificacion.mensaje.includes("[RECORDATORIO");
-        const tipoMensaje = esConfirmacion ? "Confirmación" : "Recordatorio";
+        // El cron solo procesa recordatorios — las confirmaciones las maneja
+        // el trigger inmediato en turno.action.ts al crear el turno.
+        const esRecordatorio = notificacion.mensaje.includes("[RECORDATORIO");
 
-        console.log(`📨 Enviando ${tipoMensaje} por WhatsApp...`);
+        if (!esRecordatorio) {
+          // Confirmación pendiente: marcarla como enviada para que no se reprocese.
+          // El trigger ya la envió (o falló y quedará en el log).
+          console.log(
+            `⏭️ Notificación ${notificacion.id_notificacion} es confirmación — omitida por el cron`,
+          );
+          await marcarNotificacionEnviada(notificacion.id_notificacion);
+          enviadas++;
+          continue;
+        }
 
-        // Enviar confirmación o recordatorio según corresponda
-        const resultadoBot = esConfirmacion
-          ? await enviarConfirmacionTurno(turnoParaBot)
-          : await enviarRecordatorioTurno(turnoParaBot);
+        console.log(`📨 Enviando Recordatorio por WhatsApp...`);
+
+        const resultadoBot = await enviarRecordatorioTurno(turnoParaBot);
 
         if (resultadoBot.status === "success") {
           await marcarNotificacionEnviada(notificacion.id_notificacion);
           enviadas++;
           console.log(
-            `✅ ${tipoMensaje} enviado para notificación ${notificacion.id_notificacion}`,
+            `✅ Recordatorio enviado para notificación ${notificacion.id_notificacion}`,
           );
 
           // ⏰ Esperar 5 segundos antes del siguiente mensaje (rate limit de WaSender)
@@ -102,7 +109,7 @@ export async function procesarNotificacionesPendientes() {
           await marcarNotificacionFallida(notificacion.id_notificacion);
           fallidas++;
           console.log(
-            `❌ Falló ${tipoMensaje.toLowerCase()} para notificación ${notificacion.id_notificacion}: ${resultadoBot.message}`,
+            `❌ Falló recordatorio para notificación ${notificacion.id_notificacion}: ${resultadoBot.message}`,
           );
         }
       } catch (error) {
