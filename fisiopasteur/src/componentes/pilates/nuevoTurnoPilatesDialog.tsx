@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react"; 
+import { useState, useEffect } from "react"; 
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { crearTurno } from "@/lib/actions/turno.action";
-import { crearTurnosEnLote } from "@/lib/actions/turno.action";
+import { crearTurno, crearTurnosEnLote } from "@/lib/actions/turno.action";
 import { format, addWeeks, addDays, getDay, isPast, isToday, parse } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToastStore } from '@/stores/toast-store';
 import { AlertTriangle, Users, Clock, Info, Plus, Trash2, CalendarDays } from "lucide-react"; 
 import Image from "next/image";
+import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 
 interface SlotInfo {
   disponible: boolean;
@@ -79,10 +79,6 @@ export function NuevoTurnoPilatesModal({
 
   // ============= ESTADOS PARA BÚSQUEDA DE PACIENTES =============
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
-  const [pacientesFiltrados, setPacientesFiltrados] = useState<any[]>([]);
-  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
-  const inputPacienteRef = useRef<HTMLInputElement>(null);
-  const listaPacientesRef = useRef<HTMLDivElement>(null);
 
   // ============= NUEVOS ESTADOS PARA REPETICIÓN =============
   const [mostrarRepeticion, setMostrarRepeticion] = useState(false);
@@ -99,43 +95,6 @@ export function NuevoTurnoPilatesModal({
         horaSeleccionada
       )
     : false;
-
-  // ============= FILTRAR PACIENTES SEGÚN BÚSQUEDA =============
-  useEffect(() => {
-    if (!busquedaPaciente.trim()) {
-      setPacientesFiltrados([]);
-      return;
-    }
-
-    const filtrados = pacientes.filter(paciente => {
-      const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
-      const busqueda = busquedaPaciente.toLowerCase();
-      
-      return nombreCompleto.includes(busqueda) ||
-             paciente.nombre.toLowerCase().includes(busqueda) ||
-             paciente.apellido.toLowerCase().includes(busqueda) ||
-             paciente.dni?.toString().includes(busqueda);
-    }).slice(0, 10);
-
-    setPacientesFiltrados(filtrados);
-  }, [busquedaPaciente, pacientes]);
-
-  // ============= MANEJAR CLICKS FUERA DEL AUTOCOMPLETE =============
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        inputPacienteRef.current && 
-        !inputPacienteRef.current.contains(event.target as Node) &&
-        listaPacientesRef.current && 
-        !listaPacientesRef.current.contains(event.target as Node)
-      ) {
-        setMostrarListaPacientes(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // ============= INICIALIZAR FORMULARIO =============
   useEffect(() => {
@@ -157,7 +116,6 @@ export function NuevoTurnoPilatesModal({
       }
       
       setBusquedaPaciente('');
-      setMostrarListaPacientes(false);
       setMostrarRepeticion(false);
       setDiasSeleccionados([]);
       setSemanas(4);
@@ -185,7 +143,6 @@ export function NuevoTurnoPilatesModal({
         pacientesSeleccionados: [...prev.pacientesSeleccionados, paciente.id_paciente]
       }));
       setBusquedaPaciente('');
-      setMostrarListaPacientes(false);
     }
   };
 
@@ -194,17 +151,6 @@ export function NuevoTurnoPilatesModal({
       ...prev,
       pacientesSeleccionados: prev.pacientesSeleccionados.filter(id => id !== pacienteId)
     }));
-  };
-
-  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const valor = e.target.value;
-    setBusquedaPaciente(valor);
-    
-    if (!valor.trim()) {
-      setMostrarListaPacientes(false);
-    } else {
-      setMostrarListaPacientes(true);
-    }
   };
 
   // ============= FUNCIONES PARA REPETICIÓN =============
@@ -627,50 +573,29 @@ export function NuevoTurnoPilatesModal({
                   <Plus className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
                   <span className="text-xs md:text-sm font-medium text-gray-700">Agregar participante</span>
                 </div>
-                
-                <input
-                  ref={inputPacienteRef}
-                  type="text"
-                  value={busquedaPaciente}
-                  onChange={handleBusquedaPacienteChange}
-                  onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                  className="w-full mt-2 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                  placeholder="Buscar por nombre, DNI..."
-                  autoComplete="off"
-                />
-                
-                {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
-                  <div 
-                    ref={listaPacientesRef}
-                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
-                  >
-                    {pacientesFiltrados
-                      .filter(paciente => !formData.pacientesSeleccionados.includes(paciente.id_paciente))
-                      .map((paciente) => (
-                      <div
-                        key={paciente.id_paciente}
-                        onClick={() => agregarPaciente(paciente)}
-                        className="px-2 md:px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                      >
+
+                <div className="mt-2">
+                  <PacienteAutocomplete
+                    value={busquedaPaciente}
+                    onChange={setBusquedaPaciente}
+                    onSelect={agregarPaciente}
+                    excludePatientIds={formData.pacientesSeleccionados}
+                    placeholder="Buscar por nombre, DNI o teléfono..."
+                    inputClassName="w-full pl-8 pr-2 md:pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                    dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
+                    showMinCharsHint
+                    renderOption={(paciente) => (
+                      <>
                         <div className="text-sm font-medium">
                           {paciente.nombre} {paciente.apellido}
                         </div>
                         <div className="text-xs text-gray-500">
                           DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
-                  <div 
-                    ref={listaPacientesRef}
-                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500 text-xs md:text-sm"
-                  >
-                    No se encontraron pacientes
-                  </div>
-                )}
+                      </>
+                    )}
+                  />
+                </div>
               </div>
             )}
           </div>
