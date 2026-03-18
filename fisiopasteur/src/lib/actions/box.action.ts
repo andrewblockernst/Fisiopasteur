@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import type { ActionResult } from "@/lib/actions/action-result";
 
 // Obtener todos los boxes
 export async function obtenerBoxes() {
@@ -22,7 +23,7 @@ export async function obtenerBoxes() {
 }
 
 // Crear un nuevo box
-export async function crearBox(formData: FormData) {
+export async function crearBox(formData: FormData): Promise<ActionResult<any>> {
   const supabase = await createClient();
 
   const numero = parseInt(formData.get("numero") as string);
@@ -30,13 +31,13 @@ export async function crearBox(formData: FormData) {
 
   // Validaciones
   if (!numero || numero < 1) {
-    throw new Error("El número del box debe ser mayor a 0");
+    return { success: false, error: "El número del box debe ser mayor a 0" };
   } else if (numero >= 100) {
-    throw new Error("El número del box debe ser menor a 100");
+    return { success: false, error: "El número del box debe ser menor a 100" };
   }
 
   if (!nombre) {
-    throw new Error("El nombre del box es requerido");
+    return { success: false, error: "El nombre del box es requerido" };
   }
 
   // // Verificar que el número no esté en uso
@@ -65,10 +66,10 @@ export async function crearBox(formData: FormData) {
   if (error) {
     if (error.code === "23505" || error.message.includes("duplicate key value violates unique constraint")) {
       console.error("Error creating box - duplicate number:", error);
-      throw new Error(`Ya existe un box con el número ${numero}`);
+      return { success: false, error: `Ya existe un box con el número ${numero}` };
     } else {
       console.error("Error creating box:", error);
-      throw new Error("Error al crear el box: " + error.message);
+      return { success: false, error: "Error al crear el box: " + error.message };
     }
   }
 
@@ -78,11 +79,11 @@ export async function crearBox(formData: FormData) {
     revalidatePath("/turnos");
   }).catch(err => console.error('Error revalidating path:', err));
 
-  return data;
+  return { success: true, data };
 }
 
 // Actualizar un box
-export async function actualizarBox(id: number, formData: FormData) {
+export async function actualizarBox(id: number, formData: FormData): Promise<ActionResult<any>> {
   const supabase = await createClient();
 
   const numero = parseInt(formData.get("numero") as string);
@@ -90,13 +91,13 @@ export async function actualizarBox(id: number, formData: FormData) {
 
   // Validaciones
   if (!numero || numero < 1) {
-    throw new Error("El número del box debe ser mayor a 0");
+    return { success: false, error: "El número del box debe ser mayor a 0" };
   } else if (numero >= 100) {
-    throw new Error("El número del box debe ser menor a 100");
+    return { success: false, error: "El número del box debe ser menor a 100" };
   }
 
   if (!nombre) {
-    throw new Error("El nombre del box es requerido");
+    return { success: false, error: "El nombre del box es requerido" };
   }
 
 
@@ -115,10 +116,10 @@ export async function actualizarBox(id: number, formData: FormData) {
   if (error) {
     if (error.code === "23505" || error.message.includes("duplicate key value violates unique constraint")) {
       console.error("Error updating box - duplicate number:", error);
-      throw new Error(`Ya existe otro box con el número ${numero}`);
+      return { success: false, error: `Ya existe otro box con el número ${numero}` };
     } else {
       console.error("Error updating box:", error);
-      throw new Error("Error al actualizar el box: " + error.message);
+      return { success: false, error: "Error al actualizar el box: " + error.message };
     }
   }
 
@@ -128,11 +129,11 @@ export async function actualizarBox(id: number, formData: FormData) {
     revalidatePath("/turnos");
   }).catch(err => console.error('Error revalidating path:', err));
 
-  return data;
+  return { success: true, data };
 }
 
 // Eliminar (desactivar) un box
-export async function eliminarBox(id: number) {
+export async function eliminarBox(id: number): Promise<ActionResult<any>> {
   const supabase = await createClient();
 
   // Verificar si hay turnos asociados al box
@@ -144,9 +145,10 @@ export async function eliminarBox(id: number) {
     .neq("estado", "eliminado");
 
   if (count && count > 0) {
-    throw new Error(
-      `No se puede eliminar el box porque tiene ${count} turno(s) asociado(s). Primero cancela o reasigna los turnos.`
-    );
+    return {
+      success: false,
+      error: `No se puede eliminar el box porque tiene ${count} turno(s) asociado(s). Primero cancela o reasigna los turnos.`
+    };
   }
 
   // Desactivar el box (soft delete)
@@ -162,7 +164,7 @@ export async function eliminarBox(id: number) {
 
   if (error) {
     console.error("Error deleting box:", error);
-    throw new Error("Error al eliminar el box: " + error.message);
+    return { success: false, error: "Error al eliminar el box: " + error.message };
   }
 
   // ✅ Revalidación no bloqueante
@@ -171,5 +173,5 @@ export async function eliminarBox(id: number) {
     revalidatePath("/turnos");
   }).catch(err => console.error('Error revalidating path:', err));
 
-  return data;
+  return { success: true, data };
 }

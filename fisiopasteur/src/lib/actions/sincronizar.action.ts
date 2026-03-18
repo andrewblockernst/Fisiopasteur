@@ -10,7 +10,7 @@ export async function sincronizarUsuarioAuth() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      throw new Error('No hay usuario autenticado');
+      return { success: false, error: 'No hay usuario autenticado' };
     }
 
     // Verificar si existe por ID
@@ -41,7 +41,7 @@ export async function sincronizarUsuarioAuth() {
           .single();
 
         if (updateError) {
-          throw new Error(`Error vinculando usuario: ${updateError.message}`);
+          return { success: false, error: `Error vinculando usuario: ${updateError.message}` };
         }
 
         return { success: true, message: 'Usuario vinculado correctamente' };
@@ -62,7 +62,7 @@ export async function sincronizarUsuarioAuth() {
           .single();
 
         if (createError) {
-          throw new Error(`Error creando usuario: ${createError.message}`);
+          return { success: false, error: `Error creando usuario: ${createError.message}` };
         }
 
         return { success: true, message: 'Usuario sincronizado correctamente' };
@@ -75,7 +75,7 @@ export async function sincronizarUsuarioAuth() {
     console.error('Error sincronizando usuario:', error);
     return { 
       success: false, 
-      message: error instanceof Error ? error.message : 'Error desconocido' 
+      error: error instanceof Error ? error.message : 'Error desconocido' 
     };
   }
 }

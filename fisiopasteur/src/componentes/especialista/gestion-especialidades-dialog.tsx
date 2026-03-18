@@ -7,6 +7,7 @@ import { createEspecialidad, updateEspecialidad, deleteEspecialidad } from "@/li
 import { useToastStore } from "@/stores/toast-store";
 import type { Tables } from "@/types/database.types";
 import { Plus, Pencil, X, Trash } from "lucide-react";
+import { add } from "date-fns";
 
 type Especialidad = Tables<"especialidad">;
 
@@ -42,11 +43,20 @@ export function GestionEspecialidadesDialog({
     startTransition(async () => {
       const result = await createEspecialidad(nombreNueva);
       
-      addToast({
-        variant: result.success ? "success" : "error",
-        message: result.message,
-        description: result.description
-      });
+      if (!result.success) {
+        addToast({
+          variant: "error",
+          message: "Error al crear especialidad",
+          description: result.error || "Ocurrió un error al crear la especialidad"
+        });
+        return;
+      } else {
+        addToast({
+          variant: "success",
+          message: "Especialidad creada",
+          description: "La especialidad se ha creado exitosamente"
+        });
+      }
 
       if (result.success) {
         setNombreNueva("");
@@ -74,12 +84,21 @@ export function GestionEspecialidadesDialog({
 
     startTransition(async () => {
       const result = await updateEspecialidad(editando.id, editando.nombre);
-      
-      addToast({
-        variant: result.success ? "success" : "error",
-        message: result.message,
-        description: result.description
-      });
+
+      if (!result.success) {
+        addToast({
+          variant: "error",
+          message: "Error al actualizar especialidad",
+          description: result.error || "Ocurrió un error al actualizar la especialidad"
+        });
+        return;
+      } else {
+        addToast({
+          variant: "success",
+          message: "Especialidad actualizada",
+          description: "La especialidad se ha actualizado exitosamente"
+        });
+      }
 
       if (result.success) {
         setEditando(null);
@@ -97,12 +116,22 @@ export function GestionEspecialidadesDialog({
 
     startTransition(async () => {
       const result = await deleteEspecialidad(especialidadAEliminar.id_especialidad);
+
+      if (!result.success) {
+        addToast({
+          variant: "error",
+          message: "Error al eliminar especialidad",
+          description: result.error || "Ocurrió un error al eliminar la especialidad"
+        });
+        return;
+      } else {
+        addToast({
+          variant: "success",
+          message: "Especialidad eliminada",
+          description: "La especialidad se ha eliminado exitosamente"
+        });
+      }
       
-      addToast({
-        variant: result.success ? "success" : "error",
-        message: result.message,
-        description: result.description
-      });
 
       if (result.success && onEspecialidadesUpdated) {
         onEspecialidadesUpdated();

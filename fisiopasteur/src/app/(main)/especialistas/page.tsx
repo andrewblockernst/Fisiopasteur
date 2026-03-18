@@ -66,12 +66,16 @@ export default function EspecialistasPage() {
     const loadData = async () => {
       try {
         const incluirInactivos = filter !== "activos";
-        const [especialistasData, especialidadesData] = await Promise.all([
+        const [especialistasResult, especialidadesResult] = await Promise.all([
           getEspecialistas({ incluirInactivos }),
           getEspecialidades()
         ]);
-        setEspecialistas(especialistasData);
-        setEspecialidades(especialidadesData);
+        
+        const especialistas = especialistasResult.success ? especialistasResult.data : [];
+        const especialidades = especialidadesResult.success ? especialidadesResult.data : [];
+        
+        setEspecialistas(especialistas);
+        setEspecialidades(especialidades);
       } catch (error) {
         console.error("Error loading data:", error);
       } finally {

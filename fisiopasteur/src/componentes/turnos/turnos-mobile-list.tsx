@@ -17,6 +17,8 @@ import {
 import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import type { Tables, EspecialistaWithSpecialties } from "@/types";
+import SkeletonLoader from '../skeleton-loader';
+import UnifiedSkeletonLoader from '../unified-skeleton-loader';
 
 interface TurnosMobileListProps {
   turnos: TurnoConDetalles[];
@@ -25,6 +27,7 @@ interface TurnosMobileListProps {
   onTurnoCreated?: () => void;
   especialistas: EspecialistaWithSpecialties[];
   especialidades: Tables<"especialidad">[];
+  loadingTurnos: boolean;
   initialFilters: {
     fecha_desde: string;
     fecha_hasta: string;
@@ -41,6 +44,7 @@ export default function TurnosMobileList({
   onTurnoCreated,
   especialistas,
   especialidades,
+  loadingTurnos,
   initialFilters
 }: TurnosMobileListProps) {
   const router = useRouter();
@@ -224,9 +228,9 @@ export default function TurnosMobileList({
   }, []);
 
   return (
-  <div className="min-h-screen bg-neutral-50 text-black">
+    <div className="min-h-screen bg-neutral-50 text-black">
       {/* Header fijo - Estilo similar al perfil */}
-  <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 text-black">
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 text-black">
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.back()}
@@ -281,62 +285,71 @@ export default function TurnosMobileList({
       </div>
 
       {/* Contenido */}
-  <div className="px-4 pb-20 text-black">
-        {fechasOrdenadas.length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar className="w-16 h-16 text-neutral-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-neutral-700 mb-2">
-              {searchTerm ? 'No se encontraron resultados' : 'No hay turnos programados'}
-            </h3>
-            <p className="text-neutral-500 mb-6">
-              {searchTerm ? 'Prueba con otro término de búsqueda' : `No tienes turnos para ${formatDate(fecha)}`}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-8 pt-4">
-            {fechasOrdenadas.map((fechaActual) => {
-              const horasEnFecha = Object.keys(turnosAgrupadosPorFecha[fechaActual]).sort();
-              const totalTurnosFecha = horasEnFecha.reduce((sum, hora) => sum + turnosAgrupadosPorFecha[fechaActual][hora].length, 0);
-              
-              return (
-                <div key={fechaActual} className="space-y-4">
-                  {/* Header de fecha */}
-                  <div className="text-sm text-neutral-600 capitalize font-medium sticky top-16 bg-neutral-50 py-2 z-10">
-                    {formatDate(fechaActual)} • {totalTurnosFecha} turno{totalTurnosFecha !== 1 ? 's' : ''}
-                  </div>
+      { loadingTurnos ? (
+        <UnifiedSkeletonLoader
+          type="cards"
+          showFilters={false}
+          showHeader={false}
+          showSearch={false}
+        />
+      ) : (
+        <div className="px-4 pb-20 text-black">
+          {fechasOrdenadas.length === 0 ? (
+            <div className="text-center py-12">
+              <Calendar className="w-16 h-16 text-neutral-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-neutral-700 mb-2">
+                {searchTerm ? 'No se encontraron resultados' : 'No hay turnos programados'}
+              </h3>
+              <p className="text-neutral-500 mb-6">
+                {searchTerm ? 'Prueba con otro término de búsqueda' : `No tienes turnos para ${formatDate(fecha)}`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-8 pt-4">
+              {fechasOrdenadas.map((fechaActual) => {
+                const horasEnFecha = Object.keys(turnosAgrupadosPorFecha[fechaActual]).sort();
+                const totalTurnosFecha = horasEnFecha.reduce((sum, hora) => sum + turnosAgrupadosPorFecha[fechaActual][hora].length, 0);
+                
+                return (
+                  <div key={fechaActual} className="space-y-4">
+                    {/* Header de fecha */}
+                    <div className="text-sm text-neutral-600 capitalize font-medium sticky top-16 bg-neutral-50 py-2 z-10">
+                      {formatDate(fechaActual)} • {totalTurnosFecha} turno{totalTurnosFecha !== 1 ? 's' : ''}
+                    </div>
 
-                  {/* Turnos agrupados por hora para esta fecha */}
-                  <div className="space-y-6">
-                    {horasEnFecha.map((hora) => (
-                      <div key={`${fechaActual}-${hora}`} className="space-y-3">
-                        {/* Header de hora */}
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center min-w-[80px] px-3 h-8 bg-[#9C1838] text-white rounded-lg text-sm font-medium whitespace-nowrap">
-                            {formatTime(hora)}
+                    {/* Turnos agrupados por hora para esta fecha */}
+                    <div className="space-y-6">
+                      {horasEnFecha.map((hora) => (
+                        <div key={`${fechaActual}-${hora}`} className="space-y-3">
+                          {/* Header de hora */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center min-w-[80px] px-3 h-8 bg-[#9C1838] text-white rounded-lg text-sm font-medium whitespace-nowrap">
+                              {formatTime(hora)}
+                            </div>
+                            <div className="flex-1 h-px bg-neutral-200" />
                           </div>
-                          <div className="flex-1 h-px bg-neutral-200" />
-                        </div>
 
-                        {/* Turnos para esta hora */}
-                        <div className="space-y-3">
-                          {turnosAgrupadosPorFecha[fechaActual][hora].map((turno) => (
-                            <TurnoCard 
-                              key={turno.id_turno} 
-                              turno={turno}
-                              numeroTalonario={calcularNumeroTalonario(turno)}
-                              onClick={() => handleTurnoClick(turno.id_turno)} 
-                            />
-                          ))}
+                          {/* Turnos para esta hora */}
+                          <div className="space-y-3">
+                            {turnosAgrupadosPorFecha[fechaActual][hora].map((turno) => (
+                              <TurnoCard 
+                                key={turno.id_turno} 
+                                turno={turno}
+                                numeroTalonario={calcularNumeroTalonario(turno)}
+                                onClick={() => handleTurnoClick((turno.id_turno).toString())} 
+                              />
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Panel de Filtros - Drawer desde abajo */}
       {showFilters && (
