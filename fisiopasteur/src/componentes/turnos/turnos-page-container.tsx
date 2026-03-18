@@ -103,8 +103,8 @@ export default function TurnosPageContainer({
 
   const handleDateChange = (newDate: string) => {
     setSelectedDate(newDate);
-    // Actualizar URL con la nueva fecha
-    const params = new URLSearchParams();
+    // Actualizar fecha preservando el resto de filtros activos.
+    const params = new URLSearchParams(searchParams.toString());
     params.set('desde', newDate);
     params.set('hasta', newDate);
     router.push(`/turnos?${params.toString()}`);

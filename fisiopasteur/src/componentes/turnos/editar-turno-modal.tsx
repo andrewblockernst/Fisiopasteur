@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef } from "react";
-import { actualizarTurno, obtenerPacientes, obtenerEspecialistas, obtenerEspecialidades, obtenerBoxes, obtenerAgendaEspecialista, obtenerTurnos, obtenerPrecioEspecialidad } from "@/lib/actions/turno.action";
+import { useState, useTransition, useEffect, useCallback, useMemo } from "react";
+import { actualizarTurno, obtenerEspecialistas, obtenerBoxes, obtenerAgendaEspecialista, obtenerTurnos, obtenerPrecioEspecialidad } from "@/lib/actions/turno.action";
 import BaseDialog from "@/componentes/dialog/base-dialog";
+import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 import { Database } from "@/types/database.types";
 import Image from "next/image";
 import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
+import { useAuth } from "@/hooks/usePerfil";
 
 // Tipos basados en tu estructura de BD
 type Turno = Database['public']['Tables']['turno']['Row'];
@@ -25,6 +27,10 @@ type PacienteAPI = {
   telefono: string | null;
   email: string | null;
 };
+
+function esEspecialidadPilates(especialidad: any): boolean {
+  return especialidad?.nombre?.toLowerCase().includes('pilates') ?? false;
+}
 
 type EspecialistaAPI = {
   id_usuario: string;
@@ -63,16 +69,17 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     precio: turno.precio ? String(turno.precio) : ''
   });
 
+  const { user, loading: authLoading } = useAuth();
   const [isPending, startTransition] = useTransition();
 
   // Estados con tipos que coinciden con lo que devuelve tu API
-  const [pacientes, setPacientes] = useState<PacienteAPI[]>([]);
   const [especialistas, setEspecialistas] = useState<EspecialistaAPI[]>([]);
-  const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
+  // const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [boxesDisponibles, setBoxesDisponibles] = useState<Box[]>([]);
   const [especialidadesDisponibles, setEspecialidadesDisponibles] = useState<Especialidad[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const [horasOcupadas, setHorasOcupadas] = useState<string[]>([]);
   const [verificandoDisponibilidad, setVerificandoDisponibilidad] = useState(false);
   const [verificandoBoxes, setVerificandoBoxes] = useState(false);
@@ -80,11 +87,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
   // Estados para el autocomplete de pacientes
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
-  const [pacientesFiltrados, setPacientesFiltrados] = useState<PacienteAPI[]>([]);
-  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<PacienteAPI | null>(null);
-  const inputPacienteRef = useRef<HTMLInputElement>(null);
-  const listaPacientesRef = useRef<HTMLDivElement>(null);
 
   // Dialog para mensajes (reemplaza los toasts)
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
@@ -99,29 +102,39 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     
     const cargarDatos = async () => {
       setLoading(true);
+      setIsInitializing(true);
       try {
-        const [p, e, esp, b] = await Promise.all([
-          obtenerPacientes(),
+        const formDataInicial = {
+          fecha: turno.fecha,
+          hora: turno.hora.slice(0, 5),
+          id_especialista: turno.id_especialista || '',
+          id_especialidad: turno.id_especialidad ? String(turno.id_especialidad) : '',
+          tipo_plan: (turno.tipo_plan || 'particular') as 'particular' | 'obra_social',
+          id_paciente: String(turno.id_paciente),
+          id_box: turno.id_box ? String(turno.id_box) : '',
+          observaciones: turno.observaciones || '',
+          precio: turno.precio ? String(turno.precio) : ''
+        };
+
+        const [e, b] = await Promise.all([
           obtenerEspecialistas(),
-          obtenerEspecialidades(),
           obtenerBoxes()
         ]);
-        
-        if (p.success) {
-          const pacientesData = (p.data || []).map((pac: any) => ({
-            ...pac,
-            dni: pac.dni ?? ""
-          }));
-          setPacientes(pacientesData);
-          
-          // Establecer el paciente actual como seleccionado
-          const pacienteActual = pacientesData.find((pac: PacienteAPI) => 
-            String(pac.id_paciente) === String(turno.id_paciente)
-          );
-          if (pacienteActual) {
-            setPacienteSeleccionado(pacienteActual);
-            setBusquedaPaciente(`${pacienteActual.nombre} ${pacienteActual.apellido}`);
-          }
+
+        setFormData(formDataInicial);
+
+        // Establecer el paciente actual como seleccionado usando relación del turno
+        if (turno.paciente) {
+          const pacienteActual: PacienteAPI = {
+            id_paciente: turno.paciente.id_paciente,
+            nombre: turno.paciente.nombre,
+            apellido: turno.paciente.apellido,
+            dni: turno.paciente.dni ?? "",
+            telefono: turno.paciente.telefono,
+            email: turno.paciente.email,
+          };
+          setPacienteSeleccionado(pacienteActual);
+          setBusquedaPaciente(`${pacienteActual.nombre} ${pacienteActual.apellido}`);
         }
         
         if (e.success) setEspecialistas(
@@ -130,54 +143,122 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
             color: item.color === null ? undefined : item.color
           }))
         );
-        if (esp.success) setEspecialidades(esp.data || []);
-        if (b.success) setBoxes(b.data || []);
+
+        const especialistasData: EspecialistaAPI[] = e.success
+          ? (e.data || []).map((item: any) => ({
+              ...item,
+              color: item.color === null ? undefined : item.color
+            }))
+          : [];
+
+        const boxesData: Box[] = b.success ? (b.data || []) : [];
+        setBoxes(boxesData);
+
+        if (formDataInicial.id_especialista) {
+          const especialista = especialistasData.find(
+            (esp) => String(esp.id_usuario) === String(formDataInicial.id_especialista)
+          );
+
+          if (especialista) {
+            const lista: Especialidad[] = [];
+            if (especialista.especialidad) lista.push(especialista.especialidad);
+            if (Array.isArray(especialista.usuario_especialidad)) {
+              especialista.usuario_especialidad.forEach((ue) => {
+                if (ue.especialidad) lista.push(ue.especialidad);
+              });
+            }
+
+            const unicas = lista
+              .filter((esp) => !esEspecialidadPilates(esp))
+              .filter((esp, i, arr) => i === arr.findIndex((e) => e.id_especialidad === esp.id_especialidad));
+
+            setEspecialidadesDisponibles(unicas);
+
+            if (
+              formDataInicial.id_especialidad &&
+              !unicas.some((esp) => String(esp.id_especialidad) === String(formDataInicial.id_especialidad))
+            ) {
+              setFormData((prev) => ({ ...prev, id_especialidad: '' }));
+            }
+          }
+        }
+
+        if (formDataInicial.id_especialista && formDataInicial.fecha) {
+          const agendaRes = await obtenerAgendaEspecialista(formDataInicial.id_especialista, formDataInicial.fecha);
+          if (agendaRes.success && agendaRes.data) {
+            const ocupadas: string[] = [];
+            agendaRes.data.forEach((turnoAgenda: Turno) => {
+              if (turnoAgenda.id_turno === turno.id_turno || turnoAgenda.estado === 'cancelado') {
+                return;
+              }
+
+              const [horas, minutos] = turnoAgenda.hora.split(':').map(Number);
+              const inicioTurno = new Date();
+              inicioTurno.setHours(horas, minutos, 0, 0);
+              const finTurno = new Date(inicioTurno.getTime() + (60 * 60000));
+
+              const inicioSlot = new Date(inicioTurno);
+              while (inicioSlot < finTurno) {
+                ocupadas.push(inicioSlot.toTimeString().slice(0, 5));
+                inicioSlot.setMinutes(inicioSlot.getMinutes() + 15);
+              }
+            });
+            setHorasOcupadas(ocupadas);
+          }
+        } else {
+          setHorasOcupadas([]);
+        }
+
+        if (formDataInicial.fecha && formDataInicial.hora) {
+          const turnosRes = await obtenerTurnos({ fecha: formDataInicial.fecha });
+          if (turnosRes.success && turnosRes.data) {
+            const [horaInicio, minutoInicio] = formDataInicial.hora.split(':').map(Number);
+            const inicioTurno = new Date();
+            inicioTurno.setHours(horaInicio, minutoInicio, 0, 0);
+            const finTurno = new Date(inicioTurno.getTime() + (60 * 60000));
+
+            const turnosConflicto = turnosRes.data.filter((turnoCheck: any) => {
+              if (turnoCheck.estado === 'cancelado' || !turnoCheck.id_box || turnoCheck.id_turno === turno.id_turno) {
+                return false;
+              }
+
+              const [horaTurno, minutoTurno] = turnoCheck.hora.split(':').map(Number);
+              const inicioTurnoExistente = new Date();
+              inicioTurnoExistente.setHours(horaTurno, minutoTurno, 0, 0);
+              const finTurnoExistente = new Date(inicioTurnoExistente.getTime() + (60 * 60000));
+
+              return inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente;
+            });
+
+            const boxesOcupados = turnosConflicto.map((turnoCheck: any) => turnoCheck.id_box);
+            const disponibles = boxesData.filter((box) => !boxesOcupados.includes(box.id_box));
+
+            if (formDataInicial.id_box && !disponibles.some((box) => String(box.id_box) === formDataInicial.id_box)) {
+              const boxActual = boxesData.find((box) => String(box.id_box) === formDataInicial.id_box);
+              if (boxActual) {
+                setBoxesDisponibles([...disponibles, boxActual]);
+              } else {
+                setBoxesDisponibles(disponibles);
+              }
+            } else {
+              setBoxesDisponibles(disponibles);
+            }
+          } else {
+            setBoxesDisponibles(boxesData);
+          }
+        } else {
+          setBoxesDisponibles(boxesData);
+        }
       } catch (error) {
         console.error('Error cargando datos:', error);
       } finally {
+        setIsInitializing(false);
         setLoading(false);
       }
     };
     
     cargarDatos();
-  }, [open, turno.id_paciente]);
-
-  // Filtrar pacientes según búsqueda
-  useEffect(() => {
-    if (!busquedaPaciente.trim()) {
-      setPacientesFiltrados([]);
-      return;
-    }
-
-    const filtrados = pacientes.filter(paciente => {
-      const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
-      const busqueda = busquedaPaciente.toLowerCase();
-      
-      return nombreCompleto.includes(busqueda) ||
-             paciente.nombre.toLowerCase().includes(busqueda) ||
-             paciente.apellido.toLowerCase().includes(busqueda) ||
-             paciente.dni?.toString().includes(busqueda);
-    }).slice(0, 10); // Limitar a 10 resultados
-
-    setPacientesFiltrados(filtrados);
-  }, [busquedaPaciente, pacientes]);
-
-  // Manejar clicks fuera del autocomplete
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        inputPacienteRef.current && 
-        !inputPacienteRef.current.contains(event.target as Node) &&
-        listaPacientesRef.current && 
-        !listaPacientesRef.current.contains(event.target as Node)
-      ) {
-        setMostrarListaPacientes(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [open, turno]);
 
   // Filtrar especialidades según especialista seleccionado
   useEffect(() => {
@@ -200,9 +281,9 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       });
     }
     
-    const unicas = lista.filter((esp, i, arr) => 
-      i === arr.findIndex(e => e.id_especialidad === esp.id_especialidad)
-    );
+    const unicas = lista
+      .filter((esp) => !esEspecialidadPilates(esp))
+      .filter((esp, i, arr) => i === arr.findIndex(e => e.id_especialidad === esp.id_especialidad));
     setEspecialidadesDisponibles(unicas);
     
     // Si la especialidad seleccionada ya no existe, limpiar
@@ -235,6 +316,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
   // Verificar horarios ocupados cuando cambia especialista o fecha
   useEffect(() => {
+    if (isInitializing) return;
+
     const verificarHorariosOcupados = async () => {
       if (!formData.id_especialista || !formData.fecha) {
         setHorasOcupadas([]);
@@ -281,10 +364,12 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
 
     verificarHorariosOcupados();
-  }, [formData.id_especialista, formData.fecha, turno.id_turno]);
+  }, [formData.id_especialista, formData.fecha, turno.id_turno, isInitializing]);
 
   // Verificar boxes disponibles cuando cambia fecha y hora
   useEffect(() => {
+    if (isInitializing) return;
+
     const verificarBoxesDisponibles = async () => {
       if (!formData.fecha || !formData.hora) {
         setBoxesDisponibles(boxes);
@@ -346,7 +431,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
 
     verificarBoxesDisponibles();
-  }, [formData.fecha, formData.hora, boxes, turno.id_turno, formData.id_box]);
+  }, [formData.fecha, formData.hora, boxes, turno.id_turno, formData.id_box, isInitializing]);
 
   // Función para verificar si una hora específica está disponible
   const esHoraDisponible = (hora: string): boolean => {
@@ -406,31 +491,62 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
   };
 
   // Manejar selección de paciente
-  const seleccionarPaciente = (paciente: PacienteAPI) => {
+  const seleccionarPaciente = useCallback((paciente: PacienteAPI) => {
     setPacienteSeleccionado(paciente);
     setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
     setFormData(prev => ({ ...prev, id_paciente: String(paciente.id_paciente) }));
-    setMostrarListaPacientes(false);
-  };
+  }, []);
 
   // Manejar cambio en input de búsqueda
-  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const valor = e.target.value;
+  const handleBusquedaPacienteChange = useCallback((valor: string) => {
     setBusquedaPaciente(valor);
     
     if (!valor.trim()) {
       setPacienteSeleccionado(null);
       setFormData(prev => ({ ...prev, id_paciente: '' }));
-      setMostrarListaPacientes(false);
-    } else {
-      setMostrarListaPacientes(true);
-      // Si lo que escribió no coincide con el paciente seleccionado, limpiar selección
-      if (pacienteSeleccionado && !`${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`.toLowerCase().includes(valor.toLowerCase())) {
-        setPacienteSeleccionado(null);
-        setFormData(prev => ({ ...prev, id_paciente: '' }));
-      }
+      return;
     }
-  };
+
+    if (pacienteSeleccionado && valor !== `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`) {
+      setPacienteSeleccionado(null);
+      setFormData(prev => ({ ...prev, id_paciente: '' }));
+    }
+  }, [pacienteSeleccionado]);
+
+  const hayCambios = useMemo(() => {
+    const normalizarTexto = (valor: string | null | undefined) => (valor ?? "").trim();
+    const normalizarNumeroNullable = (valor: string | number | null | undefined) => {
+      if (valor === null || valor === undefined || valor === "") return 0;
+      const numero = Number(valor);
+      return Number.isFinite(numero) ? numero : null;
+    };
+
+    const original = {
+      fecha: turno.fecha,
+      hora: turno.hora.slice(0, 5),
+      id_especialista: normalizarTexto(turno.id_especialista),
+      id_especialidad: normalizarNumeroNullable(turno.id_especialidad),
+      tipo_plan: normalizarTexto(turno.tipo_plan || "particular"),
+      id_paciente: normalizarNumeroNullable(turno.id_paciente),
+      id_box: normalizarNumeroNullable(turno.id_box),
+      observaciones: normalizarTexto(turno.observaciones),
+      precio: normalizarNumeroNullable(turno.precio),
+    };
+
+    const actual = {
+      fecha: formData.fecha,
+      hora: formData.hora,
+      id_especialista: normalizarTexto(formData.id_especialista),
+      id_especialidad: normalizarNumeroNullable(formData.id_especialidad),
+      tipo_plan: normalizarTexto(formData.tipo_plan),
+      id_paciente: normalizarNumeroNullable(formData.id_paciente),
+      id_box: normalizarNumeroNullable(formData.id_box),
+      observaciones: normalizarTexto(formData.observaciones),
+      precio: normalizarNumeroNullable(formData.precio),
+    };
+
+    return JSON.stringify(original) !== JSON.stringify(actual);
+  }, [formData, turno]);
 
 
 const handleSubmit = async () => {
@@ -467,7 +583,7 @@ const handleSubmit = async () => {
         });
         
         // Manejar el caso donde res.data puede ser undefined
-        if (res.data) {
+        if (res) {
           onSaved?.(res.data as any);
         } else {
           onSaved?.(); // Llamar sin parámetros si no hay data
@@ -492,7 +608,7 @@ const handleSubmit = async () => {
 };
 
   // Mostrar loading mientras carga datos
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <BaseDialog
         type="custom"
@@ -544,19 +660,47 @@ const handleSubmit = async () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Especialista*
               </label>
-              <select
-                value={formData.id_especialista}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                required
-              >
-                <option value="">Seleccionar especialista</option>
-                {especialistas.map((especialista) => (
-                  <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                    {especialista.nombre} {especialista.apellido}
-                  </option>
-                ))}
-              </select>
+
+              {user?.puedeGestionarTurnos ? (
+                //Usuario con permisos: habilitado
+                <select
+                  value={formData.id_especialista}
+                  onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  required
+                >
+                  <option value="">Seleccionar especialista</option>
+                  {especialistas.map((especialista) => (
+                    <option key={especialista.id_usuario} value={especialista.id_usuario}>
+                      {especialista.nombre} {especialista.apellido}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                // Usuario sin permisos: actual, deshabilitado
+                <select
+                  value={formData.id_especialista}
+                  disabled
+                  className="w-full px-2 md:px-3 py-2 text-sm bg-gray-100 border border-gray-300 rounded-lg cursor-not-allowed opacity-75"
+                  required
+                >
+                  {(() => {
+                    const userId = user?.id_usuario || user?.id; // ✅ Usar user.id como fallback
+                    const especialistaActual = especialistas.find(e => 
+                      String(e.id_usuario) === String(userId)
+                    );
+                    
+                    return (
+                      <option value={userId || ''}>
+                        {especialistaActual 
+                          ? `${especialistaActual.nombre} ${especialistaActual.apellido}`
+                          : `${user?.nombre || ''} ${user?.apellido || ''}`.trim() || 'Especialista actual'
+                        }
+                      </option>
+                    );
+                  })()}
+                </select>
+              )}
             </div>
 
             {/* Especialidad */}
@@ -590,50 +734,27 @@ const handleSubmit = async () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Paciente*
               </label>
-              <input
-                ref={inputPacienteRef}
-                type="text"
+              <PacienteAutocomplete
                 value={busquedaPaciente}
                 onChange={handleBusquedaPacienteChange}
-                onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                placeholder="Buscar paciente por nombre, apellido o DNI..."
+                onSelect={seleccionarPaciente}
+                selectedDisplayValue={pacienteSeleccionado ? `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}` : ""}
                 required
-                autoComplete="off"
-              />
-              
-              {/* Lista de resultados */}
-              {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
-                <div 
-                  ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-                >
-                  {pacientesFiltrados.map((paciente) => (
-                    <div
-                      key={paciente.id_paciente}
-                      onClick={() => seleccionarPaciente(paciente)}
-                      className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="font-medium">
-                        {paciente.nombre} {paciente.apellido}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
-                      </div>
+                placeholder="Buscar paciente por nombre, apellido o DNI..."
+                containerClassName="relative"
+                inputClassName="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+                renderOption={(paciente) => (
+                  <>
+                    <div className="font-medium">
+                      {paciente.nombre} {paciente.apellido}
                     </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Mensaje cuando no hay resultados */}
-              {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
-                <div 
-                  ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-center text-gray-500"
-                >
-                  No se encontraron pacientes, verificar datos ingresados.
-                </div>
-              )}
+                    <div className="text-sm text-gray-500">
+                      DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
+                    </div>
+                  </>
+                )}
+              />
             </div>
 
             {/* Fecha */}
@@ -682,11 +803,11 @@ const handleSubmit = async () => {
                   </option>
                 ))}
               </select>
-              {formData.id_especialista && formData.fecha && horasOcupadas.length > 0 && (
+              {/* {formData.id_especialista && formData.fecha && horasOcupadas.length > 0 && (
                 <p className="text-xs text-gray-500 mt-1">
                   {generarOpcionesHora().filter(h => h.disponible || h.value === formData.hora).length} horarios disponibles
                 </p>
-              )}
+              )} */}
             </div>
 
             {/* Box/Consultorio */}
@@ -780,7 +901,7 @@ const handleSubmit = async () => {
         primaryButton={{
           text: isPending ? "Guardando..." : "Guardar Cambios",
           onClick: handleSubmit,
-          disabled: isPending || (!esHoraDisponible(formData.hora) && formData.hora !== turno.hora.slice(0, 5)),
+          disabled: isPending || !hayCambios || (!esHoraDisponible(formData.hora) && formData.hora !== turno.hora.slice(0, 5)),
         }}
         secondaryButton={{
           text: "Cancelar",
