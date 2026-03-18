@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { obtenerEspecialistas, obtenerPacientes, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerAgendaEspecialista, obtenerTurnos, verificarDisponibilidad, crearPaqueteSesiones } from "@/lib/actions/turno.action";
+import { obtenerEspecialistas, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerAgendaEspecialista, obtenerTurnos, verificarDisponibilidad, crearPaqueteSesiones } from "@/lib/actions/turno.action";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
+import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 import SelectorRecordatorios from "@/componentes/turnos/selector-recordatorios";
 import Image from "next/image";
 import Loading from "../loading";
@@ -40,6 +41,10 @@ const DIAS_SEMANA = [
   { id: 4, nombre: 'Jueves', nombreCorto: 'Jue' },
   { id: 5, nombre: 'Viernes', nombreCorto: 'Vie' },
 ];
+
+function esEspecialidadPilates(especialidad: any): boolean {
+  return especialidad?.nombre?.toLowerCase().includes('pilates') ?? false;
+}
 
 // ✅ FUNCIÓN HELPER PARA VALIDAR FECHA Y HORA
 function esFechaHoraPasada(fecha: string, hora: string): boolean {
@@ -82,7 +87,6 @@ export function NuevoTurnoModal({
 
   // Estados para datos cargados automáticamente
   const [especialistas, setEspecialistas] = useState<any[]>(especialistasProp);
-  const [pacientes, setPacientes] = useState<any[]>([]);
   const [especialidades, setEspecialidades] = useState<any[]>([]);
   const [boxes, setBoxes] = useState<any[]>([]);
   const [boxesDisponibles, setBoxesDisponibles] = useState<any[]>([]);
@@ -97,11 +101,7 @@ export function NuevoTurnoModal({
 
   // Estados para el autocomplete de pacientes
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
-  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null);
-  const [buscandoPacientes, setBuscandoPacientes] = useState(false);
-  const inputPacienteRef = useRef<HTMLInputElement>(null);
-  const listaPacientesRef = useRef<HTMLDivElement>(null);
 
   // ============= NUEVOS ESTADOS PARA REPETICIÓN DE SESIONES =============
   const [mostrarRepeticion, setMostrarRepeticion] = useState(false);
@@ -262,61 +262,6 @@ export function NuevoTurnoModal({
     cargarDatos();
   }, [isOpen]);
 
-  // ⚡ BÚSQUEDA OPTIMIZADA: Fetch bajo demanda con debounce
-  useEffect(() => {
-    // Solo buscar si hay al menos 2 caracteres
-    if (!busquedaPaciente.trim() || busquedaPaciente.trim().length < 2) {
-      setPacientes([]);
-      return;
-    }
-
-    console.log('🔍 Buscando pacientes para:', busquedaPaciente);
-    console.log('Paciente seleccionado actual:', pacienteSeleccionado);
-
-    if (busquedaPaciente.trim().toLocaleLowerCase() === (pacienteSeleccionado?.nombre + ' ' + pacienteSeleccionado?.apellido || '').toLocaleLowerCase()) {
-      return; // No buscar si es el mismo que ya seleccionamos
-    }
-
-    const timeoutId = setTimeout(async () => {
-      setBuscandoPacientes(true);
-      try {
-        const resultado = await obtenerPacientes(busquedaPaciente.trim(), 10); // Limitar a 10 para UI
-        if (resultado.success && resultado.data) {
-          setPacientes(resultado.data);
-          setMostrarListaPacientes(true);
-        }
-      } catch (error) {
-        console.error('Error buscando pacientes:', error);
-      } finally {
-        setBuscandoPacientes(false);
-      }
-    }, 300); // Debounce de 300ms
-
-    return () => clearTimeout(timeoutId);
-  }, [busquedaPaciente]);
-
-  // Pacientes filtrados (el servidor ya limita a 10, no necesitamos slice)
-  const pacientesFiltrados = useMemo(() => {
-    return pacientes; // Ya vienen limitados del servidor
-  }, [pacientes]);
-
-  // Manejar clicks fuera del autocomplete
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        inputPacienteRef.current && 
-        !inputPacienteRef.current.contains(event.target as Node) &&
-        listaPacientesRef.current && 
-        !listaPacientesRef.current.contains(event.target as Node)
-      ) {
-        setMostrarListaPacientes(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   // Establecer fecha y hora seleccionadas cuando se abre el modal
 useEffect(() => {
   if (isOpen) {
@@ -354,17 +299,28 @@ useEffect(() => {
       console.log('🔍 Especialista encontrado:', especialistaActual);
       
       if (especialistaActual) {
-        // Prioridad: especialidad principal -> primera especialidad adicional
-        if (especialistaActual.id_especialidad) {
-          console.log('✅ Especialidad principal:', especialistaActual.id_especialidad);
-          updates.id_especialidad = String(especialistaActual.id_especialidad);
-        } else if (Array.isArray(especialistaActual.usuario_especialidad) && 
-          especialistaActual.usuario_especialidad.length > 0) {
-          const primeraEspecialidad = especialistaActual.usuario_especialidad[0];
-          console.log('✅ Primera especialidad adicional:', primeraEspecialidad);
-          if (primeraEspecialidad?.especialidad?.id_especialidad) {
-            updates.id_especialidad = String(primeraEspecialidad.especialidad.id_especialidad);
-          }
+        const especialidadesDisponiblesEspecialista: any[] = [];
+
+        if (especialistaActual.especialidad && !esEspecialidadPilates(especialistaActual.especialidad)) {
+          especialidadesDisponiblesEspecialista.push(especialistaActual.especialidad);
+        }
+
+        if (Array.isArray(especialistaActual.usuario_especialidad)) {
+          especialistaActual.usuario_especialidad.forEach((ue: any) => {
+            if (ue.especialidad && !esEspecialidadPilates(ue.especialidad)) {
+              especialidadesDisponiblesEspecialista.push(ue.especialidad);
+            }
+          });
+        }
+
+        const primeraEspecialidadDisponible = especialidadesDisponiblesEspecialista.find(
+          (especialidad, index, array) =>
+            index === array.findIndex((item: any) => item.id_especialidad === especialidad.id_especialidad)
+        );
+
+        if (primeraEspecialidadDisponible?.id_especialidad) {
+          console.log('✅ Especialidad asignada automáticamente:', primeraEspecialidadDisponible.id_especialidad);
+          updates.id_especialidad = String(primeraEspecialidadDisponible.id_especialidad);
         } else {
           console.warn('⚠️ Especialista sin especialidad asignada');
         }
@@ -404,8 +360,10 @@ useEffect(() => {
         if (ue.especialidad) lista.push(ue.especialidad);
       });
     }
-    
-    const unicas = lista.filter((esp, i, arr) => i === arr.findIndex((e: any) => e.id_especialidad === esp.id_especialidad));
+
+    const unicas = lista
+      .filter((esp) => !esEspecialidadPilates(esp))
+      .filter((esp, i, arr) => i === arr.findIndex((e: any) => e.id_especialidad === esp.id_especialidad));
     setEspecialidadesDisponibles(unicas);
     
     if (formData.id_especialidad && !unicas.some((e: any) => String(e.id_especialidad) === String(formData.id_especialidad))) {
@@ -693,7 +651,6 @@ useEffect(() => {
         setBoxesDisponibles([]);
         setBusquedaPaciente('');
         setPacienteSeleccionado(null);
-        setMostrarListaPacientes(false);
         setMostrarRepeticion(false);
         setDiasSeleccionados([]);
         setNumeroSesiones(10);
@@ -793,21 +750,21 @@ useEffect(() => {
     setPacienteSeleccionado(paciente);
     setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
     setFormData(prev => ({ ...prev, id_paciente: String(paciente.id_paciente) }));
-    setMostrarListaPacientes(false);
   }, []);
 
-  // Manejar cambio en input de búsqueda
-  const handleBusquedaPacienteChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const valor = e.target.value;
+  const handleBusquedaPacienteChange = useCallback((valor: string) => {
     setBusquedaPaciente(valor);
-    
+
+    if (pacienteSeleccionado && valor !== `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`) {
+      setPacienteSeleccionado(null);
+      setFormData(prev => ({ ...prev, id_paciente: '' }));
+    }
+
     if (!valor.trim()) {
       setPacienteSeleccionado(null);
       setFormData(prev => ({ ...prev, id_paciente: '' }));
-      setMostrarListaPacientes(false);
-      setPacientes([]); // Limpiar resultados
     }
-  }, []);
+  }, [pacienteSeleccionado]);
 
   const handleNuevoPacienteClose = useCallback(() => {
     setShowNuevoPacienteDialog(false);
@@ -1120,16 +1077,25 @@ useEffect(() => {
                 Paciente*
               </label>
               <div className="flex gap-2">
-                <input
-                  ref={inputPacienteRef}
-                  type="text"
+                <PacienteAutocomplete
                   value={busquedaPaciente}
                   onChange={handleBusquedaPacienteChange}
-                  onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                  className="flex-1 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                  placeholder="Buscar por nombre, DNI o teléfono..."
+                  onSelect={seleccionarPaciente}
                   required
-                  autoComplete="off"
+                  placeholder="Buscar por nombre, DNI o teléfono..."
+                  containerClassName="relative flex-1"
+                  inputClassName="w-full pl-8 pr-2 md:pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
+                  renderOption={(paciente) => (
+                    <>
+                      <div className="text-sm font-medium">
+                        {paciente.nombre} {paciente.apellido}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
+                      </div>
+                    </>
+                  )}
                 />
                 <button
                   type="button"
@@ -1140,52 +1106,6 @@ useEffect(() => {
                   <UserPlus2 className="w-3 h-3 md:w-4 md:h-4" />
                 </button>
               </div>
-              
-              {buscandoPacientes && (
-                <div 
-                  ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 md:p-3 text-center text-gray-500 text-xs md:text-sm"
-                >
-                  Buscando pacientes...
-                </div>
-              )}
-              
-              {!buscandoPacientes && mostrarListaPacientes && pacientesFiltrados.length > 0 && (
-                <div 
-                  ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
-                >
-                  {pacientesFiltrados.map((paciente) => (
-                    <div
-                      key={paciente.id_paciente}
-                      onClick={() => seleccionarPaciente(paciente)}
-                      className="px-2 md:px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="text-sm font-medium">
-                        {paciente.nombre} {paciente.apellido}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {!buscandoPacientes && mostrarListaPacientes && busquedaPaciente.trim().length >= 2 && pacientesFiltrados.length === 0 && (
-                <div 
-                  ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 md:p-3 text-center text-gray-500 text-xs md:text-sm"
-                >
-                  No se encontraron pacientes
-                </div>
-              )}
-              
-              {busquedaPaciente.trim().length > 0 && busquedaPaciente.trim().length < 2 && (
-                <div className="text-xs text-gray-500 mt-1">
-                  Escribe al menos 2 caracteres para buscar
-                </div>
-              )}
             </div>
 
             {/* Fecha */}

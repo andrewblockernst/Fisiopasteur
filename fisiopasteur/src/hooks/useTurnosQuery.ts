@@ -21,9 +21,11 @@ export const turnoKeys = {
  */
 export function useTurnos(options?: {
   filters?: Record<string, any>;
+  enabled?: boolean;
   // initialData?: TurnoConDetalles[];
 }) {
   const filters = options?.filters;
+  const enabled = options?.enabled ?? true;
 
   return useQuery({
     queryKey: turnoKeys.list(filters),
@@ -61,6 +63,7 @@ export function useTurnos(options?: {
     // initialData: options?.initialData, // ✅ Datos iniciales del servidor
     staleTime: 5 * 60 * 1000, // 5 minutos
     gcTime: 10 * 60 * 1000, // 10 minutos en caché
+    enabled,
   });
 }
 
