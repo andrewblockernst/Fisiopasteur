@@ -1,11 +1,15 @@
 import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerBoxes, obtenerEspecialidades } from "@/lib/actions/turno.action";
+import { obtenerPerfilUsuario } from "@/lib/actions/perfil.action";
 import TurnosPageContainer from "@/componentes/turnos/turnos-page-container";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { QueryClient } from "@tanstack/react-query";
+import { puedeGestionarTurnos } from "@/lib/constants/roles";
+import { redirect } from "next/navigation";
 
 // Helper function to parse search params
 function parseSearchParams(params: { [key: string]: string | string[] | undefined }) {
   const hoy = new Date().toISOString().split('T')[0];
+  
   
   // Helper para convertir a array
   const toArray = (value: string | string[] | undefined): string[] => {
@@ -32,8 +36,39 @@ export default async function TurnosPage({
 }) {
   // ✅ Await searchParams primero (Next.js 15 requirement)
   const params = await searchParams;
-  // ✅ Luego parsear los parámetros
-  const filtros = parseSearchParams(params);
+  const perfil: any = await obtenerPerfilUsuario();
+  const userId = perfil?.id_usuario ? String(perfil.id_usuario) : "";
+  const puedeGestionar = puedeGestionarTurnos(perfil?.rol?.id ?? null);
+
+  // ✅ Parsear parámetros base
+  const filtrosBase = parseSearchParams(params);
+  const especialistasEnUrl = Array.isArray(params?.especialistas)
+    ? params.especialistas.filter(Boolean)
+    : (params?.especialistas ? [params.especialistas] : []);
+  const verTodos = Array.isArray(params?.ver_todos)
+    ? params.ver_todos[0] === "1"
+    : params?.ver_todos === "1";
+
+  const debeAplicarAutoFiltro = !verTodos && !puedeGestionar && Boolean(userId) && especialistasEnUrl.length === 0;
+  const filtros = debeAplicarAutoFiltro
+    ? {
+        ...filtrosBase,
+        especialista_ids: [String(userId)],
+      }
+    : filtrosBase;
+
+  // Normalizar URL en servidor para evitar estado visual inconsistente de filtros.
+  if (debeAplicarAutoFiltro) {
+    const usp = new URLSearchParams();
+    if (filtros.fecha_desde) usp.set("desde", filtros.fecha_desde);
+    if (filtros.fecha_hasta) usp.set("hasta", filtros.fecha_hasta);
+    filtros.especialista_ids.forEach((id) => usp.append("especialistas", id));
+    filtros.especialidad_ids.forEach((id) => usp.append("especialidades", id));
+    filtros.estados.forEach((estado) => usp.append("estados", estado));
+    if (typeof filtros.paciente_id === "number") usp.set("paciente_id", String(filtros.paciente_id));
+    redirect(`/turnos?${usp.toString()}`);
+  }
+
   // Crear cliente en el servidor (uno nuevo por request)
   const queryClient = new QueryClient();
 

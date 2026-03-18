@@ -1,11 +1,10 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Search, Filter, X, Plus, ChevronDown } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Filter, X, Plus, ChevronDown } from "lucide-react";
 import Button from "@/componentes/boton";
 import NuevoTurnoModal from "../calendario/nuevo-turno-dialog";
-import { useAuth } from "@/hooks/usePerfil"; // Agregar el hook
-import { obtenerPacientes } from "@/lib/actions/turno.action";
+import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 
 interface FiltrosTurnosProps {
   especialistas: any[];
@@ -24,7 +23,6 @@ export default function FiltrosTurnos({
 }: FiltrosTurnosProps) {
   const router = useRouter();
   const params = useSearchParams();
-  const { user, loading } = useAuth(); // Obtener usuario actual y loading
   
   const [filter, setFilter] = useState(() => {
     // Inicializar filter desde initial y convertir arrays
@@ -37,14 +35,10 @@ export default function FiltrosTurnos({
     };
   });
   const [openNew, setOpenNew] = useState(false);
-  const [filtroInicialAplicado, setFiltroInicialAplicado] = useState(false); // ✅ Control de primera carga
   const [openDropdown, setOpenDropdown] = useState<string | null>(null); // Estado para dropdowns abiertos
 
   // ============= ESTADO PARA BÚSQUEDA DE PACIENTE =============
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
-  const [pacientesSugeridos, setPacientesSugeridos] = useState<any[]>([]);
-  const [buscandoPacientes, setBuscandoPacientes] = useState(false);
-  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<{ id_paciente: number; nombre: string; apellido: string, dni: string, telefono: string } | null>(null);
 
   useEffect(() => {
@@ -84,32 +78,6 @@ export default function FiltrosTurnos({
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [openDropdown]);
-
-  useEffect(() => {
-    if (!loading && user && !filtroInicialAplicado) {
-      const currentEspecialistaParam = params.get('especialista');
-      const verTodosParam = params.get('ver_todos');
-      
-      // ✅ LÓGICA CORREGIDA:
-      // Solo aplicar filtro automático si el usuario NO puede gestionar turnos (es solo especialista)
-      // Los Admin y Programadores SIEMPRE pueden ver "Todos los especialistas"
-      const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
-      
-      const debeAplicarFiltro = !user.puedeGestionarTurnos && esEspecialistaActivo;
-      
-      // ✅ SOLO aplicar si NO hay ningún parámetro en la URL (primera carga)
-      if (debeAplicarFiltro && !currentEspecialistaParam && !verTodosParam && user.id_usuario) {
-        const usp = new URLSearchParams(params.toString());
-        usp.set('especialista', user.id_usuario);
-        
-        // Redirigir con el filtro aplicado
-        router.replace(`/turnos?${usp.toString()}`);
-      }
-      
-      // ✅ Marcar que ya se aplicó el filtro inicial
-      setFiltroInicialAplicado(true);
-    }
-  }, [user, loading, filtroInicialAplicado, params, router, especialistas]);
 
   // Función para formatear fecha como DD/MM/YYYY - Memoizada
   const formatearFecha = useCallback((fechaStr: string) => {
@@ -157,6 +125,9 @@ export default function FiltrosTurnos({
     // Manejar arrays de especialistas
     if (filtros.especialista_ids && Array.isArray(filtros.especialista_ids) && filtros.especialista_ids.length > 0) {
       filtros.especialista_ids.forEach((id: string) => usp.append("especialistas", id));
+    } else {
+      // Intención explícita: ver todos los especialistas aunque el usuario no gestione turnos.
+      usp.set("ver_todos", "1");
     }
     
     // Manejar arrays de especialidades
@@ -299,7 +270,6 @@ export default function FiltrosTurnos({
     setOpenDropdown(null);
     setPacienteSeleccionado(null);
     setBusquedaPaciente('');
-    router.push(`/turnos`);
 
     const filtrosBase = {
       fecha_desde: fechaHoy,
@@ -341,51 +311,9 @@ export default function FiltrosTurnos({
 //   if (!esp) return 'Especialista';
 //   return esp.rol?.nombre || 'Especialista';
 // }, [especialistas]);
-
-
-  // ============= BÚSQUEDA DE PACIENTES =============
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const handleBusquedaPacienteChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const valor = e.target.value;
-    setBusquedaPaciente(valor);
-
-    // Si se modificó el texto y había un paciente seleccionado, limpiar selección
-    if (pacienteSeleccionado && valor !== `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`) {
-      setPacienteSeleccionado(null);
-    }
-
-    if (!valor.trim() || valor.trim().length < 2) {
-      setPacientesSugeridos([]);
-      setMostrarListaPacientes(false);
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      return;
-    }
-
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    setBuscandoPacientes(true);
-    setMostrarListaPacientes(true);
-
-    debounceTimerRef.current = setTimeout(async () => {
-      try {
-        const resultados = await obtenerPacientes(valor.trim(), 5);
-        if (resultados.success && resultados.data) {
-          setPacientesSugeridos(resultados.data);
-        }
-      } catch (e) {
-        setPacientesSugeridos([]);
-        setMostrarListaPacientes(false);
-        console.error('Error buscando pacientes:', e);
-      } finally {
-        setBuscandoPacientes(false);
-      }
-    }, 300);
-  }, [pacienteSeleccionado]);
-
   const handleSeleccionarPaciente = useCallback((paciente: { id_paciente: number; nombre: string; apellido: string, dni: string, telefono: string }) => {
     setPacienteSeleccionado(paciente);
     setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
-    setMostrarListaPacientes(false);
     const nuevosFiltros = { ...filter, paciente_id: paciente.id_paciente };
     setFilter(nuevosFiltros);
     aplicarFiltros(nuevosFiltros);
@@ -394,8 +322,6 @@ export default function FiltrosTurnos({
   const handleLimpiarPaciente = useCallback(() => {
     setPacienteSeleccionado(null);
     setBusquedaPaciente('');
-    setPacientesSugeridos([]);
-    setMostrarListaPacientes(false);
     const nuevosFiltros = { ...filter, paciente_id: undefined };
     setFilter(nuevosFiltros);
     aplicarFiltros(nuevosFiltros);
@@ -546,50 +472,34 @@ export default function FiltrosTurnos({
             {/* Filtro Paciente */}
             <div className="flex flex-col relative">
               <label className="text-xs font-medium text-gray-600 mb-1">Paciente</label>
-              <div className="relative flex items-center">
-                <Search size={13} className="absolute left-2 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={busquedaPaciente}
-                  onChange={handleBusquedaPacienteChange}
-                  onFocus={() => pacientesSugeridos.length > 0 && setMostrarListaPacientes(true)}
-                  onBlur={() => setTimeout(() => setMostrarListaPacientes(false), 200)}
-                  placeholder="Buscar paciente..."
-                  className="border rounded pl-6 pr-6 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-[170px]"
-                />
-                {busquedaPaciente && (
-                  <button
-                    onClick={handleLimpiarPaciente}
-                    className="absolute right-1.5 text-gray-400 hover:text-gray-600"
-                  >
-                    <X size={13} />
-                  </button>
+              <PacienteAutocomplete
+                value={busquedaPaciente}
+                onChange={(valor) => {
+                  setBusquedaPaciente(valor);
+                  if (pacienteSeleccionado && valor !== `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`) {
+                    setPacienteSeleccionado(null);
+                  }
+                }}
+                onSelect={handleSeleccionarPaciente}
+                onClear={handleLimpiarPaciente}
+                showClearButton
+                limit={5}
+                showMinCharsHint={false}
+                placeholder="Buscar paciente..."
+                inputClassName="border rounded pl-6 pr-6 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-[170px]"
+                dropdownClassName="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[220px] max-h-60 overflow-y-auto"
+                optionClassName="px-3 py-2 hover:bg-blue-50 text-sm flex flex-col"
+                renderOption={(pac) => (
+                  <>
+                    <span className="font-medium">{pac.apellido}, {pac.nombre}</span>
+                    <span className="text-xs text-gray-500">
+                      {pac.dni && <span className="mr-2">{pac.dni}</span>}
+                      {pac.dni && pac.telefono && <span className="mr-2">•</span>}
+                      {pac.telefono && <span>{pac.telefono}</span>}
+                    </span>
+                  </>
                 )}
-              </div>
-              {mostrarListaPacientes && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[220px] max-h-60 overflow-y-auto">
-                  {buscandoPacientes ? (
-                    <div className="px-3 py-2 text-sm text-gray-500">Buscando...</div>
-                  ) : pacientesSugeridos.length > 0 ? (
-                    pacientesSugeridos.map((pac: any) => (
-                      <button
-                        key={pac.id_paciente}
-                        onMouseDown={() => handleSeleccionarPaciente(pac)}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex flex-col"
-                      >
-                        <span className="font-medium">{pac.apellido}, {pac.nombre}</span>
-                        <span className="text-xs text-gray-500">
-                          {pac.dni && <span className="mr-2">{pac.dni}</span>}
-                          {pac.dni && pac.telefono && <span className="mr-2">•</span>}
-                          {pac.telefono && <span>{pac.telefono}</span>}
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-sm text-gray-500">Sin resultados</div>
-                  )}
-                </div>
-              )}
+              />
             </div>
 
             {/* Botón Limpiar */}
