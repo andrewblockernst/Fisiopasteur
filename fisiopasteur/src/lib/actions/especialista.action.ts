@@ -1,8 +1,9 @@
 "use server";
 
-import { supabaseAdmin } from "@/lib/supabase/service-role";
 import { createClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
+const supabaseAdmin = require("@/lib/supabase/service-role").supabaseAdmin;
+const { revalidatePath } = require("next/cache");
+import type { ActionResult } from "@/lib/actions/action-result";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 
@@ -11,17 +12,11 @@ type EspecialistaInsert = TablesInsert<"usuario">;
 type EspecialistaUpdate = TablesUpdate<"usuario">;
 type UsuarioEspecialidad = Tables<"usuario_especialidad">;
 
-// Solo agregar el tipo de respuesta sin cambiar las funciones existentes
-export interface ServerActionResponse {
-  success: boolean;
-  message: string;
-  toastType: 'success' | 'error' | 'warning' | 'info';
-  description?: string;
-  redirect?: string;
-}
-
 // Obtener todos los especialistas con sus especialidades
-export async function getEspecialistas({ incluirInactivos = false } = {}) {
+export async function getEspecialistas({ incluirInactivos = false } = {}): Promise<
+  | { success: true; data: any[] }
+  | { success: false; error: string }
+> {
   try {
     const supabase = await createClient();
 
@@ -53,11 +48,11 @@ export async function getEspecialistas({ incluirInactivos = false } = {}) {
 
     if (error) {
       console.error("Error fetching especialistas:", error);
-      throw new Error("Error al obtener especialistas");
+      return { success: false, error: "Error al obtener especialistas" };
     }
 
     if (!usuarios || usuarios.length === 0) {
-      return [];
+      return { success: true, data: [] };
     }
 
     // Una sola query para obtener TODAS las especialidades de TODOS los especialistas
@@ -109,15 +104,18 @@ export async function getEspecialistas({ incluirInactivos = false } = {}) {
       };
     });
 
-    return especialistasConEspecialidades;
+    return { success: true, data: especialistasConEspecialidades };
   } catch (error) {
     console.error('Error en getEspecialistas:', error);
-    return [];
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
   }
 }
 
 // Obtener un especialista por ID con sus especialidades
-export async function getEspecialista(id: string) {
+export async function getEspecialista(id: string): Promise<
+  | { success: true; data: any }
+  | { success: false; error: string }
+> {
   try {
     const supabase = await createClient();
 
@@ -143,7 +141,7 @@ export async function getEspecialista(id: string) {
 
     if (error) {
       console.error("Error fetching especialista:", error);
-      throw new Error("Error al obtener especialista");
+      return { success: false, error: "Error al obtener especialista" };
     }
 
     const { data: especialidades } = await supabase
@@ -178,15 +176,15 @@ export async function getEspecialista(id: string) {
       usuario_especialidad: especialidades || []
     };
 
-    return especialistaConEspecialidades;
+    return { success: true, data: especialistaConEspecialidades };
   } catch (error) {
     console.error('Error en getEspecialista:', error);
-    return null;
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
   }
 }
 
 // Crear especialista con múltiples especialidades
-export async function createEspecialista(formData: FormData): Promise<ServerActionResponse> {
+export async function createEspecialista(formData: FormData): Promise<ActionResult> {
   try {
     const supabase = await createClient();
 
@@ -200,9 +198,7 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
     if (!email || !nombre || !apellido || !contraseña) {
       return {
         success: false,
-        message: 'Campos requeridos faltantes',
-        toastType: 'error',
-        description: 'Por favor completa todos los campos obligatorios'
+        error: 'Por favor completa todos los campos obligatorios'
       };
     }
 
@@ -222,9 +218,7 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
       console.error("Error creando user en Auth:", authError);
       return {
         success: false,
-        message: 'Error al crear usuario',
-        toastType: 'error',
-        description: authError?.message || 'No se pudo crear el usuario en el sistema de autenticación'
+        error: authError?.message || 'No se pudo crear el usuario en el sistema de autenticación'
       };
     }
 
@@ -252,9 +246,7 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
       console.error("Error creando especialista en tabla usuario:", errorUsuario);
       return {
         success: false,
-        message: 'Error al guardar especialista',
-        toastType: 'error',
-        description: 'No se pudo guardar la información en la base de datos'
+        error: 'No se pudo guardar la información en la base de datos'
       };
     }
 
@@ -301,9 +293,7 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
         console.error("Error asignando especialidades:", errorRelaciones);
         return {
           success: false,
-          message: 'Error al asignar especialidades',
-          toastType: 'error',
-          description: 'No se pudieron asignar las especialidades seleccionadas'
+          error: 'No se pudieron asignar las especialidades seleccionadas'
         };
       }
     }
@@ -312,25 +302,20 @@ export async function createEspecialista(formData: FormData): Promise<ServerActi
     revalidatePath("/especialistas");
 
     return {
-      success: true,
-      message: 'Especialista creado exitosamente',
-      toastType: 'success',
-      description: `${nombre} ${apellido} ha sido agregado como especialista`
+      success: true
     };
 
   } catch (error) {
     console.error('Error en createEspecialista:', error);
     return {
       success: false,
-      message: 'Error interno del servidor',
-      toastType: 'error',
-      description: 'Ocurrió un error inesperado. Intenta nuevamente.'
+      error: 'Ocurrió un error inesperado. Intenta nuevamente.'
     };
   }
 }
 
 // Actualizar especialista con múltiples especialidades
-export async function updateEspecialista(id: string, formData: FormData): Promise<ServerActionResponse> {
+export async function updateEspecialista(id: string, formData: FormData): Promise<ActionResult> {
   try {
     const supabase = await createClient();
 
@@ -343,9 +328,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
     if (!nombre || !apellido || !email) {
       return {
         success: false,
-        message: 'Campos requeridos faltantes',
-        toastType: 'error',
-        description: 'Por favor completa todos los campos obligatorios'
+        error: 'Por favor completa todos los campos obligatorios'
       };
     }
 
@@ -398,9 +381,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
           console.error("Error updating password in Auth:", authError);
           return {
             success: false,
-            message: 'Error al actualizar contraseña',
-            toastType: 'error',
-            description: 'No se pudo actualizar la contraseña en el sistema de autenticación'
+            error: 'No se pudo actualizar la contraseña en el sistema de autenticación'
           };
         }
       }
@@ -418,17 +399,13 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       if (errorUsuario.code === '23505' || errorUsuario.message?.includes('duplicate') || errorUsuario.message?.includes('email')) {
         return {
           success: false,
-          message: 'Email ya en uso',
-          toastType: 'error',
-          description: 'El email ya está en uso. Por favor, usa otro correo electrónico.'
+          error: 'El email ya está en uso. Por favor, usa otro correo electrónico.'
         };
       }
 
       return {
         success: false,
-        message: 'Error al actualizar especialista',
-        toastType: 'error',
-        description: 'No se pudo actualizar la información del especialista'
+        error: 'No se pudo actualizar la información del especialista'
       };
     }
 
@@ -443,9 +420,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       console.error("Error consultando especialidades actuales:", errorConsulta);
       return {
         success: false,
-        message: 'Error al consultar especialidades',
-        toastType: 'error',
-        description: 'No se pudieron consultar las especialidades actuales'
+        error: 'No se pudieron consultar las especialidades actuales'
       };
     }
 
@@ -471,9 +446,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
         console.error("Error eliminando especialidades:", errorEliminar);
         return {
           success: false,
-          message: 'Error al eliminar especialidades',
-          toastType: 'error',
-          description: 'No se pudieron eliminar las especialidades removidas'
+          error: 'No se pudieron eliminar las especialidades removidas'
         };
       }
     }
@@ -499,9 +472,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
         console.error("Error agregando especialidades:", errorAgregar);
         return {
           success: false,
-          message: 'Error al agregar especialidades',
-          toastType: 'error',
-          description: 'No se pudieron agregar las nuevas especialidades'
+          error: 'No se pudieron agregar las nuevas especialidades'
         };
       }
     }
@@ -510,25 +481,20 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
     revalidatePath("/especialista");
 
     return {
-      success: true,
-      message: 'Especialista actualizado exitosamente',
-      toastType: 'success',
-      description: `Los datos de ${nombre} ${apellido} han sido actualizados`
+      success: true
     };
 
   } catch (error) {
     console.error('Error en updateEspecialista:', error);
     return {
       success: false,
-      message: 'Error interno del servidor',
-      toastType: 'error',
-      description: 'Ocurrió un error inesperado. Intenta nuevamente.'
+      error: 'Ocurrió un error inesperado. Intenta nuevamente.'
     };
   }
 }
 
 // Función auxiliar para toggle activo/inactivo
-export async function toggleEspecialistaActivo(id: string, activo: boolean): Promise<ServerActionResponse> {
+export async function toggleEspecialistaActivo(id: string, activo: boolean): Promise<ActionResult> {
   try {
     const supabase = await createClient();
 
@@ -542,9 +508,7 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
     if (errorVerificacion || !usuario) {
       return {
         success: false,
-        message: 'Especialista no encontrado',
-        toastType: 'error',
-        description: 'El especialista que intentas modificar no existe'
+        error: 'El especialista que intentas modificar no existe'
       };
     }
 
@@ -557,28 +521,21 @@ export async function toggleEspecialistaActivo(id: string, activo: boolean): Pro
       console.error("Error toggling especialista status:", error);
       return {
         success: false,
-        message: 'Error al cambiar estado',
-        toastType: 'error',
-        description: 'No se pudo cambiar el estado del especialista'
+        error: 'No se pudo cambiar el estado del especialista'
       };
     }
 
     revalidatePath("/especialistas");
 
     return {
-      success: true,
-      message: `Especialista ${activo ? 'activado' : 'inactivado'} exitosamente`,
-      toastType: 'success',
-      description: `${usuario.nombre || ''} ${usuario.apellido || ''} ahora está ${activo ? 'activo' : 'inactivo'}`
+      success: true
     };
 
   } catch (error) {
     console.error('Error en toggleEspecialistaActivo:', error);
     return {
       success: false,
-      message: 'Error interno del servidor',
-      toastType: 'error',
-      description: 'Ocurrió un error inesperado. Intenta nuevamente.'
+      error: 'Ocurrió un error inesperado. Intenta nuevamente.'
     };
   }
 }
@@ -608,7 +565,10 @@ export async function getEspecialidadesLegacy() {
 import { PerfilCompleto } from "./perfil.action";
 
 // obtener perfil de especialista
-export async function getPerfilEspecialista(id_especialista: string): Promise<PerfilCompleto | null> {
+export async function getPerfilEspecialista(id_especialista: string): Promise<
+  | { success: true; data: PerfilCompleto }
+  | { success: false; error: string }
+> {
   try {
     const supabase = await createClient();
 
@@ -634,7 +594,7 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<Pe
 
     if (userError || !usuario) {
       console.error('Error consultando usuario:', userError);
-      throw new Error(`No se pudo obtener el perfil: ${userError?.message || 'Usuario no encontrado'}`);
+      return { success: false, error: `No se pudo obtener el perfil: ${userError?.message || 'Usuario no encontrado'}` };
     }
 
     const { data: especialidadesData, error: especialidadesError } = await supabase
@@ -681,10 +641,10 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<Pe
       especialidades_adicionales: especialidadesAdicionales
     };
 
-    return perfil;
+    return { success: true, data: perfil };
 
   } catch (error) {
     console.error('Error en getPerfilEspecialista:', error);
-    return null;
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
   }
 }

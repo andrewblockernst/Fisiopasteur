@@ -41,12 +41,19 @@ export default function ConsultaEspecialistaMobile() {
                 setIsLoading(true);
                 const especialistaId = params.id as string;
                 if (especialistaId) {
-                    const [especialista, especialidadesData] = await Promise.all([
-                        getPerfilEspecialista(especialistaId),
-                        getEspecialidades()
-                    ]);
-                    setViewingEspecialista(especialista);
-                    setEspecialidades(especialidadesData);
+                const [especialistaResult, especialidadesResult] = await Promise.all([
+                    getPerfilEspecialista(especialistaId),
+                    getEspecialidades()
+                ]);
+                
+                if (especialistaResult.success) {
+                    setViewingEspecialista(especialistaResult.data);
+                } else {
+                    console.error("Error loading especialista:", especialistaResult.error);
+                }
+                
+                const especialidades = especialidadesResult.success ? especialidadesResult.data : [];
+                setEspecialidades(especialidades);
                 }
             } catch (error) {
                 console.error("Error loading data:", error);

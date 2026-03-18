@@ -50,19 +50,23 @@ export interface TendenciaNoShows {
     totalTurnos: number;
 }
 
+type AnalyticsResult<T> =
+    | { success: true; data: T }
+    | { success: false; error: string };
+
 // ✅ Funciones normales SIN caché (el caché está en React Query + HTTP headers)
 
 export async function getAnalisisNoShows(
     fechaInicio?: string,
     fechaFin?: string
-): Promise<AnalisisNoShows> {
+): Promise<AnalyticsResult<AnalisisNoShows>> {
     if (!fechaInicio || !fechaFin) {
-        throw new Error("Parámetros de fecha requeridos");
+        return { success: false, error: "Parámetros de fecha requeridos" };
     }
 
     const regexFecha = /^\d{4}-\d{2}-\d{2}$/;
     if (!regexFecha.test(fechaInicio) || !regexFecha.test(fechaFin)) {
-        throw new Error("Formato de fecha inválido (debe ser YYYY-MM-DD)");
+        return { success: false, error: "Formato de fecha inválido (debe ser YYYY-MM-DD)" };
     }
 
     console.log("🧮 Consultando análisis general...", fechaInicio, fechaFin);
@@ -80,7 +84,7 @@ export async function getAnalisisNoShows(
 
     if (error) {
         console.error("Error consultando turnos:", error);
-        throw new Error(`Error en BD: ${error.message}`);
+        return { success: false, error: `Error en BD: ${error.message}` };
     }
 
     const totalTurnos = turnos?.length || 0;
@@ -91,22 +95,22 @@ export async function getAnalisisNoShows(
     const tasaCancelacion = totalTurnos > 0 ? (turnosCancelados / totalTurnos) * 100 : 0;
     const tasaAsistencia = totalTurnos > 0 ? (turnosAtendidos / totalTurnos) * 100 : 0;
 
-    return {
+    return { success: true, data: {
         totalTurnos,
         turnosAtendidos,
         turnosCancelados,
         turnosProgramados,
         tasaCancelacion,
         tasaAsistencia,
-    };
+    } };
 }
 
 export async function getNoShowsPorEspecialista(
     fechaInicio?: string,
     fechaFin?: string
-): Promise<NoShowsPorEspecialista[]> {
+): Promise<AnalyticsResult<NoShowsPorEspecialista[]>> {
     if (!fechaInicio || !fechaFin) {
-        throw new Error("Parámetros de fecha requeridos");
+        return { success: false, error: "Parámetros de fecha requeridos" };
     }
 
     console.log("👥 Consultando especialistas...", fechaInicio, fechaFin);
@@ -128,7 +132,7 @@ export async function getNoShowsPorEspecialista(
 
     if (error) {
         console.error("Error consultando especialistas:", error);
-        throw new Error(`Error en BD: ${error.message}`);
+        return { success: false, error: `Error en BD: ${error.message}` };
     }
 
     const especialistasMap = new Map<string, {
@@ -165,7 +169,7 @@ export async function getNoShowsPorEspecialista(
         else if (turno.estado === "cancelado") especialista.cancelados++;
     });
 
-    return Array.from(especialistasMap.values()).map((esp) => ({
+    return { success: true, data: Array.from(especialistasMap.values()).map((esp) => ({
         id_especialista: esp.id_especialista,
         nombre: esp.nombre,
         apellido: esp.apellido,
@@ -174,15 +178,15 @@ export async function getNoShowsPorEspecialista(
         atendidos: esp.atendidos,
         cancelados: esp.cancelados,
         tasaCancelacion: esp.total > 0 ? (esp.cancelados / esp.total) * 100 : 0,
-    }));
+    })) };
 }
 
 export async function getNoShowsPorHorario(
     fechaInicio?: string,
     fechaFin?: string
-): Promise<NoShowsPorHorario[]> {
+): Promise<AnalyticsResult<NoShowsPorHorario[]>> {
     if (!fechaInicio || !fechaFin) {
-        throw new Error("Parámetros de fecha requeridos");
+        return { success: false, error: "Parámetros de fecha requeridos" };
     }
 
     console.log("⏰ Consultando horarios...", fechaInicio, fechaFin);
@@ -194,7 +198,7 @@ export async function getNoShowsPorHorario(
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin);
 
-    if (error) throw new Error(`Error en BD: ${error.message}`);
+    if (error) return { success: false, error: `Error en BD: ${error.message}` };
 
     const horarios: { [key: string]: { programados: number; atendidos: number; cancelados: number } } = {
         mañana: { programados: 0, atendidos: 0, cancelados: 0 },
@@ -211,7 +215,7 @@ export async function getNoShowsPorHorario(
         else if (turno.estado === "cancelado") horarios[franjaHoraria].cancelados++;
     });
 
-    return Object.entries(horarios).map(([horario, data]) => {
+    return { success: true, data: Object.entries(horarios).map(([horario, data]) => {
         const total = data.programados + data.atendidos + data.cancelados;
         return {
             horario: horario.charAt(0).toUpperCase() + horario.slice(1),
@@ -220,15 +224,15 @@ export async function getNoShowsPorHorario(
             atendidos: data.atendidos,
             cancelados: data.cancelados,
         };
-    });
+    }) };
 }
 
 export async function getNoShowsPorDia(
     fechaInicio?: string,
     fechaFin?: string
-): Promise<NoShowsPorDia[]> {
+): Promise<AnalyticsResult<NoShowsPorDia[]>> {
     if (!fechaInicio || !fechaFin) {
-        throw new Error("Parámetros de fecha requeridos");
+        return { success: false, error: "Parámetros de fecha requeridos" };
     }
 
     console.log("📅 Consultando días...", fechaInicio, fechaFin);
@@ -240,7 +244,7 @@ export async function getNoShowsPorDia(
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin);
 
-    if (error) throw new Error(`Error en BD: ${error.message}`);
+    if (error) return { success: false, error: `Error en BD: ${error.message}` };
 
     const diasMap = new Map<string, { programados: number; atendidos: number; cancelados: number }>();
     const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -259,7 +263,7 @@ export async function getNoShowsPorDia(
         else if (turno.estado === "cancelado") dia.cancelados++;
     });
 
-    return diasSemana.map((dia) => {
+    return { success: true, data: diasSemana.map((dia) => {
         const data = diasMap.get(dia) || { programados: 0, atendidos: 0, cancelados: 0 };
         const total = data.programados + data.atendidos + data.cancelados;
         return {
@@ -270,15 +274,15 @@ export async function getNoShowsPorDia(
             atendidos: data.atendidos,
             cancelados: data.cancelados,
         };
-    });
+    }) };
 }
 
 export async function getTendenciaNoShows(
     fechaInicio?: string,
     fechaFin?: string
-): Promise<TendenciaNoShows[]> {
+): Promise<AnalyticsResult<TendenciaNoShows[]>> {
     if (!fechaInicio || !fechaFin) {
-        throw new Error("Parámetros de fecha requeridos");
+        return { success: false, error: "Parámetros de fecha requeridos" };
     }
 
     console.log("📈 Consultando tendencia...", fechaInicio, fechaFin);
@@ -290,7 +294,7 @@ export async function getTendenciaNoShows(
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin);
 
-    if (error) throw new Error(`Error en BD: ${error.message}`);
+    if (error) return { success: false, error: `Error en BD: ${error.message}` };
 
     const tendenciaMap = new Map<string, { programados: number; atendidos: number; cancelados: number }>();
 
@@ -306,7 +310,7 @@ export async function getTendenciaNoShows(
         else if (turno.estado === "cancelado") dia.cancelados++;
     });
 
-    return Array.from(tendenciaMap.entries())
+    return { success: true, data: Array.from(tendenciaMap.entries())
         .sort(([fechaA], [fechaB]) => fechaA.localeCompare(fechaB))
         .map(([fecha, data]) => ({
             semana: fecha,
@@ -314,7 +318,7 @@ export async function getTendenciaNoShows(
             atendidos: data.atendidos,
             cancelados: data.cancelados,
             totalTurnos: data.programados + data.atendidos + data.cancelados,
-        }));
+        })) };
 }
 
 export async function invalidarCacheAnalytics() {

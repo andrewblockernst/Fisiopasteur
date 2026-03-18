@@ -72,7 +72,15 @@ export function GestionBoxesDialog({
         formDataObj.append('numero', formData.numero);
         formDataObj.append('nombre', formData.nombre);
 
-        await crearBox(formDataObj);
+        const result = await crearBox(formDataObj);
+        if (!result.success) {
+          addToast({
+            variant: 'error',
+            message: 'Error al crear box',
+            description: result.error
+          });
+          return;
+        }
         
         addToast({
           variant: 'success',
@@ -116,7 +124,15 @@ export function GestionBoxesDialog({
         formDataObj.append('numero', editando.numero);
         formDataObj.append('nombre', editando.nombre);
 
-        await actualizarBox(editando.id, formDataObj);
+        const result = await actualizarBox(editando.id, formDataObj);
+        if (!result.success) {
+          addToast({
+            variant: 'error',
+            message: 'Error al actualizar box',
+            description: result.error
+          });
+          return;
+        }
         
         addToast({
           variant: 'success',
@@ -145,7 +161,15 @@ export function GestionBoxesDialog({
 
     startTransition(async () => {
       try {
-        await eliminarBox(boxAEliminar.id_box);
+        const result = await eliminarBox(boxAEliminar.id_box);
+        if (!result.success) {
+          addToast({
+            variant: 'error',
+            message: 'Error al eliminar box',
+            description: result.error
+          });
+          return;
+        }
         
         addToast({
           variant: 'success',

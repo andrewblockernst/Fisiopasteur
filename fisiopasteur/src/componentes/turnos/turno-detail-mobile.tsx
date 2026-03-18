@@ -127,7 +127,7 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
               <Clock className="w-5 h-5 text-[#9C1838]" />
               <div>
                 <p className="font-medium text-gray-900">{formatTime(turno.hora)}</p>
-                <p className="text-sm text-gray-500">Duración est imada: 45 min</p>
+                <p className="text-sm text-gray-500">Duración estimada: 45 min</p>
               </div>
             </div>
           </div>

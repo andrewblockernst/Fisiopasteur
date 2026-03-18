@@ -120,10 +120,13 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
           obtenerEspecialistas(),
           obtenerBoxes()
         ]);
-
+        
         setFormData(formDataInicial);
-
-        // Establecer el paciente actual como seleccionado usando relación del turno
+        
+        // Establecer los especialistas si vienen en el resultado
+        if (e.success && e.data) {
+          // Handle especialistas if needed
+        }
         if (turno.paciente) {
           const pacienteActual: PacienteAPI = {
             id_paciente: turno.paciente.id_paciente,

@@ -5,6 +5,7 @@ import { Filter, X, Plus, ChevronDown } from "lucide-react";
 import Button from "@/componentes/boton";
 import NuevoTurnoModal from "../calendario/nuevo-turno-dialog";
 import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
+import { useAuth } from "@/hooks/AuthContext";
 
 interface FiltrosTurnosProps {
   especialistas: any[];
@@ -23,6 +24,7 @@ export default function FiltrosTurnos({
 }: FiltrosTurnosProps) {
   const router = useRouter();
   const params = useSearchParams();
+  const { user } = useAuth();
   
   const [filter, setFilter] = useState(() => {
     // Inicializar filter desde initial y convertir arrays
@@ -98,16 +100,6 @@ export default function FiltrosTurnos({
     }) || [];
   }, [especialidades]);
   // const especialidadesFiltradas = especialidades;
-
-  // Tipos de filtro - Ya no necesario para la UI pero lo dejamos por compatibilidad
-  // const tiposFiltro = useMemo(() => [
-  //   { value: "", label: "Seleccionar filtro..." },
-  //   { value: "fecha_desde", label: "Fecha desde" },
-  //   { value: "fecha_hasta", label: "Fecha hasta" },
-  //   { value: "especialista", label: "Especialista" },
-  //   { value: "especialidad", label: "Especialidad" },
-  //   { value: "estado", label: "Estado" },
-  // ], []);
 
   const estadosPosibles = useMemo(() => [
     { value: "", label: "Todos los estados" },
@@ -218,45 +210,6 @@ export default function FiltrosTurnos({
     aplicarFiltros(nuevosFiltros);
   }, [filter, aplicarFiltros]);
 
-  // Callback para remover filtros individuales
-  // const handleRemoverFiltro = useCallback((tipoFiltro: string) => {
-  //   const nuevosFiltros = { ...filter };
-  //   // const fechaHoy = new Date().toISOString().split('T')[0];
-  //   const fechaActual = new Date();
-  //   const fechaHoy = new Intl.DateTimeFormat('en-CA', {
-  //     timeZone: 'America/Argentina/Buenos_Aires',
-  //     year: 'numeric', 
-  //     month: '2-digit', 
-  //     day: '2-digit'
-  //   }).format(fechaActual);
-    
-  //   switch (tipoFiltro) {
-  //     case 'fecha_desde':
-  //       nuevosFiltros.fecha_desde = fechaHoy;
-  //       break;
-  //     case 'fecha_hasta':
-  //       nuevosFiltros.fecha_hasta = fechaHoy;
-  //       break;
-  //     case 'especialistas':
-  //       nuevosFiltros.especialista_ids = [];
-  //       break;
-  //     case 'especialidades':
-  //       nuevosFiltros.especialidad_ids = [];
-  //       break;
-  //     case 'estados':
-  //       nuevosFiltros.estados = [];
-  //       break;
-  //     case 'paciente':
-  //       setPacienteSeleccionado(null);
-  //       setBusquedaPaciente('');
-  //       nuevosFiltros.paciente_id = undefined;
-  //       break;
-  //   }
-    
-  //   setFilter(nuevosFiltros);
-  //   aplicarFiltros(nuevosFiltros);
-  // }, [filter, aplicarFiltros]);
-
   const limpiarFiltros = useCallback(() => {
 
     const fechaActual = new Date();
@@ -266,6 +219,7 @@ export default function FiltrosTurnos({
       day: '2-digit',
       timeZone: 'America/Argentina/Buenos_Aires'
     }).format(fechaActual);
+    const userId = user?.id_usuario && !user.puedeGestionarTurnos ? String(user.id_usuario) : "";
     
     setOpenDropdown(null);
     setPacienteSeleccionado(null);
@@ -274,25 +228,13 @@ export default function FiltrosTurnos({
     const filtrosBase = {
       fecha_desde: fechaHoy,
       fecha_hasta: fechaHoy,
-      especialista_ids: [],
+      especialista_ids: [userId],
       especialidad_ids: [],
       estados: [],
     };
     setFilter(filtrosBase);
     aplicarFiltros(filtrosBase);
-  }, [aplicarFiltros]);
-
-  // Funciones para obtener los nombres de los filtros - Memoizadas
-  // const getNombreEspecialista = useCallback((id: string) => {
-  //   const esp = especialistas?.find((e: any) => e.id_usuario === id);
-  //   return esp ? `${esp.apellido}, ${esp.nombre}` : 'Especialista filtrado';
-  // }, [especialistas]);
-
-  // const getNombreEspecialidad = useCallback((id: string) => {
-  //   // Buscar en la lista filtrada también
-  //   const esp = especialidadesFiltradas?.find((e: any) => e.id_especialidad === parseInt(id));
-  //   return esp ? esp.nombre : 'Especialidad filtrada';
-  // }, [especialidadesFiltradas]);
+  }, [aplicarFiltros, user]);
 
   const filtrosActivos = useMemo(() => {
     let count = 0;
@@ -305,12 +247,6 @@ export default function FiltrosTurnos({
     return count;
   }, [filter, pacienteSeleccionado]);
 
-//  const getRolEspecialista = useCallback((id: string) => {
-//   const esp = especialistas?.find((e: any) => e.id_usuario === id);
-  
-//   if (!esp) return 'Especialista';
-//   return esp.rol?.nombre || 'Especialista';
-// }, [especialistas]);
   const handleSeleccionarPaciente = useCallback((paciente: { id_paciente: number; nombre: string; apellido: string, dni: string, telefono: string }) => {
     setPacienteSeleccionado(paciente);
     setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
