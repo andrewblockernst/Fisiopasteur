@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Filter, X, Plus, ChevronDown } from "lucide-react";
 import Button from "@/componentes/boton";
 import NuevoTurnoModal from "../calendario/nuevo-turno-dialog";
-import { useAuth } from "@/hooks/usePerfil"; // Agregar el hook
 import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 
 interface FiltrosTurnosProps {
@@ -24,7 +23,6 @@ export default function FiltrosTurnos({
 }: FiltrosTurnosProps) {
   const router = useRouter();
   const params = useSearchParams();
-  const { user, loading } = useAuth(); // Obtener usuario actual y loading
   
   const [filter, setFilter] = useState(() => {
     // Inicializar filter desde initial y convertir arrays
@@ -37,7 +35,6 @@ export default function FiltrosTurnos({
     };
   });
   const [openNew, setOpenNew] = useState(false);
-  const [filtroInicialAplicado, setFiltroInicialAplicado] = useState(false); // ✅ Control de primera carga
   const [openDropdown, setOpenDropdown] = useState<string | null>(null); // Estado para dropdowns abiertos
 
   // ============= ESTADO PARA BÚSQUEDA DE PACIENTE =============
@@ -81,32 +78,6 @@ export default function FiltrosTurnos({
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [openDropdown]);
-
-  useEffect(() => {
-    if (!loading && user && !filtroInicialAplicado) {
-      const currentEspecialistaParam = params.get('especialista');
-      const verTodosParam = params.get('ver_todos');
-      
-      // ✅ LÓGICA CORREGIDA:
-      // Solo aplicar filtro automático si el usuario NO puede gestionar turnos (es solo especialista)
-      // Los Admin y Programadores SIEMPRE pueden ver "Todos los especialistas"
-      const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
-      
-      const debeAplicarFiltro = !user.puedeGestionarTurnos && esEspecialistaActivo;
-      
-      // ✅ SOLO aplicar si NO hay ningún parámetro en la URL (primera carga)
-      if (debeAplicarFiltro && !currentEspecialistaParam && !verTodosParam && user.id_usuario) {
-        const usp = new URLSearchParams(params.toString());
-        usp.set('especialista', user.id_usuario);
-        
-        // Redirigir con el filtro aplicado
-        router.replace(`/turnos?${usp.toString()}`);
-      }
-      
-      // ✅ Marcar que ya se aplicó el filtro inicial
-      setFiltroInicialAplicado(true);
-    }
-  }, [user, loading, filtroInicialAplicado, params, router, especialistas]);
 
   // Función para formatear fecha como DD/MM/YYYY - Memoizada
   const formatearFecha = useCallback((fechaStr: string) => {
@@ -154,6 +125,9 @@ export default function FiltrosTurnos({
     // Manejar arrays de especialistas
     if (filtros.especialista_ids && Array.isArray(filtros.especialista_ids) && filtros.especialista_ids.length > 0) {
       filtros.especialista_ids.forEach((id: string) => usp.append("especialistas", id));
+    } else {
+      // Intención explícita: ver todos los especialistas aunque el usuario no gestione turnos.
+      usp.set("ver_todos", "1");
     }
     
     // Manejar arrays de especialidades
@@ -296,7 +270,6 @@ export default function FiltrosTurnos({
     setOpenDropdown(null);
     setPacienteSeleccionado(null);
     setBusquedaPaciente('');
-    router.push(`/turnos`);
 
     const filtrosBase = {
       fecha_desde: fechaHoy,

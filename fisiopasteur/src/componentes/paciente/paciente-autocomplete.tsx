@@ -8,6 +8,7 @@ interface PacienteAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
   onSelect: (paciente: any) => void;
+  selectedDisplayValue?: string;
   excludePatientIds?: Array<number | string>;
   minChars?: number;
   limit?: number;
@@ -32,6 +33,7 @@ export default function PacienteAutocomplete({
   value,
   onChange,
   onSelect,
+  selectedDisplayValue,
   excludePatientIds = [],
   minChars = 2,
   limit = 10,
@@ -55,6 +57,7 @@ export default function PacienteAutocomplete({
   const [buscando, setBuscando] = useState(false);
   const [mostrarLista, setMostrarLista] = useState(false);
   const [indiceActivo, setIndiceActivo] = useState<number>(-1);
+  const [selectedLabelInterno, setSelectedLabelInterno] = useState("");
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +88,18 @@ export default function PacienteAutocomplete({
 
   useEffect(() => {
     const termino = value.trim();
+    const valorSeleccionado = (selectedDisplayValue || selectedLabelInterno || "").trim();
+
+    if (valorSeleccionado && termino.toLowerCase() === valorSeleccionado.toLowerCase()) {
+      setBuscando(false);
+      setMostrarLista(false);
+      setIndiceActivo(-1);
+
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      return;
+    }
 
     if (termino.length < minChars) {
       setSugerencias([]);
@@ -127,9 +142,10 @@ export default function PacienteAutocomplete({
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [value, minChars, limit]);
+  }, [value, minChars, limit, selectedDisplayValue, selectedLabelInterno]);
 
   const seleccionar = (paciente: any) => {
+    setSelectedLabelInterno(`${paciente.nombre} ${paciente.apellido}`.trim());
     onSelect(paciente);
     setMostrarLista(false);
     setIndiceActivo(-1);
@@ -186,7 +202,14 @@ export default function PacienteAutocomplete({
           ref={inputRef}
           type="text"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            const nuevoValor = e.target.value;
+            const valorSeleccionado = (selectedDisplayValue || selectedLabelInterno || "").trim();
+            if (valorSeleccionado && nuevoValor.trim().toLowerCase() !== valorSeleccionado.toLowerCase()) {
+              setSelectedLabelInterno("");
+            }
+            onChange(nuevoValor);
+          }}
           onFocus={() => {
             if (value.trim().length >= minChars && (sugerenciasFiltradas.length > 0 || buscando)) {
               setMostrarLista(true);
@@ -211,6 +234,7 @@ export default function PacienteAutocomplete({
               setSugerencias([]);
               setMostrarLista(false);
               setIndiceActivo(-1);
+              setSelectedLabelInterno("");
             }}
             className="absolute right-1.5 text-gray-400 hover:text-gray-600"
           >

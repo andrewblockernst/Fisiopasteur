@@ -28,9 +28,9 @@ interface TurnosMobileListProps {
   initialFilters: {
     fecha_desde: string;
     fecha_hasta: string;
-    especialista_id?: string;
-    especialidad_id?: number;
-    estado?: string;
+    especialista_ids: string[];
+    especialidad_ids: string[];
+    estados: string[];
   };
 }
 
@@ -51,9 +51,9 @@ export default function TurnosMobileList({
   // Estados de filtros
   const [fechaDesde, setFechaDesde] = useState(initialFilters.fecha_desde);
   const [fechaHasta, setFechaHasta] = useState(initialFilters.fecha_hasta);
-  const [especialistaId, setEspecialistaId] = useState(initialFilters.especialista_id || '');
-  const [especialidadId, setEspecialidadId] = useState(initialFilters.especialidad_id?.toString() || '');
-  const [filtroEstado, setFiltroEstado] = useState(initialFilters.estado || 'todos');
+  const [especialistaId, setEspecialistaId] = useState(initialFilters.especialista_ids?.[0] || '');
+  const [especialidadId, setEspecialidadId] = useState(initialFilters.especialidad_ids?.[0] || '');
+  const [filtroEstado, setFiltroEstado] = useState(initialFilters.estados?.[0] || 'todos');
 
   // ✨ Función para calcular el número de talonario
   const calcularNumeroTalonario = useCallback((turno: TurnoConDetalles): string | null => {
@@ -89,9 +89,14 @@ export default function TurnosMobileList({
     
     if (fechaDesde) params.set('desde', fechaDesde);
     if (fechaHasta) params.set('hasta', fechaHasta);
-    if (especialistaId) params.set('especialista', especialistaId);
-    if (especialidadId) params.set('especialidad', especialidadId);
-    if (filtroEstado !== 'todos') params.set('estado', filtroEstado);
+    if (especialistaId) {
+      params.append('especialistas', especialistaId);
+    } else {
+      // Intención explícita para evitar que el server vuelva a forzar especialista propio.
+      params.set('ver_todos', '1');
+    }
+    if (especialidadId) params.append('especialidades', especialidadId);
+    if (filtroEstado !== 'todos') params.append('estados', filtroEstado);
     
     router.push(`/turnos?${params.toString()}`);
     setShowFilters(false);
@@ -107,6 +112,7 @@ export default function TurnosMobileList({
     const params = new URLSearchParams();
     params.set('desde', hoy);
     params.set('hasta', hoy);
+    params.set('ver_todos', '1');
     
     router.push(`/turnos?${params.toString()}`);
     setShowFilters(false);

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { DetalleTurnoDialog } from "@/componentes/turnos/detalle-turno-dialog";
 import { obtenerTurnos, marcarComoAtendido, cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
 import { useToastStore } from "@/stores/toast-store";
+import { useAuth } from "@/hooks/usePerfil";
 import Button from "../boton";
 import EditarTurnoModal from "./editar-turno-modal";
 import type { TurnoWithRelations } from "@/types";
@@ -16,6 +17,20 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
 
   // const router = useRouter();
   const toast = useToastStore();
+  const { user } = useAuth();
+
+  const userId = String(user?.id_usuario || user?.id || '');
+  const puedeAccionarTurno = (turno: TurnoWithRelations) => {
+    if (user?.puedeGestionarTurnos) return true;
+    return String(turno.id_especialista || '') === userId;
+  };
+  const mostrarSinPermisos = () => {
+    toast.addToast({
+      variant: "error",
+      message: "Sin permisos",
+      description: "Solo puedes gestionar turnos propios",
+    });
+  };
   
   // ============= ESTADO PARA MODAL DE DETALLE =============
   const [turnoSeleccionado, setTurnoSeleccionado] = useState<TurnoWithRelations | null>(null);
@@ -36,6 +51,11 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
 
   // ============= FUNCIONES DE ACCIONES =============
   const handleMarcarAtendido = async (turno: TurnoWithRelations) => {
+    if (!puedeAccionarTurno(turno)) {
+      mostrarSinPermisos();
+      return;
+    }
+
     const resultado = await marcarComoAtendido(turno.id_turno);
     
     if (resultado.success) {
@@ -54,6 +74,11 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   };
 
   const handleCancelar = async (turno: TurnoWithRelations) => {
+    if (!puedeAccionarTurno(turno)) {
+      mostrarSinPermisos();
+      return;
+    }
+
     const resultado = await cancelarTurno(turno.id_turno);
     
     if (resultado.success) {
@@ -72,6 +97,11 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   };
 
   const handleEliminar = async (turno: TurnoWithRelations) => {
+    if (!puedeAccionarTurno(turno)) {
+      mostrarSinPermisos();
+      return;
+    }
+
     // Abrir modal de confirmación
     setTurnoParaEliminar(turno);
     setConfirmDialogAbierto(true);
@@ -79,6 +109,12 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
 
   const confirmarEliminacion = async () => {
     if (!turnoParaEliminar) return;
+    if (!puedeAccionarTurno(turnoParaEliminar)) {
+      mostrarSinPermisos();
+      setConfirmDialogAbierto(false);
+      setTurnoParaEliminar(null);
+      return;
+    }
 
     const resultado = await eliminarTurno(turnoParaEliminar.id_turno);
     
@@ -103,6 +139,11 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   };
 
   const handleEditar = (turno: TurnoWithRelations) => {
+    if (!puedeAccionarTurno(turno)) {
+      mostrarSinPermisos();
+      return;
+    }
+
     setTurnoParaEditar(turno);
     setModalEditarAbierto(true);
   };
@@ -293,6 +334,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
           <tbody className="bg-white divide-y divide-gray-200">
             {turnosOrdenados.map((t) => {
               const numeroTalonario = calcularNumeroTalonario(t);
+              const turnoEsPropio = puedeAccionarTurno(t);
               
               return (
               <tr 
@@ -348,8 +390,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                         {/* Marcar como Atendido */}
                         {(t.estado === 'programado' || t.estado === 'pendiente') && (
                           <DropdownMenu.Item
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-green-50 flex items-center gap-2 text-green-600 cursor-pointer outline-none"
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-green-50 text-green-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
                             onSelect={() => handleMarcarAtendido(t)}
+                            disabled={!turnoEsPropio}
                           >
                             <CheckCircle size={16} />
                             Marcar como Atendido
@@ -359,8 +402,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                         {/* Cancelar Turno */}
                         {(t.estado === 'programado' || t.estado === 'pendiente') && (
                           <DropdownMenu.Item
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer outline-none"
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-red-50 text-red-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
                             onSelect={() => handleCancelar(t)}
+                            disabled={!turnoEsPropio}
                           >
                             <XCircle size={16} />
                             Cancelar Turno
@@ -375,8 +419,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                         {/* Editar */}
                         {t.estado !== 'atendido' && (
                           <DropdownMenu.Item
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700 cursor-pointer outline-none"
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-gray-50 text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
                             onSelect={() => handleEditar(t)}
+                            disabled={!turnoEsPropio}
                           >
                             <Edit size={16} />
                             Editar
@@ -385,8 +430,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
 
                         {/* Eliminar */}
                         <DropdownMenu.Item
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer outline-none"
+                          className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-red-50 text-red-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
                           onSelect={() => handleEliminar(t)}
+                          disabled={!turnoEsPropio}
                         >
                           <Trash size={16} />
                           Eliminar

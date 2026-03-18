@@ -110,12 +110,12 @@ const AgregarBoton = () => {
       {/* Menú desplegable */}
       <div
         className={`absolute bottom-20 left-1/2 bg-white rounded-xl shadow-2xl border border-gray-200 py-4 min-w-[200px] z-50 transition-all duration-300
-          ${isOpen && !isDisabled
+          ${isOpen 
             ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 scale-95 translate-y-8 pointer-events-none'}`}
         style={{
           transitionProperty: 'opacity, transform',
-          transform: isOpen && !isDisabled
+          transform: isOpen 
             ? 'translate(-50%, 0) scale(1)'
             : 'translate(-50%, 2rem) scale(0.95)',
         }}
