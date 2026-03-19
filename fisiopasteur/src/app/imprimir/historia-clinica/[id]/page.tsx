@@ -33,7 +33,9 @@ export default async function ImprimirHistorialPage({ params, searchParams }: Pr
   try {
     // Obtener datos del paciente
     const pacienteResult = await getPaciente(pacienteId);
-    paciente = pacienteResult as Paciente;
+    if (pacienteResult.success) {
+        paciente = pacienteResult.data;
+    }
     
     // Obtener historial clínico agrupado por tratamientos
     const historialResult = await obtenerHistorialClinicoPorPaciente(pacienteId);

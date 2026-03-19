@@ -23,7 +23,7 @@ export function useEspecialistas(options: UseEspecialistasOptions = {}) {
     queryKey: especialistaKeys.list(options),
     queryFn: async () => {
       const result = await getEspecialistas(options);
-      return result; // getEspecialistas ya devuelve el array directamente
+      return result.success ? result.data : [];
     },
     staleTime: 10 * 60 * 1000, // 10 minutos (cambian poco)
     gcTime: 30 * 60 * 1000, // 30 minutos en caché

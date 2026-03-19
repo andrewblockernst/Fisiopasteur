@@ -21,7 +21,14 @@ export function DeletePacienteDialog({isOpen, onClose, paciente, handleToast}: D
     const handleDelete = async () => {
         try {
             setIsDeleting(true);
-            await deletePaciente(paciente.id_paciente);
+            const result = await deletePaciente(paciente.id_paciente);
+            if (!result.success) {
+                handleToast({
+                    variant: "error",
+                    message: result.error,
+                });
+                return;
+            }
             handleToast({
                 variant: "success",
                 message: "El paciente se ha eliminado correctamente.",

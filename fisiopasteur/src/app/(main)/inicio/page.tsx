@@ -22,14 +22,18 @@ export default function Inicio() {
     const cargarDatos = async () => {
       setLoading(true);
       try {
-        const [turnosData, boxesData, nombreOrganizacionData] = await Promise.all([
+        const [turnosData, boxesResult, nombreOrganizacionData] = await Promise.all([
           obtenerProximosTurnos(),
           obtenerOcupacionBoxes(),
           obtenerNombreOrganizacion(),
         ]);
 
         setProximosTurnos(turnosData);
-        setOcupacionBoxes(boxesData);
+        
+        if (boxesResult.success) {
+            setOcupacionBoxes(boxesResult.data);
+        }
+        
         setNombreOrganizacion(nombreOrganizacionData);
       } catch (error) {
         console.error('Error cargando datos del dashboard:', error);

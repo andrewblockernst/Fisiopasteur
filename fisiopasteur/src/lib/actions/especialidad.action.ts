@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/database.types";
+import type { ActionResult } from "@/lib/actions/action-result";
 
 type Especialidad = Database["public"]["Tables"]["especialidad"]["Row"];
 type EspecialidadInsert = Database["public"]["Tables"]["especialidad"]["Insert"];
@@ -15,7 +16,11 @@ type EspecialidadUpdate = Database["public"]["Tables"]["especialidad"]["Update"]
 /**
  * Obtener todas las especialidades de la organización actual
  */
-export async function getEspecialidades() {
+export async function getEspecialidades(): Promise<
+  // | { success: true; data: any[] }
+  // | { success: false; error: string }
+  ActionResult
+> {
   try {
     const supabase = await createClient();
 
@@ -26,13 +31,13 @@ export async function getEspecialidades() {
 
     if (error) {
       console.error("Error fetching especialidades:", error);
-      return [];
+      return { success: false, error: error.message };
     }
 
-    return data || [];
+    return { success: true, data: data || [] };
   } catch (error) {
     console.error('Error en getEspecialidades:', error);
-    return [];
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
   }
 }
 
@@ -43,7 +48,7 @@ export async function getEspecialidades() {
 /**
  * Crear una nueva especialidad
  */
-export async function createEspecialidad(nombre: string) {
+export async function createEspecialidad(nombre: string): Promise<ActionResult> {
   const supabase = await createClient();
   
   try {
@@ -51,8 +56,7 @@ export async function createEspecialidad(nombre: string) {
     if (!nombre || nombre.trim().length === 0) {
       return {
         success: false,
-        message: "Error de validación",
-        description: "El nombre de la especialidad es requerido"
+        error : "El nombre de la especialidad es requerido"
       };
     }
 
@@ -98,33 +102,27 @@ export async function createEspecialidad(nombre: string) {
         console.error("Error creating especialidad - duplicate name:", error);
         return {
           success: false,
-          message: "Especialidad duplicada",
-          description: "Ya existe una especialidad con ese nombre"
+          error: "Ya existe una especialidad con ese nombre"
         };
       }
 
       console.error("Error creando especialidad:", error);
       return {
         success: false,
-        message: "Error al crear especialidad",
-        description: error.message
+        error: error.message
       };
     }
 
     revalidatePath("/especialistas");
     
     return {
-      success: true,
-      message: "Especialidad creada",
-      description: `${nombreLimpio} ha sido agregada exitosamente`,
-      data
+      success: true
     };
   } catch (error) {
     console.error("Error inesperado creando especialidad:", error);
     return {
       success: false,
-      message: "Error inesperado",
-      description: "Ocurrió un error al crear la especialidad"
+      error: "Ocurrió un error al crear la especialidad"
     };
   }
 }
@@ -136,7 +134,7 @@ export async function createEspecialidad(nombre: string) {
 /**
  * Actualizar una especialidad existente
  */
-export async function updateEspecialidad(id: number, nombre: string) {
+export async function updateEspecialidad(id: number, nombre: string): Promise<ActionResult> {
   const supabase = await createClient();
   
   try {
@@ -144,8 +142,7 @@ export async function updateEspecialidad(id: number, nombre: string) {
     if (!nombre || nombre.trim().length === 0) {
       return {
         success: false,
-        message: "Error de validación",
-        description: "El nombre de la especialidad es requerido"
+        error : "El nombre de la especialidad es requerido"
       };
     }
 
@@ -203,8 +200,7 @@ export async function updateEspecialidad(id: number, nombre: string) {
         console.error("Error updating especialidad - duplicate name:", error);
         return {
           success: false,
-          message: "Especialidad duplicada",
-          description: "Ya existe otra especialidad con ese nombre"
+          error: "Ya existe otra especialidad con ese nombre"
         };
       }
 
@@ -212,34 +208,27 @@ export async function updateEspecialidad(id: number, nombre: string) {
         console.error("Error updating especialidad - not found:", error);
         return {
           success: false,
-          message: "Especialidad no encontrada",
-          description: "La especialidad que intentas editar ya no existe o fue eliminada."
+          error: "La especialidad que intentas editar ya no existe o fue eliminada."
         };
       }
-
 
       console.error("Error actualizando especialidad:", error);
       return {
         success: false,
-        message: "Error al actualizar especialidad",
-        description: error.message
+        error: error.message
       };
     }
 
     revalidatePath("/especialistas");
     
     return {
-      success: true,
-      message: "Especialidad actualizada",
-      description: `Actualizada exitosamente a ${nombreLimpio}`,
-      data
+      success: true
     };
   } catch (error) {
     console.error("Error inesperado actualizando especialidad:", error);
     return {
       success: false,
-      message: "Error inesperado",
-      description: "Ocurrió un error al actualizar la especialidad"
+      error: "Ocurrió un error al actualizar la especialidad"
     };
   }
 }
@@ -251,7 +240,7 @@ export async function updateEspecialidad(id: number, nombre: string) {
 /**
  * Eliminar una especialidad (solo si no está en uso)
  */
-export async function deleteEspecialidad(id: number) {
+export async function deleteEspecialidad(id: number): Promise<ActionResult> {
   const supabase = await createClient();
   
   try {
@@ -265,8 +254,7 @@ export async function deleteEspecialidad(id: number) {
     if (errorCheck || !especialidad) {
       return {
         success: false,
-        message: "Especialidad no encontrada",
-        description: "La especialidad no existe"
+        error: "La especialidad no existe"
       };
     }
 
@@ -282,16 +270,14 @@ export async function deleteEspecialidad(id: number) {
       console.error("Error verificando uso:", errorUso);
       return {
         success: false,
-        message: "Error al verificar uso",
-        description: errorUso.message
+        error: errorUso.message
       };
     }
 
     if (enUso) {
       return {
         success: false,
-        message: "No se puede eliminar",
-        description: "Esta especialidad está asignada a uno o más especialistas. Primero debes removerla de los especialistas."
+        error: "Esta especialidad está asignada a uno o más especialistas. Primero debes removerla de los especialistas."
       };
     }
 
@@ -307,16 +293,14 @@ export async function deleteEspecialidad(id: number) {
       console.error("Error verificando turnos:", errorTurnos);
       return {
         success: false,
-        message: "Error al verificar turnos",
-        description: errorTurnos.message
+        error: errorTurnos.message
       };
     }
 
     if (turnosConEspecialidad) {
       return {
         success: false,
-        message: "No se puede eliminar",
-        description: "Esta especialidad tiene turnos asociados. No se puede eliminar."
+        error: "Esta especialidad tiene turnos asociados. No se puede eliminar."
       };
     }
 
@@ -330,24 +314,20 @@ export async function deleteEspecialidad(id: number) {
       console.error("Error eliminando especialidad:", error);
       return {
         success: false,
-        message: "Error al eliminar especialidad",
-        description: error.message
+        error: error.message
       };
     }
 
     revalidatePath("/especialistas");
     
     return {
-      success: true,
-      message: "Especialidad eliminada",
-      description: `${(especialidad as any).nombre} ha sido eliminada exitosamente`
+      success: true
     };
   } catch (error) {
     console.error("Error inesperado eliminando especialidad:", error);
     return {
       success: false,
-      message: "Error inesperado",
-      description: "Ocurrió un error al eliminar la especialidad"
+      error: "Ocurrió un error al eliminar la especialidad"
     };
   }
 }

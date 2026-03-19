@@ -32,6 +32,37 @@ export async function GET(request: NextRequest) {
             getTendenciaNoShows(fechaInicio, fechaFin),
         ]);
 
+        if (!general.success) {
+            return NextResponse.json(
+                { success: false, message: general.error },
+                { status: 400 }
+            );
+        }
+        if (!especialistas.success) {
+            return NextResponse.json(
+                { success: false, message: especialistas.error },
+                { status: 400 }
+            );
+        }
+        if (!horarios.success) {
+            return NextResponse.json(
+                { success: false, message: horarios.error },
+                { status: 400 }
+            );
+        }
+        if (!dias.success) {
+            return NextResponse.json(
+                { success: false, message: dias.error },
+                { status: 400 }
+            );
+        }
+        if (!tendencia.success) {
+            return NextResponse.json(
+                { success: false, message: tendencia.error },
+                { status: 400 }
+            );
+        }
+
         const duracion = performance.now() - inicio;
         console.log(`⏱️ API tardó ${duracion.toFixed(2)}ms`);
 
@@ -40,11 +71,11 @@ export async function GET(request: NextRequest) {
             {
                 success: true,
                 data: {
-                    general,
-                    especialistas,
-                    horarios,
-                    dias,
-                    tendencia,
+                    general: general.data,
+                    especialistas: especialistas.data,
+                    horarios: horarios.data,
+                    dias: dias.data,
+                    tendencia: tendencia.data,
                 },
             },
             {

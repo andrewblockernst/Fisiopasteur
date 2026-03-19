@@ -4,10 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 import { normalizePhoneNumber } from "@/lib/utils/phone.utils";
+import type { ActionResult } from "@/lib/actions/action-result";
 
 type Paciente = Tables<"paciente">;
 type PacienteInsert = TablesInsert<"paciente">;
 type PacienteUpdate = TablesUpdate<"paciente">;
+
+export type CreatePacienteResult =
+  | { success: true; data: Paciente }
+  | { success: false; error: string };
 
 // Validacioens del servidor
 function validatePacienteData(data: Partial<PacienteInsert | PacienteUpdate>): string[] {
@@ -124,18 +129,22 @@ export async function getPacientes(options?: {
 
   if (error) {
     console.error("Error fetching pacientes:", error);
-    throw new Error("Error al obtener pacientes");
+    return { success: false, error: error.message };
   }
 
 
   return {
+    success: true,
     data: data || [],
     total: count || 0,
-  };
+  } as any;
 }
 
 // Obtener un paciente por ID
-export async function getPaciente(id: number) {
+export async function getPaciente(id: number): Promise<
+  | { success: true; data: Paciente }
+  | { success: false; error: string }
+> {
   const supabase = await createClient();
   
   const { data, error } = await supabase
@@ -146,17 +155,20 @@ export async function getPaciente(id: number) {
 
   if (error) {
     if (error.code === "PGRST116") {
-      throw new Error("Paciente no encontrado");
+      return { success: false, error: "Paciente no encontrado" };
     }
     console.error("Error fetching paciente:", error);
-    throw new Error("Error al obtener paciente");
+    return { success: false, error: error.message };
   }
 
-  return data;
+  return { success: true, data };
 }
 
 // Buscar pacientes por término
-export async function searchPacientes(searchTerm: string) {
+export async function searchPacientes(searchTerm: string): Promise<
+  | { success: true; data: any[] }
+  | { success: false; error: string }
+> {
   const supabase = await createClient();
   
   const { data, error } = await supabase
@@ -168,14 +180,14 @@ export async function searchPacientes(searchTerm: string) {
 
   if (error) {
     console.error("Error searching pacientes:", error);
-    throw new Error("Error al buscar pacientes");
+    return { success: false, error: error.message };
   }
 
-  return data || [];
+  return { success: true, data: data || [] };
 }
 
 // Crear nuevo paciente
-export async function createPaciente(formData: FormData) {
+export async function createPaciente(formData: FormData): Promise<CreatePacienteResult> {
   const supabase = await createClient();
 
   // ✅ Normalizar número de teléfono al formato internacional
@@ -195,22 +207,22 @@ export async function createPaciente(formData: FormData) {
   // Validaciones
   const validationErrors = validatePacienteData(pacienteData);
   if (validationErrors.length > 0) {
-    throw new Error(`Errores de validación: ${validationErrors.join(", ")}`);
+    return { success: false, error: `Errores de validación: ${validationErrors.join(", ")}` };
   }
 
   // Verificar email único
   if (pacienteData.email && await checkEmailExists(pacienteData.email)) {
-    throw new Error("Ya existe un paciente con este email");
+    return { success: false, error: "Ya existe un paciente con este email" };
   }
 
   // Verificar DNI único
   if (pacienteData.dni && await checkDocumentoExists(pacienteData.dni)) {
-    throw new Error("Ya existe un paciente con este DNI");
+    return { success: false, error: "Ya existe un paciente con este DNI" };
   }
 
   // Verificar teléfono único
   if (await checkTelefonoExists(telefonoNormalizado)) {
-    throw new Error("Ya existe un paciente con este número de teléfono");
+    return { success: false, error: "Ya existe un paciente con este número de teléfono" };
   }
 
   try {
@@ -226,17 +238,17 @@ export async function createPaciente(formData: FormData) {
       // Manejo específico de errores de constraint de Supabase
       if (error.code === "23505") { // Constraint violation
         if (error.details?.includes("email")) {
-          throw new Error("Ya existe un paciente con este email");
+          return { success: false, error: "Ya existe un paciente con este email" };
         }
         if (error.details?.includes("dni")) {
-          throw new Error("Ya existe un paciente con este DNI");
+          return { success: false, error: "Ya existe un paciente con este DNI" };
         }
         if (error.details?.includes("telefono")) {
-          throw new Error("Ya existe un paciente con este número de teléfono");
+          return { success: false, error: "Ya existe un paciente con este número de teléfono" };
         }
       }
       
-      throw new Error("Error al crear paciente: " + error.message);
+      return { success: false, error: "Error al crear paciente: " + error.message };
     }
 
     // ✅ Revalidación no bloqueante para evitar problemas de loading
@@ -244,16 +256,19 @@ export async function createPaciente(formData: FormData) {
       revalidatePath("/paciente");
     }).catch(err => console.error('Error revalidating path:', err));
     
-    return data;
+    return { success: true, data };
   } catch (error: any) {
     console.error("Error in createPaciente:", error);
-    throw error instanceof Error ? error : new Error("Error al crear paciente");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al crear paciente",
+    };
   }
 }
 
 
 // Actualizar paciente
-export async function updatePaciente(id: number, formData: FormData) {
+export async function updatePaciente(id: number, formData: FormData): Promise<ActionResult<Paciente>> {
   const supabase = await createClient();
 
   // ✅ Normalizar número de teléfono al formato internacional
@@ -274,22 +289,22 @@ export async function updatePaciente(id: number, formData: FormData) {
   // Validaciones
   const validationErrors = validatePacienteData(updateData);
   if (validationErrors.length > 0) {
-    throw new Error(`Errores de validación: ${validationErrors.join(", ")}`);
+    return { success: false, error: `Errores de validación: ${validationErrors.join(", ")}` };
   }
 
   // Verificar email único (excluyendo el actual)
   if (updateData.email && await checkEmailExists(updateData.email, id)) {
-    throw new Error("Ya existe otro paciente con este email");
+    return { success: false, error: "Ya existe otro paciente con este email" };
   }
 
   // Verificar documento único (excluyendo el actual)
   if (updateData.dni && await checkDocumentoExists(updateData.dni, id)) {
-    throw new Error("Ya existe otro paciente con este DNI");
+    return { success: false, error: "Ya existe otro paciente con este DNI" };
   }
 
   // Verificar teléfono único (excluyendo el actual)
   if (await checkTelefonoExists(telefonoNormalizado, id)) {
-    throw new Error("Ya existe otro paciente con este número de teléfono");
+    return { success: false, error: "Ya existe otro paciente con este número de teléfono" };
   }
 
   try {
@@ -306,17 +321,17 @@ export async function updatePaciente(id: number, formData: FormData) {
       // Manejo específico de errores de constraint de Supabase
       if (error.code === "23505") {
         if (error.details?.includes("email")) {
-          throw new Error("Ya existe otro paciente con este email");
+          return { success: false, error: "Ya existe otro paciente con este email" };
         }
         if (error.details?.includes("dni")) {
-          throw new Error("Ya existe otro paciente con este DNI");
+          return { success: false, error: "Ya existe otro paciente con este DNI" };
         }
         if (error.details?.includes("telefono")) {
-          throw new Error("Ya existe otro paciente con este número de teléfono");
+          return { success: false, error: "Ya existe otro paciente con este número de teléfono" };
         }
       }
       
-      throw new Error(error.message || "Error al actualizar paciente");
+      return { success: false, error: error.message || "Error al actualizar paciente" };
     }
 
     // ✅ Revalidación no bloqueante
@@ -324,15 +339,18 @@ export async function updatePaciente(id: number, formData: FormData) {
       revalidatePath("/pacients");
     }).catch(err => console.error('Error revalidating path:', err));
     
-    return data;
+    return { success: true, data };
   } catch (error: any) {
     console.error("Error in updatePaciente:", error);
-    throw error instanceof Error ? error : new Error("Error al actualizar paciente");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al actualizar paciente",
+    };
   }
 }
 
 // Eliminar paciente (soft delete si tienes el campo, hard delete si no)
-export async function deletePaciente(id: number) {
+export async function deletePaciente(id: number): Promise<ActionResult> {
   const supabase = await createClient();
 
   try {
@@ -345,7 +363,7 @@ export async function deletePaciente(id: number) {
       .limit(1);
 
     if (turnos && turnos.length > 0) {
-      throw new Error("No se puede eliminar el paciente porque tiene turnos asociados");
+      return { success: false, error: "No se puede eliminar el paciente porque tiene turnos asociados" };
     }
 
     const { error } = await supabase
@@ -356,13 +374,17 @@ export async function deletePaciente(id: number) {
 
     if (error) {
       console.error("Error deleting paciente:", error);
-      throw new Error("Error al eliminar paciente");
+      return { success: false, error: "Error al eliminar paciente" };
     }
 
     revalidatePath("/paciente");
+    return { success: true };
   } catch (error: any) {
     console.error("Error in deletePaciente:", error);
-    throw error instanceof Error ? error : new Error("Error al eliminar paciente");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al eliminar paciente",
+    };
   }
 }
 
@@ -383,7 +405,7 @@ export async function getHistorialClinico(idPaciente: number) {
 }
 
 // Agregar observación a la historia clínica
-export async function agregarObservacion(idPaciente: number, observaciones: string) {
+export async function agregarObservacion(idPaciente: number, observaciones: string): Promise<ActionResult<any>> {
   const supabase = await createClient();
 
   // 1. Buscar el último turno del paciente
@@ -395,7 +417,7 @@ export async function agregarObservacion(idPaciente: number, observaciones: stri
     .limit(1);
 
   if (errorTurnos || !turnos || turnos.length === 0) {
-    throw new Error("No existe turno para este paciente");
+    return { success: false, error: "No existe turno para este paciente" };
   }
 
   const idTurno = turnos[0].id_turno;
@@ -412,13 +434,13 @@ export async function agregarObservacion(idPaciente: number, observaciones: stri
 
   if (error) {
     console.error("Error agregando observación:", error);
-    throw new Error("No se pudo agregar la observación");
+    return { success: false, error: "No se pudo agregar la observación" };
   }
-  return data;
+  return { success: true, data };
 }
 
 // Editar observación (solo si está dentro de los 5 minutos)
-export async function editarObservacion(idEvolucion: number, texto: string) {
+export async function editarObservacion(idEvolucion: number, texto: string): Promise<ActionResult<any>> {
   const supabase = await createClient();
 
   // Buscar la evolución clínica en la tabla correcta
@@ -428,11 +450,11 @@ export async function editarObservacion(idEvolucion: number, texto: string) {
     .eq("id_evolucion", idEvolucion)
     .single();
 
-  if (!evo) throw new Error("Observación no encontrada");
+  if (!evo) return { success: false, error: "Observación no encontrada" };
 
   // Usar created_at para controlar el tiempo de edición
   const minutos = (Date.now() - new Date(evo.created_at ?? "").getTime()) / 60000;
-  if (minutos > 5) throw new Error("Solo se puede editar la observación durante los primeros 5 minutos");
+  if (minutos > 5) return { success: false, error: "Solo se puede editar la observación durante los primeros 5 minutos" };
 
   const { data, error } = await supabase
     .from("evolucion_clinica")
@@ -443,9 +465,9 @@ export async function editarObservacion(idEvolucion: number, texto: string) {
 
   if (error) {
     console.error("Error editando observación:", error);
-    throw new Error("No se pudo editar la observación");
+    return { success: false, error: "No se pudo editar la observación" };
   }
-  return data;
+  return { success: true, data };
 }
 
 // Obtener evoluciones clínicas de un paciente
@@ -473,7 +495,7 @@ export async function getEvolucionesClinicas(idPaciente: number) {
 }
 
 // Agregar evolución clínica
-export async function agregarEvolucionClinica(idTurno: number, observaciones: string) {
+export async function agregarEvolucionClinica(idTurno: number, observaciones: string): Promise<ActionResult<any>> {
   const supabase = await createClient();
   
   const { data, error } = await supabase
@@ -487,13 +509,13 @@ export async function agregarEvolucionClinica(idTurno: number, observaciones: st
 
   if (error) {
     console.error("Error agregando evolución clínica:", error);
-    throw new Error("No se pudo agregar la evolución clínica");
+    return { success: false, error: "No se pudo agregar la evolución clínica" };
   }
-  return data;
+  return { success: true, data };
 }
 
 // Activar paciente
-export async function activarPaciente(idPaciente: number) {
+export async function activarPaciente(idPaciente: number): Promise<ActionResult<Paciente>> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("paciente")
@@ -504,7 +526,7 @@ export async function activarPaciente(idPaciente: number) {
 
   if (error) {
     console.error("Error activando paciente:", error);
-    throw new Error("No se pudo activar el paciente");
+    return { success: false, error: "No se pudo activar el paciente" };
   }
-  return data;
+  return { success: true, data };
 }
