@@ -1,5 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/types/database.types'
+import { Database } from '@/lib/database.types'
 
 // ✅ Instancia singleton del cliente Supabase
 // let supabaseInstance: ReturnType<typeof createBrowserClient<Database>> | null = null;

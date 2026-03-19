@@ -16,7 +16,11 @@ type EspecialidadUpdate = Database["public"]["Tables"]["especialidad"]["Update"]
 /**
  * Obtener todas las especialidades de la organización actual
  */
-export async function getEspecialidades(): Promise<ActionResult<Especialidad[]>> {
+export async function getEspecialidades(): Promise<
+  // | { success: true; data: any[] }
+  // | { success: false; error: string }
+  ActionResult
+> {
   try {
     const supabase = await createClient();
 

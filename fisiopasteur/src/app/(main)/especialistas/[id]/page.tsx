@@ -47,7 +47,7 @@ export default function ConsultaEspecialistaMobile() {
                 ]);
                 
                 if (especialistaResult.success) {
-                    setViewingEspecialista(especialistaResult.data);
+                    setViewingEspecialista(especialistaResult.data ?? null);
                 } else {
                     console.error("Error loading especialista:", especialistaResult.error);
                 }
@@ -86,7 +86,14 @@ export default function ConsultaEspecialistaMobile() {
         setIsDeleting(false);
         try {
             if (!viewingEspecialista) return;
-            const especialista = await getPerfilEspecialista(viewingEspecialista.id_usuario);
+            const especialistaResult = await getPerfilEspecialista(viewingEspecialista.id_usuario);
+            
+            const especialista = especialistaResult.success ? especialistaResult.data : null;
+            if (!especialista) {
+                console.error('Especialista no encontrado después de eliminación');
+                return;
+            }
+
             setViewingEspecialista(especialista);
         } catch (error) {
             console.error('Error fetching deleted especialista:', error);
@@ -96,7 +103,12 @@ export default function ConsultaEspecialistaMobile() {
     const handleEditClose = async () => {
         setIsEditing(false);
         try {
-            const especialista = await getPerfilEspecialista(viewingEspecialista.id_usuario);
+            const especialistaResult = await getPerfilEspecialista(viewingEspecialista.id_usuario);
+            const especialista = especialistaResult.success ? especialistaResult.data : null;
+            if (!especialista) {
+                console.error('Especialista no encontrado después de actualización');
+                return;
+            }
             setViewingEspecialista(especialista);
         } catch (error) {
             console.error('Error fetching updated especialista:', error);
@@ -285,7 +297,8 @@ export default function ConsultaEspecialistaMobile() {
                         contraseña: '',
                         created_at: null,
                         id_especialidad: null,
-                        updated_at: null
+                        updated_at: null,
+                        id_rol: viewingEspecialista.rol.id,
                     }}
                     handleToast={toast.addToast}
                 />
