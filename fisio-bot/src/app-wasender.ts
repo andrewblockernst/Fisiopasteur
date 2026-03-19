@@ -174,7 +174,14 @@ const procesarRecordatoriosAutonomo = async () => {
 
             console.log(`📤 [${i + 1}/${pendientes.length}] Enviando recordatorio a ${turnoData.telefono}`)
 
-            const envio = await waSenderService.sendMessage({ to: turnoData.telefono, text: mensaje })
+            if (process.env.WHATSAPP_ENABLED !== 'true') {
+                console.log(`⚠️ [DEV] Envío bloqueado (WHATSAPP_ENABLED no activo). Destinatario: ${turnoData.telefono}`)
+                await marcarNotificacion(notif.id_notificacion, 'fallido')
+                fallidos++
+                continue
+            }
+
+        const envio = await waSenderService.sendMessage({ to: turnoData.telefono, text: mensaje })
 
             if (envio.success) {
                 console.log(`✅ Recordatorio ${notif.id_notificacion} enviado`)
