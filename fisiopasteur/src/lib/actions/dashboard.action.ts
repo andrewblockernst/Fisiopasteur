@@ -55,7 +55,10 @@ export async function obtenerNombreOrganizacion(): Promise<string> {
 // ✅ Obtener KPIs por periodo con historial
 export async function obtenerKPIsConHistorial(
   periodo: PeriodoFiltro
-): Promise<{ datos: KPIHistorico[]; total: KPIsDashboard }> {
+): Promise<
+  | { success: true; datos: KPIHistorico[]; total: KPIsDashboard }
+  | { success: false; error: string }
+> {
   const supabase = await createClient();
 
   try {
@@ -104,7 +107,7 @@ export async function obtenerKPIsConHistorial(
     const { data: turnos, error: errorTurnos } = await queryTurnos;
 
     if (errorTurnos) {
-      throw new Error("Error al obtener datos históricos");
+      return { success: false, error: "Error al obtener datos históricos" };
     }
 
     // Agrupar por fecha o por hora (si es "hoy")
@@ -204,18 +207,12 @@ export async function obtenerKPIsConHistorial(
       Ingresos: datos.reduce((sum, d) => sum + d.Ingresos, 0),
     };
 
-    return { datos, total };
+    return { success: true, datos, total };
   } catch (error) {
     console.error("❌ Error en obtenerKPIsConHistorial:", error);
     return {
-      datos: [],
-      total: {
-        // turnosHoy: 0,
-        Programados: 0,
-        Atendidos: 0,
-        Cancelaciones: 0,
-        Ingresos: 0,
-      },
+      success: false,
+      error: error instanceof Error ? error.message : "Error desconocido"
     };
   }
 }
@@ -269,7 +266,10 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
 }
 
 // ✅ Obtener ocupación de boxes
-export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
+export async function obtenerOcupacionBoxes(): Promise<
+  | { success: true; data: OcupacionBox[] }
+  | { success: false; error: string }
+> {
   const supabase = await createClient();
 
   try {
@@ -280,7 +280,7 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
       .from("box")
       .select("id_box, numero");
 
-    if (errorBoxes) throw errorBoxes;
+    if (errorBoxes) return { success: false, error: errorBoxes.message };
 
     // 2️⃣ Obtener turnos de hoy por box
     const { data: turnos, error: errorTurnos } = await supabase
@@ -290,7 +290,7 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
     //   .neq("id_especialidad", idPilates)
       .in("estado", ["programado", "atendido"]);
 
-    if (errorTurnos) throw errorTurnos;
+    if (errorTurnos) return { success: false, error: errorTurnos.message };
 
     // 3️⃣ Contar turnos por box
     const turnosPorBox = new Map<number, number>();
@@ -303,7 +303,7 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
     // 4️⃣ Calcular porcentaje (asumiendo max 8 turnos por box por día)
     const maxTurnosEstimados = 8;
 
-    return (boxes || []).map((box: any) => {
+    return { success: true, data: (boxes || []).map((box: any) => {
       const turnosBox = turnosPorBox.get(box.id_box) || 0;
       const porcentaje = (turnosBox / maxTurnosEstimados) * 100;
 
@@ -314,9 +314,9 @@ export async function obtenerOcupacionBoxes(): Promise<OcupacionBox[]> {
         turnosHoy: turnosBox,
         maxTurnosEstimados,
       };
-    });
+    }) };
   } catch (error) {
     console.error("❌ Error en obtenerOcupacionBoxes:", error);
-    return [];
+    return { success: false, error: error instanceof Error ? error.message : "Error desconocido" };
   }
 }

@@ -36,7 +36,8 @@ export default async function TurnosPage({
 }) {
   // ✅ Await searchParams primero (Next.js 15 requirement)
   const params = await searchParams;
-  const perfil: any = await obtenerPerfilUsuario();
+  const perfilResult: any = await obtenerPerfilUsuario();
+  const perfil = perfilResult.success ? perfilResult.data : null;
   const userId = perfil?.id_usuario ? String(perfil.id_usuario) : "";
   const puedeGestionar = puedeGestionarTurnos(perfil?.rol?.id ?? null);
 

@@ -17,7 +17,7 @@ export async function cerrarSesionServer() {
       }
 
       console.error('❌ Error en signOut servidor:', error);
-      throw error;
+      return { success: false, error: error.message };
     }
 
     revalidatePath('/');
@@ -25,6 +25,6 @@ export async function cerrarSesionServer() {
     
   } catch (error) {
     console.error('❌ Error al cerrar sesión en servidor:', error);
-    return { success: false, error };
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
   }
 }

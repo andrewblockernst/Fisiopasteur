@@ -17,7 +17,7 @@ export function useEspecialidades() {
     queryKey: especialidadKeys.lists(),
     queryFn: async () => {
       const result = await getEspecialidades();
-      return result; // getEspecialidades ya devuelve el array directamente
+      return result.success ? result.data : [];
     },
     staleTime: 15 * 60 * 1000, // 15 minutos (casi nunca cambian)
     gcTime: 60 * 60 * 1000, // 1 hora en caché
