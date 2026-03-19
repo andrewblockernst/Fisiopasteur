@@ -220,7 +220,12 @@ function EspecialistaEditFormForDialog({
       
       console.log('Resultado de actualización:', result);
       
-      showServerActionResponse(result);
+      showServerActionResponse({
+        ...result,
+        message: result.success ? "Especialista actualizado" : "Error al actualizar",
+        description: result.success ? "La información del especialista se ha actualizado exitosamente" : (result.error || "Ocurrió un error inesperado"),
+        toastType: result.success ? "success" : "error"
+      });
       
       if (result.success) {
         // Esperar un momento antes de cerrar para que el usuario vea el mensaje

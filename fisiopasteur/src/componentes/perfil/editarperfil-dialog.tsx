@@ -29,7 +29,7 @@ export default function EditarPerfilDialog({ open, onClose, perfil }: EditarPerf
       addToast({
         variant: result.success ? 'success' : 'error',
         message: result.success ? 'Perfil actualizado' : 'Error al actualizar perfil',
-        description: result.message,
+        description: result.success ? undefined : result.error,
       });
       
       if (result.success) {

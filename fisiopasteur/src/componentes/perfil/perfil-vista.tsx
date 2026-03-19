@@ -78,7 +78,7 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
       addToast({
         variant: result.success ? 'success' : 'error',
         message: result.success ? 'Perfil actualizado' : 'No se pudo actualizar el perfil',
-        description: result.message,
+        description: result.success ? undefined : result.error,
       });
       if (result.success) {
         router.refresh();

@@ -138,7 +138,12 @@ function EspecialistaFormForDialog({
     try {
       setIsSubmitting(true);
       const result = await createEspecialista(formData);
-      showServerActionResponse(result);
+      showServerActionResponse({
+        ...result,
+        message: result.success ? "Especialista creado" : "Error al crear especialista",
+        description: result.success ? "El especialista se ha creado exitosamente" : (result.error || "Ocurrió un error inesperado"),
+        toastType: result.success ? "success" : "error"
+      });
       
       if (result.success) {
         setTimeout(() => {

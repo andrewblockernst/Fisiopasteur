@@ -39,8 +39,10 @@ export default function ConsultaPacienteMobile() {
                 setLoading(true);
                 const pacienteId = params.id as string;
                 if (pacienteId) {
-                    const paciente = await getPaciente(parseInt(pacienteId));
-                    setViewingPaciente(paciente);
+                    const data = await getPaciente(parseInt(pacienteId));
+                    if (data.success) {
+                        setViewingPaciente(data.data);
+                    }
                 }
             } catch (error) {
                 console.error('Error loading paciente:', error);
@@ -75,8 +77,12 @@ export default function ConsultaPacienteMobile() {
     const handleDeleteClose = async () => {
         setIsDeleting(false);
         try {
-            const paciente = await getPaciente(viewingPaciente.id_paciente);
-            setViewingPaciente(paciente);
+            const pacienteResult = await getPaciente(viewingPaciente.id_paciente);
+            if (pacienteResult.success) {
+                setViewingPaciente(pacienteResult.data);
+            } else {
+                console.error('Error fetching deleted paciente:', pacienteResult.error);
+            }
         } catch (error) {
             console.error('Error fetching deleted paciente:', error);
         }
@@ -85,8 +91,12 @@ export default function ConsultaPacienteMobile() {
     const handleEditClose = async () => {
         setIsEditing(false);
         try {
-            const paciente = await getPaciente(viewingPaciente.id_paciente);
-            setViewingPaciente(paciente);
+            const pacienteResult = await getPaciente(viewingPaciente.id_paciente);
+            if (pacienteResult.success) {
+                setViewingPaciente(pacienteResult.data);
+            } else {
+                console.error('Error fetching updated paciente:', pacienteResult.error);
+            }
         } catch (error) {
             console.error('Error fetching updated paciente:', error);
         }
