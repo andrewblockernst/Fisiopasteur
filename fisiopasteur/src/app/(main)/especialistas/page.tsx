@@ -13,7 +13,11 @@ import { ArrowLeft, Plus, Search, Filter, GraduationCap, Box } from "lucide-reac
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/usePerfil";
 
-type Especialidad = Tables<"especialidad">;
+// type Especialidad = Tables<"especialidad">;
+type Especialidad = {
+  id_especialidad: number;
+  nombre: string;
+}
 
 // ✅ Tipo correcto que coincide con lo que devuelve getEspecialistas()
 type EspecialistaConDatos = {
@@ -45,6 +49,8 @@ type EspecialistaConDatos = {
     };
   }>;
 };
+
+type Especialista = Tables<"usuario">;
 
 const BRAND = '#9C1838';
 
@@ -91,7 +97,10 @@ export default function EspecialistasPage() {
     // Recargar la lista de especialistas después de crear uno nuevo
     try {
       const incluirInactivos = filter !== "activos";
-      const updatedEspecialistas = await getEspecialistas({ incluirInactivos });
+      const updatedEspecialistasResult = await getEspecialistas({ incluirInactivos });
+
+      const updatedEspecialistas = updatedEspecialistasResult.success ? updatedEspecialistasResult.data : [];
+
       setEspecialistas(updatedEspecialistas);
     } catch (error) {
       console.error("Error reloading specialists:", error);
@@ -102,7 +111,8 @@ export default function EspecialistasPage() {
     setShowEspecialidadesDialog(false);
     // Recargar especialidades
     try {
-      const updatedEspecialidades = await getEspecialidades();
+      const updatedEspecialidadesResult = await getEspecialidades();
+      const updatedEspecialidades = updatedEspecialidadesResult.success ? updatedEspecialidadesResult.data : [];
       setEspecialidades(updatedEspecialidades);
     } catch (error) {
       console.error("Error reloading specialties:", error);
@@ -112,7 +122,8 @@ export default function EspecialistasPage() {
   const handleEspecialidadesUpdated = async () => {
     // Recargar especialidades cuando se actualizan
     try {
-      const updatedEspecialidades = await getEspecialidades();
+      const updatedEspecialidadesResult  = await getEspecialidades();
+      const updatedEspecialidades = updatedEspecialidadesResult.success ? updatedEspecialidadesResult.data : [];
       setEspecialidades(updatedEspecialidades);
     } catch (error) {
       console.error("Error reloading specialties:", error);
@@ -409,7 +420,8 @@ export default function EspecialistasPage() {
             // Recargar la lista después de eliminar
             try {
               const incluirInactivos = filter !== "activos";
-              const updatedEspecialistas = await getEspecialistas({ incluirInactivos });
+              const updatedEspecialistasResult = await getEspecialistas({ incluirInactivos });
+              const updatedEspecialistas = updatedEspecialistasResult.success ? updatedEspecialistasResult.data : [];
               setEspecialistas(updatedEspecialistas);
             } catch (error) {
               console.error("Error reloading specialists:", error);
@@ -419,7 +431,8 @@ export default function EspecialistasPage() {
             // Recargar la lista después de actualizar
             try {
               const incluirInactivos = filter !== "activos";
-              const updatedEspecialistas = await getEspecialistas({ incluirInactivos });
+              const updatedEspecialistasResult = await getEspecialistas({ incluirInactivos });
+              const updatedEspecialistas = updatedEspecialistasResult.success ? updatedEspecialistasResult.data : [];
               setEspecialistas(updatedEspecialistas);
             } catch (error) {
               console.error("Error reloading specialists:", error);

@@ -74,11 +74,23 @@ export function EspecialistasTable({
   const handleToggleActivo = (especialista: EspecialistaConDatos) => {
     startTransition(async () => {
       const res = await toggleEspecialistaActivo(especialista.id_usuario, !especialista.activo);
-      addToast({
-        variant: res.success ? "success" : "error",
-        message: res.message,
-        description: res.description,
-      });
+
+      if (!res.success) {
+        addToast({
+          variant: "error",
+          message: "Error al actualizar estado",
+          description: res.error || "No se pudo actualizar el estado del especialista"
+        });
+        return;
+      } else {
+        addToast({
+          variant: res.success ? "success" : "error",
+          message: "Estado actualizado",
+          description: `El especialista ahora está ${!especialista.activo ? "activo" : "inactivo"}`,
+        });
+      }
+
+      
       if (onEspecialistaUpdated) onEspecialistaUpdated();
     });
   };

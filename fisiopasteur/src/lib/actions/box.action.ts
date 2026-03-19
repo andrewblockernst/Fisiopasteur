@@ -3,6 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/actions/action-result";
+import type { Database, TablesInsert } from "@/lib/database.types";
+
+type BoxInsert = Database["public"]["Tables"]["box"]["Insert"];
 
 // Obtener todos los boxes
 export async function obtenerBoxes() {
@@ -40,26 +43,16 @@ export async function crearBox(formData: FormData): Promise<ActionResult<any>> {
     return { success: false, error: "El nombre del box es requerido" };
   }
 
-  // // Verificar que el número no esté en uso
-  // const { data: existente } = await supabase
-  //   .from("box")
-  //   .select("id_box")
-  //   .eq("numero", numero)
-  //   .eq("estado", "activo")
-  //   .single();
-
-  // if (existente) {
-  //   throw new Error(`Ya existe un box con el número ${numero}`);
-  // }
+  const payload: BoxInsert = {
+    numero,
+    nombre,
+    estado: "activo"
+  } ;
 
   // Crear el box
   const { data, error } = await supabase
     .from("box")
-    .insert({
-      numero,
-      nombre,
-      estado: "activo",
-    })
+    .insert(payload)
     .select()
     .single();
 

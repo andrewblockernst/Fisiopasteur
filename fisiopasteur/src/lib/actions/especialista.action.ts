@@ -14,8 +14,7 @@ type UsuarioEspecialidad = Tables<"usuario_especialidad">;
 
 // Obtener todos los especialistas con sus especialidades
 export async function getEspecialistas({ incluirInactivos = false } = {}): Promise<
-  | { success: true; data: any[] }
-  | { success: false; error: string }
+  ActionResult
 > {
   try {
     const supabase = await createClient();
@@ -566,8 +565,7 @@ import { PerfilCompleto } from "./perfil.action";
 
 // obtener perfil de especialista
 export async function getPerfilEspecialista(id_especialista: string): Promise<
-  | { success: true; data: PerfilCompleto }
-  | { success: false; error: string }
+  ActionResult<PerfilCompleto>
 > {
   try {
     const supabase = await createClient();
