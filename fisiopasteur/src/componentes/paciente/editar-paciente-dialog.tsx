@@ -169,7 +169,12 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
     
         try {
             setIsSubmitting(true);
-            await updatePaciente(paciente.id_paciente, formData);
+            const result = await updatePaciente(paciente.id_paciente, formData);
+            if (!result.success) {
+                onError(new Error(result.error));
+                setIsSubmitting(false);
+                return;
+            }
             onSuccess();
         } catch (error: any) {
             if (error?.digest?.includes('NEXT_REDIRECT')) {

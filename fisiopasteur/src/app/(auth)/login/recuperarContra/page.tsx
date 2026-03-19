@@ -25,7 +25,11 @@ export default function ForgotPasswordPage() {
     }
 
     try {
-      await resetPassword(email);
+      const result = await resetPassword(email);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setMessage("Te enviamos un correo para restablecer tu contraseña.");
     } catch (err: any) {
       setError(err.message);

@@ -124,6 +124,7 @@ export default function TurnosPageContainer({
         onTurnoCreated={handleTurnoCreated}
         especialistas={especialistas}
         especialidades={especialidades}
+        loadingTurnos={turnosLoading}
         initialFilters={initialFilters}
       />
     );

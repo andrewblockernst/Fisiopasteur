@@ -136,8 +136,12 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
       setIsLoading(true);
       try {
         const resultado = await obtenerKPIsConHistorial(periodo);
-        setDatos(resultado.datos);
-        setTotales(resultado.total);
+        if (resultado.success) {
+          setDatos(resultado.datos);
+          setTotales(resultado.total);
+        } else {
+          console.error("Error cargando KPIs:", resultado.error);
+        }
       } catch (error) {
         console.error("Error cargando KPIs:", error);
       } finally {

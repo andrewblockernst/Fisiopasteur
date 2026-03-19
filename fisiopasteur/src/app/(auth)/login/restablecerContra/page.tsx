@@ -24,7 +24,11 @@ export default function ResetPasswordPage() {
     }
 
     try {
-      await updatePassword(password);
+      const result = await updatePassword(password);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setMessage("Contraseña actualizada con éxito. Ahora podés iniciar sesión.");
 
       router.push("/login");

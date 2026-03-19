@@ -27,8 +27,12 @@ export default function PacientePage() {
     useEffect(() => {
         const loadData = async () => {
             try{
-                const pacientesData = await getPacientes();
-                setPacientes(pacientesData.data);
+                const result = await getPacientes();
+                if (result.success) {
+                    setPacientes(result.data);
+                } else {
+                    console.error("Error al cargar pacientes:", result.error);
+                }
             } catch (error) {
                 console.error("Error al cargar los pacientes:", error);
             } 
@@ -53,7 +57,14 @@ export default function PacientePage() {
 
     const handleActive = async (paciente: Paciente) => {
         try {
-            await activarPaciente(paciente.id_paciente);
+            const result = await activarPaciente(paciente.id_paciente);
+            if (!result.success) {
+                toast.addToast({
+                    variant: "error",
+                    message: result.error,
+                });
+                return;
+            }
             const updatedPacientes = await getPacientes();
             setPacientes(updatedPacientes.data);
             toast.addToast({

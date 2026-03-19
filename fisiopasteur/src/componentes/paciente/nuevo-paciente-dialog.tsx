@@ -129,8 +129,15 @@ function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteF
 
         try {
             setIsSubmitting(true);
-            const pacienteCreado = await createPaciente(formData);
-            onSuccess(pacienteCreado);
+            const result = await createPaciente(formData);
+
+            if (!result.success) {
+                onError(new Error(result.error));
+                setIsSubmitting(false);
+                return;
+            }
+
+            onSuccess(result.data);
         } catch (error: any) {
             if (error?.digest?.includes('NEXT_REDIRECT')) {
                 onSuccess();

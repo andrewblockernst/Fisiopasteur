@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { Database } from '@/types/database.types';
+import type { ActionResult } from '@/lib/actions/action-result';
 
 // Tipos específicos para el perfil
 type Usuario = Database['public']['Tables']['usuario']['Row'];
@@ -124,7 +125,10 @@ export async function guardarPrecioUsuarioEspecialidad(
   }
 }
 
-export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
+export async function obtenerPerfilUsuario(): Promise<
+  | { success: true; data: PerfilCompleto }
+  | { success: false; error: string }
+> {
   try {
     const supabase = await createClient();
     
@@ -173,8 +177,7 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
     }
 
     if (userError || !userData) {
-      throw new Error(`No se pudo obtener el perfil: ${userError?.message}`);
-      throw new Error(`No se pudo obtener el perfil: ${userError?.message || 'Usuario no encontrado'}`);
+      return { success: false, error: userError?.message || 'Usuario no encontrado' };
     }
 
     // 3. Obtener especialidades del usuario
@@ -220,11 +223,11 @@ export async function obtenerPerfilUsuario(): Promise<PerfilCompleto | null> {
       especialidades_adicionales: especialidadesAdicionales
     };
 
-    return perfil;
+    return { success: true, data: perfil };
 
   } catch (error) {
     console.error('Error en obtenerPerfilUsuario:', error);
-    return null;
+    return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
   }
 }
 
@@ -236,7 +239,7 @@ export async function actualizarPerfil(formData: FormData) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      throw new Error('No autenticado');
+      return { success: false, error: 'No autenticado' };
     }
 
     // Extraer datos del formulario
@@ -280,16 +283,16 @@ export async function actualizarPerfil(formData: FormData) {
       .eq('id_usuario', usuarioId);
 
     if (updateError) {
-      throw new Error(`Error al actualizar: ${updateError.message}`);
+      return { success: false, error: `Error al actualizar: ${updateError.message}` };
     }
 
-    return { success: true, message: 'Perfil actualizado correctamente' };
+    return { success: true };
 
   } catch (error) {
     console.error('Error en actualizarPerfil:', error);
     return {
       success: false,
-      message: error instanceof Error ? error.message : 'Error desconocido'
+      error: error instanceof Error ? error.message : 'Error desconocido'
     };
   }
 }
