@@ -9,6 +9,11 @@ import { obtenerNotificacionesPendientes } from '@/lib/services/notificacion.ser
  * marcar cada una como enviada o fallida.
  */
 export async function GET() {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('⚠️ [DEV] Endpoint de recordatorios pendientes deshabilitado en desarrollo.');
+    return NextResponse.json({ success: true, data: [] });
+  }
+
   try {
     const resultado = await obtenerNotificacionesPendientes();
 
