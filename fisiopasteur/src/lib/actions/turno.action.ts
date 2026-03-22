@@ -385,65 +385,92 @@ export async function crearTurno(
 
 export async function actualizarTurno(id: number, datos: TurnoUpdate) {
   const supabase = await createClient();
-  
-  try {    // Si se cambia fecha/hora/especialista, verificar disponibilidad
-    if (datos.fecha || datos.hora || datos.id_especialista || datos.id_box !== undefined) {
-      const turnoActual: any = await supabase
-        .from("turno")
-        .select("fecha, hora, id_especialista, id_box, id_especialidad")
-        .eq("id_turno", id)
-        .single();
 
-      if (turnoActual.data) {
-        const turnoData = turnoActual.data;
-        const nuevaFecha = datos.fecha || turnoData.fecha;
-        const nuevaHora = datos.hora || turnoData.hora;
-        const nuevoEspecialista = datos.id_especialista || turnoData.id_especialista;
-        const nuevoBox = datos.id_box !== undefined ? datos.id_box : turnoData.id_box;
-        const especialidadId = turnoData.id_especialidad;
+  const normalizeHora = (h: string | null | undefined) =>
+    h != null && h !== "" ? String(h).substring(0, 5) : "";
 
-        // Solo verificar si cambió algo relevante Y si tenemos especialista
-        const cambioRelevante = 
-          datos.fecha !== turnoData.fecha ||
-          datos.hora !== turnoData.hora ||
-          datos.id_especialista !== turnoData.id_especialista ||
-          datos.id_box !== turnoData.id_box;
+  try {
+    const { data: prevTurno, error: errPrev } = await supabase
+      .from("turno")
+      .select(
+        `
+        id_turno,
+        fecha,
+        hora,
+        id_especialista,
+        id_box,
+        id_especialidad,
+        estado,
+        paciente:id_paciente(nombre, apellido, telefono),
+        especialista:id_especialista(nombre, apellido),
+        especialidad:id_especialidad(nombre),
+        box:id_box(numero)
+      `,
+      )
+      .eq("id_turno", id)
+      .single();
 
-        // Solo verificar disponibilidad si hay cambios relevantes Y tenemos especialista
-        if (cambioRelevante && nuevoEspecialista && nuevaFecha && nuevaHora) {
-          const disponibilidad = await verificarDisponibilidadParaActualizacion(
-            nuevaFecha,
-            nuevaHora,
-            nuevoEspecialista,
-            nuevoBox,
-            id,
-            especialidadId ?? undefined
-          );
-          
-          if (!disponibilidad.success || !disponibilidad.disponible) {
-            const idPilates = await obtenerIdPilates();
+    if (errPrev || !prevTurno) {
+      return {
+        success: false,
+        error: "Turno no encontrado o no pertenece a esta organización",
+      };
+    }
 
-            if (idPilates && especialidadId === idPilates) {
-              return { 
-                success: false, 
-                error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4` 
-              };
-            } else {
-              return { 
-                success: false, 
-                error: `Horario no disponible. Conflictos: ${disponibilidad.conflictos || 0}` 
-              };
-            }
+    // Si se cambia fecha/hora/especialista/box, verificar disponibilidad
+    if (
+      datos.fecha !== undefined ||
+      datos.hora !== undefined ||
+      datos.id_especialista !== undefined ||
+      datos.id_box !== undefined
+    ) {
+      const nuevaFecha = datos.fecha ?? prevTurno.fecha;
+      const nuevaHora = datos.hora ?? prevTurno.hora;
+      const nuevoEspecialista =
+        datos.id_especialista ?? prevTurno.id_especialista;
+      const nuevoBox =
+        datos.id_box !== undefined ? datos.id_box : prevTurno.id_box;
+      const especialidadId = prevTurno.id_especialidad;
+
+      const cambioRelevante =
+        (datos.fecha !== undefined && datos.fecha !== prevTurno.fecha) ||
+        (datos.hora !== undefined &&
+          normalizeHora(datos.hora as string) !==
+            normalizeHora(prevTurno.hora)) ||
+        (datos.id_especialista !== undefined &&
+          datos.id_especialista !== prevTurno.id_especialista) ||
+        (datos.id_box !== undefined && datos.id_box !== prevTurno.id_box);
+
+      if (cambioRelevante && nuevoEspecialista && nuevaFecha && nuevaHora) {
+        const disponibilidad = await verificarDisponibilidadParaActualizacion(
+          nuevaFecha,
+          String(nuevaHora),
+          nuevoEspecialista,
+          nuevoBox,
+          id,
+          especialidadId ?? undefined,
+        );
+
+        if (!disponibilidad.success || !disponibilidad.disponible) {
+          const idPilates = await obtenerIdPilates();
+
+          if (idPilates && especialidadId === idPilates) {
+            return {
+              success: false,
+              error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4`,
+            };
           }
+          return {
+            success: false,
+            error: `Horario no disponible. Conflictos: ${disponibilidad.conflictos || 0}`,
+          };
         }
-      } else {
-        return { success: false, error: "Turno no encontrado o no pertenece a esta organización" };
       }
     }
 
     const datosUpdate: any = {
       ...datos,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     // @ts-expect-error - Supabase typing issue after merge
@@ -451,13 +478,15 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
       .from("turno")
       .update(datosUpdate)
       .eq("id_turno", id)
-      .select(`
+      .select(
+        `
         *,
         paciente:id_paciente(nombre, apellido, telefono, dni),
         especialista:id_especialista(nombre, apellido, color),
         especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(numero)
-      `)
+      `,
+      )
       .single();
 
     if (error) {
@@ -465,12 +494,48 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
       return { success: false, error: error.message };
     }
 
+    const cambioVisiblePaciente =
+      prevTurno.fecha !== data.fecha ||
+      normalizeHora(prevTurno.hora) !== normalizeHora(data.hora) ||
+      prevTurno.id_especialista !== data.id_especialista ||
+      prevTurno.id_box !== data.id_box ||
+      prevTurno.id_especialidad !== data.id_especialidad;
+
+    if (
+      cambioVisiblePaciente &&
+      data.paciente?.telefono &&
+      data.estado !== "eliminado"
+    ) {
+      Promise.resolve()
+        .then(async () => {
+          try {
+            const { enviarAvisoModificacionTurno, snapshotDesdeTurnoRelacionado } =
+              await import("@/lib/services/whatsapp-bot.service");
+            const nombrePaciente =
+              `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
+              "Paciente";
+            await enviarAvisoModificacionTurno({
+              telefono: data.paciente.telefono,
+              nombrePaciente,
+              anterior: snapshotDesdeTurnoRelacionado(prevTurno as any),
+              actual: snapshotDesdeTurnoRelacionado(data as any),
+            });
+          } catch (notifyErr) {
+            console.error(
+              "Error enviando aviso WhatsApp por cambio de turno:",
+              notifyErr,
+            );
+          }
+        })
+        .catch(() => {});
+    }
+
     revalidatePath("/turnos");
     revalidatePath("/pilates");
     revalidatePath("/pacientes");
     revalidatePath("/pacientes/HistorialClinico");
     revalidatePath("/inicio");
-    
+
     return { success: true, data };
   } catch (error) {
     console.error("Error inesperado:", error);
