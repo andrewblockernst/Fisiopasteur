@@ -7,6 +7,7 @@ import type { Database } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
+import { snapshotDesdeTurnoRelacionado } from "@/lib/utils/whatsapp.utils";
 import { es } from "date-fns/locale";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
@@ -509,8 +510,9 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
       Promise.resolve()
         .then(async () => {
           try {
-            const { enviarAvisoModificacionTurno, snapshotDesdeTurnoRelacionado } =
-              await import("@/lib/services/whatsapp-bot.service");
+            const { enviarAvisoModificacionTurno } = await import(
+              "@/lib/services/whatsapp-bot.service"
+            );
             const nombrePaciente =
               `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
               "Paciente";

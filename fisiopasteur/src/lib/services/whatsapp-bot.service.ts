@@ -7,8 +7,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   mapearTurnoParaBot,
-  formatearFechaParaBot,
-  formatearHoraParaBot,
+  type SnapshotTurnoParaAviso,
 } from "@/lib/utils/whatsapp.utils";
 import { getBrandingConfig, getNombreOrganizacion } from "./branding.service";
 
@@ -265,37 +264,6 @@ export async function enviarMensajePersonalizado(
   }
 
   return resultado;
-}
-
-/** Datos legibles para el mensaje de “turno modificado” */
-export type SnapshotTurnoParaAviso = {
-  fecha: string;
-  hora: string;
-  profesional: string;
-  especialidad: string;
-  boxLabel: string | null;
-};
-
-export function snapshotDesdeTurnoRelacionado(turno: {
-  fecha: string;
-  hora: string;
-  especialista?: { nombre?: string | null; apellido?: string | null } | null;
-  especialidad?: { nombre?: string | null } | null;
-  box?: { numero?: number | null } | null;
-}): SnapshotTurnoParaAviso {
-  const prof = turno.especialista
-    ? `${turno.especialista.nombre ?? ""} ${turno.especialista.apellido ?? ""}`.trim()
-    : "Profesional";
-  const esp = turno.especialidad?.nombre?.trim() || "Consulta";
-  const boxNum = turno.box?.numero;
-  return {
-    fecha: formatearFechaParaBot(turno.fecha),
-    hora: formatearHoraParaBot(turno.hora || ""),
-    profesional: prof || "Profesional",
-    especialidad: esp,
-    boxLabel:
-      boxNum !== undefined && boxNum !== null ? `Box ${boxNum}` : null,
-  };
 }
 
 /**
