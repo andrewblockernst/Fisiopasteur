@@ -726,4 +726,4 @@
 //   },
 // } as const
 
-export type { Database } from "@/lib/database.types";
+export type { Database, Tables, TablesInsert, TablesUpdate, Enums, CompositeTypes, Constants } from "@/lib/database.types";

@@ -5,14 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
 import { es } from "date-fns/locale";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
 type TurnoUpdate = Database["public"]["Tables"]["turno"]["Update"];
-type SupabaseClientType = SupabaseClient<Database>;
 
 
 export async function obtenerTurno(id: number): Promise<
@@ -28,7 +26,8 @@ export async function obtenerTurno(id: number): Promise<
         paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email),
         especialista:id_especialista(id_usuario, nombre, apellido, color),
         especialidad:id_especialidad(id_especialidad, nombre),
-        box:id_box(id_box, numero)
+        box:id_box(id_box, numero),
+        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
       `)
       .eq("id_turno", id)
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
@@ -62,7 +61,8 @@ export async function obtenerTurnos(filtros?: {
         paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email),
         especialista:id_especialista(id_usuario, nombre, apellido, color),
         especialidad:id_especialidad(id_especialidad, nombre),
-        box:id_box(id_box, numero)
+        box:id_box(id_box, numero),
+        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
       `)
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
@@ -129,7 +129,8 @@ export async function obtenerTurnosConFiltros(filtros?: {
           especialidad:id_especialidad(id_especialidad, nombre)
         ),
         especialidad:id_especialidad(id_especialidad, nombre),
-        box:id_box(id_box, numero)
+        box:id_box(id_box, numero),
+        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
       `)
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
@@ -218,10 +219,11 @@ export async function crearTurno(
       const nuevoGrupo: Database["public"]["Tables"]["grupo_tratamiento"]["Insert"] = {
         id_paciente: datos.id_paciente,
         id_especialista: datos.id_especialista,
-        id_especialidad: idPilates ?? datos.id_especialidad ?? undefined,        nombre: datos.titulo_tratamiento,
+        id_especialidad: idPilates ?? datos.id_especialidad ?? undefined,
+        nombre: datos.titulo_tratamiento,
         fecha_inicio: datos.fecha,
         tipo_plan: datos.tipo_plan ?? 'particular',
-        
+        cantidad_turnos_planificados: 1,
       };
 
       const { data: grupo, error: errorGrupo } = await supabase
@@ -285,7 +287,8 @@ export async function crearTurno(
         paciente:id_paciente(nombre, apellido, telefono, dni),
         especialista:id_especialista(nombre, apellido, color),
         especialidad:id_especialidad(id_especialidad, nombre),
-        box:id_box(numero)
+        box:id_box(numero),
+        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
       `)
       .single();
 
@@ -1762,38 +1765,7 @@ export async function crearPaqueteSesiones(params: {
 }) {
   try {
     const supabase = await createClient();
-    // ============= PASO 1: CREAR GRUPO DE TRATAMIENTO =============
-    let id_grupo_tratamiento: string | undefined;
-
-    if (params.titulo_tratamiento) {
-      const nuevoGrupo: Database["public"]["Tables"]["grupo_tratamiento"]["Insert"] = {
-        id_paciente: params.id_paciente,
-        id_especialista: params.id_especialista,
-        id_especialidad: params.id_especialidad,        nombre: params.titulo_tratamiento,
-        fecha_inicio: params.fechaBase,
-        tipo_plan: params.tipo_plan,
-      };
-
-      const { data: grupo, error: errorGrupo } = await supabase
-        .from('grupo_tratamiento')
-        .insert(nuevoGrupo as any)
-        .select('id_grupo')
-        .single();
-
-      if (errorGrupo) {
-        console.error('Error creando grupo de tratamiento:', errorGrupo);
-        return {
-          success: false,
-          error: errorGrupo.message || 'No se pudo crear el grupo de tratamiento'
-        };
-      }
-
-      if (grupo) {
-        id_grupo_tratamiento = (grupo as any).id_grupo;
-      }
-    }
-
-    // ============= PASO 2: GENERAR LISTA DE TURNOS =============
+    // ============= PASO 1: GENERAR LISTA DE TURNOS =============
     const turnosParaCrear: TurnoInsert[] = [];
     const [year, month, day] = params.fechaBase.split('-').map(Number);
     const fechaBaseParsed = new Date(year, month - 1, day);
@@ -1825,7 +1797,7 @@ export async function crearPaqueteSesiones(params: {
         id_box: params.id_box || null,
         observaciones: params.observaciones || null,
         estado: "programado" as const,
-        tipo_plan: params.tipo_plan,        ...(id_grupo_tratamiento && { id_grupo_tratamiento })
+        tipo_plan: params.tipo_plan,
       });
     }
 
@@ -1863,7 +1835,7 @@ export async function crearPaqueteSesiones(params: {
             id_box: params.id_box || null,
             observaciones: params.observaciones || null,
             estado: "programado" as const,
-            tipo_plan: params.tipo_plan,            ...(id_grupo_tratamiento && { id_grupo_tratamiento })
+            tipo_plan: params.tipo_plan,
           });
           sesionesCreadas++;
         }
@@ -1878,25 +1850,74 @@ export async function crearPaqueteSesiones(params: {
       };
     }
 
-    // ============= PASO 3: INSERTAR TODOS LOS TURNOS EN UNA TRANSACCIÓN =============
-    const { data: turnosCreados, error: errorCrear } = await supabase
-      .from('turno')
-      .insert(turnosParaCrear as any)
-      .select(`
-        *,
-        paciente:id_paciente(nombre, apellido, telefono),
-        especialista:id_especialista(nombre, apellido)
-      `);
+    turnosParaCrear.sort((a, b) => {
+      const fechaA = `${a.fecha}T${a.hora || "00:00:00"}`;
+      const fechaB = `${b.fecha}T${b.hora || "00:00:00"}`;
+      return fechaA.localeCompare(fechaB);
+    });
 
-    if (errorCrear) {
-      console.error('Error creando turnos en lote:', errorCrear);
+    // ============= PASO 2: CREAR GRUPO + TURNOS VIA RPC TRANSACCIONAL =============
+    const turnosPayload = turnosParaCrear.map((turno) => ({
+      fecha: turno.fecha,
+      hora: turno.hora,
+      id_box: turno.id_box,
+      observaciones: turno.observaciones,
+      estado: turno.estado,
+      tipo_plan: turno.tipo_plan,
+    }));
+
+    const { data: turnosRpc, error: errorRpc } = await supabase.rpc('crear_paquete_sesiones_rpc', {
+      p_id_paciente: params.id_paciente,
+      p_id_especialista: params.id_especialista,
+      p_id_especialidad: params.id_especialidad,
+      p_fecha_inicio: params.fechaBase,
+      p_tipo_plan: params.tipo_plan,
+      p_titulo_tratamiento: params.titulo_tratamiento || null,
+      p_turnos: turnosPayload,
+    });
+
+    if (errorRpc) {
+      console.error('Error creando paquete por RPC:', errorRpc);
       return {
         success: false,
-        error: errorCrear.message || 'No se pudieron crear los turnos'
+        error: errorRpc.message || 'No se pudieron crear los turnos'
       };
     }
 
-    // ============= PASO 4: ENVIAR NOTIFICACIÓN GRUPAL =============
+    const idsTurnosCreados = (turnosRpc || [])
+      .map((r: any) => r.id_turno)
+      .filter((id: any): id is number => typeof id === 'number');
+
+    if (idsTurnosCreados.length === 0) {
+      return {
+        success: false,
+        error: 'No se pudieron crear los turnos'
+      };
+    }
+
+    const id_grupo_tratamiento = (turnosRpc || []).find((r: any) => r.id_grupo_tratamiento)?.id_grupo_tratamiento as string | undefined;
+
+    const { data: turnosCreados, error: errorTurnos } = await supabase
+      .from('turno')
+      .select(`
+        *,
+        paciente:id_paciente(nombre, apellido, telefono),
+        especialista:id_especialista(nombre, apellido),
+        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
+      `)
+      .in('id_turno', idsTurnosCreados)
+      .order('fecha', { ascending: true })
+      .order('hora', { ascending: true });
+
+    if (errorTurnos || !turnosCreados) {
+      console.error('Error obteniendo turnos creados tras RPC:', errorTurnos);
+      return {
+        success: false,
+        error: errorTurnos?.message || 'Se crearon turnos, pero falló la lectura posterior'
+      };
+    }
+
+    // ============= PASO 3: ENVIAR NOTIFICACIÓN GRUPAL =============
     if (turnosCreados && turnosCreados.length > 0) {
       // Ejecutar en background sin bloquear
       Promise.resolve().then(async () => {
@@ -1921,7 +1942,7 @@ export async function crearPaqueteSesiones(params: {
       });
     }
 
-    // ============= PASO 5: REVALIDAR Y RETORNAR =============
+    // ============= PASO 4: REVALIDAR Y RETORNAR =============
     revalidatePath('/turnos');
     revalidatePath('/calendario');
 
