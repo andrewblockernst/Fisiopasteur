@@ -2,7 +2,7 @@ import Button from "@/componentes/boton";
 //import { DeleteEspecialistaButton } from "./eliminar-boton";
 import { useState, useTransition } from "react";
 import { EditarEspecialistaDialog } from "./editar-especialista-dialog";
-import type { Tables } from "@/types/database.types";
+import type { Tables } from "@/lib/database.types";
 import { formatoNumeroTelefono } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toggleEspecialistaActivo } from "@/lib/actions/especialista.action";

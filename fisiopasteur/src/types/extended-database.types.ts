@@ -13,6 +13,7 @@ export type TurnoWithRelations = {
   id_turno: number;
   fecha: string;
   hora: string;
+  numero_en_grupo?: number | null;
   estado: string | null;
   observaciones: string | null;
   notas: string | null;
@@ -47,6 +48,10 @@ export type TurnoWithRelations = {
   box: {
     id_box: number;
     numero: number;
+  } | null;
+  grupo_tratamiento?: {
+    id_grupo: string;
+    cantidad_turnos_planificados: number | null;
   } | null;
 };
 
