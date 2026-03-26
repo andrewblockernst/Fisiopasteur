@@ -1,14 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { DetalleTurnoDialog } from "@/componentes/turnos/detalle-turno-dialog";
-import { obtenerTurnos, marcarComoAtendido, cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
+import { marcarComoAtendido, cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
 import { useToastStore } from "@/stores/toast-store";
 import { useAuth } from "@/hooks/usePerfil";
-import Button from "../boton";
 import EditarTurnoModal from "./editar-turno-modal";
 import type { TurnoWithRelations } from "@/types";
-import { MoreVertical, CheckCircle, XCircle, Edit, Trash, AlertCircle } from "lucide-react";
+import { MoreVertical, CheckCircle, XCircle, Edit, Trash } from "lucide-react";
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import UnifiedSkeletonLoader from "../unified-skeleton-loader";
@@ -44,10 +42,6 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   // ============= ESTADO PARA MODAL DE CONFIRMACIÓN =============
   const [confirmDialogAbierto, setConfirmDialogAbierto] = useState(false);
   const [turnoParaEliminar, setTurnoParaEliminar] = useState<TurnoWithRelations | null>(null);
-
-  // ============= ESTADO PARA TURNOS COMPLETOS (PARA CÁLCULO DE TALONARIO) =============
-  const [todosLosTurnos, setTodosLosTurnos] = useState<TurnoWithRelations[]>([]);
-  const [cargandoTurnos, setCargandoTurnos] = useState(true);
 
   // ============= FUNCIONES DE ACCIONES =============
   const handleMarcarAtendido = async (turno: TurnoWithRelations) => {
@@ -148,40 +142,6 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
     setModalEditarAbierto(true);
   };
 
-  // ============= CARGAR TODOS LOS TURNOS PARA CALCULAR TALONARIO CORRECTAMENTE =============
-  useEffect(() => {
-    const cargarTodosLosTurnos = async () => {
-      try {
-        // Obtener IDs únicos de pacientes de los turnos visibles
-        const pacientesIds = [...new Set(turnos.map(t => t.id_paciente).filter(Boolean))];
-        
-        if (pacientesIds.length === 0) {
-          setTodosLosTurnos([]);
-          setCargandoTurnos(false);
-          return;
-        }
-
-        // Obtener todos los turnos de estos pacientes (sin filtro de fecha)
-        const promesas = pacientesIds.map(id => obtenerTurnos({ paciente_id: id as number }));
-        const resultados = await Promise.all(promesas);
-        
-        // Combinar todos los resultados
-        const turnosCombinados = resultados
-          .filter(r => r.success && r.data)
-          .flatMap(r => r.data as TurnoWithRelations[]);
-        
-        setTodosLosTurnos(turnosCombinados);
-      } catch (error) {
-        console.error('Error cargando turnos para talonario:', error);
-        setTodosLosTurnos([]);
-      } finally {
-        setCargandoTurnos(false);
-      }
-    };
-
-    cargarTodosLosTurnos();
-  }, [turnos]);
-
   // Función para formatear fecha como DD/MM/YYYY
   const formatearFecha = (fechaStr: string) => {
     if (!fechaStr) return '-';
@@ -262,35 +222,15 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
       return fechaA.getTime() - fechaB.getTime();
     }) || [];
 
-  // ✅ FUNCIÓN: Calcular número de turno en el paquete (talonario)
-  // ⚠️ IMPORTANTE: Solo agrupa turnos que pertenecen al MISMO grupo de tratamiento
-  // ⚠️ INCLUYE cancelados en el conteo para que mantengan su número original
+  // ✅ FUNCIÓN: Calcular número de turno en el paquete (talonario) usando datos persistidos
   const calcularNumeroTalonario = (turno: any) => {
-    if (!turno.id_paciente || !turno.id_especialidad || !turno.fecha) return null;
-    
-    // ✅ NUEVO: Solo mostrar número si el turno pertenece a un grupo
     if (!turno.id_grupo_tratamiento) return null;
-    
-    // Si aún está cargando, no mostrar número
-    if (cargandoTurnos) return null;
 
-    // ✅ CORREGIDO: Filtrar por id_grupo_tratamiento en lugar de solo especialidad
-    const turnosMismoPaquete = todosLosTurnos.filter(t => 
-      t.id_paciente === turno.id_paciente &&
-      t.id_grupo_tratamiento === turno.id_grupo_tratamiento && // ✅ Mismo grupo de tratamiento
-      !esTurnoPilates(t) // Solo excluir Pilates
-    ).sort((a, b) => {
-      const fechaA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
-      const fechaB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
-      return fechaA.getTime() - fechaB.getTime();
-    });
+    const posicion = turno.numero_en_grupo;
+    const total = turno.grupo_tratamiento?.cantidad_turnos_planificados;
 
-    const total = turnosMismoPaquete.length;
-    
-    // Solo mostrar numeración si hay más de 1 turno (es un paquete)
-    if (total <= 1) return null;
+    if (!posicion || !total || total <= 1) return null;
 
-    const posicion = turnosMismoPaquete.findIndex(t => t.id_turno === turno.id_turno) + 1;
     return `${posicion}/${total}`;
   };
 
