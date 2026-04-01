@@ -3,6 +3,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import type { Database } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -507,29 +508,43 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
       data.paciente?.telefono &&
       data.estado !== "eliminado"
     ) {
-      Promise.resolve()
-        .then(async () => {
-          try {
-            const { enviarAvisoModificacionTurno } = await import(
-              "@/lib/services/whatsapp-bot.service"
-            );
-            const nombrePaciente =
-              `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
-              "Paciente";
-            await enviarAvisoModificacionTurno({
-              telefono: data.paciente.telefono,
-              nombrePaciente,
-              anterior: snapshotDesdeTurnoRelacionado(prevTurno as any),
-              actual: snapshotDesdeTurnoRelacionado(data as any),
-            });
-          } catch (notifyErr) {
+      // Snapshots y strings ahora (no dentro del callback) para el cierre correcto
+      const snapshotAnterior = snapshotDesdeTurnoRelacionado(prevTurno as any);
+      const snapshotActual = snapshotDesdeTurnoRelacionado(data as any);
+      const telefonoAviso = String(data.paciente.telefono).trim();
+      const nombrePacienteAviso =
+        `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
+        "Paciente";
+
+      // En Vercel/serverless, Promise.resolve().then(...) se corta al terminar el action.
+      // `after` ejecuta el trabajo después de enviar la respuesta al cliente.
+      after(async () => {
+        try {
+          const { enviarAvisoModificacionTurno } = await import(
+            "@/lib/services/whatsapp-bot.service"
+          );
+          console.log(
+            `[WhatsApp] Enviando aviso cambio turno id=${id} → ${telefonoAviso}`,
+          );
+          const resultado = await enviarAvisoModificacionTurno({
+            telefono: telefonoAviso,
+            nombrePaciente: nombrePacienteAviso,
+            anterior: snapshotAnterior,
+            actual: snapshotActual,
+          });
+          if (resultado.status !== "success") {
             console.error(
-              "Error enviando aviso WhatsApp por cambio de turno:",
-              notifyErr,
+              "[WhatsApp] Aviso cambio turno falló:",
+              resultado.message,
             );
           }
-        })
-        .catch(() => {});
+        } catch (notifyErr) {
+          console.error(
+            "Error enviando aviso WhatsApp por cambio de turno:",
+            notifyErr,
+          );
+        }
+      });
     }
 
     revalidatePath("/turnos");
