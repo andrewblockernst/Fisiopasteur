@@ -304,20 +304,20 @@ export async function crearTurno(
       // Esto evita que un error o timeout en WhatsApp bloquee la creación del turno
       Promise.resolve().then(async () => {
         try {
-          const { registrarNotificacionConfirmacion, marcarNotificacionEnviada, registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
+          const { registrarNotificacionConfirmacion, marcarNotificacionEnviada, marcarNotificacionFallida, registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
           const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
 
           if (turnoCreado.paciente?.telefono) {
             const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
 
-            // 1. Registrar confirmación en DB como pendiente (garantiza tracking y fallback)
+            // 1. Registrar confirmación en DB para auditoría
             const resultadoRegistro = await registrarNotificacionConfirmacion(
               turnoCreado.id_turno,
               turnoCreado.paciente.telefono,
               mensajeConfirmacion
             );
 
-            // 2. Enviar confirmación INMEDIATAMENTE al bot (sin esperar el cron)
+            // 2. Enviar confirmación INMEDIATAMENTE al bot (trigger único, sin reintento por cron)
             try {
               const resultadoBot = await Promise.race([
                 enviarConfirmacionTurno(turnoCreado as any),
@@ -326,14 +326,18 @@ export async function crearTurno(
                 )
               ]);
 
-              // 3. Si se envió bien, marcar como enviado en DB para no reenviar por el cron
-              if (resultadoBot.status === 'success' && resultadoRegistro.success && resultadoRegistro.data) {
-                await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
+              if (resultadoRegistro.success && resultadoRegistro.data) {
+                if (resultadoBot.status === 'success') {
+                  await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
+                } else {
+                  await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
+                }
               }
             } catch (e) {
-              // Si falla (bot caído, timeout, etc.), la notificación queda como 'pendiente'
-              // → el cron la reintentará en los próximos 2 minutos
-              console.warn('Confirmación directa falló, el cron reintentará:', e);
+              console.warn('Confirmación directa falló:', e);
+              if (resultadoRegistro.success && resultadoRegistro.data) {
+                await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
+              }
             }
 
             // 4. Programar recordatorios en DB (el scheduler los enviará a su tiempo)
