@@ -45,6 +45,40 @@ export function mapearTurnoParaBot(
   };
 }
 
+/** Datos legibles para el mensaje de “turno modificado” (no va en archivos "use server") */
+export type SnapshotTurnoParaAviso = {
+  fecha: string;
+  hora: string;
+  profesional: string;
+  especialidad: string;
+  boxLabel: string | null;
+};
+
+/**
+ * Arma el snapshot desde un turno con relaciones Supabase (paciente/especialista/box).
+ */
+export function snapshotDesdeTurnoRelacionado(turno: {
+  fecha: string;
+  hora: string;
+  especialista?: { nombre?: string | null; apellido?: string | null } | null;
+  especialidad?: { nombre?: string | null } | null;
+  box?: { numero?: number | null } | null;
+}): SnapshotTurnoParaAviso {
+  const prof = turno.especialista
+    ? `${turno.especialista.nombre ?? ""} ${turno.especialista.apellido ?? ""}`.trim()
+    : "Profesional";
+  const esp = turno.especialidad?.nombre?.trim() || "Consulta";
+  const boxNum = turno.box?.numero;
+  return {
+    fecha: formatearFechaParaBot(turno.fecha),
+    hora: formatearHoraParaBot(turno.hora || ""),
+    profesional: prof || "Profesional",
+    especialidad: esp,
+    boxLabel:
+      boxNum !== undefined && boxNum !== null ? `Box ${boxNum}` : null,
+  };
+}
+
 /**
  * Opciones de recordatorio disponibles
  */
