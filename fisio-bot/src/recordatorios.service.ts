@@ -1,4 +1,5 @@
 import { obtenerNotificacionesPendientes, marcarNotificacionEnviada, marcarNotificacionFallida, type NotificacionPendiente } from './supabase.service'
+import { dayjs } from './dayjs'
 
 // =====================================
 // 🕐 SERVICIO DE RECORDATORIOS AUTOMÁTICOS
@@ -27,11 +28,9 @@ export async function procesarRecordatoriosPendientes(enviarMensaje: FuncionEnvi
       return {
         procesadas: 0,
         enviadas: 0,
-        fallidas: 0
+        fallidas: 0,
       }
     }
-
-    console.log(`📋 Encontradas ${notificaciones.length} notificaciones pendientes`)
 
     // Procesar cada notificación
     let enviadas = 0
@@ -214,13 +213,7 @@ Responde *SI* para confirmar o *NO* si necesitas reprogramar.
  */
 function formatearFecha(fecha: string): string {
   try {
-    const fechaObj = new Date(fecha)
-    return fechaObj.toLocaleDateString('es-AR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
+    return dayjs(fecha).format('dddd D [de] MMMM [de] YYYY')
   } catch (error) {
     return fecha
   }

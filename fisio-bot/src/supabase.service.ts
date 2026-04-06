@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { nowIso } from './dayjs'
 
 // Configuración de Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL
@@ -47,7 +48,7 @@ export interface NotificacionPendiente {
  */
 export async function obtenerNotificacionesPendientes(): Promise<NotificacionPendiente[]> {
   try {
-    const ahora = new Date().toISOString()
+    const ahora = nowIso()
     
     console.log('🔍 Consultando notificaciones pendientes hasta:', ahora)
     
@@ -97,7 +98,7 @@ export async function marcarNotificacionEnviada(idNotificacion: number): Promise
       .from('notificacion')
       .update({ 
         estado: 'enviado',
-        fecha_envio: new Date().toISOString()
+        fecha_envio: nowIso()
       })
       .eq('id_notificacion', idNotificacion)
 

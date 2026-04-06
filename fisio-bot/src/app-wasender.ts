@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { waSenderService } from './wasender.service'
 import { procesarRecordatoriosPendientes } from './recordatorios.service'
+import { nowIso } from './dayjs'
 
 const PORT = process.env.PORT ?? 3008
 const app = express()
@@ -116,7 +117,7 @@ const marcarNotificacion = async (id: number, estado: 'enviado' | 'fallido') => 
 const procesarRecordatoriosAutonomo = async () => {
     try {
         const startTime = Date.now()
-        console.log(`🔄 [${new Date().toISOString()}] Obteniendo recordatorios pendientes...`)
+        console.log(`🔄 [${nowIso()}] Obteniendo recordatorios pendientes...`)
 
         const response = await fetchWithTimeout(
             `${FISIOPASTEUR_URL}/api/cron/recordatorios/pendientes`,
@@ -436,7 +437,7 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'ok',
         uptime: Math.floor(process.uptime()),
-        timestamp: new Date().toISOString()
+        timestamp: nowIso()
     })
 })
 
@@ -454,7 +455,7 @@ app.get('/api/health', (req, res) => {
         status: 'ok',
         uptime: `${hours}h ${minutes}m`,
         uptimeSeconds: uptime,
-        timestamp: new Date().toISOString(),
+        timestamp: nowIso(),
         service: 'Fisiopasteur WhatsApp Bot (WaSenderAPI)',
         memory: {
             rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
@@ -477,7 +478,7 @@ app.get('/api/status', async (req, res) => {
             authenticated: sessionStatus.success,
             sessionData: sessionStatus.data,
             uptime: uptime,
-            timestamp: new Date().toISOString(),
+            timestamp: nowIso(),
             service: 'Fisiopasteur WhatsApp Bot (WaSenderAPI)'
         })
     } catch (error) {
@@ -485,7 +486,7 @@ app.get('/api/status', async (req, res) => {
             authenticated: false,
             error: error instanceof Error ? error.message : 'Error desconocido',
             uptime: Math.floor(process.uptime()),
-            timestamp: new Date().toISOString(),
+            timestamp: nowIso(),
             service: 'Fisiopasteur WhatsApp Bot (WaSenderAPI)'
         })
     }

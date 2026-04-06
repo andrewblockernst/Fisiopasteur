@@ -4,6 +4,7 @@ import { createBot, createProvider, createFlow, addKeyword, utils, EVENTS } from
 import { MemoryDB as Database } from '@builderbot/bot'
 import { BaileysProvider as Provider } from '@builderbot/provider-baileys'
 import { procesarRecordatoriosPendientes } from './recordatorios.service'
+import { dayjs, nowIso } from './dayjs'
 
 const PORT = process.env.PORT ?? 3008
 
@@ -78,12 +79,12 @@ const proximoTurnoFlow = addKeyword<Provider, Database>([
             
             // Formatear fecha en español
             const [year, month, day] = turno.fecha.split('-');
-            const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            const fecha = dayjs(turno.fecha, 'YYYY-MM-DD');
             const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
             const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
             
-            const diaSemana = diasSemana[fecha.getDay()];
-            const nombreMes = meses[fecha.getMonth()];
+            const diaSemana = diasSemana[fecha.day()];
+            const nombreMes = meses[fecha.month()];
             const fechaFormateada = `${diaSemana} ${day} de ${nombreMes} de ${year}`;
             
             const mensaje = `📋 Tu próximo turno es el ${fechaFormateada} a las ${turno.hora.substring(0, 5)} con ${turno.especialista.nombre} ${turno.especialista.apellido} para ${turno.especialidad.nombre}.`;
@@ -142,12 +143,12 @@ const contactoEspecialistaFlow = addKeyword<Provider, Database>([
             
             // Formatear fecha del turno
             const [year, month, day] = turno.fecha.split('-');
-            const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            const fecha = dayjs(turno.fecha, 'YYYY-MM-DD');
             const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
             const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
             
-            const diaSemana = diasSemana[fecha.getDay()];
-            const nombreMes = meses[fecha.getMonth()];
+            const diaSemana = diasSemana[fecha.day()];
+            const nombreMes = meses[fecha.month()];
             const fechaFormateada = `${diaSemana} ${day} de ${nombreMes}`;
             
             const mensaje = [
@@ -416,7 +417,7 @@ const main = async () => {
         const procesarRecordatoriosViaAPI = async () => {
             try {
                 const startTime = Date.now()
-                console.log(`🔄 [${new Date().toISOString()}] Llamando al endpoint de recordatorios...`)
+                console.log(`🔄 [${nowIso()}] Llamando al endpoint de recordatorios...`)
                 
                 const response = await fetchWithTimeout(
                     `${FISIOPASTEUR_URL}/api/cron/recordatorios`,
@@ -890,7 +891,7 @@ const main = async () => {
         return res.end(JSON.stringify({ 
             status: 'ok',
             uptime: Math.floor(process.uptime()),
-            timestamp: new Date().toISOString()
+            timestamp: nowIso()
         }))
     }
     
@@ -909,7 +910,7 @@ const main = async () => {
             status: 'ok',
             uptime: `${hours}h ${minutes}m`,
             uptimeSeconds: uptime,
-            timestamp: new Date().toISOString(),
+            timestamp: nowIso(),
             service: 'Fisiopasteur WhatsApp Bot',
             memory: {
                 rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
@@ -930,7 +931,7 @@ const main = async () => {
         return res.end(JSON.stringify({ 
             authenticated: isAuthenticated,
             uptime: uptime,
-            timestamp: new Date().toISOString(),
+            timestamp: nowIso(),
             service: 'Fisiopasteur WhatsApp Bot'
         }))
     })
