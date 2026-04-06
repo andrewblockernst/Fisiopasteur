@@ -807,7 +807,19 @@ export async function obtenerSlotsOcupados(
 
     return { success: true, data: Array.from(slotsOcupados) };
   } catch (error) {
-    console.error("Error inesperado:", error);
+    let query = supabase
+      .from("turno")
+      .select("id_turno, hora")
+      .eq("id_especialista", especialista_id!)
+      .eq("fecha", fecha)
+      .neq("estado", "cancelado")
+      .neq("estado", "eliminado");
+
+    if (idPilates != null) {
+      query = query.neq("id_especialidad", idPilates);
+    }
+
+    const { data, error } = await query.order("hora", { ascending: true });
     return { success: false, error: "Error inesperado" };
   }
 }
