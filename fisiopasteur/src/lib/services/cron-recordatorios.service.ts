@@ -9,6 +9,7 @@ import {
   enviarRecordatorioTurno,
 } from "@/lib/services/whatsapp-bot.service";
 import type { TurnoConDetalles } from "@/stores/turno-store";
+import { nowIso } from "@/lib/dayjs";
 
 /**
  * Delay helper para respetar rate limits de WaSender
@@ -68,13 +69,24 @@ export async function procesarNotificacionesPendientes() {
           continue;
         }
 
-        // Solo procesa recordatorios — las confirmaciones las dispara turno.action.ts
-        if (!notificacion.mensaje?.includes("[RECORDATORIO")) {
-          console.log(`⏭️ Notificación ${notificacion.id_notificacion} no es recordatorio — ignorada`);
+        // Construir objeto turno completo para el bot
+        const turno = notificacion.turno as any;
+        const turnoParaBot = turno as unknown as TurnoConDetalles;
+
+        // El cron solo procesa recordatorios — las confirmaciones las maneja
+        // el trigger inmediato en turno.action.ts al crear el turno.
+        const esRecordatorio = notificacion.mensaje.includes("[RECORDATORIO");
+
+        if (!esRecordatorio) {
+          // Confirmación pendiente: marcarla como enviada para que no se reprocese.
+          // El trigger ya la envió (o falló y quedará en el log).
+          console.log(
+            `⏭️ Notificación ${notificacion.id_notificacion} es confirmación — omitida por el cron`,
+          );
+          await marcarNotificacionEnviada(notificacion.id_notificacion);
+          enviadas++;
           continue;
         }
-
-        const turnoParaBot = notificacion.turno as unknown as TurnoConDetalles;
 
         console.log(`📨 Enviando Recordatorio por WhatsApp...`);
 
@@ -137,7 +149,7 @@ export async function procesarNotificacionesPendientes() {
  * Función para ser llamada manualmente o desde un endpoint
  */
 export async function ejecutarCronRecordatorios() {
-  const timestamp = new Date().toISOString();
+  const timestamp = nowIso();
   console.log(`🔄 [${timestamp}] Ejecutando cron de recordatorios...`);
 
   const resultado = await procesarNotificacionesPendientes();

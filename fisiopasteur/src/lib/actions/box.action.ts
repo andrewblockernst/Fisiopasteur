@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from "@/lib/supabase/server";
+import { nowIso } from "@/lib/dayjs";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/actions/action-result";
 import type { Database, TablesInsert } from "@/lib/database.types";
@@ -100,7 +101,7 @@ export async function actualizarBox(id: number, formData: FormData): Promise<Act
     .update({
       numero,
       nombre,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso(),
     })
     .eq("id_box", id)
     .select()
@@ -149,7 +150,7 @@ export async function eliminarBox(id: number): Promise<ActionResult<any>> {
     .from("box")
     .update({
       estado: "inactivo",
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso(),
     })
     .eq("id_box", id)
     .select()

@@ -66,6 +66,7 @@ export default function TurnosPageContainer({
   // ✅ React Query con datos iniciales del servidor (SSR + Client Cache)
   const { data: turnos = [], isLoading: turnosLoading } = useTurnos({
     filters,
+    refetchOnMount: true,
     // initialData: shouldUseInitialData ? initialTurnos : undefined
   });
   const invalidateTurnos = useInvalidateTurnos();
@@ -122,10 +123,12 @@ export default function TurnosPageContainer({
         fecha={selectedDate}
         onDateChange={handleDateChange}
         onTurnoCreated={handleTurnoCreated}
+        invalidateTurnos={invalidateTurnos}
         especialistas={especialistas}
         especialidades={especialidades}
         loadingTurnos={turnosLoading}
         initialFilters={initialFilters}
+        activeFilters={filters}
       />
     );
   }

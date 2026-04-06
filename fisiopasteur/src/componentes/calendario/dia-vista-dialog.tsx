@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Clock } from "lucide-react";
-import { useTurnoStore, type TurnoConDetalles } from "@/stores/turno-store";
+import { type TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
 import { eliminarTurno as eliminarTurnoAction } from "@/lib/actions/turno.action";
+import { turnoKeys, useInvalidateTurnos } from "@/hooks/useTurnosQuery";
 import Image from "next/image";
 import TurnoCard from "./turno-card";
+import { dayjs } from "@/lib/dayjs";
 
 interface DayViewModalProps {
   isOpen: boolean;
@@ -26,12 +29,33 @@ export function DayViewModal({
   turnos,
 }: DayViewModalProps) {
   const { addToast } = useToastStore();
-  const { deleteTurno, updateTurno } = useTurnoStore();
+  const queryClient = useQueryClient();
+  const invalidateTurnos = useInvalidateTurnos();
   const [turnoEditando, setTurnoEditando] = useState<TurnoConDetalles | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; turno?: TurnoConDetalles }>(
     { open: false }
   );
   const [turnosLocal, setTurnosLocal] = useState<TurnoConDetalles[]>(turnos);
+
+  const getTurnosSnapshots = () => {
+    return queryClient.getQueriesData<TurnoConDetalles[]>({ queryKey: turnoKeys.lists() });
+  };
+
+  const restoreTurnosSnapshots = (snapshots: Array<[readonly unknown[], TurnoConDetalles[] | undefined]>) => {
+    for (const [queryKey, data] of snapshots) {
+      queryClient.setQueryData(queryKey, data);
+    }
+  };
+
+  const updateTurnosLists = (updater: (rows: TurnoConDetalles[]) => TurnoConDetalles[]) => {
+    queryClient.setQueriesData(
+      { queryKey: turnoKeys.lists() },
+      (oldData: TurnoConDetalles[] | undefined) => {
+        if (!oldData) return oldData;
+        return updater(oldData);
+      }
+    );
+  };
 
   useEffect(() => {
     if (isOpen) setTurnosLocal(turnos);
@@ -40,19 +64,11 @@ export function DayViewModal({
   if (!isOpen || !fecha) return null;
 
   const formatearFecha = (fecha: Date) => {
-    return fecha.toLocaleDateString('es-AR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    return dayjs(fecha).format('dddd D [de] MMMM [de] YYYY');
   };
 
   const formatearHora = (hora: string) => {
-    return new Date(`2000-01-01T${hora}`).toLocaleTimeString('es-ES', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return dayjs(hora, 'HH:mm:ss').format('HH:mm');
   };
 
   const getEstadoColor = (estado: string) => {
@@ -139,36 +155,48 @@ export function DayViewModal({
     />
       {turnoEditando && (
         <EditarTurnoDialog
-          turno={{
-            id_turno: turnoEditando.id_turno,
-            id_paciente: turnoEditando.id_paciente ?? null,
-            id_especialista: turnoEditando.id_especialista ?? null,
-            id_especialidad: turnoEditando.id_especialidad ?? null,
-            id_box: (turnoEditando as any).id_box ?? null,
-            fecha: turnoEditando.fecha,
-            hora: turnoEditando.hora,
-            observaciones: turnoEditando.observaciones ?? null,
-            created_at: (turnoEditando as any).created_at ?? null,
-            estado: (turnoEditando as any).estado ?? null,
-            notas: (turnoEditando as any).notas ?? null,
-            precio: (turnoEditando as any).precio ?? null,
-            updated_at: (turnoEditando as any).updated_at ?? null,
-            tipo_plan: (turnoEditando as any).tipo_plan ?? null,
-            dificultad: (turnoEditando as any).dificultad ?? null,
-            evolucion_clinica: (turnoEditando as any).evolucion_clinica ?? null,
-            evolucion_completada_en: (turnoEditando as any).evolucion_completada_en ?? null,
-            id_grupo_tratamiento: (turnoEditando as any).id_grupo_tratamiento ?? null,
-            titulo_tratamiento: (turnoEditando as any).titulo_tratamiento ?? null,
-          }}
+          turno={turnoEditando}
+          //   {
+          //   id_turno: turnoEditando.id_turno,
+          //   id_paciente: turnoEditando.id_paciente ?? null,
+          //   id_especialista: turnoEditando.id_especialista ?? null,
+          //   id_especialidad: turnoEditando.id_especialidad ?? null,
+          //   id_box: (turnoEditando as any).id_box ?? null,
+          //   fecha: turnoEditando.fecha,
+          //   hora: turnoEditando.hora,
+          //   observaciones: turnoEditando.observaciones ?? null,
+          //   created_at: (turnoEditando as any).created_at ?? null,
+          //   estado: (turnoEditando as any).estado ?? null,
+          //   notas: (turnoEditando as any).notas ?? null,
+          //   precio: (turnoEditando as any).precio ?? null,
+          //   updated_at: (turnoEditando as any).updated_at ?? null,
+          //   tipo_plan: (turnoEditando as any).tipo_plan ?? null,
+          //   dificultad: (turnoEditando as any).dificultad ?? null,
+          //   evolucion_clinica: (turnoEditando as any).evolucion_clinica ?? null,
+          //   evolucion_completada_en: (turnoEditando as any).evolucion_completada_en ?? null,
+          //   id_grupo_tratamiento: (turnoEditando as any).id_grupo_tratamiento ?? null,
+          //   titulo_tratamiento: (turnoEditando as any).titulo_tratamiento ?? null,
+          //   paciente: (turnoEditando as any).paciente ?? undefined,
+          //   especialista: (turnoEditando as any).especialista ?? undefined,
+          //   especialidad: (turnoEditando as any).especialidad ?? undefined,
+          //   box: (turnoEditando as any).box ?? undefined,
+          // }
+        // }
           open={Boolean(turnoEditando)}
           onClose={() => setTurnoEditando(null)}
           onSaved={(updated?: any) => {
+            const turnoActual = turnoEditando;
             setTurnoEditando(null);
-          if (updated) {
-            updateTurno(turnoEditando.id_turno, updated);
-            setTurnosLocal(prev => prev.map(t => t.id_turno === turnoEditando.id_turno ? { ...t, ...updated } as any : t));
-            addToast({ variant: 'success', message: 'Turno actualizado' });
-          }
+            if (updated && turnoActual) {
+              updateTurnosLists((rows) =>
+                rows.map((t) => (t.id_turno === turnoActual.id_turno ? { ...t, ...updated } as any : t))
+              );
+              setTurnosLocal((prev) =>
+                prev.map((t) => (t.id_turno === turnoActual.id_turno ? { ...t, ...updated } as any : t))
+              );
+              invalidateTurnos({ scope: 'dates', date: updated.fecha || turnoActual.fecha });
+              // addToast({ variant: 'success', message: 'Turno actualizado' });
+            }
           }}
         />
       )}
@@ -189,14 +217,23 @@ export function DayViewModal({
           text: 'Eliminar',
           onClick: async () => {
             if (!confirmDelete.turno) return;
-            const id = confirmDelete.turno.id_turno;
+
+            const turnoAEliminar = confirmDelete.turno;
+            const id = turnoAEliminar.id_turno;
+            const snapshots = getTurnosSnapshots();
+
+            updateTurnosLists((rows) => rows.filter((t) => t.id_turno !== id));
+            setTurnosLocal((prev) => prev.filter((t) => t.id_turno !== id));
+
             const res = await eliminarTurnoAction(id);
+
             if (res.success) {
-              deleteTurno(id);
-              setTurnosLocal(prev => prev.filter(t => t.id_turno !== id));
+              invalidateTurnos({ scope: 'dates', date: turnoAEliminar.fecha });
               addToast({ variant: 'success', message: 'Turno eliminado' });
               setConfirmDelete({ open: false });
             } else {
+              restoreTurnosSnapshots(snapshots);
+              setTurnosLocal((prev) => [turnoAEliminar, ...prev].sort((a, b) => a.hora.localeCompare(b.hora)));
               addToast({ variant: 'error', message: res.error || 'Error al eliminar' });
             }
           }

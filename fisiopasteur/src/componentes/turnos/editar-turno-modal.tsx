@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback, useMemo } from "react";
-import { actualizarTurno, obtenerEspecialistas, obtenerBoxes, obtenerAgendaEspecialista, obtenerTurnos, obtenerPrecioEspecialidad } from "@/lib/actions/turno.action";
+import { useState, useTransition, useEffect, useCallback, useMemo, useRef } from "react";
+import { actualizarTurno, obtenerEspecialistasParaTurnos, obtenerBoxes, obtenerSlotsOcupados, obtenerTurnosParaValidarBoxes, obtenerPrecioEspecialidad } from "@/lib/actions/turno.action";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 import { Database } from "@/types/database.types";
@@ -10,6 +10,8 @@ import Loading from "../loading";
 import { useToastStore } from '@/stores/toast-store';
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 import { useAuth } from "@/hooks/usePerfil";
+import type { TurnoWithRelations } from "@/types";
+import { dayjs, isPastDateTime, minutesToTime, timeToMinutes, todayYmd } from "@/lib/dayjs";
 
 // Tipos basados en tu estructura de BD
 type Turno = Database['public']['Tables']['turno']['Row'];
@@ -42,21 +44,60 @@ type EspecialistaAPI = {
 };
 
 // Tipo para el turno con relaciones incluidas (como viene del JOIN)
-type TurnoConRelaciones = Turno & {
-  paciente?: PacienteCompleto;
-  especialista?: Usuario;
-  especialidad?: Especialidad;
-  box?: Box;
-};
+// type TurnoConRelaciones = Turno & {
+//   paciente?: PacienteCompleto;
+//   especialista?: Usuario;
+//   especialidad?: Especialidad;
+//   box?: Box;
+// };
 
 interface EditarTurnoModalProps {
-  turno: TurnoConRelaciones;
+  turno: TurnoWithRelations;
   open: boolean;
   onClose: () => void;
-  onSaved?: (updated?: TurnoConRelaciones) => void;
+  onSaved?: (updated?: TurnoWithRelations) => void;
 }
 
+let especialistasTurnoCache: EspecialistaAPI[] | null = null;
+let boxesTurnoCache: Box[] | null = null;
+let catalogoTurnoPromise: Promise<{ especialistas: EspecialistaAPI[]; boxes: Box[] }> | null = null;
+
+const normalizarEspecialistas = (rows: any[]): EspecialistaAPI[] => {
+  return rows.map((item: any) => ({
+    ...item,
+    color: item.color === null ? undefined : item.color,
+  }));
+};
+
+const cargarCatalogosTurno = async (): Promise<{ especialistas: EspecialistaAPI[]; boxes: Box[] }> => {
+  if (especialistasTurnoCache && boxesTurnoCache) {
+    return { especialistas: especialistasTurnoCache, boxes: boxesTurnoCache };
+  }
+
+  if (!catalogoTurnoPromise) {
+    catalogoTurnoPromise = Promise.all([
+      obtenerEspecialistasParaTurnos(),
+      obtenerBoxes(),
+    ])
+      .then(([e, b]) => {
+        const especialistas = e.success ? normalizarEspecialistas(e.data || []) : [];
+        const boxes = b.success ? (b.data || []) : [];
+
+        especialistasTurnoCache = especialistas;
+        boxesTurnoCache = boxes;
+
+        return { especialistas, boxes };
+      })
+      .finally(() => {
+        catalogoTurnoPromise = null;
+      });
+  }
+
+  return catalogoTurnoPromise;
+};
+
 export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: EditarTurnoModalProps) {
+  const ultimaInicializacionRef = useRef<string | null>(null);
   const [formData, setFormData] = useState({
     fecha: turno.fecha,
     hora: turno.hora.slice(0, 5), // Remover segundos para mostrar solo HH:MM
@@ -98,7 +139,16 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
   // Cargar datos cuando se abre el modal
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      ultimaInicializacionRef.current = null;
+      return;
+    }
+
+    const claveInicializacion = `${turno.id_turno}-${turno.updated_at ?? ''}`;
+    if (ultimaInicializacionRef.current === claveInicializacion) {
+      return;
+    }
+    ultimaInicializacionRef.current = claveInicializacion;
     
     const cargarDatos = async () => {
       setLoading(true);
@@ -116,17 +166,10 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
           precio: turno.precio ? String(turno.precio) : ''
         };
 
-        const [e, b] = await Promise.all([
-          obtenerEspecialistas(),
-          obtenerBoxes()
-        ]);
+        const { especialistas: especialistasData, boxes: boxesData } = await cargarCatalogosTurno();
         
         setFormData(formDataInicial);
         
-        // Establecer los especialistas si vienen en el resultado
-        if (e.success && e.data) {
-          // Handle especialistas if needed
-        }
         if (turno.paciente) {
           const pacienteActual: PacienteAPI = {
             id_paciente: turno.paciente.id_paciente,
@@ -140,21 +183,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
           setBusquedaPaciente(`${pacienteActual.nombre} ${pacienteActual.apellido}`);
         }
         
-        if (e.success) setEspecialistas(
-          (e.data || []).map((item: any) => ({
-            ...item,
-            color: item.color === null ? undefined : item.color
-          }))
-        );
-
-        const especialistasData: EspecialistaAPI[] = e.success
-          ? (e.data || []).map((item: any) => ({
-              ...item,
-              color: item.color === null ? undefined : item.color
-            }))
-          : [];
-
-        const boxesData: Box[] = b.success ? (b.data || []) : [];
+        setEspecialistas(especialistasData);
         setBoxes(boxesData);
 
         if (formDataInicial.id_especialista) {
@@ -187,38 +216,20 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
         }
 
         if (formDataInicial.id_especialista && formDataInicial.fecha) {
-          const agendaRes = await obtenerAgendaEspecialista(formDataInicial.id_especialista, formDataInicial.fecha);
-          if (agendaRes.success && agendaRes.data) {
-            const ocupadas: string[] = [];
-            agendaRes.data.forEach((turnoAgenda: Turno) => {
-              if (turnoAgenda.id_turno === turno.id_turno || turnoAgenda.estado === 'cancelado') {
-                return;
-              }
-
-              const [horas, minutos] = turnoAgenda.hora.split(':').map(Number);
-              const inicioTurno = new Date();
-              inicioTurno.setHours(horas, minutos, 0, 0);
-              const finTurno = new Date(inicioTurno.getTime() + (60 * 60000));
-
-              const inicioSlot = new Date(inicioTurno);
-              while (inicioSlot < finTurno) {
-                ocupadas.push(inicioSlot.toTimeString().slice(0, 5));
-                inicioSlot.setMinutes(inicioSlot.getMinutes() + 15);
-              }
-            });
-            setHorasOcupadas(ocupadas);
+          const slotsRes = await obtenerSlotsOcupados(formDataInicial.id_especialista, formDataInicial.fecha, turno.id_turno);
+          if (slotsRes.success && slotsRes.data) {
+            setHorasOcupadas(slotsRes.data);
           }
         } else {
           setHorasOcupadas([]);
         }
 
         if (formDataInicial.fecha && formDataInicial.hora) {
-          const turnosRes = await obtenerTurnos({ fecha: formDataInicial.fecha });
+          const turnosRes = await obtenerTurnosParaValidarBoxes(formDataInicial.fecha);
           if (turnosRes.success && turnosRes.data) {
             const [horaInicio, minutoInicio] = formDataInicial.hora.split(':').map(Number);
-            const inicioTurno = new Date();
-            inicioTurno.setHours(horaInicio, minutoInicio, 0, 0);
-            const finTurno = new Date(inicioTurno.getTime() + (60 * 60000));
+            const inicioTurno = (horaInicio * 60) + minutoInicio;
+            const finTurno = inicioTurno + 60;
 
             const turnosConflicto = turnosRes.data.filter((turnoCheck: any) => {
               if (turnoCheck.estado === 'cancelado' || !turnoCheck.id_box || turnoCheck.id_turno === turno.id_turno) {
@@ -226,9 +237,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
               }
 
               const [horaTurno, minutoTurno] = turnoCheck.hora.split(':').map(Number);
-              const inicioTurnoExistente = new Date();
-              inicioTurnoExistente.setHours(horaTurno, minutoTurno, 0, 0);
-              const finTurnoExistente = new Date(inicioTurnoExistente.getTime() + (60 * 60000));
+              const inicioTurnoExistente = (horaTurno * 60) + minutoTurno;
+              const finTurnoExistente = inicioTurnoExistente + 60;
 
               return inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente;
             });
@@ -261,7 +271,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
     
     cargarDatos();
-  }, [open, turno]);
+  }, [open, turno.id_turno, turno.updated_at]);
 
   // Filtrar especialidades según especialista seleccionado
   useEffect(() => {
@@ -329,35 +339,9 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
       setVerificandoDisponibilidad(true);
       try {
-        const res = await obtenerAgendaEspecialista(formData.id_especialista, formData.fecha);
+        const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha, turno.id_turno);
         if (res.success && res.data) {
-          // Generar lista de horas ocupadas, excluyendo el turno actual
-          const ocupadas: string[] = [];
-          
-          res.data.forEach((turnoAgenda: Turno) => {
-            // Excluir el turno actual que se está editando
-            if (turnoAgenda.id_turno === turno.id_turno || turnoAgenda.estado === 'cancelado') {
-              return;
-            }
-            
-            const [horas, minutos] = turnoAgenda.hora.split(':').map(Number);
-            const inicioTurno = new Date();
-            inicioTurno.setHours(horas, minutos, 0, 0);
-            
-            // Duración del turno (1 hora por defecto)
-            const duracionTurno = 60; // minutos
-            const finTurno = new Date(inicioTurno.getTime() + (duracionTurno * 60000));
-            
-            // Marcar todos los slots de tiempo ocupados en intervalos de 15 minutos
-            const inicioSlot = new Date(inicioTurno);
-            while (inicioSlot < finTurno) {
-              const horaStr = inicioSlot.toTimeString().slice(0, 5); // "HH:MM"
-              ocupadas.push(horaStr);
-              inicioSlot.setMinutes(inicioSlot.getMinutes() + 15); // Intervalos de 15 min
-            }
-          });
-          
-          setHorasOcupadas(ocupadas);
+          setHorasOcupadas(res.data);
         }
       } catch (error) {
         console.error('Error verificando horarios:', error);
@@ -382,16 +366,13 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       setVerificandoBoxes(true);
       try {
         // Obtener todos los turnos en esa fecha y hora específica
-        const res = await obtenerTurnos({
-          fecha: formData.fecha
-        });
+        const res = await obtenerTurnosParaValidarBoxes(formData.fecha);
         
         if (res.success && res.data) {
           // Calcular el rango de tiempo del turno (1 hora)
           const [horaInicio, minutoInicio] = formData.hora.split(':').map(Number);
-          const inicioTurno = new Date();
-          inicioTurno.setHours(horaInicio, minutoInicio, 0, 0);
-          const finTurno = new Date(inicioTurno.getTime() + (60 * 60000)); // 1 hora después
+          const inicioTurno = (horaInicio * 60) + minutoInicio;
+          const finTurno = inicioTurno + 60;
 
           // Filtrar turnos que se solapan con nuestro horario (excluyendo el turno actual)
           const turnosConflicto = res.data.filter((turnoCheck: any) => {
@@ -400,9 +381,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
                 turnoCheck.id_turno === turno.id_turno) return false;
             
             const [horaTurno, minutoTurno] = turnoCheck.hora.split(':').map(Number);
-            const inicioTurnoExistente = new Date();
-            inicioTurnoExistente.setHours(horaTurno, minutoTurno, 0, 0);
-            const finTurnoExistente = new Date(inicioTurnoExistente.getTime() + (60 * 60000));
+            const inicioTurnoExistente = (horaTurno * 60) + minutoTurno;
+            const finTurnoExistente = inicioTurnoExistente + 60;
 
             // Verificar solapamiento
             return (inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente);
@@ -444,14 +424,11 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     if (horasOcupadas.includes(hora)) return false;
     
     // Verificar si hay conflicto con turnos existentes (duración de 1 hora)
-    const [horas, minutos] = hora.split(':').map(Number);
-    const inicioNuevoTurno = new Date();
-    inicioNuevoTurno.setHours(horas, minutos, 0, 0);
+    const inicioNuevoTurno = timeToMinutes(hora);
     
     // Verificar conflictos con slots ocupados
     for (let i = 0; i < 4; i++) { // 4 slots de 15 min = 1 hora
-      const slotTiempo = new Date(inicioNuevoTurno.getTime() + (i * 15 * 60000));
-      const slotStr = slotTiempo.toTimeString().slice(0, 5);
+      const slotStr = minutesToTime(inicioNuevoTurno + (i * 15));
       if (horasOcupadas.includes(slotStr)) {
         return false;
       }
@@ -471,13 +448,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
         const disponible = esHoraDisponible(hora);
         
         // Si es hora pasada (solo para fecha de hoy), no mostrar
-        if (formData.fecha === new Date().toISOString().split('T')[0]) {
-          const ahora = new Date();
-          const [horaNum, minNum] = hora.split(':').map(Number);
-          const horaTurno = new Date();
-          horaTurno.setHours(horaNum, minNum, 0, 0);
-          
-          if (horaTurno <= ahora) {
+        if (formData.fecha === todayYmd()) {
+          if (isPastDateTime(formData.fecha, hora) || dayjs(`${formData.fecha} ${hora}`, 'YYYY-MM-DD HH:mm').isSame(dayjs(), 'minute')) {
             continue; // Saltar horas pasadas
           }
         }
@@ -675,7 +647,7 @@ const handleSubmit = async () => {
                   <option value="">Seleccionar especialista</option>
                   {especialistas.map((especialista) => (
                     <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                      {especialista.nombre} {especialista.apellido}
+                      {especialista.apellido}, {especialista.nombre} 
                     </option>
                   ))}
                 </select>
@@ -771,7 +743,7 @@ const handleSubmit = async () => {
                 onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '', id_box: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
-                min={new Date().toISOString().split('T')[0]}
+                min={todayYmd()}
               />
             </div>
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { obtenerEspecialistas, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerAgendaEspecialista, obtenerTurnos, verificarDisponibilidad, crearPaqueteSesiones } from "@/lib/actions/turno.action";
+import { obtenerEspecialistasParaTurnos, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerSlotsOcupados, obtenerTurnosParaValidarBoxes, verificarDisponibilidadPaquete, crearPaqueteSesiones } from "@/lib/actions/turno.action";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
 import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 import SelectorRecordatorios from "@/componentes/turnos/selector-recordatorios";
@@ -13,7 +13,7 @@ import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 import { useAuth } from '@/hooks/usePerfil';
 import { UserPlus2, CalendarDays, Info } from "lucide-react";
 import type { TipoRecordatorio } from "@/lib/utils/whatsapp.utils";
-import { format, set } from "date-fns";
+import { dayjs, isPastDateTime, minutesToTime, timeToMinutes, todayYmd, toYmd } from "@/lib/dayjs";
 
 // ✅ Cache simple para evitar llamadas repetidas
 const dataCache = {
@@ -29,6 +29,7 @@ interface NuevoTurnoModalProps {
   onTurnoCreated?: () => void;
   fechaSeleccionada?: Date | null;
   horaSeleccionada?: string | null;
+  especialistaPreseleccionado?: string | null;
   especialistas?: any[];
   // pacientes?: any[];
 }
@@ -49,13 +50,7 @@ function esEspecialidadPilates(especialidad: any): boolean {
 // ✅ FUNCIÓN HELPER PARA VALIDAR FECHA Y HORA
 function esFechaHoraPasada(fecha: string, hora: string): boolean {
   try {
-    const [year, month, day] = fecha.split('-').map(Number);
-    const [hours, minutes] = hora.split(':').map(Number);
-    
-    const fechaHoraTurno = new Date(year, month - 1, day, hours, minutes);
-    const ahora = new Date();
-    
-    return fechaHoraTurno < ahora;
+    return isPastDateTime(fecha, hora);
   } catch {
     return false;
   }
@@ -67,6 +62,7 @@ export function NuevoTurnoModal({
   onTurnoCreated,
   fechaSeleccionada = null,
   horaSeleccionada = '',
+  especialistaPreseleccionado = null,
   especialistas: especialistasProp = [],
   // pacientes: pacientesProp = []
 }: NuevoTurnoModalProps) {
@@ -206,7 +202,7 @@ export function NuevoTurnoModal({
         
         // Solo cargar especialistas si no vienen por props Y no los tenemos
         if (especialistasProp.length === 0 && especialistas.length === 0) {
-          promises.push(obtenerEspecialistas().then(res => {
+          promises.push(obtenerEspecialistasParaTurnos().then(res => {
             if (res.success) setEspecialistas(res.data || []);
           }));
         }
@@ -277,11 +273,15 @@ useEffect(() => {
     const updates: Partial<typeof formData> = {};
     
     if (fechaSeleccionada) {
-      updates.fecha = fechaSeleccionada.toISOString().split('T')[0];
+      updates.fecha = toYmd(fechaSeleccionada);
     }
     
     if (horaSeleccionada) {
       updates.hora = horaSeleccionada;
+    }
+
+    if (especialistaPreseleccionado) {
+      updates.id_especialista = String(especialistaPreseleccionado);
     }
     
     // ✅ Usar user.id en lugar de user.id_usuario
@@ -335,7 +335,7 @@ useEffect(() => {
       setFormData(prev => ({ ...prev, ...updates }));
     }
   }
-}, [fechaSeleccionada, horaSeleccionada, isOpen, user, especialistas]);
+}, [fechaSeleccionada, horaSeleccionada, especialistaPreseleccionado, isOpen, user, especialistas]);
 
 
   // Construir lista de especialidades del especialista seleccionado
@@ -384,50 +384,9 @@ useEffect(() => {
       // setHorasOcupadas([]);
 
       try {
-        const res = await obtenerAgendaEspecialista(formData.id_especialista, formData.fecha);
+        const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha);
         if (res.success && res.data) {
-          const ocupadas = new Set<string>();
-
-          console.log(` Horarios ocupados por los turnos en la fecha seleccionada (${formData.fecha}):`);
-          
-          res.data.forEach((turno: any) => {
-
-              
-            
-              const [horas, minutos] = turno.hora.split(':').map(Number);
-              const inicioSlot = new Date(); // inicioTurno
-              inicioSlot.setHours(horas, minutos, 0, 0);
-              
-              // const duracionTurno = 60;
-              // const finTurno = new Date(inicioTurno.getTime() + (duracionTurno * 60000));
-              
-              // const inicioSlot = new Date(inicioTurno);
-              // while (inicioSlot < finTurno) {
-              //   const horaStr = inicioSlot.toTimeString().slice(0, 5);
-              //   ocupadas.push(horaStr);
-              //   inicioSlot.setMinutes(inicioSlot.getMinutes() + 15);
-              // }
-
-            // Un turno de 60 minutos equivale exactamente a 4 bloques de 15 min.
-            // Usar un bucle 'for' es más directo y un poco más eficiente que manejar tiempos.
-            for (let i = 0; i < 4; i++) {
-              const h = inicioSlot.getHours().toString().padStart(2, '0');
-              const m = inicioSlot.getMinutes().toString().padStart(2, '0');
-              
-              ocupadas.add(`${h}:${m}`);
-
-              console.log(`${h}:${m}`)
-
-
-              
-              // Sumamos 15 minutos para la siguiente iteración
-              inicioSlot.setMinutes(inicioSlot.getMinutes() + 15);
-            }
-            
-          });
-          
-          setHorasOcupadas(Array.from(ocupadas));
-          
+          setHorasOcupadas(res.data);
         }
       } catch (error) {
         console.error('Error verificando horarios:', error);
@@ -455,40 +414,21 @@ useEffect(() => {
           const nuevosHorarios: Record<number, string[]> = {};
           
           for (const diaId of diasSeleccionados) {
-            const [year, month, day] = formData.fecha.split('-').map(Number);
-            const fechaBase = new Date(year, month - 1, day);
-            const diaBaseNumero = fechaBase.getDay() === 0 ? 7 : fechaBase.getDay();
+            const fechaBase = dayjs(formData.fecha, 'YYYY-MM-DD');
+            const diaBaseNumero = fechaBase.day() === 0 ? 7 : fechaBase.day();
             
             let diferenciaDias = diaId - diaBaseNumero;
             if (diferenciaDias < 0) diferenciaDias += 7;
             
-            const fechaDia = new Date(fechaBase);
-            fechaDia.setDate(fechaDia.getDate() + diferenciaDias);
-            const fechaFormateada = format(fechaDia, 'yyyy-MM-dd');
+            const fechaDia = fechaBase.add(diferenciaDias, 'day');
+            const fechaFormateada = fechaDia.format('YYYY-MM-DD');
 
-            const res = await obtenerAgendaEspecialista(formData.id_especialista, fechaFormateada);
+            const res = await obtenerSlotsOcupados(formData.id_especialista, fechaFormateada);
             
-            const horasOcupadasDia: string[] = [];
+            let horasOcupadasDia: string[] = [];
             
-            if (res.success && res.data) {
-              res.data.forEach((turno: any) => {
-                if (turno.estado !== 'cancelado') {
-                  const [horas, minutos] = turno.hora.split(':').map(Number);
-                  const inicioTurno = new Date();
-                  inicioTurno.setHours(horas, minutos, 0, 0);
-                  
-                  const duracionTurno = 60;
-                  const finTurno = new Date(inicioTurno.getTime() + (duracionTurno * 60000));
-                  
-                  const inicioSlot = new Date(inicioTurno);
-                  while (inicioSlot < finTurno) {
-                    const horaStr = inicioSlot.toTimeString().slice(0, 5);
-                    horasOcupadasDia.push(horaStr);
-                    inicioSlot.setMinutes(inicioSlot.getMinutes() + 30);
-                  }
-                }
-              });
-            }
+              // Ya tenemos los slots ocupados del servidor
+              horasOcupadasDia = res.data || [];
 
             // ✅ Generar horarios disponibles (7am - 21pm, cada 30min)
             const horariosDisponibles: string[] = [];
@@ -533,37 +473,33 @@ useEffect(() => {
       setHayConflictos(false);
 
       try {
-        const ocupados: string[] = [];
-        const [year, month, day] = formData.fecha.split('-').map(Number);
-        const fechaBase = new Date(year, month - 1, day);
+        const resultado = await verificarDisponibilidadPaquete({
+          fechaBase: formData.fecha,
+          horaBase: formData.hora,
+          diasSeleccionados,
+          numeroSesiones,
+          mantenerHorario,
+          horariosPorDia,
+          id_especialista: formData.id_especialista,
+          id_box: formData.id_box ? parseInt(formData.id_box) : null,
+        });
 
-        // Iterar sobre cada semana
-        for (let semana = 0; semana < numeroSesiones; semana++) {
-          // Iterar sobre cada día seleccionado
-          for (const diaId of diasSeleccionados) {
-            const diaBaseNumero = fechaBase.getDay() === 0 ? 7 : fechaBase.getDay();
-            let diferenciaDias = diaId - diaBaseNumero;
-            if (diferenciaDias < 0) diferenciaDias += 7;
-
-            const fechaTurno = new Date(fechaBase);
-            fechaTurno.setDate(fechaTurno.getDate() + diferenciaDias + (semana * 7));
-
-            const fechaFormateada = format(fechaTurno, 'yyyy-MM-dd');
-            const horaSeleccionada = mantenerHorario ? formData.hora : (horariosPorDia[diaId] || '09:00');
-
-            // ✅ Verificar disponibilidad para este especialista en esta fecha/hora
-            const resultado = await verificarDisponibilidad(
-              fechaFormateada,
-              horaSeleccionada,
-              formData.id_especialista
-            );
-
-            if (!resultado.disponible) {
-              const diaNombre = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][diaId - 1];
-              ocupados.push(`${diaNombre} ${format(fechaTurno, 'dd/MM')} a las ${horaSeleccionada}`);
-            }
-          }
+        if (!resultado.success) {
+          throw new Error(resultado.error || 'No se pudo validar disponibilidad');
         }
+
+        const ocupadosDetalle = resultado.data?.ocupadosDetalle || [];
+        const ocupados = ocupadosDetalle.length > 0
+          ? ocupadosDetalle.map((conflicto: any) => {
+              const razon = conflicto.motivo === 'ambos'
+                ? 'conflicto por especialista y box'
+                : conflicto.motivo === 'especialista'
+                  ? 'conflicto por especialista'
+                  : 'conflicto por box';
+
+              return `${conflicto.texto} (${razon})`;
+            })
+          : (resultado.data?.ocupados || []);
 
         setHorariosOcupados(ocupados);
         setHayConflictos(ocupados.length > 0);
@@ -580,7 +516,7 @@ useEffect(() => {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [diasSeleccionados, numeroSesiones, mantenerHorario, horariosPorDia, formData.id_especialista, formData.fecha, formData.hora, mostrarRepeticion]);
+  }, [diasSeleccionados, numeroSesiones, mantenerHorario, horariosPorDia, formData.id_especialista, formData.fecha, formData.hora, formData.id_box, mostrarRepeticion]);
 
   // Verificar boxes disponibles
   useEffect(() => {
@@ -592,23 +528,19 @@ useEffect(() => {
 
       setVerificandoBoxes(true);
       try {
-        const res = await obtenerTurnos({
-          fecha: formData.fecha
-        });
+        const res = await obtenerTurnosParaValidarBoxes(formData.fecha);
         
         if (res.success && res.data) {
           const [horaInicio, minutoInicio] = formData.hora.split(':').map(Number);
-          const inicioTurno = new Date();
-          inicioTurno.setHours(horaInicio, minutoInicio, 0, 0);
-          const finTurno = new Date(inicioTurno.getTime() + (60 * 60000));
+          const inicioTurno = (horaInicio * 60) + minutoInicio;
+          const finTurno = inicioTurno + 60;
 
           const turnosConflicto = res.data.filter((turno: any) => {
             if (turno.estado === 'cancelado' || !turno.id_box) return false;
             
             const [horaTurno, minutoTurno] = turno.hora.split(':').map(Number);
-            const inicioTurnoExistente = new Date();
-            inicioTurnoExistente.setHours(horaTurno, minutoTurno, 0, 0);
-            const finTurnoExistente = new Date(inicioTurnoExistente.getTime() + (60 * 60000));
+            const inicioTurnoExistente = (horaTurno * 60) + minutoTurno;
+            const finTurnoExistente = inicioTurnoExistente + 60;
 
             return (inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente);
           });
@@ -677,19 +609,11 @@ useEffect(() => {
   const esHoraDisponible = (hora: string): boolean => {
     if (!hora || horasOcupadas.length === 0) return true;
     
-    const [horas, minutos] = hora.split(':').map(Number);
-    const inicioNuevoTurno = new Date();
-    inicioNuevoTurno.setHours(horas, minutos, 0, 0);
+    const inicioNuevoTurno = timeToMinutes(hora);
     
     for (let i = 0; i < 4; i++) {
       // Creamos un clon de la fecha y le sumamos los minutos correspondientes
-      const slotTiempo = new Date(inicioNuevoTurno.getTime());
-      slotTiempo.setMinutes(slotTiempo.getMinutes() + (i * 15));
-
-      // Formateo seguro a mano
-    const h = slotTiempo.getHours().toString().padStart(2, '0');
-    const m = slotTiempo.getMinutes().toString().padStart(2, '0');
-    const slotStr = `${h}:${m}`;
+      const slotStr = minutesToTime(inicioNuevoTurno + (i * 15));
     
       if (horasOcupadas.includes(slotStr)) {
         return false;
@@ -704,16 +628,16 @@ useEffect(() => {
     const opciones = [];
     
     // Comparar fechas de forma robusta
-    const ahora = new Date();
-    const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    const ahora = dayjs();
+    const hoy = dayjs().startOf('day');
     
     // Convertir fecha seleccionada a objeto Date (sin hora)
     const fechaSeleccionadaObj = formData.fecha 
-      ? new Date(formData.fecha + 'T00:00:00')
+      ? dayjs(formData.fecha + 'T00:00:00')
       : null;
     
     const esHoy = fechaSeleccionadaObj 
-      ? fechaSeleccionadaObj.getTime() === hoy.getTime()
+      ? fechaSeleccionadaObj.valueOf() === hoy.valueOf()
       : false;
     
     for (let h = 7; h <= 21; h++) {
@@ -723,13 +647,7 @@ useEffect(() => {
         
         // ✅ SOLO filtrar horas pasadas si la fecha seleccionada es HOY
         if (esHoy) {
-          const [horaNum, minNum] = hora.split(':').map(Number);
-          
-          // Crear fecha completa con la hora del turno
-          const horaTurno = new Date();
-          horaTurno.setHours(horaNum, minNum, 0, 0);
-          
-          if (horaTurno <= ahora) {
+          if (isPastDateTime(formData.fecha, hora) || dayjs(`${formData.fecha} ${hora}`, 'YYYY-MM-DD HH:mm').isSame(ahora, 'minute')) {
             continue; // Saltar horas que ya pasaron (solo para HOY)
           }
         }
@@ -995,7 +913,7 @@ useEffect(() => {
                   <option value="">Seleccionar especialista</option>
                   {especialistas.map((especialista) => (
                     <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                      {especialista.nombre} {especialista.apellido}
+                      {especialista.apellido}, {especialista.nombre} 
                     </option>
                   ))}
                 </select>
@@ -1119,7 +1037,7 @@ useEffect(() => {
                 onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '', id_box: '' }))}
                 className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 required
-                min={new Date().toISOString().split('T')[0]}
+                min={todayYmd()}
               />
             </div>
 
@@ -1410,7 +1328,7 @@ useEffect(() => {
                   <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm md:text-base">
                     <span className="text-lg md:text-xl">✓</span>
                     <span className="text-green-700">
-                      Todos los horarios están disponibles ({diasSeleccionados.length} días × {numeroSesiones} semanas = {diasSeleccionados.length * numeroSesiones} turnos)
+                      Todos los horarios están disponibles ({diasSeleccionados.length} días × {numeroSesiones/diasSeleccionados.length} semanas = {numeroSesiones} turnos)
                     </span>
                   </div>
                 )}

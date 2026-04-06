@@ -5,7 +5,7 @@ import { NuevoTurnoPilatesModal } from "@/componentes/pilates/nuevoTurnoPilatesD
 import { DetalleClaseModal } from "@/componentes/pilates/detalleClaseModal";
 import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerPacientes } from "@/lib/actions/turno.action";
 import { getIdPilates, esPilates } from "@/lib/constants/especialidades";
-import { addDays, format, startOfWeek } from "date-fns";
+import { dayjs } from "@/lib/dayjs";
 import { useToastStore } from '@/stores/toast-store';
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
 
@@ -42,8 +42,9 @@ export default function PilatesPage() {
 
   // ============= FUNCIÓN PARA CARGAR TURNOS =============
   const cargarTurnos = async () => {
-    const desde = format(startOfWeek(semanaBase, { weekStartsOn: 1 }), "yyyy-MM-dd");
-    const hasta = format(addDays(startOfWeek(semanaBase, { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
+    const inicioSemana = dayjs(semanaBase).startOf("week").add(1, "day");
+    const desde = inicioSemana.format("YYYY-MM-DD");
+    const hasta = inicioSemana.add(6, "day").format("YYYY-MM-DD");
     
     try {
       const res = await obtenerTurnosConFiltros({ 
@@ -140,7 +141,7 @@ export default function PilatesPage() {
 
   // ============= FUNCIÓN PARA VERIFICAR SI SLOT ESTÁ DISPONIBLE PARA NUEVOS TURNOS =============
   const verificarDisponibilidadSlot = (dia: Date, horario: string): SlotInfo => {
-    const fechaStr = format(dia, "yyyy-MM-dd");
+    const fechaStr = dayjs(dia).format("YYYY-MM-DD");
     const turnosEnSlot = turnos.filter(turno => 
       turno.fecha === fechaStr && 
       turno.hora?.substring(0, 5) === horario

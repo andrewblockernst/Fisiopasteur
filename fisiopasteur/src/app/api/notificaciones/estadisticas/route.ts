@@ -5,6 +5,7 @@ import {
   obtenerNotificacionesTurno
 } from '@/lib/services/notificacion.service';
 import { verificarEstadoBot } from '@/lib/services/whatsapp-bot.service';
+import { nowIso } from '@/lib/dayjs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
           data: {
             ...estadisticas.data,
             botDisponible: botEstado,
-            ultimaActualizacion: new Date().toISOString()
+            ultimaActualizacion: nowIso()
           }
         });
 
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
           success: true,
           data: {
             botDisponible: botOnline,
-            timestamp: new Date().toISOString(),
+            timestamp: nowIso(),
             status: botOnline ? 'online' : 'offline'
           }
         });

@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import type { TurnoWithRelations } from '@/types/extended-database.types';
+import { dayjs, todayYmd, toYmd } from '@/lib/dayjs';
 
 // Exportar TurnoWithRelations como TurnoConDetalles para compatibilidad con código existente
 export type TurnoConDetalles = TurnoWithRelations;
@@ -42,7 +43,7 @@ export const useTurnoStore = create<TurnoStore>((set, get) => ({
   })),
   
   getTurnosByDate: (turnos, date) => {
-    const dateString = date.toISOString().split('T')[0];
+    const dateString = toYmd(date);
     return turnos.filter(turno => turno.fecha === dateString);
   },
   
@@ -52,22 +53,20 @@ export const useTurnoStore = create<TurnoStore>((set, get) => ({
   },
   
   getTurnosHoy: () => {
-    const today = new Date();
     const { turnos } = get();
-    return get().getTurnosByDate(turnos, today);
+    return turnos.filter(turno => turno.fecha === todayYmd());
   },
   
   getTurnosProximos: () => {
     const { turnos } = get();
-    const today = new Date();
-    const todayString = today.toISOString().split('T')[0];
+    const todayString = todayYmd();
     
     return turnos
       .filter(turno => turno.fecha >= todayString)
       .sort((a, b) => {
-        const dateA = new Date(`${a.fecha}T${a.hora}`);
-        const dateB = new Date(`${b.fecha}T${b.hora}`);
-        return dateA.getTime() - dateB.getTime();
+        const dateA = dayjs(`${a.fecha} ${a.hora}`, 'YYYY-MM-DD HH:mm:ss');
+        const dateB = dayjs(`${b.fecha} ${b.hora}`, 'YYYY-MM-DD HH:mm:ss');
+        return dateA.valueOf() - dateB.valueOf();
       });
   }
 }));

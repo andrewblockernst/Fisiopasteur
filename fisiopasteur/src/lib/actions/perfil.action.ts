@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { nowIso } from '@/lib/dayjs';
 import { redirect } from 'next/navigation';
 import { Database } from '@/types/database.types';
 import type { ActionResult } from '@/lib/actions/action-result';
@@ -102,7 +103,7 @@ export async function guardarPrecioUsuarioEspecialidad(
       id_usuario: user.id,
       id_especialidad,
       ...valores,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso(),
     } as any;
 
     if (existente) {
@@ -278,7 +279,7 @@ export async function actualizarPerfil(formData: FormData) {
         apellido,
         telefono: telefono || null,
         color: color || null,
-        updated_at: new Date().toISOString()
+        updated_at: nowIso()
       })
       .eq('id_usuario', usuarioId);
 

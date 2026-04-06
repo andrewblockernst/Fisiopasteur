@@ -5,6 +5,7 @@ import {
   marcarNotificacionFallida 
 } from '@/lib/services/notificacion.service';
 import { enviarMensajePersonalizado, verificarEstadoBot } from '@/lib/services/whatsapp-bot.service';
+import { nowIso } from '@/lib/dayjs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
       procesadas: notificaciones.length,
       enviadas,
       fallidas,
-      timestamp: new Date().toISOString()
+      timestamp: nowIso()
     };
 
     console.log(`🎯 Proceso completado: ${enviadas} enviadas, ${fallidas} fallidas de ${notificaciones.length} total`);
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           botDisponible,
-          timestamp: new Date().toISOString()
+          timestamp: nowIso()
         });
         
       case 'send-test-message':

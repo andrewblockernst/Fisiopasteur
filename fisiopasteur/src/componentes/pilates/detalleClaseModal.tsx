@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { eliminarTurno, crearTurno, actualizarTurno, crearTurnosEnLote } from "@/lib/actions/turno.action";
-import { format, addWeeks } from "date-fns";
-import { es } from "date-fns/locale";
+import { dayjs, isPastDateTime } from "@/lib/dayjs";
 import { useToastStore } from '@/stores/toast-store';
 import { Users, Clock, Calendar, User, AlertTriangle, Trash2, UserPlus, Settings, Plus, Repeat } from "lucide-react";
 import Image from "next/image";
@@ -129,8 +128,7 @@ export function DetalleClaseModal({
   
   // ✅ Parsear correctamente para mostrar
   const fechaClaseDate = fechaClase ? (() => {
-    const [year, month, day] = fechaClase.split('-').map(Number);
-    return new Date(year, month - 1, day);
+    return dayjs(fechaClase, 'YYYY-MM-DD').toDate();
   })() : null;
 
   // Sincronizar valores del header para mover la clase cuando cambian fecha/hora
@@ -454,13 +452,13 @@ export function DetalleClaseModal({
 
             const fechaTurno = new Date(fechaBase);
             fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
-            const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+            const fechaFormateada = dayjs(fechaTurno).format("YYYY-MM-DD");
 
             const esMismaFecha = fechaFormateada === fechaClase;
             const [hours, minutes] = horaClase.split(':').map(Number);
             const fechaHoraTurno = new Date(fechaTurno);
             fechaHoraTurno.setHours(hours, minutes, 0, 0);
-            const esPasado = fechaHoraTurno < ahora;
+            const esPasado = isPastDateTime(fechaFormateada, horaClase);
 
             const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
             const weeksDiff = Math.floor(diasDiferencia / 7);
@@ -473,7 +471,7 @@ export function DetalleClaseModal({
 
               if (!disponibilidad.success || !disponibilidad.disponible) {
                 const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
-                ocupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")}`);
+                ocupados.push(`${diaSpanish} ${dayjs(fechaTurno).format("DD/MM")}`);
               }
             }
           }
@@ -738,14 +736,14 @@ export function DetalleClaseModal({
 
           const fechaTurno = new Date(fechaBase);
           fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
-          const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+          const fechaFormateada = dayjs(fechaTurno).format("YYYY-MM-DD");
 
           // Saltar fecha original y fechas pasadas
           const esMismaFecha = fechaFormateada === fechaClase;
           const [hours, minutes] = horaClase!.split(':').map(Number);
           const fechaHoraTurno = new Date(fechaTurno);
           fechaHoraTurno.setHours(hours, minutes, 0, 0);
-          const esPasado = fechaHoraTurno < ahora;
+          const esPasado = isPastDateTime(fechaFormateada, horaClase!);
 
           const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
           const weeksDiff = Math.floor(diasDiferencia / 7);
@@ -759,7 +757,7 @@ export function DetalleClaseModal({
 
             if (!disponibilidad.success || !disponibilidad.disponible) {
               const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
-              horariosOcupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")} a las ${horaClase}hs`);
+              horariosOcupados.push(`${diaSpanish} ${dayjs(fechaTurno).format("DD/MM")} a las ${horaClase}hs`);
             }
           }
         }
@@ -795,7 +793,7 @@ export function DetalleClaseModal({
           const fechaTurno = new Date(fechaBase);
           fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
 
-          const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+          const fechaFormateada = dayjs(fechaTurno).format("YYYY-MM-DD");
 
           // ✅ Validar que no sea la misma fecha de la clase original
           const esMismaFecha = fechaFormateada === fechaClase;
@@ -804,7 +802,7 @@ export function DetalleClaseModal({
           const [hours, minutes] = horaClase!.split(':').map(Number);
           const fechaHoraTurno = new Date(fechaTurno);
           fechaHoraTurno.setHours(hours, minutes, 0, 0);
-          const esPasado = fechaHoraTurno < ahora;
+          const esPasado = isPastDateTime(fechaFormateada, horaClase!);
 
           // ✅ Calcular cuántas semanas reales hay desde la fecha base
           const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
@@ -916,7 +914,7 @@ export function DetalleClaseModal({
         {/* Información de la clase que se repetirá */}
         <div className="bg-blue-50 p-2 md:p-4 rounded-lg space-y-2">
           <p className="text-xs md:text-sm text-blue-800">
-            <strong>📅 Clase base:</strong> {fechaClaseDate ? format(fechaClaseDate, "EEEE dd/MM/yyyy", { locale: es }) : ''} a las {horaClase}
+            <strong>📅 Clase base:</strong> {fechaClaseDate ? dayjs(fechaClaseDate).format("dddd DD/MM/YYYY") : ''} a las {horaClase}
           </p>
           <p className="text-xs md:text-sm text-blue-800">
             <strong>👥 Participantes:</strong> {pacientesSeleccionados.length}
@@ -1137,7 +1135,7 @@ export function DetalleClaseModal({
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 <span>
-                  {fechaClaseDate ? format(fechaClaseDate, "EEEE dd/MM", { locale: es }) : ''} - {horaClase}
+                  {fechaClaseDate ? dayjs(fechaClaseDate).format("dddd DD/MM") : ''} - {horaClase}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-1">
@@ -1241,7 +1239,7 @@ export function DetalleClaseModal({
             <div className="flex items-center gap-2">
               <Clock className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
               <span>
-                {fechaClaseDate ? format(fechaClaseDate, "EEEE dd/MM", { locale: es }) : ''} - {horaClase}
+                {fechaClaseDate ? dayjs(fechaClaseDate).format("dddd DD/MM") : ''} - {horaClase}
               </span>
             </div>
 

@@ -1,35 +1,55 @@
 'use client';
 
-import React, { useState, useEffect } from "react";
-import { CalendarioTurnos } from "@/componentes/calendario/calendario-turnos";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { CalendarioTurnos, type VistaCalendario } from "@/componentes/calendario/calendario-turnos";
 import { DayViewModal } from "@/componentes/calendario/dia-vista-dialog";
 import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
-import { useTurnoStore, type TurnoConDetalles } from "@/stores/turno-store";
-import { useToastStore } from "@/stores/toast-store";
+import type { TurnoConDetalles } from "@/stores/turno-store";
 import { useAuth } from "@/hooks/usePerfil";
 import { ArrowLeft, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
-import { useTurnos, useInvalidateTurnos } from "@/hooks/useTurnosQuery";
+import { useTurnos, useInvalidateTurnos, usePrefetchTurnos } from "@/hooks/useTurnosQuery";
 
 interface CalendarioClientQueryProps {
   especialistas: any[];
-  pacientes: any[];
+  // pacientes: any[];
 }
 
-const BRAND = '#9C1838';
+// Cantidad de meses por bloque de cache (ajustable).
+// Con 3, cada key cubre 3 meses contiguos y evita solapamientos redundantes.
+const WINDOW_MONTHS = 3;
+
+const formatDateISO = (date: Date) => date.toISOString().split('T')[0];
+
+const getCacheWindowRange = (fechaVisible: Date, blockOffset = 0) => {
+  // Normaliza por bloques no solapados para reutilizar cache entre meses adyacentes.
+  const monthIndex = fechaVisible.getFullYear() * 12 + fechaVisible.getMonth();
+  const baseBlockStartIndex = Math.floor(monthIndex / WINDOW_MONTHS) * WINDOW_MONTHS;
+  const blockStartIndex = baseBlockStartIndex + blockOffset * WINDOW_MONTHS;
+
+  const startYear = Math.floor(blockStartIndex / 12);
+  const startMonth = blockStartIndex % 12;
+  const endIndexExclusive = blockStartIndex + WINDOW_MONTHS;
+  const endYear = Math.floor(endIndexExclusive / 12);
+  const endMonth = endIndexExclusive % 12;
+
+  const primerDiaVentana = new Date(startYear, startMonth, 1);
+  const ultimoDiaVentana = new Date(endYear, endMonth, 0);
+
+  return {
+    fecha_desde: formatDateISO(primerDiaVentana),
+    fecha_hasta: formatDateISO(ultimoDiaVentana),
+  };
+};
 
 export function CalendarioClientQuery({ 
   especialistas, 
-  pacientes 
+  // pacientes 
 }: CalendarioClientQueryProps) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  
-  // ✅ React Query - obtener turnos con caché
-  const { data: turnos = [], isLoading: turnosLoading } = useTurnos();
-  const invalidateTurnos = useInvalidateTurnos();
-  
+
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -37,9 +57,27 @@ export function CalendarioClientQuery({
   const [especialistaFiltro, setEspecialistaFiltro] = useState<string>("");
   const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [vistaCalendario, setVistaCalendario] = useState<VistaCalendario>('mes');
+  const [fechaVisible, setFechaVisible] = useState<Date>(new Date());
 
-  const { getTurnosByDate } = useTurnoStore();
-  const { showServerActionResponse } = useToastStore();
+  const handleViewContextChange = useCallback(({ vista, fecha }: { vista: VistaCalendario; fecha: Date }) => {
+    setVistaCalendario((prev) => (prev === vista ? prev : vista));
+    setFechaVisible((prev) => (prev.getTime() === fecha.getTime() ? prev : fecha));
+  }, []);
+
+  const filters = useMemo(() => {
+    const range = getCacheWindowRange(fechaVisible);
+
+    return {
+      ...range,
+      especialista_ids: especialistaFiltro ? [especialistaFiltro] : undefined,
+    };
+  }, [fechaVisible, especialistaFiltro]);
+  
+  // ✅ React Query - obtener turnos con caché
+  const { data: turnos = [], isLoading: turnosLoading } = useTurnos({ filters });
+  const invalidateTurnos = useInvalidateTurnos();
+  const prefetchTurnos = usePrefetchTurnos();
 
   // Efecto para mostrar skeleton loader en la carga inicial
   useEffect(() => {
@@ -63,17 +101,20 @@ export function CalendarioClientQuery({
     }
   }, [user, authLoading, especialistas, especialistaFiltro]);
 
+  // Prefetch ventanas adyacentes para navegación rápida (mes/día/semana)
+  useEffect(() => {
+    const prevRange = getCacheWindowRange(fechaVisible, -1);
+    const nextRange = getCacheWindowRange(fechaVisible, 1);
+
+    const base = especialistaFiltro ? { especialista_ids: [especialistaFiltro] } : {};
+
+    prefetchTurnos({ ...prevRange, ...base });
+    prefetchTurnos({ ...nextRange, ...base });
+  }, [fechaVisible, especialistaFiltro, prefetchTurnos]);
+
   // Handler para volver (mobile)
   const handleBack = () => {
     router.push('/inicio');
-  };
-
-  // Handlers para el calendario
-  const handleDayClick = (date: Date) => {
-    setSelectedDate(date);
-    const turnosDelDia = getTurnosByDate(turnos, date);
-    setSelectedDayTurnos(turnosDelDia);
-    setIsDayModalOpen(true);
   };
 
   const handleCreateTurno = () => {
@@ -82,17 +123,15 @@ export function CalendarioClientQuery({
 
   const handleSuccessfulTurnoCreation = () => {
     // ✅ Invalidar caché para refrescar los datos
-    invalidateTurnos();
-    // showServerActionResponse({
-    //   success: true,
-    //   message: 'Turno creado exitosamente',
-    //   toastType: 'success',
-    //   description: 'El turno ha sido creado correctamente'
-    // });
+    if (selectedDate) {
+      invalidateTurnos({ scope: 'dates', date: formatDateISO(selectedDate) });
+      return;
+    }
+    invalidateTurnos({ scope: 'lists' });
   };
 
   // ✅ Mostrar skeleton solo durante la carga inicial o mientras carga datos
-  if (isInitialLoad || turnosLoading) {
+  if (isInitialLoad || (turnosLoading && turnos.length === 0)) {
     return (
       <UnifiedSkeletonLoader 
         type="calendar" 
@@ -101,11 +140,6 @@ export function CalendarioClientQuery({
       />
     );
   }
-
-  // Filtrar turnos por especialista
-  const turnosFiltrados = especialistaFiltro 
-    ? turnos.filter(turno => turno.id_especialista === especialistaFiltro)
-    : turnos;
 
   return (
     <div className="min-h-screen text-black">
@@ -144,7 +178,7 @@ export function CalendarioClientQuery({
             <option value="">Todos los especialistas</option>
             {especialistas.map((especialista) => (
               <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                {especialista.nombre} {especialista.apellido}
+                {especialista.apellido}, {especialista.nombre}
               </option>
             ))}
           </select>
@@ -155,7 +189,7 @@ export function CalendarioClientQuery({
       <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-0">
         <div className="rounded-lg">
           <CalendarioTurnos
-            turnos={turnosFiltrados}
+            turnos={turnos}
             onDayClick={(date: Date, turnos: TurnoConDetalles[]) => {
               setSelectedDate(date);
               setSelectedDayTurnos(turnos);
@@ -170,6 +204,9 @@ export function CalendarioClientQuery({
             especialistas={especialistas}
             especialistaSeleccionado={especialistaFiltro}
             onEspecialistaChange={setEspecialistaFiltro}
+            vistaProp={vistaCalendario}
+            onVistaChange={setVistaCalendario}
+            onViewContextChange={handleViewContextChange}
           />
         </div>
       </div>
@@ -191,6 +228,7 @@ export function CalendarioClientQuery({
         }}
         fechaSeleccionada={selectedDate}
         horaSeleccionada={horaSeleccionada}
+        especialistaPreseleccionado={especialistaFiltro || null}
         especialistas={especialistas}
         // pacientes={pacientes}
         onTurnoCreated={handleSuccessfulTurnoCreation}

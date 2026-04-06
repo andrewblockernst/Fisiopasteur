@@ -223,6 +223,7 @@ export function CalendarioClient({
         }}
         fechaSeleccionada={selectedDate}
         horaSeleccionada={horaSeleccionada} // Pasar la hora preseleccionada
+        especialistaPreseleccionado={especialistaFiltro || null}
         especialistas={especialistas}
         // pacientes={pacientes}
         onTurnoCreated={handleSuccessfulTurnoCreation}

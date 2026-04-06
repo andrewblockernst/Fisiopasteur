@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { obtenerHistorialClinicoPorPaciente, actualizarEvolucionClinica, actualizarTurno, actualizarGrupoTratamiento } from "@/lib/actions/turno.action";
 import { useToastStore } from "@/stores/toast-store";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { dayjs, diffMsFromNow } from "@/lib/dayjs";
 import { Check, Edit2, X, ChevronDown, ChevronUp } from "lucide-react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 
@@ -65,7 +64,7 @@ export function HistorialClinicoMobile({ pacienteId }: HistorialClinicoMobilePro
   }, [pacienteId]);
 
   const formatearFecha = (fecha: string) => {
-    return format(new Date(fecha), "dd/MM/yyyy", { locale: es });
+    return dayjs(fecha).format("DD/MM/YYYY");
   };
 
   const estadoLabel = (estado: string) => {
@@ -81,7 +80,7 @@ export function HistorialClinicoMobile({ pacienteId }: HistorialClinicoMobilePro
   const puedeEditar = (turno: Turno): boolean => {
     if (!turno.evolucion_completada_en) return true;
     
-    const tiempoTranscurrido = Date.now() - new Date(turno.evolucion_completada_en).getTime();
+    const tiempoTranscurrido = diffMsFromNow(turno.evolucion_completada_en);
     const cincoMinutos = 5 * 60 * 1000;
     
     return tiempoTranscurrido <= cincoMinutos;

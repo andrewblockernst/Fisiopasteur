@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
+import { dayjs, todayYmd } from "@/lib/dayjs";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type Box = Database["public"]["Tables"]["box"]["Row"];
@@ -222,7 +223,7 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
   const supabase = await createClient();
 
   try {
-    const hoy = new Date().toISOString().split("T")[0];
+    const hoy = todayYmd();
 
     const { data, error } = await supabase
       .from("turno")
@@ -238,7 +239,7 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
       )
       .eq("fecha", hoy)
       .eq("estado", "programado")
-      .gt("hora", new Date().toLocaleTimeString("en-US", { hour12: false }))
+      .gt("hora", dayjs().format("HH:mm:ss"))
     //   .neq("id_especialidad", idPilates) // Excluir Pilates
       .order("hora", { ascending: true });
 
@@ -273,7 +274,7 @@ export async function obtenerOcupacionBoxes(): Promise<
   const supabase = await createClient();
 
   try {
-    const hoy = new Date().toISOString().split("T")[0];
+    const hoy = todayYmd();
 
     // 1️⃣ Obtener todos los boxes
     const { data: boxes, error: errorBoxes } = await supabase

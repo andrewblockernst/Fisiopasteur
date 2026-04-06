@@ -5,10 +5,11 @@ import type { TurnoConDetalles } from "@/stores/turno-store";
 import { QueryClient } from "@tanstack/react-query";
 import { puedeGestionarTurnos } from "@/lib/constants/roles";
 import { redirect } from "next/navigation";
+import { todayYmd } from "@/lib/dayjs";
 
 // Helper function to parse search params
 function parseSearchParams(params: { [key: string]: string | string[] | undefined }) {
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = todayYmd();
   
   
   // Helper para convertir a array

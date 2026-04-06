@@ -16,8 +16,10 @@ import {
   Trash2
 } from 'lucide-react';
 import type { TurnoConDetalles } from "@/stores/turno-store";
+import { useInvalidateTurnos } from '@/hooks/useTurnosQuery';
 import Button from '../boton';
 import EditarTurnoModal from './editar-turno-modal';
+import { dayjs } from '@/lib/dayjs';
 
 interface TurnoDetailMobileProps {
   turno: TurnoConDetalles;
@@ -26,6 +28,7 @@ interface TurnoDetailMobileProps {
 
 export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetailMobileProps) {
   const router = useRouter();
+  const invalidateTurnos = useInvalidateTurnos();
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
 
   const getEstadoColor = (estado: string) => {
@@ -50,24 +53,11 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
   };
 
   const formatDate = (fecha: string) => {
-    const date = new Date(fecha);
-    return date.toLocaleDateString('es-AR', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    return dayjs(fecha).format('dddd D [de] MMMM [de] YYYY');
   };
 
   const formatTime = (hora: string) => {
-    const [hours, minutes] = hora.split(':');
-    const date = new Date();
-    date.setHours(parseInt(hours), parseInt(minutes));
-    return date.toLocaleTimeString('es-AR', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true
-    });
+    return dayjs(hora, 'HH:mm:ss').format('hh:mm A');
   };
 
   return (
@@ -249,8 +239,17 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
           turno={turno as any}
           open={modalEditarAbierto}
           onClose={() => setModalEditarAbierto(false)}
-          onSaved={() => {
+          onSaved={(updated) => {
             setModalEditarAbierto(false);
+            const fechaAnterior = turno.fecha;
+            const fechaNueva = updated?.fecha || turno.fecha;
+
+            // Invalidar las listas para la fecha anterior y la nueva por si el turno cambió de día.
+            invalidateTurnos({ scope: 'dates', date: fechaAnterior });
+            if (fechaNueva !== fechaAnterior) {
+              invalidateTurnos({ scope: 'dates', date: fechaNueva });
+            }
+            invalidateTurnos({ scope: 'lists' });
             router.refresh();
           }}
         />

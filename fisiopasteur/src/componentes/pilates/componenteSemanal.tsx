@@ -1,7 +1,6 @@
 'use client'
 import { useState } from "react";
-import { addDays, format, startOfWeek, isToday, isSameDay } from "date-fns";
-import { es } from "date-fns/locale";
+import { dayjs } from "@/lib/dayjs";
 import { ChevronLeft, ChevronRight, Plus, Eye } from "lucide-react";
 
 interface PilatesCalendarioSemanalProps {
@@ -21,8 +20,8 @@ const HORARIOS_PILATES = [
 
 // Función para obtener días de la semana
 function getWeekDays(fecha: Date) {
-  const start = startOfWeek(fecha, { weekStartsOn: 1 }); // Lunes
-  return Array.from({ length: 5 }, (_, i) => addDays(start, i)); // Solo lunes a viernes
+  const start = dayjs(fecha).startOf("week").add(1, "day");
+  return Array.from({ length: 5 }, (_, i) => start.add(i, "day").toDate());
 }
 
 export default function PilatesCalendarioSemanal({
@@ -37,20 +36,20 @@ export default function PilatesCalendarioSemanal({
 
   // Navegación de semanas
   const irSemanaAnterior = () => {
-    onSemanaChange(addDays(semanaBase, -7));
+    onSemanaChange(dayjs(semanaBase).subtract(7, "day").toDate());
   };
 
   const irSemanaSiguiente = () => {
-    onSemanaChange(addDays(semanaBase, 7));
+    onSemanaChange(dayjs(semanaBase).add(7, "day").toDate());
   };
 
   const irSemanaActual = () => {
-    onSemanaChange(new Date());
+    onSemanaChange(dayjs().toDate());
   };
 
   // Obtener turnos para un día y horario específico
   const getTurnosParaSlot = (dia: Date, horario: string) => {
-    const fechaStr = format(dia, "yyyy-MM-dd");
+    const fechaStr = dayjs(dia).format("YYYY-MM-DD");
     return turnos.filter(turno => 
       turno.fecha === fechaStr && 
       turno.hora?.substring(0, 5) === horario
@@ -231,7 +230,7 @@ export default function PilatesCalendarioSemanal({
             </button>
             
             <span className="text-sm font-medium text-gray-700 min-w-[160px] md:min-w-[200px] text-center">
-              {format(diasSemana[0], "dd MMM", { locale: es })} - {format(diasSemana[4], "dd MMM yyyy", { locale: es })}
+              {dayjs(diasSemana[0]).format("DD MMM")} - {dayjs(diasSemana[4]).format("DD MMM YYYY")}
             </span>
             
             <button
@@ -273,17 +272,17 @@ export default function PilatesCalendarioSemanal({
             <div
               key={index}
               className={`p-2 border-b border-l border-gray-200 bg-gray-50 ${
-                isToday(dia) ? 'bg-blue-50 border-blue-200' : ''
+                dayjs(dia).isSame(dayjs(), 'day') ? 'bg-blue-50 border-blue-200' : ''
               }`}
             >
               <div className="text-center">
                 <div className="text-sm font-medium text-gray-700">
-                  {format(dia, "EEEE", { locale: es })}
+                  {dayjs(dia).format("dddd")}
                 </div>
                 <div className={`text-lg font-semibold ${
-                  isToday(dia) ? 'text-blue-600' : 'text-gray-900'
+                  dayjs(dia).isSame(dayjs(), 'day') ? 'text-blue-600' : 'text-gray-900'
                 }`}>
-                  {format(dia, "dd/MM")}
+                  {dayjs(dia).format("DD/MM")}
                 </div>
               </div>
             </div>

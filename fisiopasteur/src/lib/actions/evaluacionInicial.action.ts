@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { nowIso } from "@/lib/dayjs";
 import { revalidatePath } from "next/cache";
 
 export async function obtenerEvaluacionInicial(idGrupo: string) {
@@ -45,7 +46,7 @@ export async function guardarEvaluacionInicial(idGrupo: string, datos: any) {
         .from('evaluacion_inicial')
         .update({
           ...datos,
-          updated_at: new Date().toISOString()
+          updated_at: nowIso()
         })
         .eq('id_grupo', idGrupo);
 

@@ -8,7 +8,6 @@ import { updatePaciente } from "@/lib/actions/paciente.action";
 import Button from "../boton";
 import { ToastItem } from "@/stores/toast-store";
 import { getPhoneInputHint, isValidPhoneNumber } from "@/lib/utils/phone.utils";
-import { te } from "date-fns/locale";
 
 type Paciente = Tables<'paciente'>;
 

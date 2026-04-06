@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   Calendar, 
   User, 
@@ -17,14 +18,17 @@ import {
 import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import type { Tables, EspecialistaWithSpecialties } from "@/types";
-import SkeletonLoader from '../skeleton-loader';
+import type { InvalidateTurnosOptions } from '@/hooks/useTurnosQuery';
+import { turnoKeys } from '@/hooks/useTurnosQuery';
 import UnifiedSkeletonLoader from '../unified-skeleton-loader';
+import { dayjs, todayYmd } from '@/lib/dayjs';
 
 interface TurnosMobileListProps {
   turnos: TurnoConDetalles[];
   fecha: string;
   onDateChange: (date: string) => void;
   onTurnoCreated?: () => void;
+  invalidateTurnos: (options?: InvalidateTurnosOptions) => void;
   especialistas: EspecialistaWithSpecialties[];
   especialidades: Tables<"especialidad">[];
   loadingTurnos: boolean;
@@ -34,6 +38,15 @@ interface TurnosMobileListProps {
     especialista_ids: string[];
     especialidad_ids: string[];
     estados: string[];
+    paciente_id?: number;
+  };
+  activeFilters: {
+    fecha_desde: string;
+    fecha_hasta: string;
+    especialista_ids: string[];
+    especialidad_ids: string[];
+    estados: string[];
+    paciente_id?: number;
   };
 }
 
@@ -42,12 +55,36 @@ export default function TurnosMobileList({
   fecha, 
   onDateChange, 
   onTurnoCreated,
+  invalidateTurnos,
   especialistas,
   especialidades,
   loadingTurnos,
-  initialFilters
+  initialFilters,
+  activeFilters
 }: TurnosMobileListProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const getTurnosSnapshots = () => {
+    return queryClient.getQueriesData<TurnoConDetalles[]>({ queryKey: turnoKeys.lists() });
+  };
+
+  const restoreTurnosSnapshots = (snapshots: Array<[readonly unknown[], TurnoConDetalles[] | undefined]>) => {
+    for (const [queryKey, data] of snapshots) {
+      queryClient.setQueryData(queryKey, data);
+    }
+  };
+
+  const updateTurnosLists = (updater: (rows: TurnoConDetalles[]) => TurnoConDetalles[]) => {
+    queryClient.setQueriesData(
+      { queryKey: turnoKeys.lists() },
+      (oldData: TurnoConDetalles[] | undefined) => {
+        if (!oldData) return oldData;
+        return updater(oldData);
+      }
+    );
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [showNuevoTurnoModal, setShowNuevoTurnoModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -59,32 +96,55 @@ export default function TurnosMobileList({
   const [especialidadId, setEspecialidadId] = useState(initialFilters.especialidad_ids?.[0] || '');
   const [filtroEstado, setFiltroEstado] = useState(initialFilters.estados?.[0] || 'todos');
 
+  useEffect(() => {
+    setFechaDesde(activeFilters.fecha_desde);
+    setFechaHasta(activeFilters.fecha_hasta);
+    setEspecialistaId(activeFilters.especialista_ids?.[0] || '');
+    setEspecialidadId(activeFilters.especialidad_ids?.[0] || '');
+    setFiltroEstado(activeFilters.estados?.[0] || 'todos');
+  }, [
+    activeFilters.fecha_desde,
+    activeFilters.fecha_hasta,
+    activeFilters.especialista_ids,
+    activeFilters.especialidad_ids,
+    activeFilters.estados,
+  ]);
+
+  const handleTurnoCreated = useCallback(() => {
+    // Hacer snapshot y invalidar con opciones específicas para la fecha del turno creado
+    invalidateTurnos({ 
+      scope: 'dates', 
+      date: fecha // Invalidar turnos de la fecha actual/seleccionada
+    });
+    onTurnoCreated?.();
+  }, [invalidateTurnos, onTurnoCreated, fecha]);
+
   // ✨ Función para calcular el número de talonario
   const calcularNumeroTalonario = useCallback((turno: TurnoConDetalles): string | null => {
-    if (!turno.id_paciente || !turno.id_especialidad) return null;
+    if (!turno.id_paciente || !turno.id_especialidad || !turno.numero_en_grupo || !turno.grupo_tratamiento?.cantidad_turnos_planificados) return null;
 
-    // Filtrar turnos del mismo paciente y especialidad (sin importar mes/año)
-    const turnosMismoPaquete = turnos.filter(t => 
-      t.id_paciente === turno.id_paciente &&
-      t.id_especialidad === turno.id_especialidad &&
-      t.estado !== 'cancelado' // Excluir cancelados del conteo
-    );
+    // // Filtrar turnos del mismo paciente y especialidad (sin importar mes/año)
+    // const turnosMismoPaquete = turnos.filter(t => 
+    //   t.id_paciente === turno.id_paciente &&
+    //   t.id_especialidad === turno.id_especialidad &&
+    //   t.estado !== 'cancelado' // Excluir cancelados del conteo
+    // );
 
-    // Si solo hay un turno, no mostrar número
-    if (turnosMismoPaquete.length <= 1) return null;
+    // // Si solo hay un turno, no mostrar número
+    // if (turnosMismoPaquete.length <= 1) return null;
 
-    // Ordenar por fecha y hora
-    const turnosOrdenados = [...turnosMismoPaquete].sort((a, b) => {
-      const fechaA = new Date(`${a.fecha}T${a.hora}`);
-      const fechaB = new Date(`${b.fecha}T${b.hora}`);
-      return fechaA.getTime() - fechaB.getTime();
-    });
+    // // Ordenar por fecha y hora
+    // const turnosOrdenados = [...turnosMismoPaquete].sort((a, b) => {
+    //   const fechaA = new Date(`${a.fecha}T${a.hora}`);
+    //   const fechaB = new Date(`${b.fecha}T${b.hora}`);
+    //   return fechaA.getTime() - fechaB.getTime();
+    // });
 
-    // Encontrar la posición del turno actual
-    const posicion = turnosOrdenados.findIndex(t => t.id_turno === turno.id_turno) + 1;
-    const total = turnosOrdenados.length;
+    // // Encontrar la posición del turno actual
+    // const posicion = turnosOrdenados.findIndex(t => t.id_turno === turno.id_turno) + 1;
+    // const total = turnosOrdenados.length;
 
-    return `${posicion}/${total}`;
+    return `${turno.numero_en_grupo}/${turno.grupo_tratamiento?.cantidad_turnos_planificados}`;
   }, [turnos]);
 
   // Función para aplicar filtros (navegar con query params)
@@ -108,9 +168,7 @@ export default function TurnosMobileList({
 
   // Función para limpiar filtros y aplicar inmediatamente
   const limpiarFiltros = useCallback(() => {
-    // Obtener fecha de hoy
-    const ahora = new Date();
-    const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
+    const hoy = todayYmd();
     
     // Navegar solo con la fecha de hoy (sin filtros)
     const params = new URLSearchParams();
@@ -173,27 +231,13 @@ export default function TurnosMobileList({
 
   const formatDate = useMemo( () => {
     return (fecha: string) => {
-      const [year, month, day] = fecha.split('-');
-      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return date.toLocaleDateString('es-AR', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
+      return dayjs(fecha, 'YYYY-MM-DD').format('dddd D [de] MMMM [de] YYYY');
     };
   }, [])
 
   const formatTime = useMemo(() => {
     return (hora: string) => {
-      const [hours, minutes] = hora.split(':');
-      const date = new Date();
-      date.setHours(parseInt(hours), parseInt(minutes));
-      return date.toLocaleTimeString('es-AR', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true
-      });
+      return dayjs(hora, 'HH:mm:ss').format('hh:mm A');
     };
   }, []);
 
@@ -564,8 +608,9 @@ export default function TurnosMobileList({
       <NuevoTurnoModal
         isOpen={showNuevoTurnoModal}
         onClose={() => setShowNuevoTurnoModal(false)}
-        onTurnoCreated={onTurnoCreated}
-        fechaSeleccionada={new Date(fecha)}
+        onTurnoCreated={handleTurnoCreated}
+        fechaSeleccionada={dayjs(fecha, 'YYYY-MM-DD').toDate()}
+        especialistaPreseleccionado={especialistaId || null}
       />
     </div>
   );
