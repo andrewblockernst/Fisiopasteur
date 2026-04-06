@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { nowIso } from '@/lib/dayjs';
 
 export async function sincronizarUsuarioAuth() {
   try {
@@ -34,7 +35,7 @@ export async function sincronizarUsuarioAuth() {
           .from('usuario')
           .update({ 
             id_usuario: user.id,
-            updated_at: new Date().toISOString()
+            updated_at: nowIso()
           })
           .eq('email', user.email || '')
           .select()
@@ -56,7 +57,7 @@ export async function sincronizarUsuarioAuth() {
             usuario: user.email?.split('@')[0] || 'usuario',
             contraseña: '',
             id_rol: 1,
-            created_at: new Date().toISOString()
+            created_at: nowIso()
           })
           .select()
           .single();

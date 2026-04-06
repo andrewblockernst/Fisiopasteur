@@ -9,6 +9,7 @@ import {
   enviarRecordatorioTurno,
 } from "@/lib/services/whatsapp-bot.service";
 import type { TurnoConDetalles } from "@/stores/turno-store";
+import { nowIso } from "@/lib/dayjs";
 
 /**
  * Delay helper para respetar rate limits de WaSender
@@ -148,7 +149,7 @@ export async function procesarNotificacionesPendientes() {
  * Función para ser llamada manualmente o desde un endpoint
  */
 export async function ejecutarCronRecordatorios() {
-  const timestamp = new Date().toISOString();
+  const timestamp = nowIso();
   console.log(`🔄 [${timestamp}] Ejecutando cron de recordatorios...`);
 
   const resultado = await procesarNotificacionesPendientes();

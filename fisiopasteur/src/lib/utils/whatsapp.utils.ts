@@ -1,7 +1,6 @@
 // Funciones utilitarias para WhatsApp (NO son server actions)
-import { format } from 'date-fns';
 import type { TurnoConDetalles } from "@/stores/turno-store";
-import { es } from 'date-fns/locale';
+import { now, parseYmdHm } from "@/lib/dayjs";
 
 // =====================================
 // 🔧 FUNCIONES AUXILIARES
@@ -68,16 +67,19 @@ export function calcularTiemposRecordatorio(
   tiposRecordatorio: TipoRecordatorio[] = ['1d', '2h']
 ): Record<TipoRecordatorio, Date | null> {
   try {
-    // ✅ Crear fecha/hora del turno en hora Argentina (UTC-3, sin DST)
-    // Parsear componentes de fecha y hora
-    const [year, month, day] = fecha.split('-').map(Number);
-    const [hours, minutes] = hora.split(':').map(Number);
+    const fechaTurno = parseYmdHm(fecha, hora);
+    const ahora = now();
 
-    // Argentina es UTC-3 (sin cambio de horario de verano).
-    // Convertir hora local Argentina → UTC sumando 3 horas.
-    const ARGENTINA_OFFSET_MS = 3 * 60 * 60 * 1000;
-    const fechaTurno = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0) + ARGENTINA_OFFSET_MS);
-    const ahora = new Date();
+    if (!fechaTurno.isValid()) {
+      console.warn(`⚠️ Fecha/hora de turno inválida para recordatorios: fecha='${fecha}', hora='${hora}'`);
+      return {
+        '1h': null,
+        '2h': null,
+        '3h': null,
+        '1d': null,
+        '2d': null
+      };
+    }
     
     console.log(`📅 Calculando recordatorios para turno: ${fecha} ${hora}`);
     console.log(`   Fecha turno (local): ${fechaTurno.toISOString()}`);
@@ -95,9 +97,9 @@ export function calcularTiemposRecordatorio(
     for (const tipo of tiposRecordatorio) {
       const opcion = OPCIONES_RECORDATORIO[tipo];
       if (opcion) {
-        const tiempoRecordatorio = new Date(fechaTurno.getTime() - (opcion.minutos * 60 * 1000));
-        const esValido = tiempoRecordatorio > ahora;
-        recordatorios[tipo] = esValido ? tiempoRecordatorio : null;
+        const tiempoRecordatorio = fechaTurno.subtract(opcion.minutos, 'minute');
+        const esValido = tiempoRecordatorio.isAfter(ahora);
+        recordatorios[tipo] = esValido ? tiempoRecordatorio.toDate() : null;
         console.log(`   ${tipo}: ${esValido ? tiempoRecordatorio.toISOString() : 'Ya pasó (no se programará)'}`);
       }
     }

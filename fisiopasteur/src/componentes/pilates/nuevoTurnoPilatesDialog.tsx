@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react"; 
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { crearTurno, crearTurnosEnLote } from "@/lib/actions/turno.action";
-import { format, addWeeks, addDays, getDay, isPast, isToday, parse } from "date-fns";
-import { es } from "date-fns/locale";
+import { dayjs, isPastDateTime, toYmd } from "@/lib/dayjs";
 import { useToastStore } from '@/stores/toast-store';
 import { AlertTriangle, Users, Clock, Info, Plus, Trash2, CalendarDays } from "lucide-react"; 
 import Image from "next/image";
@@ -42,14 +41,7 @@ const DIAS_SEMANA = [
 // ✅ FUNCIÓN HELPER PARA VALIDAR FECHA Y HORA
 function esFechaHoraPasada(fecha: string, hora: string): boolean {
   try {
-    // Parsear la fecha y hora en formato local
-    const [year, month, day] = fecha.split('-').map(Number);
-    const [hours, minutes] = hora.split(':').map(Number);
-    
-    const fechaHoraTurno = new Date(year, month - 1, day, hours, minutes);
-    const ahora = new Date();
-    
-    return fechaHoraTurno < ahora;
+    return isPastDateTime(fecha, hora);
   } catch {
     return false;
   }
@@ -91,7 +83,7 @@ export function NuevoTurnoPilatesModal({
   // ✅ VALIDAR SI LA FECHA Y HORA SELECCIONADAS ESTÁN EN EL PASADO
   const esHoraPasada = fechaSeleccionada && horaSeleccionada 
     ? esFechaHoraPasada(
-        format(fechaSeleccionada, "yyyy-MM-dd"),
+        toYmd(fechaSeleccionada),
         horaSeleccionada
       )
     : false;
@@ -176,26 +168,26 @@ export function NuevoTurnoPilatesModal({
 
       try {
         const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
-        const diaBaseNumero = getDay(fechaSeleccionada);
-        const ahora = new Date();
+        const diaBaseNumero = dayjs(fechaSeleccionada).day();
+        const ahora = dayjs();
         const ocupados: string[] = [];
 
         // Verificar cada combinación de fecha/hora
         for (let semana = 0; semana < semanas; semana++) {
           for (const diaSeleccionado of diasSeleccionados) {
             const diasDiferencia = (diaSeleccionado - diaBaseNumero + 7) % 7;
-            const fechaTurno = addDays(fechaSeleccionada, diasDiferencia + (semana * 7));
+            const fechaTurno = dayjs(fechaSeleccionada).add(diasDiferencia + (semana * 7), 'day');
             
-            if (fechaTurno < ahora) continue;
+            if (fechaTurno.isBefore(ahora)) continue;
             
-            const fechaStr = format(fechaTurno, "yyyy-MM-dd");
+            const fechaStr = fechaTurno.format("YYYY-MM-DD");
             const horaStr = horaSeleccionada + ':00';
             
             const disponibilidad = await verificarDisponibilidadPilates(fechaStr, horaStr);
             
             if (!disponibilidad.success || !disponibilidad.disponible) {
               const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
-              ocupados.push(`${diaSpanish} ${format(fechaTurno, "dd/MM")}`);
+              ocupados.push(`${diaSpanish} ${fechaTurno.format("DD/MM")}`);
             }
           }
         }
@@ -261,7 +253,7 @@ export function NuevoTurnoPilatesModal({
     setIsSubmitting(true);
     
     try {
-      const fecha = format(fechaSeleccionada, "yyyy-MM-dd");
+      const fecha = toYmd(fechaSeleccionada);
       const hora = horaSeleccionada;
 
       // ============= SIN REPETICIÓN: CREAR TURNOS SIMPLES =============
@@ -307,8 +299,7 @@ export function NuevoTurnoPilatesModal({
       // ============= CON REPETICIÓN: CREAR TURNOS EN LOTE =============
       
       const turnosParaCrear = [];
-      const diaBaseNumero = getDay(fechaSeleccionada);
-      const ahora = new Date();
+      const diaBaseNumero = dayjs(fechaSeleccionada).day();
 
       // Por cada paciente seleccionado
       for (const pacienteId of formData.pacientesSeleccionados) {
@@ -323,10 +314,8 @@ export function NuevoTurnoPilatesModal({
             let diferenciaDias = diaSeleccionado - diaBaseNumero;
             if (diferenciaDias < 0) diferenciaDias += 7;
 
-            const fechaTurno = addWeeks(fechaSeleccionada, semana);
-            fechaTurno.setDate(fechaTurno.getDate() + diferenciaDias);
-            
-            const fechaFormateada = format(fechaTurno, "yyyy-MM-dd");
+            const fechaTurno = dayjs(fechaSeleccionada).add((semana * 7) + diferenciaDias, 'day');
+            const fechaFormateada = fechaTurno.format("YYYY-MM-DD");
             
             // ✅ VALIDACIÓN: Solo verificar si ya pasó, NO excluir la fecha actual
             const esPasado = esFechaHoraPasada(fechaFormateada, hora);
@@ -487,7 +476,7 @@ export function NuevoTurnoPilatesModal({
           {/* Información básica del turno */}
           <div className="p-2 md:p-3 bg-gray-50 rounded-lg">
             <p className="text-xs md:text-sm">
-              <span className="font-medium text-gray-700">Día:</span> {fechaSeleccionada ? format(fechaSeleccionada, "EEEE dd/MM", { locale: es }) : ""}
+              <span className="font-medium text-gray-700">Día:</span> {fechaSeleccionada ? dayjs(fechaSeleccionada).format("dddd DD/MM") : ""}
               <br />
               <span className="font-medium text-gray-700">Horario:</span> {horaSeleccionada}
               {esHoraPasada && (

@@ -1,21 +1,52 @@
 "use client";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DetalleTurnoDialog } from "@/componentes/turnos/detalle-turno-dialog";
 import { marcarComoAtendido, cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
 import { useToastStore } from "@/stores/toast-store";
 import { useAuth } from "@/hooks/usePerfil";
+import { turnoKeys, type InvalidateTurnosOptions } from "@/hooks/useTurnosQuery";
 import EditarTurnoModal from "./editar-turno-modal";
 import type { TurnoWithRelations } from "@/types";
 import { MoreVertical, CheckCircle, XCircle, Edit, Trash } from "lucide-react";
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import UnifiedSkeletonLoader from "../unified-skeleton-loader";
+import { nowIso } from "@/lib/dayjs";
 
-export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, isMobile }: { turnos: TurnoWithRelations[], invalidateTurnos: () => void, turnosLoading: boolean, isMobile: boolean }) {
+type TurnosTableProps = {
+  turnos: TurnoWithRelations[];
+  invalidateTurnos: (options?: InvalidateTurnosOptions) => void;
+  turnosLoading: boolean;
+  isMobile: boolean;
+};
+
+export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, isMobile }: TurnosTableProps) {
 
   // const router = useRouter();
   const toast = useToastStore();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const getTurnosSnapshots = () => {
+    return queryClient.getQueriesData<TurnoWithRelations[]>({ queryKey: turnoKeys.lists() });
+  };
+
+  const restoreTurnosSnapshots = (snapshots: Array<[readonly unknown[], TurnoWithRelations[] | undefined]>) => {
+    for (const [queryKey, data] of snapshots) {
+      queryClient.setQueryData(queryKey, data);
+    }
+  };
+
+  const updateTurnosLists = (updater: (rows: TurnoWithRelations[]) => TurnoWithRelations[]) => {
+    queryClient.setQueriesData(
+      { queryKey: turnoKeys.lists() },
+      (oldData: TurnoWithRelations[] | undefined) => {
+        if (!oldData) return oldData;
+        return updater(oldData);
+      }
+    );
+  };
 
   const userId = String(user?.id_usuario || user?.id || '');
   const puedeAccionarTurno = (turno: TurnoWithRelations) => {
@@ -50,6 +81,15 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
       return;
     }
 
+    const snapshots = getTurnosSnapshots();
+    updateTurnosLists((rows) =>
+      rows.map((row) =>
+        row.id_turno === turno.id_turno
+          ? { ...row, estado: "atendido", updated_at: nowIso() }
+          : row
+      )
+    );
+
     const resultado = await marcarComoAtendido(turno.id_turno);
     
     if (resultado.success) {
@@ -57,9 +97,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
         variant: "success",
         message: "Turno marcado como atendido",
       });
-      // router.refresh();
-      invalidateTurnos(); // ✅ Solo invalidar el query de turnos para refrescar datos
+      invalidateTurnos({ scope: "statuses", statuses: ["programado", "pendiente", "atendido"] });
     } else {
+      restoreTurnosSnapshots(snapshots);
       toast.addToast({
         variant: "error",
         message: resultado.error || "Error al marcar turno",
@@ -73,6 +113,15 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
       return;
     }
 
+    const snapshots = getTurnosSnapshots();
+    updateTurnosLists((rows) =>
+      rows.map((row) =>
+        row.id_turno === turno.id_turno
+          ? { ...row, estado: "cancelado", updated_at: nowIso() }
+          : row
+      )
+    );
+
     const resultado = await cancelarTurno(turno.id_turno);
     
     if (resultado.success) {
@@ -80,9 +129,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
         variant: "success",
         message: "Turno cancelado",
       });
-      // router.refresh();
-      invalidateTurnos(); // ✅ Solo invalidar el query de turnos para refrescar datos
+      invalidateTurnos({ scope: "statuses", statuses: ["programado", "pendiente", "cancelado"] });
     } else {
+      restoreTurnosSnapshots(snapshots);
       toast.addToast({
         variant: "error",
         message: resultado.error || "Error al cancelar turno",
@@ -110,6 +159,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
       return;
     }
 
+    const snapshots = getTurnosSnapshots();
+    updateTurnosLists((rows) => rows.filter((row) => row.id_turno !== turnoParaEliminar.id_turno));
+
     const resultado = await eliminarTurno(turnoParaEliminar.id_turno);
     
     if (resultado.success) {
@@ -118,9 +170,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
         message: "Turno eliminado",
         description: "El turno se eliminó correctamente"
       });
-      // router.refresh();f
-      invalidateTurnos(); // ✅ Invalidar el query de turnos para refrescar datos
+      invalidateTurnos({ scope: "lists" });
     } else {
+      restoreTurnosSnapshots(snapshots);
       toast.addToast({
         variant: "error",
         message: resultado.error || "Error al eliminar turno",

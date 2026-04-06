@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock } from "lucide-react";
-import { useTurnoStore } from "@/stores/turno-store";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import Button from "../boton";
 
@@ -16,7 +15,7 @@ interface CalendarioTurnosProps {
   setIsCreateModalOpen?: (open: boolean) => void; // ✅ Nueva prop para controlar el modal desde el padre
 }
 
-type VistaCalendario = 'mes' | 'semana' | 'dia';
+export type VistaCalendario = 'mes' | 'semana' | 'dia';
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -31,6 +30,7 @@ const DIAS_SEMANA_COMPLETOS = ["Domingo", "Lunes", "Martes", "Miércoles", "Juev
 interface CalendarioTurnosExtraProps {
   vistaProp?: VistaCalendario;
   onVistaChange?: (v: VistaCalendario) => void;
+  onViewContextChange?: (context: { vista: VistaCalendario; fecha: Date }) => void;
   goToTodaySignal?: number; // increment this to trigger go to today
   hideHeaderControls?: boolean;
 }
@@ -45,6 +45,7 @@ export function CalendarioTurnos({
   setIsCreateModalOpen,
   vistaProp,
   onVistaChange,
+  onViewContextChange,
   goToTodaySignal,
   hideHeaderControls
 }: CalendarioTurnosProps & CalendarioTurnosExtraProps) {
@@ -58,7 +59,24 @@ export function CalendarioTurnos({
     }
     return false; // Default para SSR
   });
-  const { getTurnosByDate } = useTurnoStore();
+
+  const turnosPorFecha = useMemo(() => {
+    const index = new Map<string, TurnoConDetalles[]>();
+
+    for (const turno of turnos) {
+      const key = turno.fecha;
+      const actuales = index.get(key);
+      if (actuales) {
+        actuales.push(turno);
+      } else {
+        index.set(key, [turno]);
+      }
+    }
+
+    return index;
+  }, [turnos]);
+
+  const formatDateKey = (fecha: Date) => fecha.toISOString().split('T')[0];
 
   useEffect(() => {
     // Solo se ejecuta en el cliente
@@ -67,6 +85,14 @@ export function CalendarioTurnos({
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    if (!onViewContextChange) return;
+    onViewContextChange({
+      vista,
+      fecha: new Date(fechaActual),
+    });
+  }, [vista, fechaActual, onViewContextChange]);
 
   // Maneja el estado para abrir/cerrar el modal de creación de turno
 // const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -83,7 +109,7 @@ export function CalendarioTurnos({
 
 
   const getTurnosParaDia = (fecha: Date) => {
-    return getTurnosByDate(turnos, fecha);
+    return turnosPorFecha.get(formatDateKey(fecha)) || [];
   };
 
   const esDiaActual = (fecha: Date) => {
@@ -210,7 +236,7 @@ export function CalendarioTurnos({
                           {turnosDelDia.slice(0, 4).map((turno) => (
                             <div
                               key={turno.id_turno}
-                              onClick={(e) => e.stopPropagation()}
+                              // onClick={(e) => e.stopPropagation()}
                               className="flex items-center gap-1 text-xs px-1 py-0.5 rounded transition-all"
                             >
                               {/* Indicador de color del especialista */}
@@ -322,8 +348,6 @@ export function CalendarioTurnos({
                   {diasSemana.map((fecha, di) => {
                     const turnosEnHora = getTurnoEnHora(fecha, hora);
                     const turnosDelDiaCompleto = getTurnosParaDia(fecha);
-                    const fechaStr = fecha.toISOString().split('T')[0];
-                    const horaStr = `${hora.toString().padStart(2, '0')}:00`;
 
                     return (
                       <div 
@@ -681,7 +705,7 @@ export function CalendarioTurnos({
                   <option value="">Todos los especialistas</option>
                   {especialistas.map((especialista) => (
                     <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                      {especialista.nombre} {especialista.apellido}
+                      {especialista.apellido}, {especialista.nombre}
                     </option>
                   ))}
                 </select>

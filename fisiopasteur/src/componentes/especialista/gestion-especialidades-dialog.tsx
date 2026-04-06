@@ -7,7 +7,6 @@ import { createEspecialidad, updateEspecialidad, deleteEspecialidad } from "@/li
 import { useToastStore } from "@/stores/toast-store";
 import type { Tables } from "@/types/database.types";
 import { Plus, Pencil, X, Trash } from "lucide-react";
-import { add } from "date-fns";
 
 type Especialidad = Tables<"especialidad">;
 

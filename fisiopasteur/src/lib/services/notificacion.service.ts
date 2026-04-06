@@ -1,12 +1,16 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { dayjs, nowIso } from "@/lib/dayjs";
 import { revalidatePath } from "next/cache";
-import type { Database } from "@/types/database.types";
+import type { Database } from "@/lib/database.types";
 
 type NotificacionInsert = Database["public"]["Tables"]["notificacion"]["Insert"];
 type NotificacionUpdate = Database["public"]["Tables"]["notificacion"]["Update"];
 type NotificacionRow = Database["public"]["Tables"]["notificacion"]["Row"];
+
+const isValidDate = (value: Date): boolean => !Number.isNaN(value.getTime());
+const getSupabase = async (): Promise<any> => createClient();
 
 // =====================================
 // 📧 GESTIÓN DE NOTIFICACIONES EN BD
@@ -16,7 +20,7 @@ type NotificacionRow = Database["public"]["Tables"]["notificacion"]["Row"];
  * Crear registro de notificación en la base de datos
  */
 export async function crearNotificacion(datos: NotificacionInsert) {
-  const supabase = await createClient();
+  const supabase = await getSupabase();
   
   try {
     const { data, error } = await supabase
@@ -46,7 +50,7 @@ export async function actualizarEstadoNotificacion(
   estado: 'pendiente' | 'enviado' | 'fallido' | 'leido',
   fechaEnvio?: string
 ) {
-  const supabase = await createClient();
+  const supabase = await getSupabase();
   
   try {
     const updateData: NotificacionUpdate = {
@@ -77,7 +81,7 @@ export async function actualizarEstadoNotificacion(
  * Obtener notificaciones de un turno específico
  */
 export async function obtenerNotificacionesTurno(idTurno: number) {
-  const supabase = await createClient();
+  const supabase = await getSupabase();
   
   try {
     const { data, error } = await supabase
@@ -102,10 +106,10 @@ export async function obtenerNotificacionesTurno(idTurno: number) {
  * Obtener notificaciones pendientes de enviar
  */
 export async function obtenerNotificacionesPendientes() {
-  const supabase = await createClient();
+  const supabase = await getSupabase();
   
   try {
-    const ahora = new Date().toISOString();
+    const ahora = nowIso();
     
     const { data, error } = await supabase
       .from("notificacion")
@@ -153,7 +157,7 @@ export async function registrarNotificacionConfirmacion(
     mensaje: mensaje,
     telefono: telefono,
     estado: 'pendiente',
-    fecha_programada: new Date().toISOString(),
+    fecha_programada: nowIso(),
   };
 
   return await crearNotificacion(notificacion);
@@ -173,20 +177,23 @@ export async function registrarNotificacionesRecordatorioFlexible(
   console.log(`📝 Iniciando registro de ${Object.keys(fechasRecordatorio).length} notificaciones para turno ${idTurno}`);
   
   for (const [tipo, fecha] of Object.entries(fechasRecordatorio)) {
-    if (fecha) {
+    if (fecha && isValidDate(fecha)) {
+      const fechaProgramadaIso = fecha.toISOString();
       const notificacionRecordatorio: NotificacionInsert = {
         id_turno: idTurno,
         medio: 'whatsapp',
         mensaje: `[RECORDATORIO ${tipo.toUpperCase()}] ${mensaje}`,
         telefono: telefono,
         estado: 'pendiente',
-        fecha_programada: fecha.toISOString(),
+        fecha_programada: fechaProgramadaIso,
       };
       
-      console.log(`  💾 Guardando notificación ${tipo}: fecha_programada=${fecha.toISOString()}, telefono=${telefono}`);
+      console.log(`  💾 Guardando notificación ${tipo}: fecha_programada=${fechaProgramadaIso}, telefono=${telefono}`);
       const resultado = await crearNotificacion(notificacionRecordatorio);
       console.log(`  ${resultado.success ? '✅' : '❌'} Resultado para ${tipo}:`, resultado.success ? 'OK' : resultado.error);
       resultados.push({ tipo, resultado });
+    } else if (fecha) {
+      console.warn(`⚠️ Se omitió recordatorio ${tipo} por fecha inválida para turno ${idTurno}`);
     }
   }
   
@@ -207,6 +214,9 @@ export async function registrarNotificacionesRecordatorio(
   
   // Recordatorio 24h antes
   if (fechasRecordatorio.recordatorio24h) {
+    if (!isValidDate(fechasRecordatorio.recordatorio24h)) {
+      console.warn(`⚠️ Se omitió recordatorio 24h por fecha inválida para turno ${idTurno}`);
+    } else {
     const notificacion24h: NotificacionInsert = {
       id_turno: idTurno,
       medio: 'whatsapp',
@@ -218,10 +228,14 @@ export async function registrarNotificacionesRecordatorio(
     
     const resultado24h = await crearNotificacion(notificacion24h);
     resultados.push({ tipo: '24h', resultado: resultado24h });
+    }
   }
   
   // Recordatorio 2h antes
   if (fechasRecordatorio.recordatorio2h) {
+    if (!isValidDate(fechasRecordatorio.recordatorio2h)) {
+      console.warn(`⚠️ Se omitió recordatorio 2h por fecha inválida para turno ${idTurno}`);
+    } else {
     const notificacion2h: NotificacionInsert = {
       id_turno: idTurno,
       medio: 'whatsapp',
@@ -233,6 +247,7 @@ export async function registrarNotificacionesRecordatorio(
     
     const resultado2h = await crearNotificacion(notificacion2h);
     resultados.push({ tipo: '2h', resultado: resultado2h });
+    }
   }
   
   return resultados;
@@ -245,11 +260,10 @@ export async function marcarNotificacionEnviada(
   idNotificacion: number, 
   fechaEnvio?: Date
 ) {
-  const fecha = fechaEnvio || new Date();
   return await actualizarEstadoNotificacion(
     idNotificacion, 
     'enviado', 
-    fecha.toISOString()
+    fechaEnvio ? dayjs(fechaEnvio).toISOString() : nowIso()
   );
 }
 
@@ -264,7 +278,7 @@ export async function marcarNotificacionFallida(idNotificacion: number) {
  * Obtener estadísticas de notificaciones
  */
 export async function obtenerEstadisticasNotificaciones(fechaDesde?: string, fechaHasta?: string) {
-  const supabase = await createClient();
+  const supabase = await getSupabase();
   
   try {
     let query = supabase
@@ -287,14 +301,14 @@ export async function obtenerEstadisticasNotificaciones(fechaDesde?: string, fec
 
     // Procesar estadísticas
     const total = data.length;
-    const porEstado = data.reduce((acc: Record<string, number>, notif) => {
+    const porEstado = data.reduce((acc: Record<string, number>, notif: Pick<NotificacionRow, "estado">) => {
       if (notif.estado) {
         acc[notif.estado] = (acc[notif.estado] || 0) + 1;
       }
       return acc;
     }, {} as Record<string, number>);
     
-    const porMedio = data.reduce((acc: Record<string, number>, notif) => {
+    const porMedio = data.reduce((acc: Record<string, number>, notif: Pick<NotificacionRow, "medio">) => {
       acc[notif.medio] = (acc[notif.medio] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -317,16 +331,15 @@ export async function obtenerEstadisticasNotificaciones(fechaDesde?: string, fec
  * Limpiar notificaciones antiguas (más de 30 días)
  */
 export async function limpiarNotificacionesAntiguas() {
-  const supabase = await createClient();
+  const supabase = await getSupabase();
   
   try {
-    const fechaLimite = new Date();
-    fechaLimite.setDate(fechaLimite.getDate() - 30);
+    const fechaLimite = dayjs().subtract(30, "day").toISOString();
     
     const { error, count } = await supabase
       .from("notificacion")
       .delete({ count: 'exact' })
-      .lt("fecha_programada", fechaLimite.toISOString());
+      .lt("fecha_programada", fechaLimite);
 
     if (error) {
       console.error("Error limpiando notificaciones:", error);

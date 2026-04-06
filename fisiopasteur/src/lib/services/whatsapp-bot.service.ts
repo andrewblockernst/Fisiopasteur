@@ -3,8 +3,7 @@
 // import { WhatsAppService } from './whatsapp.service';
 import { createClient } from "../supabase/server";
 import type { TurnoConDetalles } from "@/stores/turno-store";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { dayjs } from "@/lib/dayjs";
 import { mapearTurnoParaBot } from "@/lib/utils/whatsapp.utils";
 import { getBrandingConfig } from './branding.service';
 
@@ -298,9 +297,8 @@ function analizarPatronesTurnos(turnos: any[]) {
   const patronesPorDiaYHora: Record<string, Set<string>> = {};
 
   turnos.forEach((turno) => {
-    const [year, month, day] = turno.fecha.split("-").map(Number);
-    const fecha = new Date(year, month - 1, day);
-    const diaNumero = fecha.getDay();
+    const fecha = dayjs(turno.fecha, "YYYY-MM-DD");
+    const diaNumero = fecha.day();
     const diaSemana = diasSemanaPorId[diaNumero] || "desconocido";
 
     const hora = turno.hora || turno.hora_inicio;
@@ -333,11 +331,8 @@ function analizarPatronesTurnos(turnos: any[]) {
 
   // Obtener fecha del último turno
   const fechas = turnos
-    .map((t) => {
-      const [year, month, day] = t.fecha.split("-").map(Number);
-      return new Date(year, month - 1, day);
-    })
-    .sort((a, b) => b.getTime() - a.getTime());
+    .map((t) => dayjs(t.fecha, "YYYY-MM-DD"))
+    .sort((a, b) => b.valueOf() - a.valueOf());
   const ultimaFecha = fechas[0];
 
   return {
@@ -370,11 +365,7 @@ export async function enviarNotificacionGrupal(
     const analisis = analizarPatronesTurnos(turnos);
 
     // Obtener el mes de los turnos (usar el primer turno)
-    const [year, month, day] = turnos[0].fecha.split("-").map(Number);
-    const primerTurno = new Date(year, month - 1, day);
-    const nombreMes = primerTurno.toLocaleDateString("es-AR", {
-      month: "long",
-    });
+    const nombreMes = dayjs(turnos[0].fecha, "YYYY-MM-DD").format("MMMM");
     const nombreMesCapitalizado =
       nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
 
@@ -436,9 +427,9 @@ export async function enviarNotificacionGrupalTurnos(
   try {
     // Ordenar turnos por fecha y hora
     const turnosOrdenados = [...turnos].sort((a, b) => {
-      const fechaA = new Date(a.fecha + " " + a.hora);
-      const fechaB = new Date(b.fecha + " " + b.hora);
-      return fechaA.getTime() - fechaB.getTime();
+      const fechaA = dayjs(`${a.fecha} ${a.hora}`, "YYYY-MM-DD HH:mm:ss");
+      const fechaB = dayjs(`${b.fecha} ${b.hora}`, "YYYY-MM-DD HH:mm:ss");
+      return fechaA.valueOf() - fechaB.valueOf();
     });
 
     // Formatear cada turno con día, fecha DD/MM y hora en formato 24h
@@ -446,16 +437,12 @@ export async function enviarNotificacionGrupalTurnos(
 
     const listaTurnos = turnosOrdenados
       .map((turno) => {
-        const [year, month, day] = turno.fecha.split("-").map(Number);
-        const fecha = new Date(year, month - 1, day);
+        const fecha = dayjs(turno.fecha, "YYYY-MM-DD");
 
         // Obtener diminutivo del día
-        const diaSemana = diasSemana[fecha.getDay()];
+        const diaSemana = diasSemana[fecha.day()];
 
-        const fechaFormateada = fecha.toLocaleDateString("es-AR", {
-          day: "2-digit",
-          month: "2-digit",
-        });
+        const fechaFormateada = fecha.format("DD/MM");
 
         // Extraer hora en formato 24h (HH:MM)
         const hora =

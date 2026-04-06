@@ -18,8 +18,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import type { TurnoWithRelations } from "@/types";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { dayjs } from "@/lib/dayjs";
 
 interface DetalleTurnoDialogProps {
   isOpen: boolean;
@@ -100,8 +99,7 @@ export function DetalleTurnoDialog({
   // ============= FUNCIONES DE FORMATO =============
   const formatearFecha = (fecha: string) => {
     try {
-      const date = new Date(fecha + 'T00:00:00');
-      return format(date, "EEEE dd/MM/yyyy", { locale: es });
+      return dayjs(fecha, 'YYYY-MM-DD').format("dddd DD/MM/YYYY");
     } catch {
       return fecha;
     }
@@ -349,13 +347,13 @@ export function DetalleTurnoDialog({
             {turno.created_at && (
               <div>
                 <span className="font-medium">Creado:</span>{' '}
-                {format(new Date(turno.created_at), "dd/MM/yyyy HH:mm", { locale: es })}
+                  {dayjs(turno.created_at).format("DD/MM/YYYY HH:mm")}
               </div>
             )}
             {turno.updated_at && (
               <div>
                 <span className="font-medium">Actualizado:</span>{' '}
-                {format(new Date(turno.updated_at), "dd/MM/yyyy HH:mm", { locale: es })}
+                  {dayjs(turno.updated_at).format("DD/MM/YYYY HH:mm")}
               </div>
             )}
           </div>

@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { actualizarEvolucionClinica, actualizarTurno, actualizarGrupoTratamiento } from "@/lib/actions/turno.action";
 import { useToastStore } from "@/stores/toast-store"; 
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { dayjs, diffMsFromNow } from "@/lib/dayjs";
 import { Check, Edit2, X, Calendar, Ban, Clock, ClipboardList } from "lucide-react";
 import { EvaluacionInicialModal } from "./evaluacion-inicial-modal";
 import BaseDialog from "@/componentes/dialog/base-dialog";
@@ -60,10 +59,7 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
   }>({ open: false, id_turno: null, accion: null });
 
   const formatearFecha = (fecha: string) => {
-    // ✅ FIX: Parsear fecha sin convertir a UTC para evitar problemas de zona horaria
-    const [year, month, day] = fecha.split('-').map(Number);
-    const fechaLocal = new Date(year, month - 1, day);
-    return format(fechaLocal, "dd/MM/yyyy", { locale: es });
+    return dayjs(fecha, "YYYY-MM-DD").format("DD/MM/YYYY");
   };
 
   const estadoLabel = (estado: string) => {
@@ -79,7 +75,7 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
   const puedeEditar = (turno: Turno): boolean => {
     if (!turno.evolucion_completada_en) return true;
     
-    const tiempoTranscurrido = Date.now() - new Date(turno.evolucion_completada_en).getTime();
+    const tiempoTranscurrido = diffMsFromNow(turno.evolucion_completada_en);
     const cincoMinutos = 5 * 60 * 1000;
     
     return tiempoTranscurrido <= cincoMinutos;

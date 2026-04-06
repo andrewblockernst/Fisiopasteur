@@ -6,18 +6,18 @@ import { getPacientes } from "@/lib/actions/paciente.action";
 export default async function CalendarioPage() {
   // Solo cargar especialistas y pacientes en el servidor
   // Los turnos se cargan con React Query en el cliente
-  const [resEspecialistas, resPacientes] = await Promise.all([
+  const [resEspecialistas] = await Promise.all([ //, resPacientes
     obtenerEspecialistas(),
-    getPacientes({})
+    // getPacientes({})
   ]);
 
   const especialistas = resEspecialistas.success ? resEspecialistas.data || [] : [];
-  const pacientes = resPacientes.data || [];
+  // const pacientes = resPacientes.data || [];
 
   return (
     <CalendarioClientQuery 
       especialistas={especialistas}
-      pacientes={pacientes}
+      // pacientes={pacientes}
     />
   );
 }

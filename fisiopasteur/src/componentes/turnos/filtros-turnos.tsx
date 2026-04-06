@@ -553,6 +553,7 @@ export default function FiltrosTurnos({
         isOpen={openNew} 
         onClose={() => setOpenNew(false)}
         onTurnoCreated={onTurnoCreated}
+        especialistaPreseleccionado={Array.isArray(filter.especialista_ids) && filter.especialista_ids.length === 1 ? String(filter.especialista_ids[0]) : null}
         especialistas={especialistas}
         // pacientes={[]}
       />

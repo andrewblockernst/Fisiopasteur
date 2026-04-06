@@ -1,5 +1,4 @@
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { dayjs, ageFromBirthdate } from "@/lib/dayjs";
 
 interface Turno {
   id_turno: number;
@@ -45,7 +44,7 @@ export default function PlantillaImpresion({
 }: PlantillaImpresionProps) {
   const formatearFecha = (fecha: string) => {
     try {
-      return format(new Date(fecha), "dd/MM/yyyy", { locale: es });
+      return dayjs(fecha).format("DD/MM/YYYY");
     } catch {
       return fecha;
     }
@@ -53,7 +52,7 @@ export default function PlantillaImpresion({
 
   const formatearFechaHora = (fecha: string) => {
     try {
-      return format(new Date(fecha), "dd/MM/yyyy 'a las' HH:mm", { locale: es });
+      return dayjs(fecha).format("DD/MM/YYYY [a las] HH:mm");
     } catch {
       return fecha;
     }
@@ -72,14 +71,7 @@ export default function PlantillaImpresion({
 
   const calcularEdad = (fechaNacimiento: string) => {
     try {
-      const hoy = new Date();
-      const nacimiento = new Date(fechaNacimiento);
-      let edad = hoy.getFullYear() - nacimiento.getFullYear();
-      const mes = hoy.getMonth() - nacimiento.getMonth();
-      if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
-        edad--;
-      }
-      return edad;
+      return ageFromBirthdate(fechaNacimiento);
     } catch {
       return null;
     }
@@ -93,7 +85,7 @@ export default function PlantillaImpresion({
           Historia Clínica
         </h1>
         <p className="text-sm text-gray-600">
-          Generado el {format(new Date(), "dd/MM/yyyy 'a las' HH:mm", { locale: es })}
+          Generado el {dayjs().format("DD/MM/YYYY [a las] HH:mm")}
         </p>
         {(fechaInicio || fechaFin) && (
           <p className="text-sm text-gray-600 mt-1">
