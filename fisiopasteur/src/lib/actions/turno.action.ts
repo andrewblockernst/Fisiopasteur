@@ -3,9 +3,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { afeter } from "next/server"
 import type { Database } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
+import { snapshotDesdeTurnoRelacionado } from "@/lib/utils/whatsapp.utils";
 import { nowIso, todayYmd } from "@/lib/dayjs";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
@@ -341,20 +343,20 @@ export async function crearTurno(
       // Esto evita que un error o timeout en WhatsApp bloquee la creación del turno
       Promise.resolve().then(async () => {
         try {
-          const { registrarNotificacionConfirmacion, marcarNotificacionEnviada, registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
+          const { registrarNotificacionConfirmacion, marcarNotificacionEnviada, marcarNotificacionFallida, registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
           const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
 
           if (turnoCreado.paciente?.telefono) {
             const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
 
-            // 1. Registrar confirmación en DB como pendiente (garantiza tracking y fallback)
+            // 1. Registrar confirmación en DB para auditoría
             const resultadoRegistro = await registrarNotificacionConfirmacion(
               turnoCreado.id_turno,
               turnoCreado.paciente.telefono,
               mensajeConfirmacion
             );
 
-            // 2. Enviar confirmación INMEDIATAMENTE al bot (sin esperar el cron)
+            // 2. Enviar confirmación INMEDIATAMENTE al bot (trigger único, sin reintento por cron)
             try {
               const resultadoBot = await Promise.race([
                 enviarConfirmacionTurno(turnoCreado as any),
@@ -363,14 +365,18 @@ export async function crearTurno(
                 )
               ]);
 
-              // 3. Si se envió bien, marcar como enviado en DB para no reenviar por el cron
-              if (resultadoBot.status === 'success' && resultadoRegistro.success && resultadoRegistro.data) {
-                await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
+              if (resultadoRegistro.success && resultadoRegistro.data) {
+                if (resultadoBot.status === 'success') {
+                  await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
+                } else {
+                  await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
+                }
               }
             } catch (e) {
-              // Si falla (bot caído, timeout, etc.), la notificación queda como 'pendiente'
-              // → el cron la reintentará en los próximos 2 minutos
-              console.warn('Confirmación directa falló, el cron reintentará:', e);
+              console.warn('Confirmación directa falló:', e);
+              if (resultadoRegistro.success && resultadoRegistro.data) {
+                await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
+              }
             }
 
             // 4. Programar recordatorios en DB (el scheduler los enviará a su tiempo)
@@ -417,58 +423,85 @@ export async function crearTurno(
 export async function actualizarTurno(id: number, datos: TurnoUpdate) {
   const supabase = await createClient();
 
-  try {    // Si se cambia fecha/hora/especialista, verificar disponibilidad
-    if (datos.fecha || datos.hora || datos.id_especialista || datos.id_box !== undefined) {
-      const turnoActual: any = await supabase
-        .from("turno")
-        .select("fecha, hora, id_especialista, id_box, id_especialidad")
-        .eq("id_turno", id)
-        .single();
+  const normalizeHora = (h: string | null | undefined) =>
+    h != null && h !== "" ? String(h).substring(0, 5) : "";
 
-      if (turnoActual.data) {
-        const turnoData = turnoActual.data;
-        const nuevaFecha = datos.fecha || turnoData.fecha;
-        const nuevaHora = datos.hora || turnoData.hora;
-        const nuevoEspecialista = datos.id_especialista || turnoData.id_especialista;
-        const nuevoBox = datos.id_box !== undefined ? datos.id_box : turnoData.id_box;
-        const especialidadId = turnoData.id_especialidad;
+  try {
+    const { data: prevTurno, error: errPrev } = await supabase
+      .from("turno")
+      .select(
+        `
+        id_turno,
+        fecha,
+        hora,
+        id_especialista,
+        id_box,
+        id_especialidad,
+        estado,
+        paciente:id_paciente(nombre, apellido, telefono),
+        especialista:id_especialista(nombre, apellido),
+        especialidad:id_especialidad(nombre),
+        box:id_box(numero)
+      `,
+      )
+      .eq("id_turno", id)
+      .single();
 
-        // Solo verificar si cambió algo relevante Y si tenemos especialista
-        const cambioRelevante =
-          datos.fecha !== turnoData.fecha ||
-          datos.hora !== turnoData.hora ||
-          datos.id_especialista !== turnoData.id_especialista ||
-          datos.id_box !== turnoData.id_box;
+    if (errPrev || !prevTurno) {
+      return {
+        success: false,
+        error: "Turno no encontrado o no pertenece a esta organización",
+      };
+    }
 
-        // Solo verificar disponibilidad si hay cambios relevantes Y tenemos especialista
-        if (cambioRelevante && nuevoEspecialista && nuevaFecha && nuevaHora) {
-          const disponibilidad = await verificarDisponibilidadParaActualizacion(
-            nuevaFecha,
-            nuevaHora,
-            nuevoEspecialista,
-            nuevoBox,
-            id,
-            especialidadId ?? undefined
-          );
+    // Si se cambia fecha/hora/especialista/box, verificar disponibilidad
+    if (
+      datos.fecha !== undefined ||
+      datos.hora !== undefined ||
+      datos.id_especialista !== undefined ||
+      datos.id_box !== undefined
+    ) {
+      const nuevaFecha = datos.fecha ?? prevTurno.fecha;
+      const nuevaHora = datos.hora ?? prevTurno.hora;
+      const nuevoEspecialista =
+        datos.id_especialista ?? prevTurno.id_especialista;
+      const nuevoBox =
+        datos.id_box !== undefined ? datos.id_box : prevTurno.id_box;
+      const especialidadId = prevTurno.id_especialidad;
 
-          if (!disponibilidad.success || !disponibilidad.disponible) {
-            const idPilates = await obtenerIdPilates();
+      const cambioRelevante =
+        (datos.fecha !== undefined && datos.fecha !== prevTurno.fecha) ||
+        (datos.hora !== undefined &&
+          normalizeHora(datos.hora as string) !==
+            normalizeHora(prevTurno.hora)) ||
+        (datos.id_especialista !== undefined &&
+          datos.id_especialista !== prevTurno.id_especialista) ||
+        (datos.id_box !== undefined && datos.id_box !== prevTurno.id_box);
 
-            if (idPilates && especialidadId === idPilates) {
-              return {
-                success: false,
-                error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4`
-              };
-            } else {
-              return {
-                success: false,
-                error: `Horario no disponible. Conflictos: ${disponibilidad.conflictos || 0}`
-              };
-            }
+      if (cambioRelevante && nuevoEspecialista && nuevaFecha && nuevaHora) {
+        const disponibilidad = await verificarDisponibilidadParaActualizacion(
+          nuevaFecha,
+          String(nuevaHora),
+          nuevoEspecialista,
+          nuevoBox,
+          id,
+          especialidadId ?? undefined,
+        );
+
+        if (!disponibilidad.success || !disponibilidad.disponible) {
+          const idPilates = await obtenerIdPilates();
+
+          if (idPilates && especialidadId === idPilates) {
+            return {
+              success: false,
+              error: `Clase de Pilates completa. Participantes: ${disponibilidad.participantes_actuales || disponibilidad.conflictos}/4`,
+            };
           }
+          return {
+            success: false,
+            error: `Horario no disponible. Conflictos: ${disponibilidad.conflictos || 0}`,
+          };
         }
-      } else {
-        return { success: false, error: "Turno no encontrado o no pertenece a esta organización" };
       }
     }
 
@@ -494,6 +527,57 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
     if (error) {
       console.error("Error al actualizar turno:", error);
       return { success: false, error: error.message };
+    }
+
+      const cambioVisiblePaciente =
+      prevTurno.fecha !== data.fecha ||
+      normalizeHora(prevTurno.hora) !== normalizeHora(data.hora) ||
+      prevTurno.id_especialista !== data.id_especialista ||
+      prevTurno.id_box !== data.id_box ||
+      prevTurno.id_especialidad !== data.id_especialidad;
+
+    if (
+      cambioVisiblePaciente &&
+      data.paciente?.telefono &&
+      data.estado !== "eliminado"
+    ) {
+      // Snapshots y strings ahora (no dentro del callback) para el cierre correcto
+      const snapshotAnterior = snapshotDesdeTurnoRelacionado(prevTurno as any);
+      const snapshotActual = snapshotDesdeTurnoRelacionado(data as any);
+      const telefonoAviso = String(data.paciente.telefono).trim();
+      const nombrePacienteAviso =
+        `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
+        "Paciente";
+
+      // En Vercel/serverless, Promise.resolve().then(...) se corta al terminar el action.
+      // `after` ejecuta el trabajo después de enviar la respuesta al cliente.
+      after(async () => {
+        try {
+          const { enviarAvisoModificacionTurno } = await import(
+            "@/lib/services/whatsapp-bot.service"
+          );
+          console.log(
+            `[WhatsApp] Enviando aviso cambio turno id=${id} → ${telefonoAviso}`,
+          );
+          const resultado = await enviarAvisoModificacionTurno({
+            telefono: telefonoAviso,
+            nombrePaciente: nombrePacienteAviso,
+            anterior: snapshotAnterior,
+            actual: snapshotActual,
+          });
+          if (resultado.status !== "success") {
+            console.error(
+              "[WhatsApp] Aviso cambio turno falló:",
+              resultado.message,
+            );
+          }
+        } catch (notifyErr) {
+          console.error(
+            "Error enviando aviso WhatsApp por cambio de turno:",
+            notifyErr,
+          );
+        }
+      });
     }
 
     return { success: true, data };
