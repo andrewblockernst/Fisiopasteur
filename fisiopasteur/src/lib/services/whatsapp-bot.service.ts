@@ -266,53 +266,6 @@ export async function enviarMensajePersonalizado(
 }
 
 /**
- * Avisar por WhatsApp que el turno fue modificado (fecha, hora, profesional, etc.)
- */
-export async function enviarAvisoModificacionTurno(params: {
-  telefono: string;
-  nombrePaciente: string;
-  anterior: SnapshotTurnoParaAviso;
-  actual: SnapshotTurnoParaAviso;
-}): Promise<BotResponse> {
-  const { telefono, nombrePaciente, anterior, actual } = params;
-
-  if (!telefono?.trim()) {
-    return { status: "error", message: "Sin teléfono" };
-  }
-
-  let nombreCentro = "Fisiopasteur";
-  try {
-    nombreCentro = await getNombreOrganizacion();
-  } catch {
-    /* default */
-  }
-
-  const linea = (s: SnapshotTurnoParaAviso) => {
-    const box = s.boxLabel ? `\n📦 ${s.boxLabel}` : "";
-    return `📅 ${s.fecha} — 🕐 ${s.hora}\n👤 ${s.profesional}\n🩺 ${s.especialidad}${box}`;
-  };
-
-  const mensaje = `📝 *Cambio en tu turno*
-
-Hola ${nombrePaciente},
-
-Tu turno en *${nombreCentro}* fue actualizado.
-
-*Antes:*
-${linea(anterior)}
-
-*Ahora:*
-${linea(actual)}
-
-📍 Pasteur 206, Libertador San Martín
-Ante cualquier duda, comunicate con el centro.
-
-¡Gracias!`;
-
-  return enviarMensajePersonalizado(telefono.trim(), mensaje);
-}
-
-/**
  * Verificar estado del bot de WhatsApp
  */
 export async function verificarEstadoBot(): Promise<boolean> {

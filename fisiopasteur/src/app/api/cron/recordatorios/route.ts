@@ -1,17 +1,36 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { ejecutarCronRecordatorios } from '@/lib/services/cron-recordatorios.service';
 
-/**
- * Este endpoint está deshabilitado.
- * Los recordatorios son procesados exclusivamente por el bot de Heroku
- * (procesarRecordatoriosAutonomo, cada 2 minutos) consultando Supabase directamente.
- */
 export async function GET() {
-  return NextResponse.json({
-    success: true,
-    message: 'Recordatorios manejados por el bot de Heroku'
-  });
+  try {
+    
+    const resultado = await ejecutarCronRecordatorios();
+    
+    if (resultado.success) {
+      return NextResponse.json({
+        success: true,
+        message: 'Cron de recordatorios ejecutado exitosamente',
+        data: resultado
+      });
+    } else {
+      return NextResponse.json({
+        success: false,
+        message: 'Error ejecutando cron de recordatorios',
+        error: resultado.error
+      }, { status: 500 });
+    }
+    
+  } catch (error) {
+    console.error('Error en endpoint de cron:', error);
+    return NextResponse.json({
+      success: false,
+      message: 'Error interno del servidor',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
 }
 
 export async function POST() {
+  // Permitir también POST para herramientas externas de cron
   return GET();
 }
