@@ -2173,3 +2173,51 @@ export async function crearPaqueteSesiones(params: {
     };
   }
 }
+
+export async function obtenerProximoTurnoPorTelefono(telefono: string) {
+  const supabase = await createClient();
+  
+  try {
+    // Primero encontrar el paciente por teléfono
+    const { data: paciente, error: pacienteError } = await supabase
+      .from("paciente")
+      .select("id_paciente")
+      .eq("telefono", telefono)
+      .single();
+
+    if (pacienteError || !paciente) {
+      return { success: true, data: null };
+    }
+
+    // Buscar el próximo turno (fecha >= hoy, ordenado por fecha y hora)
+    const hoy = new Date().toISOString().split('T')[0];
+    
+    const { data, error } = await supabase
+      .from("turno")
+      .select(`
+        *,
+        paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email),
+        especialista:id_especialista(id_usuario, nombre, apellido, color),
+        especialidad:id_especialidad(id_especialidad, nombre),
+        box:id_box(id_box, numero)
+      `)
+      .eq("id_paciente", paciente.id_paciente)
+      .gte("fecha", hoy)
+      .neq("estado", "cancelado")
+      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
+      .order("fecha", { ascending: true })
+      .order("hora", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error al obtener próximo turno:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (error) {
+    console.error("Error inesperado:", error);
+    return { success: false, error: "Error inesperado" };
+  }
+}
