@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import { waSenderService } from './wasender.service'
-import { procesarRecordatoriosPendientes } from './recordatorios.service'
+import { supabase } from './supabase.client'
 import { nowIso } from './dayjs'
 
 const PORT = process.env.PORT ?? 3008
@@ -61,29 +61,6 @@ const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recorda
 
 let recordatoriosInterval: NodeJS.Timeout | null = null
 
-const FISIOPASTEUR_URL = process.env.FISIOPASTEUR_API_URL || 'https://fisiopasteur.vercel.app'
-
-// Función helper para fetch con timeout
-const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 10000) => {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
-
-    try {
-        const response = await fetch(url, {
-            ...options,
-            signal: controller.signal
-        })
-        clearTimeout(timeout)
-        return response
-    } catch (error: any) {
-        clearTimeout(timeout)
-        if (error.name === 'AbortError') {
-            throw new Error(`Timeout después de ${timeoutMs}ms`)
-        }
-        throw error
-    }
-}
-
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 const formatearFecha = (fecha: string): string => {
@@ -91,53 +68,55 @@ const formatearFecha = (fecha: string): string => {
     return `${day}/${month}/${year}`
 }
 
-// Notificar a Vercel el resultado de cada envío
-const marcarNotificacion = async (id: number, estado: 'enviado' | 'fallido') => {
-    try {
-        await fetchWithTimeout(
-            `${FISIOPASTEUR_URL}/api/cron/notificacion/${id}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ estado }),
-            },
-            5000
-        )
-    } catch (error: any) {
+// Actualiza el estado de la notificación directamente en Supabase
+const actualizarEstadoNotificacion = async (id: number, estado: 'enviado' | 'fallido') => {
+    const update: Record<string, string> = { estado }
+    if (estado === 'enviado') update.fecha_envio = new Date().toISOString()
+
+    const { error } = await supabase
+        .from('notificacion')
+        .update(update)
+        .eq('id_notificacion', id)
+
+    if (error) {
         console.error(`⚠️ No se pudo marcar notificación ${id} como ${estado}: ${error.message}`)
     }
 }
 
 /**
- * El bot obtiene la lista de recordatorios pendientes de Vercel,
- * los envía directamente a WaSender respetando el rate limit de 5s,
- * y notifica a Vercel el resultado de cada uno.
- * Así el timeout de Vercel no afecta el procesamiento.
+ * Consulta Supabase directamente, envía recordatorios pendientes por WaSender
+ * y marca cada uno como enviado/fallido. Se ejecuta cada 2 minutos en Heroku.
  */
 const procesarRecordatoriosAutonomo = async () => {
     try {
         const startTime = Date.now()
         console.log(`🔄 [${nowIso()}] Obteniendo recordatorios pendientes...`)
 
-        const response = await fetchWithTimeout(
-            `${FISIOPASTEUR_URL}/api/cron/recordatorios/pendientes`,
-            { method: 'GET', headers: { 'Content-Type': 'application/json' } },
-            10000
-        )
+         const { data: pendientes, error } = await supabase
+            .from('notificacion')
+            .select(`
+                id_notificacion,
+                id_turno,
+                mensaje,
+                turno:id_turno(
+                    fecha,
+                    hora,
+                    paciente:id_paciente(nombre, apellido, telefono),
+                    especialista:id_especialista(nombre, apellido),
+                    especialidad:id_especialidad(nombre)
+                )
+            `)
+            .eq('estado', 'pendiente')
+            .ilike('mensaje', '%[RECORDATORIO%')
+            .lte('fecha_programada', new Date().toISOString())
+            .order('fecha_programada', { ascending: true })
 
-        if (!response.ok) {
-            console.error(`❌ Error obteniendo pendientes: ${response.status}`)
+        if (error) {
+            console.error(`❌ Error consultando Supabase: ${error.message}`)
             return
         }
 
-        const resultado = await response.json()
-        if (!resultado.success || !resultado.data) {
-            console.error(`❌ Respuesta inválida: ${resultado.error}`)
-            return
-        }
-
-        const pendientes: any[] = resultado.data
-        if (pendientes.length === 0) {
+        if (!pendientes || pendientes.length === 0) {
             console.log(`✅ Sin recordatorios pendientes (${Date.now() - startTime}ms)`)
             return
         }
@@ -149,11 +128,11 @@ const procesarRecordatoriosAutonomo = async () => {
 
         for (let i = 0; i < pendientes.length; i++) {
             const notif = pendientes[i]
-            const turno = notif.turno
+            const turno = notif.turno as any
 
             if (!turno?.paciente?.telefono) {
                 console.error(`❌ Notificación ${notif.id_notificacion} sin teléfono — marcando fallida`)
-                await marcarNotificacion(notif.id_notificacion, 'fallido')
+                await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
                 fallidos++
                 continue
             }
@@ -177,7 +156,7 @@ const procesarRecordatoriosAutonomo = async () => {
 
             if (process.env.WHATSAPP_ENABLED !== 'true') {
                 console.log(`⚠️ [DEV] Envío bloqueado (WHATSAPP_ENABLED no activo). Destinatario: ${turnoData.telefono}`)
-                await marcarNotificacion(notif.id_notificacion, 'fallido')
+                await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
                 fallidos++
                 continue
             }
@@ -186,11 +165,11 @@ const procesarRecordatoriosAutonomo = async () => {
 
             if (envio.success) {
                 console.log(`✅ Recordatorio ${notif.id_notificacion} enviado`)
-                await marcarNotificacion(notif.id_notificacion, 'enviado')
+                await actualizarEstadoNotificacion(notif.id_notificacion, 'enviado')
                 enviados++
             } else {
                 console.error(`❌ Falló recordatorio ${notif.id_notificacion}: ${envio.error}`)
-                await marcarNotificacion(notif.id_notificacion, 'fallido')
+                await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
                 fallidos++
             }
 
@@ -391,47 +370,6 @@ app.post('/api/mensaje/enviar', async (req, res) => {
     }
 })
 
-// Endpoint para procesar recordatorios manualmente
-app.post('/api/recordatorios/procesar', async (req, res) => {
-    try {
-        console.log('🔄 Procesamiento manual de recordatorios iniciado...')
-        
-        // Función para enviar mensajes usando WaSenderAPI
-        const enviarMensaje = async (telefono: string, mensaje: string) => {
-            const resultado = await waSenderService.sendMessage({
-                to: telefono,
-                text: mensaje
-            })
-            
-            if (!resultado.success) {
-                throw new Error(resultado.error || 'Error enviando mensaje')
-            }
-            
-            return true
-        }
-        
-        const resultado = await procesarRecordatoriosPendientes(enviarMensaje)
-        
-        return res.status(200).json({
-            status: 'success',
-            message: 'Recordatorios procesados exitosamente',
-            resultado: {
-                procesadas: resultado.procesadas,
-                enviadas: resultado.enviadas,
-                fallidas: resultado.fallidas
-            }
-        })
-        
-    } catch (error) {
-        console.error('❌ Error en procesamiento manual de recordatorios:', error)
-        return res.status(500).json({
-            status: 'error',
-            message: 'Error interno del servidor',
-            details: error instanceof Error ? error.message : 'Error desconocido'
-        })
-    }
-})
-
 // Endpoint de health check
 app.get('/health', (req, res) => {
     res.json({ 
@@ -516,11 +454,101 @@ app.get('/api/qr', async (req, res) => {
     }
 })
 
+// Panel de estado: notificaciones pendientes y resumen reciente
+app.get('/api/notificaciones/estado', async (_req, res) => {
+    try {
+        const ahora = new Date()
+        const hace24h = new Date(ahora.getTime() - 24 * 60 * 60 * 1000).toISOString()
+
+        // Pendientes (a enviar en el futuro o ya vencidas aún no procesadas)
+        const { data: pendientes, error: errPend } = await supabase
+            .from('notificacion')
+            .select(`
+                id_notificacion,
+                mensaje,
+                telefono,
+                fecha_programada,
+                turno:id_turno(
+                    fecha,
+                    hora,
+                    paciente:id_paciente(nombre, apellido, telefono),
+                    especialista:id_especialista(nombre, apellido)
+                )
+            `)
+            .eq('estado', 'pendiente')
+            .order('fecha_programada', { ascending: true })
+
+        if (errPend) throw errPend
+
+        // Enviadas y fallidas en las últimas 24h
+        const { data: recientes, error: errRec } = await supabase
+            .from('notificacion')
+            .select('id_notificacion, estado, mensaje, telefono, fecha_programada, fecha_envio')
+            .in('estado', ['enviado', 'fallido'])
+            .gte('fecha_envio', hace24h)
+            .order('fecha_envio', { ascending: false })
+            .limit(50)
+
+        if (errRec) throw errRec
+
+        const pendientesFormateadas = (pendientes || []).map((n: any) => {
+            const turno = n.turno
+            const paciente = turno?.paciente
+            const programada = new Date(n.fecha_programada)
+            const minutosRestantes = Math.round((programada.getTime() - ahora.getTime()) / 60000)
+            const tipo = n.mensaje?.includes('[RECORDATORIO') ? 'recordatorio' : 'confirmacion'
+
+            return {
+                id: n.id_notificacion,
+                tipo,
+                paciente: paciente ? `${paciente.nombre} ${paciente.apellido}` : 'Sin datos',
+                telefono: paciente?.telefono || n.telefono || 'Sin teléfono',
+                turno_fecha: turno?.fecha || null,
+                turno_hora: turno?.hora?.substring(0, 5) || null,
+                especialista: turno?.especialista
+                    ? `${turno.especialista.nombre} ${turno.especialista.apellido}`
+                    : null,
+                programado_para: programada.toISOString(),
+                estado: minutosRestantes <= 0 ? 'VENCIDO — procesando en próximo ciclo' : `en ${minutosRestantes} min`,
+            }
+        })
+
+        const vencidas = pendientesFormateadas.filter(n => n.estado.startsWith('VENCIDO'))
+        const proximas = pendientesFormateadas.filter(n => !n.estado.startsWith('VENCIDO'))
+
+        res.json({
+            timestamp: ahora.toISOString(),
+            resumen: {
+                pendientes_total: pendientesFormateadas.length,
+                vencidas_sin_procesar: vencidas.length,
+                proximas: proximas.length,
+                enviadas_24h: (recientes || []).filter(r => r.estado === 'enviado').length,
+                fallidas_24h: (recientes || []).filter(r => r.estado === 'fallido').length,
+            },
+            vencidas_sin_procesar: vencidas,
+            proximas_a_enviar: proximas,
+            recientes_24h: (recientes || []).map(r => ({
+                id: r.id_notificacion,
+                estado: r.estado,
+                tipo: r.mensaje?.includes('[RECORDATORIO') ? 'recordatorio' : 'confirmacion',
+                telefono: r.telefono,
+                programado_para: r.fecha_programada,
+                enviado_en: r.fecha_envio,
+            })),
+        })
+    } catch (error: any) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message || 'Error consultando notificaciones',
+        })
+    }
+})
+
 // Endpoint raíz
 app.get('/', (req, res) => {
     res.json({
         service: 'Fisiopasteur WhatsApp Bot',
-        version: '2.0.0',
+        version: '3.0.0',
         provider: 'WaSenderAPI',
         status: 'running'
     })
@@ -543,16 +571,16 @@ process.on('SIGINT', () => {
 app.listen(PORT, () => {
     console.log(`🤖 Bot de Fisiopasteur iniciado en puerto ${PORT}`)
     console.log(`📱 Provider: WaSenderAPI`)
-    console.log(`📱 Endpoints disponibles:`)
-    console.log(`   POST /api/turno/confirmar - Enviar confirmación de turno`)
-    console.log(`   POST /api/turno/recordatorio - Enviar recordatorio`)
-    console.log(`   POST /api/mensaje/enviar - Enviar mensaje genérico`)
-    console.log(`   POST /api/recordatorios/procesar - Procesar recordatorios manualmente`)
-    console.log(`   GET /api/health - Estado del servicio`)
-    console.log(`   GET /api/status - Estado de autenticación WhatsApp`)
-    console.log(`   GET /api/qr - Obtener código QR (si es necesario)`)
+    console.log(`📱 Endpoints:`)
+    console.log(`   POST /api/turno/confirmar          - Confirmación de turno (llamado por Vercel)`)
+    console.log(`   POST /api/turno/recordatorio       - Recordatorio manual`)
+    console.log(`   POST /api/mensaje/enviar           - Mensaje genérico`)
+    console.log(`   GET  /api/notificaciones/estado    - Panel: pendientes + resumen 24h`)
+    console.log(`   GET  /api/health                   - Health check`)
+    console.log(`   GET  /api/status                   - Estado WhatsApp`)
+
     console.log(``)
-    console.log(`🕐 Sistema de recordatorios automáticos: ACTIVADO (cada 2 minutos)`)
+    console.log(`🕐 Scheduler: consulta Supabase directamente cada 2 minutos`)
     
     // Iniciar sistema de recordatorios
     iniciarProcesadorRecordatorios()
