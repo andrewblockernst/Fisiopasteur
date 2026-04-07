@@ -4,8 +4,11 @@
 import { createClient } from "../supabase/server";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { dayjs } from "@/lib/dayjs";
-import { mapearTurnoParaBot } from "@/lib/utils/whatsapp.utils";
-import { getBrandingConfig } from './branding.service';
+import {
+  mapearTurnoParaBot,
+  type SnapshotTurnoParaAviso,
+} from "@/lib/utils/whatsapp.utils";
+import { getBrandingConfig, getNombreOrganizacion } from "./branding.service";
 
 // Configuración del bot
 const BOT_URL =
@@ -260,6 +263,53 @@ export async function enviarMensajePersonalizado(
   }
 
   return resultado;
+}
+
+/**
+ * Avisar por WhatsApp que el turno fue modificado (fecha, hora, profesional, etc.)
+ */
+export async function enviarAvisoModificacionTurno(params: {
+  telefono: string;
+  nombrePaciente: string;
+  anterior: SnapshotTurnoParaAviso;
+  actual: SnapshotTurnoParaAviso;
+}): Promise<BotResponse> {
+  const { telefono, nombrePaciente, anterior, actual } = params;
+
+  if (!telefono?.trim()) {
+    return { status: "error", message: "Sin teléfono" };
+  }
+
+  let nombreCentro = "Fisiopasteur";
+  try {
+    nombreCentro = await getNombreOrganizacion();
+  } catch {
+    /* default */
+  }
+
+  const linea = (s: SnapshotTurnoParaAviso) => {
+    const box = s.boxLabel ? `\n📦 ${s.boxLabel}` : "";
+    return `📅 ${s.fecha} — 🕐 ${s.hora}\n👤 ${s.profesional}\n🩺 ${s.especialidad}${box}`;
+  };
+
+  const mensaje = `📝 *Cambio en tu turno*
+
+Hola ${nombrePaciente},
+
+Tu turno en *${nombreCentro}* fue actualizado.
+
+*Antes:*
+${linea(anterior)}
+
+*Ahora:*
+${linea(actual)}
+
+📍 Pasteur 206, Libertador San Martín
+Ante cualquier duda, comunicate con el centro.
+
+¡Gracias!`;
+
+  return enviarMensajePersonalizado(telefono.trim(), mensaje);
 }
 
 /**
