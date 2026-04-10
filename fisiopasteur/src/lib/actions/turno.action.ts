@@ -420,7 +420,7 @@ export async function crearTurno(
 }
 
 
-export async function actualizarTurno(id: number, datos: TurnoUpdate) {
+export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?: { notificar?: boolean }) {
   const supabase = await createClient();
 
   
@@ -543,43 +543,102 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
       data.paciente?.telefono &&
       data.estado !== "eliminado"
     ) {
-      // Snapshots y strings ahora (no dentro del callback) para el cierre correcto
-      const snapshotAnterior = snapshotDesdeTurnoRelacionado(prevTurno as any);
-      const snapshotActual = snapshotDesdeTurnoRelacionado(data as any);
       const telefonoAviso = String(data.paciente.telefono).trim();
-      const nombrePacienteAviso =
-        `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
-        "Paciente";
 
-      // En Vercel/serverless, Promise.resolve().then(...) se corta al terminar el action.
-      // `after` ejecuta el trabajo después de enviar la respuesta al cliente.
+      // 1. Reprogramar recordatorios: cancelar los viejos y crear nuevos con la fecha/hora actualizada
       after(async () => {
         try {
-          const { enviarAvisoModificacionTurno } = await import(
-            "@/lib/services/whatsapp-bot.service"
-          );
-          console.log(
-            `[WhatsApp] Enviando aviso cambio turno id=${id} → ${telefonoAviso}`,
-          );
-          const resultado = await enviarAvisoModificacionTurno({
-            telefono: telefonoAviso,
-            nombrePaciente: nombrePacienteAviso,
-            anterior: snapshotAnterior,
-            actual: snapshotActual,
-          });
-          if (resultado.status !== "success") {
-            console.error(
-              "[WhatsApp] Aviso cambio turno falló:",
-              resultado.message,
+          const { data: notifAntiguas } = await supabase
+            .from("notificacion")
+            .select("id_notificacion, mensaje")
+            .eq("id_turno", id)
+            .eq("estado", "pendiente")
+            .like("mensaje", "%[RECORDATORIO%");
+
+          const tiposAntiguos: string[] = [];
+          if (notifAntiguas?.length) {
+            for (const n of notifAntiguas) {
+              const match = (n.mensaje as string | null)?.match(/\[RECORDATORIO (\w+)\]/i);
+              if (match) {
+                const tipo = match[1].toLowerCase();
+                if (["1h", "2h", "3h", "1d", "2d"].includes(tipo)) {
+                  tiposAntiguos.push(tipo);
+                }
+              }
+            }
+            await supabase
+              .from("notificacion")
+              .delete()
+              .in("id_notificacion", notifAntiguas.map((n: any) => n.id_notificacion));
+            console.log(
+              `[Recordatorios] Eliminados ${notifAntiguas.length} recordatorios viejos para turno ${id}`,
             );
           }
-        } catch (notifyErr) {
-          console.error(
-            "Error enviando aviso WhatsApp por cambio de turno:",
-            notifyErr,
-          );
+
+          if (tiposAntiguos.length > 0) {
+            const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+            const { registrarNotificacionesRecordatorioFlexible } = await import(
+              "@/lib/services/notificacion.service"
+            );
+            const tiempos = calcularTiemposRecordatorio(
+              data.fecha,
+              String(data.hora),
+              tiposAntiguos as any,
+            );
+            const validos = Object.fromEntries(
+              Object.entries(tiempos).filter(([, v]) => v !== null),
+            ) as Record<string, Date>;
+
+            if (Object.keys(validos).length > 0) {
+              const msg = `Recordatorio: Tu turno es el ${data.fecha} a las ${String(data.hora).substring(0, 5)}`;
+              await registrarNotificacionesRecordatorioFlexible(id, telefonoAviso, msg, validos);
+              console.log(
+                `[Recordatorios] Reprogramados ${Object.keys(validos).length} recordatorios para turno ${id}`,
+              );
+            }
+          }
+        } catch (err) {
+          console.error("[Recordatorios] Error reprogramando recordatorios:", err);
         }
       });
+
+      // 2. Enviar aviso WhatsApp al paciente (solo si se solicitó)
+      if (opciones?.notificar !== false) {
+        const snapshotAnterior = snapshotDesdeTurnoRelacionado(prevTurno as any);
+        const snapshotActual = snapshotDesdeTurnoRelacionado(data as any);
+        const nombrePacienteAviso =
+          `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
+          "Paciente";
+
+        // En Vercel/serverless, `after` ejecuta el trabajo después de enviar la respuesta al cliente.
+        after(async () => {
+          try {
+            const { enviarAvisoModificacionTurno } = await import(
+              "@/lib/services/whatsapp-bot.service"
+            );
+            console.log(
+              `[WhatsApp] Enviando aviso cambio turno id=${id} → ${telefonoAviso}`,
+            );
+            const resultado = await enviarAvisoModificacionTurno({
+              telefono: telefonoAviso,
+              nombrePaciente: nombrePacienteAviso,
+              anterior: snapshotAnterior,
+              actual: snapshotActual,
+            });
+            if (resultado.status !== "success") {
+              console.error(
+                "[WhatsApp] Aviso cambio turno falló:",
+                resultado.message,
+              );
+            }
+          } catch (notifyErr) {
+            console.error(
+              "Error enviando aviso WhatsApp por cambio de turno:",
+              notifyErr,
+            );
+          }
+        });
+      }
     }
 
     return { success: true, data };

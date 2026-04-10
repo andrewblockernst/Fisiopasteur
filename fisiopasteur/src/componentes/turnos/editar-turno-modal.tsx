@@ -131,11 +131,14 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<PacienteAPI | null>(null);
 
   // Dialog para mensajes (reemplaza los toasts)
-  const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
-    open: false, 
-    type: 'success', 
-    message: '' 
+  const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({
+    open: false,
+    type: 'success',
+    message: ''
   });
+
+  // Dialog de confirmación de notificación WhatsApp
+  const [confirmDialog, setConfirmDialog] = useState<{ show: boolean; datos: any }>({ show: false, datos: null });
 
   // Cargar datos cuando se abre el modal
   useEffect(() => {
@@ -523,6 +526,52 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     return JSON.stringify(original) !== JSON.stringify(actual);
   }, [formData, turno]);
 
+  // Cambios que son visibles para el paciente (fecha, hora, especialista, box, especialidad)
+  const hayCambiosVisiblesPaciente = useMemo(() => {
+    if (!pacienteSeleccionado?.telefono) return false;
+    const normNum = (v: string | number | null | undefined) => {
+      if (v === null || v === undefined || v === "") return 0;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    return (
+      formData.fecha !== turno.fecha ||
+      formData.hora !== turno.hora.slice(0, 5) ||
+      (formData.id_especialista || "") !== (turno.id_especialista || "") ||
+      normNum(formData.id_box) !== normNum(turno.id_box) ||
+      normNum(formData.id_especialidad) !== normNum(turno.id_especialidad)
+    );
+  }, [formData, turno, pacienteSeleccionado]);
+
+  const ejecutarActualizacion = (datos: any, notificar: boolean) => {
+    startTransition(async () => {
+      try {
+        const res = await actualizarTurno(turno.id_turno, datos, { notificar });
+        if (res.success) {
+          addToast({
+            variant: 'success',
+            message: 'Turno actualizado',
+            description: 'Los cambios se guardaron correctamente',
+          });
+          onSaved?.(res.data as any);
+          onClose();
+        } else {
+          addToast({
+            variant: 'error',
+            message: 'Error al actualizar',
+            description: res.error || 'No se pudo actualizar el turno',
+          });
+        }
+      } catch (error) {
+        console.error('Error al actualizar turno:', error);
+        addToast({
+          variant: 'error',
+          message: 'Error inesperado',
+          description: 'Ocurrió un problema al actualizar el turno',
+        });
+      }
+    });
+  };
 
 const handleSubmit = async () => {
   if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
@@ -534,52 +583,25 @@ const handleSubmit = async () => {
     return;
   }
 
-  startTransition(async () => {
-    try {
-      const datosActualizacion: Partial<Database['public']['Tables']['turno']['Update']> = {
-        id_paciente: Number(formData.id_paciente),
-        id_especialista: formData.id_especialista,
-        id_especialidad: Number(formData.id_especialidad),
-        id_box: formData.id_box ? Number(formData.id_box) : null,
-        fecha: formData.fecha,
-        hora: formData.hora + ':00',
-        observaciones: formData.observaciones || null,
-        tipo_plan: formData.tipo_plan,
-        precio: formData.precio ? Number(formData.precio) : null,
-      };
+  const datosActualizacion: Partial<Database['public']['Tables']['turno']['Update']> = {
+    id_paciente: Number(formData.id_paciente),
+    id_especialista: formData.id_especialista,
+    id_especialidad: Number(formData.id_especialidad),
+    id_box: formData.id_box ? Number(formData.id_box) : null,
+    fecha: formData.fecha,
+    hora: formData.hora + ':00',
+    observaciones: formData.observaciones || null,
+    tipo_plan: formData.tipo_plan,
+    precio: formData.precio ? Number(formData.precio) : null,
+  };
 
-      const res = await actualizarTurno(turno.id_turno, datosActualizacion);
+  // Si hay cambios visibles para el paciente y tiene teléfono, preguntar si notificar
+  if (hayCambiosVisiblesPaciente) {
+    setConfirmDialog({ show: true, datos: datosActualizacion });
+    return;
+  }
 
-      if (res.success) {
-        addToast({
-          variant: 'success',
-          message: 'Turno actualizado',
-          description: 'Los cambios se guardaron correctamente',
-        });
-        
-        // Manejar el caso donde res.data puede ser undefined
-        if (res) {
-          onSaved?.(res.data as any);
-        } else {
-          onSaved?.(); // Llamar sin parámetros si no hay data
-        }
-        onClose();
-      } else {
-        addToast({
-          variant: 'error',
-          message: 'Error al actualizar',
-          description: res.error || 'No se pudo actualizar el turno',
-        });
-      }
-    } catch (error) {
-      console.error('Error al actualizar turno:', error);
-      addToast({
-        variant: 'error',
-        message: 'Error inesperado',
-        description: 'Ocurrió un problema al actualizar el turno',
-      });
-    }
-  });
+  ejecutarActualizacion(datosActualizacion, false);
 };
 
   // Mostrar loading mientras carga datos
@@ -896,6 +918,38 @@ const handleSubmit = async () => {
         primaryButton={{
           text: "Aceptar",
           onClick: () => setDialog({ ...dialog, open: false }),
+        }}
+      />
+
+      {/* Confirmación de notificación WhatsApp */}
+      <BaseDialog
+        type="warning"
+        size="sm"
+        title="¿Notificar al paciente?"
+        message={
+          <span>
+            Se detectaron cambios en la fecha, hora o profesional del turno.
+            <br /><br />
+            ¿Querés enviar una notificación por WhatsApp al paciente con la información actualizada?
+          </span>
+        }
+        isOpen={confirmDialog.show}
+        onClose={() => setConfirmDialog({ show: false, datos: null })}
+        primaryButton={{
+          text: "Sí, notificar",
+          onClick: () => {
+            const datos = confirmDialog.datos;
+            setConfirmDialog({ show: false, datos: null });
+            ejecutarActualizacion(datos, true);
+          },
+        }}
+        secondaryButton={{
+          text: "No notificar",
+          onClick: () => {
+            const datos = confirmDialog.datos;
+            setConfirmDialog({ show: false, datos: null });
+            ejecutarActualizacion(datos, false);
+          },
         }}
       />
     </>
