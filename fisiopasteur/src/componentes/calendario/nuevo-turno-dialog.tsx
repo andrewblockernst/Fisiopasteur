@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { obtenerEspecialistasParaTurnos, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerSlotsOcupados, obtenerTurnosParaValidarBoxes, verificarDisponibilidadPaquete, crearPaqueteSesiones } from "@/lib/actions/turno.action";
+import { obtenerPrefsNotificacionPaciente, actualizarPreferenciasNotificacion } from "@/lib/actions/paciente.action";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
 import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 import SelectorRecordatorios from "@/componentes/turnos/selector-recordatorios";
@@ -115,11 +116,14 @@ export function NuevoTurnoModal({
   const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
   const [hayConflictos, setHayConflictos] = useState(false);
 
-  const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({ 
-    open: false, 
-    type: 'success', 
-    message: '' 
+  const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({
+    open: false,
+    type: 'success',
+    message: ''
   });
+
+  // Preferencias de notificación del paciente seleccionado
+  const [notifPrefs, setNotifPrefs] = useState({ confirmacion: true, recordatorios: true });
 
   // ✅ LIMPIAR ESTADO AL CERRAR EL MODAL
   useEffect(() => {
@@ -156,6 +160,7 @@ export function NuevoTurnoModal({
         setNumeroSesiones(10);
         setBusquedaPaciente('');
         setPacienteSeleccionado(null);
+        setNotifPrefs({ confirmacion: true, recordatorios: true });
       }, 300);
     }
   }, [isOpen, showNuevoPacienteDialog]);
@@ -668,6 +673,15 @@ useEffect(() => {
     setPacienteSeleccionado(paciente);
     setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
     setFormData(prev => ({ ...prev, id_paciente: String(paciente.id_paciente) }));
+    // Cargar preferencias de notificación del paciente
+    obtenerPrefsNotificacionPaciente(paciente.id_paciente).then((res) => {
+      if (res.success) {
+        setNotifPrefs({
+          confirmacion: res.data.notif_confirmacion,
+          recordatorios: res.data.notif_recordatorios,
+        });
+      }
+    });
   }, []);
 
   const handleBusquedaPacienteChange = useCallback((valor: string) => {
@@ -676,11 +690,13 @@ useEffect(() => {
     if (pacienteSeleccionado && valor !== `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`) {
       setPacienteSeleccionado(null);
       setFormData(prev => ({ ...prev, id_paciente: '' }));
+      setNotifPrefs({ confirmacion: true, recordatorios: true });
     }
 
     if (!valor.trim()) {
       setPacienteSeleccionado(null);
       setFormData(prev => ({ ...prev, id_paciente: '' }));
+      setNotifPrefs({ confirmacion: true, recordatorios: true });
     }
   }, [pacienteSeleccionado]);
 
@@ -733,7 +749,15 @@ useEffect(() => {
         titulo_tratamiento: formData.titulo_tratamiento || null,
       } as any; // ✅ Cast temporal hasta que se actualicen los tipos
 
-      const resultado = await crearTurno(turnoData, formData.recordatorios);
+      const recordatoriosParaEnviar = notifPrefs.recordatorios ? formData.recordatorios : [];
+      const debeNotificar = notifPrefs.confirmacion || notifPrefs.recordatorios;
+      const resultado = await crearTurno(
+        turnoData,
+        recordatoriosParaEnviar,
+        debeNotificar,
+        undefined,
+        { enviarConfirmacion: notifPrefs.confirmacion },
+      );
 
       if (resultado.success && resultado.data) {
         addToast({
@@ -1335,18 +1359,93 @@ useEffect(() => {
               </div>
             )}
 
-            {/* Recordatorios WhatsApp */}
+            {/* Notificaciones WhatsApp */}
             <div>
               <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
-                Recordatorios automáticos por WhatsApp
+                Notificaciones WhatsApp
               </label>
-              <SelectorRecordatorios
-                recordatoriosSeleccionados={formData.recordatorios}
-                onRecordatoriosChange={(recordatorios) => setFormData(prev => ({ ...prev, recordatorios }))}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Los recordatorios se enviarán automáticamente antes de cada sesión
-              </p>
+
+              {!pacienteSeleccionado?.telefono ? (
+                <p className="text-xs text-gray-400 italic">
+                  Seleccioná un paciente con teléfono para configurar notificaciones
+                </p>
+              ) : (
+                <div className="space-y-2 rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  {/* Toggle: Confirmación */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm text-gray-700">Confirmación al crear turno</span>
+                      <p className="text-xs text-gray-500">Mensaje inmediato al paciente</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nuevo = { ...notifPrefs, confirmacion: !notifPrefs.confirmacion };
+                        setNotifPrefs(nuevo);
+                        if (pacienteSeleccionado?.id_paciente) {
+                          actualizarPreferenciasNotificacion(pacienteSeleccionado.id_paciente, {
+                            notif_confirmacion: nuevo.confirmacion,
+                            notif_recordatorios: nuevo.recordatorios,
+                          });
+                        }
+                      }}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                        notifPrefs.confirmacion ? 'bg-[#9C1838]' : 'bg-gray-300'
+                      }`}
+                      role="switch"
+                      aria-checked={notifPrefs.confirmacion}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                          notifPrefs.confirmacion ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Toggle: Recordatorios */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm text-gray-700">Recordatorios automáticos</span>
+                      <p className="text-xs text-gray-500">Avisos previos al turno</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nuevo = { ...notifPrefs, recordatorios: !notifPrefs.recordatorios };
+                        setNotifPrefs(nuevo);
+                        if (pacienteSeleccionado?.id_paciente) {
+                          actualizarPreferenciasNotificacion(pacienteSeleccionado.id_paciente, {
+                            notif_confirmacion: nuevo.confirmacion,
+                            notif_recordatorios: nuevo.recordatorios,
+                          });
+                        }
+                      }}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                        notifPrefs.recordatorios ? 'bg-[#9C1838]' : 'bg-gray-300'
+                      }`}
+                      role="switch"
+                      aria-checked={notifPrefs.recordatorios}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                          notifPrefs.recordatorios ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Selector de tipos de recordatorio (solo si recordatorios activos) */}
+                  {notifPrefs.recordatorios && (
+                    <div className="pt-1">
+                      <SelectorRecordatorios
+                        recordatoriosSeleccionados={formData.recordatorios}
+                        onRecordatoriosChange={(recordatorios) => setFormData(prev => ({ ...prev, recordatorios }))}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Observaciones */}

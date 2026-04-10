@@ -280,10 +280,11 @@ export async function updatePaciente(id: number, formData: FormData): Promise<Ac
     apellido: formData.get("apellido") as string,
     email: formData.get("email") as string || null,
     dni: formData.get("dni") as string,
-    telefono: telefonoNormalizado, // ✅ Guardar teléfono normalizado
+    telefono: telefonoNormalizado,
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
-    // estado: formData.get("estado") as string || "activo",
+    notif_confirmacion: formData.get("notif_confirmacion") === "true",
+    notif_recordatorios: formData.get("notif_recordatorios") === "true",
   };
 
   // Validaciones
@@ -515,6 +516,40 @@ export async function agregarEvolucionClinica(idTurno: number, observaciones: st
 }
 
 // Activar paciente
+export async function obtenerPrefsNotificacionPaciente(
+  id: number,
+): Promise<{ success: true; data: { notif_confirmacion: boolean; notif_recordatorios: boolean } } | { success: false; error: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("paciente")
+    .select("notif_confirmacion, notif_recordatorios")
+    .eq("id_paciente", id)
+    .single();
+
+  if (error) return { success: false, error: error.message };
+  return {
+    success: true,
+    data: {
+      notif_confirmacion: data.notif_confirmacion ?? true,
+      notif_recordatorios: data.notif_recordatorios ?? true,
+    },
+  };
+}
+
+export async function actualizarPreferenciasNotificacion(
+  id: number,
+  prefs: { notif_confirmacion: boolean; notif_recordatorios: boolean },
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("paciente")
+    .update({ notif_confirmacion: prefs.notif_confirmacion, notif_recordatorios: prefs.notif_recordatorios })
+    .eq("id_paciente", id);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
 export async function activarPaciente(idPaciente: number): Promise<ActionResult<Paciente>> {
   const supabase = await createClient();
   const { data, error } = await supabase

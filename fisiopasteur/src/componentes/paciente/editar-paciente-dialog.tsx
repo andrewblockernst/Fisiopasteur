@@ -106,6 +106,8 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
         dni: paciente.dni || '',
         fecha_nacimiento: paciente.fecha_nacimiento || '',
         direccion: paciente.direccion || '',
+        notif_confirmacion: paciente.notif_confirmacion ?? true,
+        notif_recordatorios: paciente.notif_recordatorios ?? true,
     });
 
     const datosOriginales = useMemo(() => ({
@@ -116,6 +118,8 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
         dni: (paciente.dni || '').trim(),
         fecha_nacimiento: paciente.fecha_nacimiento ? paciente.fecha_nacimiento.trim() : '',
         direccion: (paciente.direccion || '').trim().toLowerCase(),
+        notif_confirmacion: paciente.notif_confirmacion ?? true,
+        notif_recordatorios: paciente.notif_recordatorios ?? true,
     }), [paciente]);
 
     // Detectar cambios en el formulario
@@ -340,6 +344,58 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                         placeholder="Ingresa la direccion"
                     />
                     {errors.direccion && <p className="text-red-500 text-xs mt-1">{errors.direccion}</p>}
+                </div>
+            </div>
+
+            {/* Notificaciones WhatsApp */}
+            <div className="col-span-2 mt-2">
+                <p className="text-sm font-medium text-gray-700 mb-2">Notificaciones WhatsApp</p>
+                <div className="space-y-2 rounded-lg border border-gray-200 p-3 bg-gray-50">
+                    {/* Hidden inputs para FormData */}
+                    <input type="hidden" name="notif_confirmacion" value={formValues.notif_confirmacion ? "true" : "false"} />
+                    <input type="hidden" name="notif_recordatorios" value={formValues.notif_recordatorios ? "true" : "false"} />
+
+                    {/* Toggle: Confirmación */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <span className="text-sm text-gray-700">Confirmación al crear turno</span>
+                            <p className="text-xs text-gray-500">Mensaje inmediato cuando se agenda un turno</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setFormValues(prev => ({ ...prev, notif_confirmacion: !prev.notif_confirmacion }))}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                                formValues.notif_confirmacion ? 'bg-[#9C1838]' : 'bg-gray-300'
+                            }`}
+                            role="switch"
+                            aria-checked={formValues.notif_confirmacion}
+                        >
+                            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                                formValues.notif_confirmacion ? 'translate-x-5' : 'translate-x-0'
+                            }`} />
+                        </button>
+                    </div>
+
+                    {/* Toggle: Recordatorios */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <span className="text-sm text-gray-700">Recordatorios automáticos</span>
+                            <p className="text-xs text-gray-500">Avisos previos al turno (1 día antes, 2 horas antes, etc.)</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setFormValues(prev => ({ ...prev, notif_recordatorios: !prev.notif_recordatorios }))}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                                formValues.notif_recordatorios ? 'bg-[#9C1838]' : 'bg-gray-300'
+                            }`}
+                            role="switch"
+                            aria-checked={formValues.notif_recordatorios}
+                        >
+                            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                                formValues.notif_recordatorios ? 'translate-x-5' : 'translate-x-0'
+                            }`} />
+                        </button>
+                    </div>
                 </div>
             </div>
 

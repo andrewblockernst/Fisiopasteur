@@ -240,6 +240,7 @@ export async function crearTurno(
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
   enviarNotificacion: boolean = true,
   id_grupo_tratamiento?: string,
+  opciones?: { enviarConfirmacion?: boolean },
 ) {
 
   // console.log('Iniciando creación de turno con datos:', datos, 'y recordatorios:', recordatorios);
@@ -347,35 +348,39 @@ export async function crearTurno(
           const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
 
           if (turnoCreado.paciente?.telefono) {
-            const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
+            const debeConfirmar = opciones?.enviarConfirmacion !== false;
 
-            // 1. Registrar confirmación en DB para auditoría
-            const resultadoRegistro = await registrarNotificacionConfirmacion(
-              turnoCreado.id_turno,
-              turnoCreado.paciente.telefono,
-              mensajeConfirmacion
-            );
+            if (debeConfirmar) {
+              const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
 
-            // 2. Enviar confirmación INMEDIATAMENTE al bot (trigger único, sin reintento por cron)
-            try {
-              const resultadoBot = await Promise.race([
-                enviarConfirmacionTurno(turnoCreado as any),
-                new Promise<never>((_, reject) =>
-                  setTimeout(() => reject(new Error('Timeout enviando confirmación')), 10000)
-                )
-              ]);
+              // 1. Registrar confirmación en DB para auditoría
+              const resultadoRegistro = await registrarNotificacionConfirmacion(
+                turnoCreado.id_turno,
+                turnoCreado.paciente.telefono,
+                mensajeConfirmacion
+              );
 
-              if (resultadoRegistro.success && resultadoRegistro.data) {
-                if (resultadoBot.status === 'success') {
-                  await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
-                } else {
+              // 2. Enviar confirmación INMEDIATAMENTE al bot (trigger único, sin reintento por cron)
+              try {
+                const resultadoBot = await Promise.race([
+                  enviarConfirmacionTurno(turnoCreado as any),
+                  new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Timeout enviando confirmación')), 10000)
+                  )
+                ]);
+
+                if (resultadoRegistro.success && resultadoRegistro.data) {
+                  if (resultadoBot.status === 'success') {
+                    await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
+                  } else {
+                    await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
+                  }
+                }
+              } catch (e) {
+                console.warn('Confirmación directa falló:', e);
+                if (resultadoRegistro.success && resultadoRegistro.data) {
                   await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
                 }
-              } 
-            } catch (e) {
-              console.warn('Confirmación directa falló:', e);
-              if (resultadoRegistro.success && resultadoRegistro.data) {
-                await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
               }
             }
 
