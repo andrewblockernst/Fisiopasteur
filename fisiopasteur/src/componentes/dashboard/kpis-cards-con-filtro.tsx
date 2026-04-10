@@ -158,7 +158,10 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
     { label: "Este Mes", value: "mes" },
   ];
 
-  if (isLoading || loading) {
+  // Mostrar Skeleton SÓLO en la primera carga (cuando no hay totales calculados ni datos) o si el padre dice loading
+  const esPrimeraCarga = (isLoading && datos.length === 0) || loading;
+
+  if (esPrimeraCarga) {
     return (
       <div className="space-y-4">
         {/* Filtros skeleton */}
@@ -185,20 +188,22 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
   return (
     <div>
       {/* Filtros - Arriba a la derecha */}
-      <div className="flex justify-end gap-2 mb-6">
-        {filtros.map((filtro) => (
-          <button
-            key={filtro.value}
-            onClick={() => setPeriodo(filtro.value)}
-            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-              periodo === filtro.value
-                ? "bg-[#9C1838] text-white shadow-md"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            {filtro.label}
-          </button>
-        ))}
+      <div className="flex justify-end mb-6">
+        <div className="flex bg-gray-100 rounded-lg p-1 shadow-sm">
+          {filtros.map((filtro) => (
+            <button
+              key={filtro.value}
+              onClick={() => setPeriodo(filtro.value)}
+              className={`px-4 py-1.5 rounded-md text-sm transition-colors ${
+                periodo === filtro.value
+                  ? "bg-white text-[#9C1838] font-medium shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              {filtro.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* KPI Cards Grid */}

@@ -185,9 +185,8 @@ export default function LoginPage() {
                       setPasswordError(null);
                     }}
                     placeholder="Ej. 12345678"
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-black ${
-                      password.length > 0 ? 'pr-24' : ''
-                    } ${
+                    // ✅ Se deja un padding fijo (pr-12) y se agrega "text-base" (16px) para evitar zoom en iOS
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-black text-base pr-12 ${
                       passwordError
                         ? 'border-red-500 focus:ring-red-500'
                         : 'border-gray-300 focus:ring-red-500'
@@ -197,22 +196,19 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute inset-y-0 right-3 text-sm text-gray-700 hover:text-black"
+                      // ✅ Se agrega "flex items-center" para centrado perfecto sin alterar layout
+                      className="absolute inset-y-0 right-3 flex items-center text-gray-700 hover:text-black"
                       aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                     >
-                      
-                      {showPassword ?
-                        <EyeOff size={18} /> : 
-                        <Eye size={18} />
-                      }
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   )}
-                </div>
+                </div> {/* <-- ESTE CIERRA EL 'DIV RELATIVE MT-1' */}
+
                 {passwordError && (
                   <p className="text-red-500 text-sm mt-1">{passwordError}</p>
-                )}
+                )} {/* <-- ESTE CIERRA EL 'DIV' GLOBAL DE LA CONTRASEÑA */}
               </div>
-
               {error && <p className="text-[var(--brand)] text-sm">{error}</p>}
 
               <Boton
