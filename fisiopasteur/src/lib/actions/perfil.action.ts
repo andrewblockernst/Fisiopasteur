@@ -5,6 +5,15 @@ import { nowIso } from '@/lib/dayjs';
 import { redirect } from 'next/navigation';
 import { Database } from '@/types/database.types';
 import type { ActionResult } from '@/lib/actions/action-result';
+import { puedeGestionarTurnos } from '@/lib/constants/roles';
+
+// Flags de navegación computados en el servidor
+export interface PerfilNavFlags {
+  verTurnos: boolean;
+  verCalendario: boolean;
+  verPilates: boolean;
+  puedeGestionar: boolean;
+}
 
 // Tipos específicos para el perfil
 type Usuario = Database['public']['Tables']['usuario']['Row'];
@@ -229,6 +238,64 @@ export async function obtenerPerfilUsuario(): Promise<
   } catch (error) {
     console.error('Error en obtenerPerfilUsuario:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+}
+
+/**
+ * Obtiene los flags de navegación del usuario actual calculados en el servidor.
+ * No redirige — devuelve null si no está autenticado o hay error.
+ */
+export async function obtenerPermisosNav(): Promise<PerfilNavFlags | null> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return null;
+
+    // Consulta mínima: solo id_usuario e id_rol
+    const { data: firstData } = await supabase
+      .from('usuario')
+      .select('id_usuario, id_rol')
+      .eq('id_usuario', user.id)
+      .eq('activo', true)
+      .maybeSingle();
+
+    let userData: any = firstData;
+
+    if (!userData) {
+      const { data: byEmail } = await supabase
+        .from('usuario')
+        .select('id_usuario, id_rol')
+        .eq('email', user.email!)
+        .eq('activo', true)
+        .maybeSingle();
+      userData = byEmail;
+    }
+
+    if (!userData) return null;
+
+    const idRol: number | undefined = (userData as any).id_rol ?? undefined;
+    const gestiona = puedeGestionarTurnos(idRol);
+
+    // Obtener especialidades activas
+    const { data: ueData } = await supabase
+      .from('usuario_especialidad')
+      .select('especialidad:id_especialidad(nombre)')
+      .eq('id_usuario', (userData as any).id_usuario)
+      .eq('activo', true);
+
+    const nombres = (ueData || []).map(
+      (ue: any) => (ue.especialidad?.nombre ?? '').toLowerCase()
+    );
+    const tienePilates = nombres.includes('pilates');
+
+    return {
+      verTurnos: gestiona || !tienePilates,
+      verCalendario: gestiona || !tienePilates,
+      verPilates: gestiona || tienePilates,
+      puedeGestionar: gestiona,
+    };
+  } catch {
+    return null;
   }
 }
 

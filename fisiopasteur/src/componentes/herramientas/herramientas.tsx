@@ -2,53 +2,41 @@
 
 import {
   Home,
-  Plus,
   ClipboardList,
   CalendarDays,
   Accessibility,
   FileBadge,
   User,
   HelpCircle,
-  Settings,
   Bed,
   LogOut,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cerrarSesionServer } from '@/lib/actions/logOut.action';
-import { getSupabaseClient } from '@/lib/supabase/client';
+import { usePerfilNav } from '@/hooks/PerfilNavContext';
 
 const Herramientas = () => {
   const router = useRouter();
+  const { verTurnos, verCalendario, verPilates } = usePerfilNav();
 
   const onCerrarSesion = async () => {
     try {
       console.log('🔐 Cerrando sesión...');
-      
-      // 1. SignOut en el cliente para limpiar localStorage/sessionStorage
-      // const supabase = getSupabaseClient();
-      // await supabase.auth.signOut();
-      
-      // 2. SignOut en el servidor para limpiar cookies
       await cerrarSesionServer();
-      
       console.log('✅ Logout exitoso, redirigiendo...');
-      
-      // 3. Hard redirect para forzar recarga completa sin estado stale
       window.location.href = '/login';
     } catch (error) {
       console.error('❌ Error en onCerrarSesion:', error);
-      // Aun si falla, intentar redirigir
       window.location.href = '/login';
     }
   }
-  
 
   return (
     <aside className="hidden lg:flex fixed top-1/2 left-0 -translate-y-1/2 bg-[#9C1838] py-6 px-2 flex-col items-center gap-6 shadow-lg rounded-r-lg z-50">
       <IconWrapper label="Inicio" icon={<Home size={28} />} onClick={() => router.push('/inicio')} />
-      <IconWrapper label="Turnos" icon={<ClipboardList size={28} />} onClick={() => router.push('/turnos')} />
-      <IconWrapper label="Pilates" icon={<Bed size={28} />} onClick={() => router.push('/pilates')} />
-      <IconWrapper label="Calendario" icon={<CalendarDays size={28} />} onClick={() => router.push('/calendario')} />
+      {verTurnos && <IconWrapper label="Turnos" icon={<ClipboardList size={28} />} onClick={() => router.push('/turnos')} />}
+      {verPilates && <IconWrapper label="Pilates" icon={<Bed size={28} />} onClick={() => router.push('/pilates')} />}
+      {verCalendario && <IconWrapper label="Calendario" icon={<CalendarDays size={28} />} onClick={() => router.push('/calendario')} />}
       <IconWrapper label="Pacientes" icon={<Accessibility size={28} />} onClick={() => router.push('/pacientes')} />
       <IconWrapper label="Especialistas" icon={<FileBadge size={28} />} onClick={() => router.push('/especialistas')} />
       <IconWrapper label="Perfil" icon={<User size={28} />} onClick={() => router.push('/perfil')} />

@@ -1363,7 +1363,19 @@ export async function obtenerEspecialistas() {
       }))
     }));
 
-    return { success: true, data: especialistas };
+    // Excluir especialistas cuya única especialidad es Pilates
+    const idPilates = await obtenerIdPilates();
+    const especialistasFiltrados = idPilates
+      ? especialistas.filter((e) => {
+          const ids = e.usuario_especialidad
+            .map((ue) => ue.especialidad?.id_especialidad)
+            .filter((id) => id != null);
+          // Mantener si: no tiene especialidades asignadas, o tiene al menos una que no es Pilates
+          return ids.length === 0 || ids.some((id) => id !== idPilates);
+        })
+      : especialistas;
+
+    return { success: true, data: especialistasFiltrados };
 
   } catch (error: any) {
     console.error("❌ Error en obtenerEspecialistas:", error.message);
@@ -1416,7 +1428,18 @@ export async function obtenerEspecialistasParaTurnos() {
       }))
     }));
 
-    return { success: true, data: especialistas };
+    // Excluir especialistas cuya única especialidad es Pilates
+    const idPilates = await obtenerIdPilates();
+    const especialistasFiltrados = idPilates
+      ? especialistas.filter((e) => {
+          const ids = e.usuario_especialidad
+            .map((ue) => ue.especialidad?.id_especialidad)
+            .filter((id) => id != null);
+          return ids.length === 0 || ids.some((id) => id !== idPilates);
+        })
+      : especialistas;
+
+    return { success: true, data: especialistasFiltrados };
 
   } catch (error: any) {
     console.error("❌ Error en obtenerEspecialistasParaTurnos:", error.message);

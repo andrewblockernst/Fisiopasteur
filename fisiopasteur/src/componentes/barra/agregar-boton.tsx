@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
 import { useAuth } from '@/hooks/usePerfil';
+import { usePerfilNav } from '@/hooks/PerfilNavContext';
 
 interface MenuOption {
   icon: React.ReactNode;
@@ -28,6 +29,7 @@ const AgregarBoton = () => {
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, loading } = useAuth();
+  const { verTurnos, puedeGestionar } = usePerfilNav();
 
   // Definir todas las opciones posibles
   const allMenuOptions: MenuOption[] = [
@@ -35,38 +37,39 @@ const AgregarBoton = () => {
       icon: <CalendarDays size={28} />,
       label: 'Turnos',
       route: '/turnos',
-      requiresAdmin: false // Todos pueden agregar turnos
+      requiresAdmin: false
     },
     {
       icon: <Accessibility size={28} />,
       label: 'Pacientes',
       route: '/pacientes?nuevo=true',
-      requiresAdmin: false // Todos pueden agregar pacientes
+      requiresAdmin: false
     },
     {
       icon: <ClipboardList size={28} />,
       label: 'Especialistas',
       route: '/especialistas?nuevo=true',
-      requiresAdmin: true // Solo admin puede agregar especialistas
+      requiresAdmin: true
     }
   ];
 
-  // Filtrar opciones según el rol del usuario
+  // Filtrar opciones según los permisos de navegación del servidor
   const menuOptions = useMemo(() => {
-    // comento el if para que igual aparezca el + aunque no haya usuario o esté cargando, pero sin opciones al hacer clic
-    if (loading || !user) return []; 
-    
-    // Si puede gestionar el sistema (admin o programador), mostrar todas las opciones
-    if (user?.puedeGestionarTurnos) {
-      return allMenuOptions;
+    if (loading || !user) return [];
+
+    let opciones = puedeGestionar
+      ? allMenuOptions
+      : allMenuOptions.filter(option => !option.requiresAdmin);
+
+    if (!verTurnos) {
+      opciones = opciones.filter(option => option.route !== '/turnos');
     }
-    
-    // Si es especialista, filtrar solo las opciones que no requieren admin
-    return allMenuOptions.filter(option => !option.requiresAdmin);
-  }, [user, loading]);  
-  
+
+    return opciones;
+  }, [user, loading, verTurnos, puedeGestionar]);
+
   const toggleMenu = () => {
-    if (loading || !user) return; // Evitar abrir el menú si está cargando o no hay usuario
+    if (loading || !user) return;
     setIsOpen(!isOpen);
   };
 
