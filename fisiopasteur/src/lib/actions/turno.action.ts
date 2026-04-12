@@ -1778,7 +1778,8 @@ export async function crearTurnosEnLote(turnos: Array<{
   tipo?: string;
   estado?: string;
   dificultad?: 'principiante' | 'intermedio' | 'avanzado';
-}>) {
+  es_pilates?: boolean;
+}>, opciones?: { enviarNotificacion?: boolean }) {
   try {
     const supabase = await createClient();
 
@@ -1862,7 +1863,7 @@ export async function crearTurnosEnLote(turnos: Array<{
     }
 
     // Procesar notificaciones agrupadas de confirmación
-    if (turnosCreados.length > 0) {
+    if (turnosCreados.length > 0 && opciones?.enviarNotificacion !== false) {
       await procesarNotificacionesRepeticion(turnosCreados);
     }
 
@@ -1968,6 +1969,64 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
     }
   } catch (error) {
     console.error("Error al enviar notificación agrupada:", error);
+  }
+}
+
+// =====================================
+// 📣 NOTIFICACIONES PILATES (EXPORTADAS)
+// =====================================
+
+/**
+ * Enviar notificación agrupada de confirmación a los participantes de una clase de Pilates.
+ * Usar después de crear turnos individuales (sin repetición) para enviar un único mensaje
+ * con el formato Pilates en lugar de confirmaciones individuales.
+ */
+export async function notificarParticipantesPilates(turnosCreados: any[]) {
+  if (!turnosCreados?.length) return { success: true };
+  try {
+    await procesarNotificacionesRepeticion(turnosCreados);
+    return { success: true };
+  } catch (error) {
+    console.error("Error notificando participantes Pilates:", error);
+    return { success: false, error: "Error enviando notificaciones" };
+  }
+}
+
+/**
+ * Notificar a un paciente que fue dado de baja de una clase de Pilates.
+ * Enviar ANTES de llamar a eliminarTurno para tener los datos disponibles.
+ */
+export async function notificarCancelacionPilates(turnoId: number) {
+  try {
+    const supabase = await createClient();
+    const { data: turno } = await supabase
+      .from("turno")
+      .select("fecha, hora, paciente:id_paciente(nombre, telefono)")
+      .eq("id_turno", turnoId)
+      .single();
+
+    if (!turno || !(turno as any).paciente?.telefono) return { success: true };
+
+    const pac = (turno as any).paciente;
+    const telefono = String(pac.telefono).trim();
+    const nombrePaciente = pac.nombre;
+    const fecha = dayjs(turno.fecha).format("DD/MM/YYYY");
+    const hora = String(turno.hora).substring(0, 5);
+
+    after(async () => {
+      try {
+        const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
+        const mensaje = `Hola ${nombrePaciente}, tu clase de Pilates del ${fecha} a las ${hora}hs fue cancelada.\n\nSi tenés alguna duda, comunicate con nosotros.`;
+        await enviarMensajePersonalizado(telefono, mensaje);
+      } catch (err) {
+        console.error("[Pilates] Error enviando cancelación:", err);
+      }
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error en notificarCancelacionPilates:", error);
+    return { success: false, error: "Error al enviar notificación" };
   }
 }
 

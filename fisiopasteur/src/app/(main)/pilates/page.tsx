@@ -42,7 +42,7 @@ export default function PilatesPage() {
 
   // ============= FUNCIÓN PARA CARGAR TURNOS =============
   const cargarTurnos = async () => {
-    const inicioSemana = dayjs(semanaBase).startOf("week").add(1, "day");
+    const inicioSemana = dayjs(semanaBase).startOf("week"); // locale "es": lunes
     const desde = inicioSemana.format("YYYY-MM-DD");
     const hasta = inicioSemana.add(6, "day").format("YYYY-MM-DD");
     
