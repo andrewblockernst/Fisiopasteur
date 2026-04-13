@@ -3,8 +3,8 @@ import { useState, useEffect } from "react";
 import PilatesCalendarioSemanal from "@/componentes/pilates/componenteSemanal";
 import { NuevoTurnoPilatesModal } from "@/componentes/pilates/nuevoTurnoPilatesDialog";
 import { DetalleClaseModal } from "@/componentes/pilates/detalleClaseModal";
-import { obtenerTurnosConFiltros, obtenerEspecialistas, obtenerPacientes } from "@/lib/actions/turno.action";
-import { getIdPilates, esPilates } from "@/lib/constants/especialidades";
+import { obtenerTurnosConFiltros, obtenerEspecialistasPilates, obtenerPacientes } from "@/lib/actions/turno.action";
+import { getIdPilates } from "@/lib/constants/especialidades";
 import { dayjs } from "@/lib/dayjs";
 import { useToastStore } from '@/stores/toast-store';
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
@@ -42,7 +42,7 @@ export default function PilatesPage() {
 
   // ============= FUNCIÓN PARA CARGAR TURNOS =============
   const cargarTurnos = async () => {
-    const inicioSemana = dayjs(semanaBase).startOf("week").add(1, "day");
+    const inicioSemana = dayjs(semanaBase).startOf("week"); // locale "es": lunes
     const desde = inicioSemana.format("YYYY-MM-DD");
     const hasta = inicioSemana.add(6, "day").format("YYYY-MM-DD");
     
@@ -87,40 +87,18 @@ export default function PilatesPage() {
     const cargarDatos = async () => {
       setLoading(true);
       try {
-        // Cargar todas las especialidades para encontrar el ID de Pilates dinámicamente
-        const resEspecialistas = await obtenerEspecialistas();
+        // Cargar solo especialistas de Pilates desde el servidor
+        const resEspecialistas = await obtenerEspecialistasPilates();
         if (resEspecialistas.success && Array.isArray(resEspecialistas.data)) {
-          // Buscar el ID de Pilates por nombre
-            const todosEspecialistas = resEspecialistas.data;
-            const EspecialidadesEspecialistas = Array.from(
-            new Set(
-              todosEspecialistas.flatMap((e: any) => {
-              const especialidades = [];
-              if (e.especialidad) especialidades.push(e.especialidad);
-              if (Array.isArray(e.usuario_especialidad)) {
-                especialidades.push(...e.usuario_especialidad.map((ue: any) => ue.especialidad));
-              }
-              return especialidades;
-              })
-            )
-            );
+          const especialistasPilates = resEspecialistas.data;
 
-          const pilatesId = getIdPilates(EspecialidadesEspecialistas);
-
-          console.log('ID de Pilates encontrado:', pilatesId);
+          // Obtener el ID de Pilates a partir de las especialidades de los especialistas
+          const todasEspecialidades = especialistasPilates.flatMap((e: any) =>
+            (e.usuario_especialidad || []).map((ue: any) => ue.especialidad)
+          );
+          const pilatesId = getIdPilates(todasEspecialidades);
           setIdPilates(pilatesId);
-          
-          // Filtrar solo especialistas de Pilates
-          const especialistasPilates = todosEspecialistas.filter((e: any) => {
-            const principal = esPilates(e.especialidad);
-            const adicional = Array.isArray(e.usuario_especialidad)
-              ? e.usuario_especialidad.some((ue: any) => esPilates(ue.especialidad))
-              : false;
-            return principal || adicional;
-          });
 
-          console.log('Especialistas de Pilates:', especialistasPilates);
-          
           setEspecialistas(especialistasPilates);
         }
 

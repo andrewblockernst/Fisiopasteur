@@ -1,6 +1,6 @@
 'use client'
 import { useState } from "react";
-import { dayjs } from "@/lib/dayjs";
+import { dayjs, isPastDateTime } from "@/lib/dayjs";
 import { ChevronLeft, ChevronRight, Plus, Eye } from "lucide-react";
 
 interface PilatesCalendarioSemanalProps {
@@ -18,9 +18,9 @@ const HORARIOS_PILATES = [
   "14:30", "15:30", "16:30", "17:30", "18:30", "19:30", "20:30", "21:30"
 ];
 
-// Función para obtener días de la semana
+// Función para obtener días de la semana (lunes a viernes)
 function getWeekDays(fecha: Date) {
-  const start = dayjs(fecha).startOf("week").add(1, "day");
+  const start = dayjs(fecha).startOf("week"); // locale "es": semana arranca el lunes
   return Array.from({ length: 5 }, (_, i) => start.add(i, "day").toDate());
 }
 
@@ -277,7 +277,7 @@ export default function PilatesCalendarioSemanal({
             >
               <div className="text-center">
                 <div className="text-sm font-medium text-gray-700">
-                  {dayjs(dia).format("dddd")}
+                  {(() => { const d = dayjs(dia).format("dddd"); return d.charAt(0).toUpperCase() + d.slice(1); })()}
                 </div>
                 <div className={`text-lg font-semibold ${
                   dayjs(dia).isSame(dayjs(), 'day') ? 'text-blue-600' : 'text-gray-900'
@@ -302,6 +302,7 @@ export default function PilatesCalendarioSemanal({
                 const isOcupado = isSlotOcupado(dia, horario);
                 const bgColor = getSlotBackgroundColor(dia, horario);
                 const tieneClase = turnosEnSlot.length > 0;
+                const esPasado = isPastDateTime(dayjs(dia).format("YYYY-MM-DD"), horario);
 
                 return (
                   <div
@@ -309,19 +310,22 @@ export default function PilatesCalendarioSemanal({
                     className={`
                       border-b border-l border-gray-200 min-h-[120px] relative
                       ${!tieneClase ? bgColor : ''}
-                      ${!isOcupado && !tieneClase ? 'cursor-pointer' : ''}
+                      ${!isOcupado && !tieneClase && !esPasado ? 'cursor-pointer' : ''}
+                      ${esPasado ? 'opacity-50' : ''}
                       transition-colors
                     `}
-                    onClick={() => !isOcupado && !tieneClase && onAgregarTurno(dia, horario)}
+                    onClick={() => !isOcupado && !tieneClase && !esPasado && onAgregarTurno(dia, horario)}
                   >
                     {/* Slot vacío */}
                     {!tieneClase && (
                       <>
                         {/* Botón de agregar */}
-                        <div className="absolute top-2 right-2">
-                          <Plus className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                        </div>
-                        
+                        {!esPasado && (
+                          <div className="absolute top-2 right-2">
+                            <Plus className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+                          </div>
+                        )}
+
                         {/* Contador de participantes */}
                         <div className="absolute top-2 left-2 text-xs font-medium text-gray-600">
                           0/4

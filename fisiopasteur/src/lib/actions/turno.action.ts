@@ -247,6 +247,7 @@ export async function crearTurno(
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[],
   enviarNotificacion: boolean = true,
   id_grupo_tratamiento?: string,
+  opciones?: { enviarConfirmacion?: boolean },
 ) {
 
   // console.log('Iniciando creación de turno con datos:', datos, 'y recordatorios:', recordatorios);
@@ -354,35 +355,39 @@ export async function crearTurno(
           const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
 
           if (turnoCreado.paciente?.telefono) {
-            const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
+            const debeConfirmar = opciones?.enviarConfirmacion !== false;
 
-            // 1. Registrar confirmación en DB para auditoría
-            const resultadoRegistro = await registrarNotificacionConfirmacion(
-              turnoCreado.id_turno,
-              turnoCreado.paciente.telefono,
-              mensajeConfirmacion
-            );
+            if (debeConfirmar) {
+              const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
 
-            // 2. Enviar confirmación INMEDIATAMENTE al bot (trigger único, sin reintento por cron)
-            try {
-              const resultadoBot = await Promise.race([
-                enviarConfirmacionTurno(turnoCreado as any),
-                new Promise<never>((_, reject) =>
-                  setTimeout(() => reject(new Error('Timeout enviando confirmación')), 10000)
-                )
-              ]);
+              // 1. Registrar confirmación en DB para auditoría
+              const resultadoRegistro = await registrarNotificacionConfirmacion(
+                turnoCreado.id_turno,
+                turnoCreado.paciente.telefono,
+                mensajeConfirmacion
+              );
 
-              if (resultadoRegistro.success && resultadoRegistro.data) {
-                if (resultadoBot.status === 'success') {
-                  await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
-                } else {
+              // 2. Enviar confirmación INMEDIATAMENTE al bot (trigger único, sin reintento por cron)
+              try {
+                const resultadoBot = await Promise.race([
+                  enviarConfirmacionTurno(turnoCreado as any),
+                  new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Timeout enviando confirmación')), 10000)
+                  )
+                ]);
+
+                if (resultadoRegistro.success && resultadoRegistro.data) {
+                  if (resultadoBot.status === 'success') {
+                    await marcarNotificacionEnviada(resultadoRegistro.data.id_notificacion);
+                  } else {
+                    await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
+                  }
+                }
+              } catch (e) {
+                console.warn('Confirmación directa falló:', e);
+                if (resultadoRegistro.success && resultadoRegistro.data) {
                   await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
                 }
-              } 
-            } catch (e) {
-              console.warn('Confirmación directa falló:', e);
-              if (resultadoRegistro.success && resultadoRegistro.data) {
-                await marcarNotificacionFallida(resultadoRegistro.data.id_notificacion);
               }
             }
 
@@ -427,7 +432,7 @@ export async function crearTurno(
 }
 
 
-export async function actualizarTurno(id: number, datos: TurnoUpdate) {
+export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?: { notificar?: boolean }) {
   const supabase = await createClient();
 
   
@@ -550,43 +555,102 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate) {
       data.paciente?.telefono &&
       data.estado !== "eliminado"
     ) {
-      // Snapshots y strings ahora (no dentro del callback) para el cierre correcto
-      const snapshotAnterior = snapshotDesdeTurnoRelacionado(prevTurno as any);
-      const snapshotActual = snapshotDesdeTurnoRelacionado(data as any);
       const telefonoAviso = String(data.paciente.telefono).trim();
-      const nombrePacienteAviso =
-        `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
-        "Paciente";
 
-      // En Vercel/serverless, Promise.resolve().then(...) se corta al terminar el action.
-      // `after` ejecuta el trabajo después de enviar la respuesta al cliente.
+      // 1. Reprogramar recordatorios: cancelar los viejos y crear nuevos con la fecha/hora actualizada
       after(async () => {
         try {
-          const { enviarAvisoModificacionTurno } = await import(
-            "@/lib/services/whatsapp-bot.service"
-          );
-          console.log(
-            `[WhatsApp] Enviando aviso cambio turno id=${id} → ${telefonoAviso}`,
-          );
-          const resultado = await enviarAvisoModificacionTurno({
-            telefono: telefonoAviso,
-            nombrePaciente: nombrePacienteAviso,
-            anterior: snapshotAnterior,
-            actual: snapshotActual,
-          });
-          if (resultado.status !== "success") {
-            console.error(
-              "[WhatsApp] Aviso cambio turno falló:",
-              resultado.message,
+          const { data: notifAntiguas } = await supabase
+            .from("notificacion")
+            .select("id_notificacion, mensaje")
+            .eq("id_turno", id)
+            .eq("estado", "pendiente")
+            .like("mensaje", "%[RECORDATORIO%");
+
+          const tiposAntiguos: string[] = [];
+          if (notifAntiguas?.length) {
+            for (const n of notifAntiguas) {
+              const match = (n.mensaje as string | null)?.match(/\[RECORDATORIO (\w+)\]/i);
+              if (match) {
+                const tipo = match[1].toLowerCase();
+                if (["1h", "2h", "3h", "1d", "2d"].includes(tipo)) {
+                  tiposAntiguos.push(tipo);
+                }
+              }
+            }
+            await supabase
+              .from("notificacion")
+              .delete()
+              .in("id_notificacion", notifAntiguas.map((n: any) => n.id_notificacion));
+            console.log(
+              `[Recordatorios] Eliminados ${notifAntiguas.length} recordatorios viejos para turno ${id}`,
             );
           }
-        } catch (notifyErr) {
-          console.error(
-            "Error enviando aviso WhatsApp por cambio de turno:",
-            notifyErr,
-          );
+
+          if (tiposAntiguos.length > 0) {
+            const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
+            const { registrarNotificacionesRecordatorioFlexible } = await import(
+              "@/lib/services/notificacion.service"
+            );
+            const tiempos = calcularTiemposRecordatorio(
+              data.fecha,
+              String(data.hora),
+              tiposAntiguos as any,
+            );
+            const validos = Object.fromEntries(
+              Object.entries(tiempos).filter(([, v]) => v !== null),
+            ) as Record<string, Date>;
+
+            if (Object.keys(validos).length > 0) {
+              const msg = `Recordatorio: Tu turno es el ${data.fecha} a las ${String(data.hora).substring(0, 5)}`;
+              await registrarNotificacionesRecordatorioFlexible(id, telefonoAviso, msg, validos);
+              console.log(
+                `[Recordatorios] Reprogramados ${Object.keys(validos).length} recordatorios para turno ${id}`,
+              );
+            }
+          }
+        } catch (err) {
+          console.error("[Recordatorios] Error reprogramando recordatorios:", err);
         }
       });
+
+      // 2. Enviar aviso WhatsApp al paciente (solo si se solicitó)
+      if (opciones?.notificar !== false) {
+        const snapshotAnterior = snapshotDesdeTurnoRelacionado(prevTurno as any);
+        const snapshotActual = snapshotDesdeTurnoRelacionado(data as any);
+        const nombrePacienteAviso =
+          `${data.paciente?.nombre ?? ""} ${data.paciente?.apellido ?? ""}`.trim() ||
+          "Paciente";
+
+        // En Vercel/serverless, `after` ejecuta el trabajo después de enviar la respuesta al cliente.
+        after(async () => {
+          try {
+            const { enviarAvisoModificacionTurno } = await import(
+              "@/lib/services/whatsapp-bot.service"
+            );
+            console.log(
+              `[WhatsApp] Enviando aviso cambio turno id=${id} → ${telefonoAviso}`,
+            );
+            const resultado = await enviarAvisoModificacionTurno({
+              telefono: telefonoAviso,
+              nombrePaciente: nombrePacienteAviso,
+              anterior: snapshotAnterior,
+              actual: snapshotActual,
+            });
+            if (resultado.status !== "success") {
+              console.error(
+                "[WhatsApp] Aviso cambio turno falló:",
+                resultado.message,
+              );
+            }
+          } catch (notifyErr) {
+            console.error(
+              "Error enviando aviso WhatsApp por cambio de turno:",
+              notifyErr,
+            );
+          }
+        });
+      }
     }
 
     return { success: true, data };
@@ -1306,7 +1370,19 @@ export async function obtenerEspecialistas() {
       }))
     }));
 
-    return { success: true, data: especialistas };
+    // Excluir especialistas cuya única especialidad es Pilates
+    const idPilates = await obtenerIdPilates();
+    const especialistasFiltrados = idPilates
+      ? especialistas.filter((e) => {
+          const ids = e.usuario_especialidad
+            .map((ue) => ue.especialidad?.id_especialidad)
+            .filter((id) => id != null);
+          // Mantener si: no tiene especialidades asignadas, o tiene al menos una que no es Pilates
+          return ids.length === 0 || ids.some((id) => id !== idPilates);
+        })
+      : especialistas;
+
+    return { success: true, data: especialistasFiltrados };
 
   } catch (error: any) {
     console.error("❌ Error en obtenerEspecialistas:", error.message);
@@ -1359,10 +1435,86 @@ export async function obtenerEspecialistasParaTurnos() {
       }))
     }));
 
-    return { success: true, data: especialistas };
+    // Excluir especialistas cuya única especialidad es Pilates
+    const idPilates = await obtenerIdPilates();
+    const especialistasFiltrados = idPilates
+      ? especialistas.filter((e) => {
+          const ids = e.usuario_especialidad
+            .map((ue) => ue.especialidad?.id_especialidad)
+            .filter((id) => id != null);
+          return ids.length === 0 || ids.some((id) => id !== idPilates);
+        })
+      : especialistas;
+
+    return { success: true, data: especialistasFiltrados };
 
   } catch (error: any) {
     console.error("❌ Error en obtenerEspecialistasParaTurnos:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Devuelve solo los especialistas que tienen la especialidad Pilates.
+ * Usar en el módulo de Pilates para el selector de especialistas.
+ */
+export async function obtenerEspecialistasPilates() {
+  const supabase = await createClient();
+
+  try {
+    const idPilates = await obtenerIdPilates();
+    if (!idPilates) return { success: true, data: [] };
+
+    const { data, error } = await supabase
+      .from("usuario")
+      .select(`
+        id_usuario,
+        nombre,
+        apellido,
+        color,
+        activo,
+        usuario_especialidad (
+          activo,
+          especialidad:id_especialidad (
+            id_especialidad,
+            nombre
+          )
+        )
+      `)
+      .in("id_rol", ROLES_ESPECIALISTAS)
+      .eq("activo", true)
+      .eq("usuario_especialidad.activo", true)
+      .order("apellido", { ascending: true })
+      .order("nombre", { ascending: true });
+
+    if (error) throw error;
+
+    // Mantener solo los que tienen Pilates entre sus especialidades activas
+    const soloConPilates = (data || []).filter((e) =>
+      (e.usuario_especialidad || []).some(
+        (ue: any) => ue.especialidad?.id_especialidad === idPilates
+      )
+    );
+
+    return {
+      success: true,
+      data: soloConPilates.map((e) => ({
+        id_usuario: e.id_usuario,
+        nombre: e.nombre,
+        apellido: e.apellido,
+        color: e.color,
+        activo: e.activo,
+        especialidad: null,
+        usuario_especialidad: (e.usuario_especialidad || []).map((ue: any) => ({
+          especialidad: {
+            id_especialidad: ue.especialidad?.id_especialidad,
+            nombre: ue.especialidad?.nombre,
+          },
+        })),
+      })),
+    };
+  } catch (error: any) {
+    console.error("❌ Error en obtenerEspecialistasPilates:", error.message);
     return { success: false, error: error.message };
   }
 }
@@ -1728,7 +1880,8 @@ export async function crearTurnosEnLote(turnos: Array<{
   tipo?: string;
   estado?: string;
   dificultad?: 'principiante' | 'intermedio' | 'avanzado';
-}>) {
+  es_pilates?: boolean;
+}>, opciones?: { enviarNotificacion?: boolean }) {
   try {
     const supabase = await createClient();
 
@@ -1812,7 +1965,7 @@ export async function crearTurnosEnLote(turnos: Array<{
     }
 
     // Procesar notificaciones agrupadas de confirmación
-    if (turnosCreados.length > 0) {
+    if (turnosCreados.length > 0 && opciones?.enviarNotificacion !== false) {
       await procesarNotificacionesRepeticion(turnosCreados);
     }
 
@@ -1918,6 +2071,64 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
     }
   } catch (error) {
     console.error("Error al enviar notificación agrupada:", error);
+  }
+}
+
+// =====================================
+// 📣 NOTIFICACIONES PILATES (EXPORTADAS)
+// =====================================
+
+/**
+ * Enviar notificación agrupada de confirmación a los participantes de una clase de Pilates.
+ * Usar después de crear turnos individuales (sin repetición) para enviar un único mensaje
+ * con el formato Pilates en lugar de confirmaciones individuales.
+ */
+export async function notificarParticipantesPilates(turnosCreados: any[]) {
+  if (!turnosCreados?.length) return { success: true };
+  try {
+    await procesarNotificacionesRepeticion(turnosCreados);
+    return { success: true };
+  } catch (error) {
+    console.error("Error notificando participantes Pilates:", error);
+    return { success: false, error: "Error enviando notificaciones" };
+  }
+}
+
+/**
+ * Notificar a un paciente que fue dado de baja de una clase de Pilates.
+ * Enviar ANTES de llamar a eliminarTurno para tener los datos disponibles.
+ */
+export async function notificarCancelacionPilates(turnoId: number) {
+  try {
+    const supabase = await createClient();
+    const { data: turno } = await supabase
+      .from("turno")
+      .select("fecha, hora, paciente:id_paciente(nombre, telefono)")
+      .eq("id_turno", turnoId)
+      .single();
+
+    if (!turno || !(turno as any).paciente?.telefono) return { success: true };
+
+    const pac = (turno as any).paciente;
+    const telefono = String(pac.telefono).trim();
+    const nombrePaciente = pac.nombre;
+    const fecha = dayjs(turno.fecha).format("DD/MM/YYYY");
+    const hora = String(turno.hora).substring(0, 5);
+
+    after(async () => {
+      try {
+        const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
+        const mensaje = `Hola ${nombrePaciente}, tu clase de Pilates del ${fecha} a las ${hora}hs fue cancelada.\n\nSi tenés alguna duda, comunicate con nosotros.`;
+        await enviarMensajePersonalizado(telefono, mensaje);
+      } catch (err) {
+        console.error("[Pilates] Error enviando cancelación:", err);
+      }
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error en notificarCancelacionPilates:", error);
+    return { success: false, error: "Error al enviar notificación" };
   }
 }
 

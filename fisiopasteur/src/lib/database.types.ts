@@ -364,6 +364,8 @@ export type Database = {
           historia_clinica: string | null
           id_paciente: number
           nombre: string
+          notif_confirmacion: boolean
+          notif_recordatorios: boolean
           telefono: string
           updated_at: string | null
         }
@@ -379,6 +381,8 @@ export type Database = {
           historia_clinica?: string | null
           id_paciente?: number
           nombre: string
+          notif_confirmacion?: boolean
+          notif_recordatorios?: boolean
           telefono: string
           updated_at?: string | null
         }
@@ -394,6 +398,8 @@ export type Database = {
           historia_clinica?: string | null
           id_paciente?: number
           nombre?: string
+          notif_confirmacion?: boolean
+          notif_recordatorios?: boolean
           telefono?: string
           updated_at?: string | null
         }

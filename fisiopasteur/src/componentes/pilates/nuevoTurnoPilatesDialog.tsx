@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"; 
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { crearTurno, crearTurnosEnLote } from "@/lib/actions/turno.action";
+import { crearTurno, crearTurnosEnLote, notificarParticipantesPilates } from "@/lib/actions/turno.action";
 import { dayjs, isPastDateTime, toYmd } from "@/lib/dayjs";
 import { useToastStore } from '@/stores/toast-store';
 import { AlertTriangle, Users, Clock, Info, Plus, Trash2, CalendarDays } from "lucide-react"; 
@@ -68,6 +68,7 @@ export function NuevoTurnoPilatesModal({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notifParticipantes, setNotifParticipantes] = useState(true);
 
   // ============= ESTADOS PARA BÚSQUEDA DE PACIENTES =============
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
@@ -107,6 +108,7 @@ export function NuevoTurnoPilatesModal({
         });
       }
       
+      setNotifParticipantes(true);
       setBusquedaPaciente('');
       setMostrarRepeticion(false);
       setDiasSeleccionados([]);
@@ -260,19 +262,34 @@ export function NuevoTurnoPilatesModal({
       if (!mostrarRepeticion || diasSeleccionados.length === 0) {
 
         const resultados = [];
+        const turnosCreados: any[] = [];
         for (const pacienteId of formData.pacientesSeleccionados) {
-          const resultado = await crearTurno({
-            fecha,
-            hora: hora + ':00',
-            id_especialista: formData.especialistaId,
-            id_paciente: pacienteId,
-            estado: "programado",
-            observaciones: formData.observaciones || null,
-            tipo_plan: "particular",
-            dificultad: formData.dificultad,                
-            es_pilates: true  
-          });
+          const resultado = await crearTurno(
+            {
+              fecha,
+              hora: hora + ':00',
+              id_especialista: formData.especialistaId,
+              id_paciente: pacienteId,
+              estado: "programado",
+              observaciones: formData.observaciones || null,
+              tipo_plan: "particular",
+              dificultad: formData.dificultad,
+              es_pilates: true,
+            },
+            ['1d', '2h', '1h'],  // programar recordatorios
+            true,                 // enviarNotificacion=true para registrar recordatorios
+            undefined,
+            { enviarConfirmacion: false }  // omitir confirmación individual
+          );
           resultados.push(resultado);
+          if (resultado.success && resultado.data) {
+            turnosCreados.push(resultado.data);
+          }
+        }
+
+        // Enviar un único mensaje de confirmación agrupado por participante
+        if (notifParticipantes && turnosCreados.length > 0) {
+          await notificarParticipantesPilates(turnosCreados);
         }
 
         const esClaseNueva = slotInfo?.tipo === 'libre';
@@ -349,7 +366,7 @@ export function NuevoTurnoPilatesModal({
       }
 
 
-      const resultado = await crearTurnosEnLote(turnosParaCrear);
+      const resultado = await crearTurnosEnLote(turnosParaCrear, { enviarNotificacion: notifParticipantes });
 
       if (resultado.success) {
         const { exitosos, fallidos } = resultado.data as { exitosos: number; fallidos: number; };
@@ -587,6 +604,32 @@ export function NuevoTurnoPilatesModal({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* ============= NOTIFICACIONES WHATSAPP ============= */}
+          <div className="border-t pt-3 md:pt-4">
+            <p className="text-xs md:text-sm font-medium text-gray-700 mb-2">Notificaciones WhatsApp</p>
+            <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs md:text-sm text-gray-700">Confirmar a los participantes</span>
+                  <p className="text-xs text-gray-500">Enviar mensaje de confirmación de la clase</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNotifParticipantes(prev => !prev)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                    notifParticipantes ? 'bg-[#9C1838]' : 'bg-gray-300'
+                  }`}
+                  role="switch"
+                  aria-checked={notifParticipantes}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                    notifParticipantes ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* ============= SECCIÓN DE REPETICIÓN ============= */}

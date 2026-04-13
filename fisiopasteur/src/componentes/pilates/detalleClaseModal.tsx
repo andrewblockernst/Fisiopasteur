@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { eliminarTurno, crearTurno, actualizarTurno, crearTurnosEnLote } from "@/lib/actions/turno.action";
+import { eliminarTurno, crearTurno, actualizarTurno, crearTurnosEnLote, notificarCancelacionPilates } from "@/lib/actions/turno.action";
 import { dayjs, isPastDateTime } from "@/lib/dayjs";
 import { useToastStore } from '@/stores/toast-store';
 import { Users, Clock, Calendar, User, AlertTriangle, Trash2, UserPlus, Settings, Plus, Repeat } from "lucide-react";
@@ -560,10 +560,11 @@ export function DetalleClaseModal({
       const pacientesAEliminar = pacientesActuales.filter(id => !pacientesSeleccionados.includes(id));
       const pacientesNuevos = pacientesSeleccionados.filter(id => !pacientesActuales.includes(id));
       
-      // 1. Eliminar turnos
+      // 1. Eliminar turnos (notificar al paciente antes de eliminar)
       for (const pacienteId of pacientesAEliminar) {
         const turnoAEliminar = turnos.find(t => t.id_paciente === pacienteId);
         if (turnoAEliminar) {
+          await notificarCancelacionPilates(turnoAEliminar.id_turno);
           const resultado = await eliminarTurno(turnoAEliminar.id_turno);
           if (!resultado.success) {
             throw new Error(`Error eliminando turno: ${resultado.error}`);
