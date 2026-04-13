@@ -528,25 +528,12 @@ useEffect(() => {
 
       setVerificandoBoxes(true);
       try {
-        const res = await obtenerTurnosParaValidarBoxes(formData.fecha);
+        const res = await obtenerTurnosParaValidarBoxes(formData.fecha, {
+          hora: formData.hora,
+        });
         
         if (res.success && res.data) {
-          const [horaInicio, minutoInicio] = formData.hora.split(':').map(Number);
-          const inicioTurno = (horaInicio * 60) + minutoInicio;
-          const finTurno = inicioTurno + 60;
-
-          const turnosConflicto = res.data.filter((turno: any) => {
-            if (turno.estado === 'cancelado' || !turno.id_box) return false;
-            
-            const [horaTurno, minutoTurno] = turno.hora.split(':').map(Number);
-            const inicioTurnoExistente = (horaTurno * 60) + minutoTurno;
-            const finTurnoExistente = inicioTurnoExistente + 60;
-
-            return (inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente);
-          });
-
-          const boxesOcupados = turnosConflicto.map((turno: any) => turno.id_box);
-          const disponibles = boxes.filter(box => !boxesOcupados.includes(box.id_box));
+          const disponibles = boxes.filter(box => res.data.includes(box.id_box));
           setBoxesDisponibles(disponibles);
         } else {
           setBoxesDisponibles(boxes);

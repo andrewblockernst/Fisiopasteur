@@ -1,4 +1,4 @@
-import { Clock, FileText, Phone, Edit, Trash2, Pen, Trash, Handshake } from "lucide-react";
+import { Clock, FileText, Phone, Pen, Trash, Handshake, MapPin } from "lucide-react";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { formatoNumeroTelefono } from "@/lib/utils";
 
@@ -62,7 +62,7 @@ export default function TurnoCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 text-sm">
+      <div className="grid grid-cols-1 md:grid-cols-4 text-sm">
         <div className="flex items-center gap-2 text-gray-600">
           <Clock className="w-4 h-4" />
           <span>
@@ -86,8 +86,22 @@ export default function TurnoCard({
           </span>
         </div>
 
+        {typeof turno.numero_en_grupo === 'number' && turno.grupo_tratamiento?.cantidad_turnos_planificados ? (
+          <div className="flex items-center gap-2 text-gray-600">
+            <FileText className="w-4 h-4" />
+            <span>
+              {turno.numero_en_grupo}/{turno.grupo_tratamiento.cantidad_turnos_planificados}
+            </span>
+          </div>
+        ) : null}
+
+        <div className="flex items-center gap-2 text-gray-600">
+          <MapPin className="w-4 h-4" />
+          <span>{turno.box?.numero ? `Box ${turno.box.numero}` : ''}</span>
+        </div>
+
         {turno.observaciones && (
-          <div className="md:col-span-2 flex items-start gap-2 text-gray-600 mt-4">
+          <div className="md:col-span-4 flex items-start gap-2 text-gray-600 mt-4">
             <FileText className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <span className="text-sm">{turno.observaciones}</span>
           </div>

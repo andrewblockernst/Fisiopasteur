@@ -106,33 +106,40 @@ export async function obtenerTurnos(filtros?: {
   }
 }
 
-// Obtener turnos minimos para validacion de disponibilidad de boxes
-export async function obtenerTurnosParaValidarBoxes(fecha: string) {
+// Obtener ids de boxes disponibles para validar disponibilidad
+export async function obtenerTurnosParaValidarBoxes(
+  fecha: string,
+  opciones?: {
+    hora?: string;
+    turnoIdExcluir?: number;
+    minutosRango?: number;
+  }
+) {
   const supabase = await createClient();
 
   try {
-    let query = supabase
-      .from("turno")
-      .select("id_turno, hora, estado, id_box")
-      .eq("fecha", fecha)
-      .neq("estado", "eliminado")
-      .neq("estado", "cancelado")
-      .order("hora", { ascending: true });
-
     const idPilates = await obtenerIdPilates();
 
-    if (idPilates) {
-      query = query.neq("id_especialidad", idPilates);
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await supabase.rpc("obtener_boxes_disponibles_rpc", {
+      p_fecha: fecha,
+      p_hora: opciones?.hora ? `${opciones.hora}:00` : null,
+      p_turno_id_excluir: opciones?.turnoIdExcluir ?? null,
+      p_minutos_rango: opciones?.minutosRango ?? 59,
+      p_id_especialidad_excluir: idPilates ?? null,
+    });
 
     if (error) {
       console.error("Error al obtener turnos para validar boxes:", error);
       return { success: false, error: error.message };
     }
 
-    return { success: true, data };
+    const idsDisponibles = Array.isArray(data)
+      ? data
+          .map((row: any) => Number(row.id_box))
+          .filter((id: number) => Number.isFinite(id))
+      : [];
+
+    return { success: true, data: idsDisponibles };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };
@@ -1561,6 +1568,13 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
     // ✅ Normalizar a número (convertir si es string)
     const pacienteId = typeof id_paciente === 'string' ? parseInt(id_paciente, 10) : id_paciente;
 
+    if (!Number.isFinite(pacienteId)) {
+      console.error("❌ ID paciente inválido en obtenerHistorialClinicoPorPaciente:", id_paciente);
+      return { success: false, error: "ID de paciente inválido" };
+    }
+
+    console.log("obtenerHistorialClinicoPorPaciente - pacienteId:", pacienteId, " (tipo:", typeof pacienteId, ")");
+
     // 1️⃣ Obtener TODOS los turnos del paciente (con y sin grupo)
     const { data, error } = await supabase
       .from("turno")
@@ -2054,6 +2068,37 @@ export async function crearPaqueteSesiones(params: {
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[];
 }) {
   try {
+    // ============= VALIDACIONES TEMPRANAS =============
+    if (!params.fechaBase || !params.horaBase || !params.id_especialista || !params.id_paciente || !params.id_especialidad) {
+      return {
+        success: false,
+        error: 'Faltan datos requeridos para crear el paquete de sesiones'
+      };
+    }
+
+    if (!Number.isInteger(params.numeroSesiones) || params.numeroSesiones <= 0) {
+      return {
+        success: false,
+        error: 'La cantidad de sesiones debe ser un numero mayor a 0'
+      };
+    }
+
+    const horaValida = /^([01]\d|2[0-3]):([0-5]\d)$/.test(params.horaBase);
+    if (!horaValida) {
+      return {
+        success: false,
+        error: 'La hora base no tiene un formato valido (HH:mm)'
+      };
+    }
+
+    const diasUnicos = Array.from(new Set((params.diasSeleccionados || []).filter((d) => Number.isInteger(d) && d >= 1 && d <= 7)));
+    if (diasUnicos.length === 0) {
+      return {
+        success: false,
+        error: 'Debes seleccionar al menos un dia valido (1-7)'
+      };
+    }
+
     const supabase = await createClient();
     // ============= PASO 1: GENERAR LISTA DE TURNOS =============
     const turnosParaCrear: TurnoInsert[] = [];
@@ -2096,7 +2141,7 @@ export async function crearPaqueteSesiones(params: {
     let semanaActual = 0;
 
     while (sesionesCreadas < params.numeroSesiones && semanaActual < 52) {
-      for (const diaSeleccionado of params.diasSeleccionados) {
+      for (const diaSeleccionado of diasUnicos) {
         if (sesionesCreadas >= params.numeroSesiones) break;
 
         let diferenciaDias = diaSeleccionado - diaBaseNumero;
@@ -2179,8 +2224,36 @@ export async function crearPaqueteSesiones(params: {
       };
     }
 
-    const idsTurnosCreados = (turnosRpc || [])
-      .map((r: any) => r.id_turno)
+    const turnosCreados = (turnosRpc || []).map((r: any) => ({
+      id_turno: r.id_turno,
+      fecha: r.fecha,
+      hora: r.hora,
+      id_paciente: r.id_paciente,
+      id_especialista: r.id_especialista,
+      id_especialidad: r.id_especialidad,
+      id_box: r.id_box,
+      observaciones: r.observaciones,
+      estado: r.estado,
+      tipo_plan: r.tipo_plan,
+      paciente: {
+        nombre: r.paciente_nombre,
+        apellido: r.paciente_apellido,
+        telefono: r.paciente_telefono,
+      },
+      especialista: {
+        nombre: r.especialista_nombre,
+        apellido: r.especialista_apellido,
+      },
+      grupo_tratamiento: r.id_grupo_tratamiento
+        ? {
+            id_grupo: r.id_grupo_tratamiento,
+            cantidad_turnos_planificados: params.numeroSesiones,
+          }
+        : null,
+    }));
+
+    const idsTurnosCreados = turnosCreados
+      .map((t: any) => t.id_turno)
       .filter((id: any): id is number => typeof id === 'number');
 
     if (idsTurnosCreados.length === 0) {
@@ -2192,30 +2265,12 @@ export async function crearPaqueteSesiones(params: {
 
     const id_grupo_tratamiento = (turnosRpc || []).find((r: any) => r.id_grupo_tratamiento)?.id_grupo_tratamiento as string | undefined;
 
-    const { data: turnosCreados, error: errorTurnos } = await supabase
-      .from('turno')
-      .select(`
-        *,
-        paciente:id_paciente(nombre, apellido, telefono),
-        especialista:id_especialista(nombre, apellido),
-        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
-      `)
-      .in('id_turno', idsTurnosCreados)
-      .order('fecha', { ascending: true })
-      .order('hora', { ascending: true });
-
-    if (errorTurnos || !turnosCreados) {
-      console.error('Error obteniendo turnos creados tras RPC:', errorTurnos);
-      return {
-        success: false,
-        error: errorTurnos?.message || 'Se crearon turnos, pero falló la lectura posterior'
-      };
-    }
-
-    // ============= PASO 3: ENVIAR NOTIFICACIÓN GRUPAL =============
+    // ============= PASO 3: ENVIAR NOTIFICACIÓN GRUPAL + PROGRAMAR RECORDATORIOS =============
     if (turnosCreados && turnosCreados.length > 0) {
-      // Ejecutar en background sin bloquear
-      Promise.resolve().then(async () => {
+      // En serverless usar after para ejecutar tareas post-respuesta de forma confiable.
+      after(async () => {
+        const telefonoPaciente = String(turnosCreados[0]?.paciente?.telefono || '').trim();
+
         try {
           const { enviarNotificacionGrupalTurnos } = await import('@/lib/services/whatsapp-bot.service');
 
@@ -2234,6 +2289,43 @@ export async function crearPaqueteSesiones(params: {
           console.error('Error enviando notificación agrupada:', error);
           // No fallar la operación por error en notificación
         }
+
+        try {
+          if (!telefonoPaciente) {
+            return;
+          }
+
+          const { calcularTiemposRecordatorio } = await import('@/lib/utils/whatsapp.utils');
+          const { registrarNotificacionesRecordatorioFlexible } = await import('@/lib/services/notificacion.service');
+
+          const tiposRecordatorio = (params.recordatorios && params.recordatorios.length > 0)
+            ? params.recordatorios
+            : ['1d', '2h'];
+
+          for (const turno of turnosCreados) {
+            const tiemposRecordatorio = calcularTiemposRecordatorio(turno.fecha, turno.hora, tiposRecordatorio);
+
+            const recordatoriosValidos = Object.entries(tiemposRecordatorio)
+              .filter(([_, fecha]) => fecha !== null)
+              .reduce((acc, [tipo, fecha]) => {
+                if (fecha) acc[tipo] = fecha;
+                return acc;
+              }, {} as Record<string, Date>);
+
+            if (Object.keys(recordatoriosValidos).length > 0) {
+              const mensajeRecordatorio = `Recordatorio: Tu turno es el ${turno.fecha} a las ${turno.hora}`;
+              await registrarNotificacionesRecordatorioFlexible(
+                turno.id_turno,
+                telefonoPaciente,
+                mensajeRecordatorio,
+                recordatoriosValidos
+              );
+            }
+          }
+        } catch (error) {
+          console.error('Error programando recordatorios del paquete:', error);
+          // No fallar la operación por error en recordatorios
+        }
       });
     }
 
@@ -2245,10 +2337,13 @@ export async function crearPaqueteSesiones(params: {
       success: true,
       data: {
         turnosCreados: turnosCreados.length,
+        turnosSolicitados: params.numeroSesiones,
         turnos: turnosCreados,
         id_grupo_tratamiento
       },
-      message: `${turnosCreados.length} sesiones creadas exitosamente`
+      message: turnosCreados.length === params.numeroSesiones
+        ? `${turnosCreados.length} sesiones creadas exitosamente`
+        : `Se crearon ${turnosCreados.length} de ${params.numeroSesiones} sesiones solicitadas`
     };
 
   } catch (error: any) {

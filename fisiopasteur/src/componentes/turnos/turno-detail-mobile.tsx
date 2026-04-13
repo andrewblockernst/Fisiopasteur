@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { useInvalidateTurnos } from '@/hooks/useTurnosQuery';
+import { cancelarTurno, marcarComoAtendido } from '@/lib/actions/turno.action';
+import { useToastStore } from '@/stores/toast-store';
 import Button from '../boton';
 import EditarTurnoModal from './editar-turno-modal';
 import { dayjs } from '@/lib/dayjs';
@@ -29,7 +31,57 @@ interface TurnoDetailMobileProps {
 export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetailMobileProps) {
   const router = useRouter();
   const invalidateTurnos = useInvalidateTurnos();
+  const { addToast } = useToastStore();
   const [modalEditarAbierto, setModalEditarAbierto] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleMarcarComoAtendido = async () => {
+    if (!turno?.id_turno || isSubmitting) return;
+
+    setIsSubmitting(true);
+    const resultado = await marcarComoAtendido(turno.id_turno);
+
+    if (resultado.success) {
+      addToast({
+        variant: 'success',
+        message: 'Turno marcado como atendido',
+      });
+      invalidateTurnos({ scope: 'statuses', statuses: ['programado', 'pendiente', 'atendido'] });
+      invalidateTurnos({ scope: 'dates', date: turno.fecha });
+      router.refresh();
+    } else {
+      addToast({
+        variant: 'error',
+        message: resultado.error || 'Error al marcar turno como atendido',
+      });
+    }
+
+    setIsSubmitting(false);
+  };
+
+  const handleCancelarTurno = async () => {
+    if (!turno?.id_turno || isSubmitting) return;
+
+    setIsSubmitting(true);
+    const resultado = await cancelarTurno(turno.id_turno);
+
+    if (resultado.success) {
+      addToast({
+        variant: 'success',
+        message: 'Turno cancelado',
+      });
+      invalidateTurnos({ scope: 'statuses', statuses: ['programado', 'pendiente', 'cancelado'] });
+      invalidateTurnos({ scope: 'dates', date: turno.fecha });
+      router.refresh();
+    } else {
+      addToast({
+        variant: 'error',
+        message: resultado.error || 'Error al cancelar turno',
+      });
+    }
+
+    setIsSubmitting(false);
+  };
 
   const getEstadoColor = (estado: string) => {
     switch (estado.toLowerCase()) {
@@ -217,19 +269,29 @@ export default function TurnoDetailMobile({ turno, numeroTalonario }: TurnoDetai
 
         {/* Acciones */}
         <div className="space-y-3 pt-4">
-          {turno.estado === 'programado' && (
+          
             <>
-              <Button className="w-full flex items-center justify-center">
+            {turno.estado === 'programado' || turno.estado === 'pendiente' && (
+              <Button
+                className="w-full flex items-center justify-center"
+                onClick={handleMarcarComoAtendido}
+                disabled={isSubmitting}
+              >
                 <Clock className="w-5 h-5" />
-                Marcar en Curso
+                {isSubmitting ? 'Procesando...' : 'Marcar como atendido'}
               </Button>
+            )}
               
-                <Button className='flex items-center justify-center w-full'>
-                <Trash2 className="w-5 h-5" />
-                Cancelar Turno
+                <Button
+                  className='flex items-center justify-center w-full'
+                  onClick={handleCancelarTurno}
+                  disabled={isSubmitting || turno.estado === 'cancelado'} //  || turno.estado === 'atendido'
+                >
+                  <Trash2 className="w-5 h-5" />
+                  {isSubmitting ? 'Procesando...' : 'Cancelar Turno'}
                 </Button>
             </>
-          )}
+          
         </div>
       </div>
 

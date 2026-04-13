@@ -43,14 +43,6 @@ type EspecialistaAPI = {
   usuario_especialidad?: Array<{ especialidad: Especialidad }>;
 };
 
-// Tipo para el turno con relaciones incluidas (como viene del JOIN)
-// type TurnoConRelaciones = Turno & {
-//   paciente?: PacienteCompleto;
-//   especialista?: Usuario;
-//   especialidad?: Especialidad;
-//   box?: Box;
-// };
-
 interface EditarTurnoModalProps {
   turno: TurnoWithRelations;
   open: boolean;
@@ -225,26 +217,12 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
         }
 
         if (formDataInicial.fecha && formDataInicial.hora) {
-          const turnosRes = await obtenerTurnosParaValidarBoxes(formDataInicial.fecha);
+          const turnosRes = await obtenerTurnosParaValidarBoxes(formDataInicial.fecha, {
+            hora: formDataInicial.hora,
+            turnoIdExcluir: turno.id_turno,
+          });
           if (turnosRes.success && turnosRes.data) {
-            const [horaInicio, minutoInicio] = formDataInicial.hora.split(':').map(Number);
-            const inicioTurno = (horaInicio * 60) + minutoInicio;
-            const finTurno = inicioTurno + 60;
-
-            const turnosConflicto = turnosRes.data.filter((turnoCheck: any) => {
-              if (turnoCheck.estado === 'cancelado' || !turnoCheck.id_box || turnoCheck.id_turno === turno.id_turno) {
-                return false;
-              }
-
-              const [horaTurno, minutoTurno] = turnoCheck.hora.split(':').map(Number);
-              const inicioTurnoExistente = (horaTurno * 60) + minutoTurno;
-              const finTurnoExistente = inicioTurnoExistente + 60;
-
-              return inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente;
-            });
-
-            const boxesOcupados = turnosConflicto.map((turnoCheck: any) => turnoCheck.id_box);
-            const disponibles = boxesData.filter((box) => !boxesOcupados.includes(box.id_box));
+            const disponibles = boxesData.filter((box) => turnosRes.data.includes(box.id_box));
 
             if (formDataInicial.id_box && !disponibles.some((box) => String(box.id_box) === formDataInicial.id_box)) {
               const boxActual = boxesData.find((box) => String(box.id_box) === formDataInicial.id_box);
@@ -365,37 +343,15 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
       setVerificandoBoxes(true);
       try {
-        // Obtener todos los turnos en esa fecha y hora específica
-        const res = await obtenerTurnosParaValidarBoxes(formData.fecha);
+        const res = await obtenerTurnosParaValidarBoxes(formData.fecha, {
+          hora: formData.hora,
+          turnoIdExcluir: turno.id_turno,
+        });
         
         if (res.success && res.data) {
-          // Calcular el rango de tiempo del turno (1 hora)
-          const [horaInicio, minutoInicio] = formData.hora.split(':').map(Number);
-          const inicioTurno = (horaInicio * 60) + minutoInicio;
-          const finTurno = inicioTurno + 60;
-
-          // Filtrar turnos que se solapan con nuestro horario (excluyendo el turno actual)
-          const turnosConflicto = res.data.filter((turnoCheck: any) => {
-            if (turnoCheck.estado === 'cancelado' || 
-                !turnoCheck.id_box || 
-                turnoCheck.id_turno === turno.id_turno) return false;
-            
-            const [horaTurno, minutoTurno] = turnoCheck.hora.split(':').map(Number);
-            const inicioTurnoExistente = (horaTurno * 60) + minutoTurno;
-            const finTurnoExistente = inicioTurnoExistente + 60;
-
-            // Verificar solapamiento
-            return (inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente);
-          });
-
-          // Obtener IDs de boxes ocupados
-          const boxesOcupados = turnosConflicto.map((turnoCheck: any) => turnoCheck.id_box);
-
-          // Filtrar boxes disponibles
-          const disponibles = boxes.filter(box => !boxesOcupados.includes(box.id_box));
+          const disponibles = boxes.filter(box => res.data.includes(box.id_box));
           setBoxesDisponibles(disponibles);
 
-          // Si el box actual ya no está disponible pero es el que tenía asignado, incluirlo
           if (formData.id_box && !disponibles.some(b => String(b.id_box) === formData.id_box)) {
             const boxActual = boxes.find(b => String(b.id_box) === formData.id_box);
             if (boxActual) {
