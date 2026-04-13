@@ -7,11 +7,12 @@ import { Database } from '@/types/database.types';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { puedeGestionarTurnos } from '@/lib/constants/roles';
 
-// Flags de navegación computados en el servidor
+// Datos de navegación computados en el servidor
+// Con estos dos valores se deriva todo lo demás en cada componente:
+//   verTurnos / verCalendario = puedeGestionar || !tienePilates
+//   verPilates                = puedeGestionar || tienePilates
 export interface PerfilNavFlags {
-  verTurnos: boolean;
-  verCalendario: boolean;
-  verPilates: boolean;
+  tienePilates: boolean;
   puedeGestionar: boolean;
 }
 
@@ -288,12 +289,7 @@ export async function obtenerPermisosNav(): Promise<PerfilNavFlags | null> {
     );
     const tienePilates = nombres.includes('pilates');
 
-    return {
-      verTurnos: gestiona || !tienePilates,
-      verCalendario: gestiona || !tienePilates,
-      verPilates: gestiona || tienePilates,
-      puedeGestionar: gestiona,
-    };
+    return { tienePilates, puedeGestionar: gestiona };
   } catch {
     return null;
   }

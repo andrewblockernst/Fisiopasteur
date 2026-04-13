@@ -5,9 +5,7 @@ import { obtenerPermisosNav } from "@/lib/actions/perfil.action";
 import { PerfilNavProvider } from "@/hooks/PerfilNavContext";
 
 const defaultFlags = {
-  verTurnos: true,
-  verCalendario: true,
-  verPilates: true,
+  tienePilates: false,
   puedeGestionar: false,
 };
 

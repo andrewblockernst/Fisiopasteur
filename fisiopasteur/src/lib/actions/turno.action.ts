@@ -1447,6 +1447,71 @@ export async function obtenerEspecialistasParaTurnos() {
   }
 }
 
+/**
+ * Devuelve solo los especialistas que tienen la especialidad Pilates.
+ * Usar en el módulo de Pilates para el selector de especialistas.
+ */
+export async function obtenerEspecialistasPilates() {
+  const supabase = await createClient();
+
+  try {
+    const idPilates = await obtenerIdPilates();
+    if (!idPilates) return { success: true, data: [] };
+
+    const { data, error } = await supabase
+      .from("usuario")
+      .select(`
+        id_usuario,
+        nombre,
+        apellido,
+        color,
+        activo,
+        usuario_especialidad (
+          activo,
+          especialidad:id_especialidad (
+            id_especialidad,
+            nombre
+          )
+        )
+      `)
+      .in("id_rol", ROLES_ESPECIALISTAS)
+      .eq("activo", true)
+      .eq("usuario_especialidad.activo", true)
+      .order("apellido", { ascending: true })
+      .order("nombre", { ascending: true });
+
+    if (error) throw error;
+
+    // Mantener solo los que tienen Pilates entre sus especialidades activas
+    const soloConPilates = (data || []).filter((e) =>
+      (e.usuario_especialidad || []).some(
+        (ue: any) => ue.especialidad?.id_especialidad === idPilates
+      )
+    );
+
+    return {
+      success: true,
+      data: soloConPilates.map((e) => ({
+        id_usuario: e.id_usuario,
+        nombre: e.nombre,
+        apellido: e.apellido,
+        color: e.color,
+        activo: e.activo,
+        especialidad: null,
+        usuario_especialidad: (e.usuario_especialidad || []).map((ue: any) => ({
+          especialidad: {
+            id_especialidad: ue.especialidad?.id_especialidad,
+            nombre: ue.especialidad?.nombre,
+          },
+        })),
+      })),
+    };
+  } catch (error: any) {
+    console.error("❌ Error en obtenerEspecialistasPilates:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function obtenerEspecialidades() {
   const supabase = await createClient();
 

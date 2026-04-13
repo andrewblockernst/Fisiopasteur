@@ -6,9 +6,7 @@ import type { PerfilNavFlags } from '@/lib/actions/perfil.action';
 export type { PerfilNavFlags };
 
 const defaultFlags: PerfilNavFlags = {
-  verTurnos: true,
-  verCalendario: true,
-  verPilates: true,
+  tienePilates: false,
   puedeGestionar: false,
 };
 
