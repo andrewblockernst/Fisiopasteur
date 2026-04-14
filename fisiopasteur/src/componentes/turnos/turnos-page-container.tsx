@@ -6,8 +6,6 @@ import FiltrosTurnos from './filtros-turnos';
 import TablaTurnos from './listado-turnos';
 import TurnosMobileList from './turnos-mobile-list';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
-import type { TurnoConDetalles } from "@/stores/turno-store";
 import type { Tables, EspecialistaWithSpecialties } from "@/types";
 import { actualizarTurnosPendientes } from '@/lib/actions/turno.action';
 import { useTurnos, useInvalidateTurnos } from '@/hooks/useTurnosQuery';

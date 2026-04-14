@@ -13,6 +13,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import UnifiedSkeletonLoader from "../unified-skeleton-loader";
 import { nowIso } from "@/lib/dayjs";
+import Button from "@/componentes/boton";
 
 type TurnosTableProps = {
   turnos: TurnoWithRelations[];
@@ -318,7 +319,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
               <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
               <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialista</th>
               <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialidad</th>
-              <th className="px-4 py-1 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">N°</th>
+              <th className="px-4 py-1 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">N° de sesiones</th>
               <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider w-14">Acciones</th>
             </tr>
           </thead>
@@ -368,69 +369,75 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                 {/* ✅ COLUMNA DE ACCIONES - Evitar propagación del click */}
                 <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
                   {t.id_paciente && (
-                    <DropdownMenu.Root>
-                      <DropdownMenu.Trigger asChild>
-                        <button
-                          className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreVertical className="w-5 h-5 text-gray-600" />
-                        </button>
-                      </DropdownMenu.Trigger>
-
-                      <DropdownMenu.Content align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
-                        {/* Marcar como Atendido */}
-                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
-                          <DropdownMenu.Item
-                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-green-50 text-green-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
-                            onSelect={() => handleMarcarAtendido(t)}
-                            disabled={!turnoEsPropio}
-                          >
-                            <CheckCircle size={16} />
-                            Marcar como Atendido
-                          </DropdownMenu.Item>
-                        )}
-
-                        {/* Cancelar Turno */}
-                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
-                          <DropdownMenu.Item
-                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-red-50 text-red-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
-                            onSelect={() => handleCancelar(t)}
-                            disabled={!turnoEsPropio}
-                          >
-                            <XCircle size={16} />
-                            Cancelar Turno
-                          </DropdownMenu.Item>
-                        )}
-
-                        {/* Separador */}
-                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
-                          <div className="h-px bg-gray-200 my-1" />
-                        )}
-
-                        {/* Editar */}
-                        {t.estado !== 'atendido' && (
-                          <DropdownMenu.Item
-                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-gray-50 text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
-                            onSelect={() => handleEditar(t)}
-                            disabled={!turnoEsPropio}
-                          >
-                            <Edit size={16} />
-                            Editar
-                          </DropdownMenu.Item>
-                        )}
-
-                        {/* Eliminar */}
-                        <DropdownMenu.Item
-                          className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-red-50 text-red-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
-                          onSelect={() => handleEliminar(t)}
+                    <div className="flex items-center gap-2">
+      
+                      {/* Botón de Editar extraído */}
+                      {t.estado !== 'atendido' && (
+                        <Button 
+                          variant="secondary" 
+                          className="text-xs px-3 py-1.5 h-8 min-w-16 flex items-center justify-center"
+                          onClick={() => handleEditar(t)}
                           disabled={!turnoEsPropio}
                         >
-                          <Trash size={16} />
-                          Eliminar
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Root>
+                          Editar
+                        </Button>
+                      )}
+
+                      {/* Botón de Eliminar extraído */}
+                      <Button
+                        variant="danger"
+                        className="text-xs px-3 py-1.5 h-8 min-w-16 flex items-center justify-center"
+                        onClick={() => handleEliminar(t)}
+                        disabled={!turnoEsPropio}
+                      >
+                        Eliminar
+                      </Button>
+
+                      {/* DropdownMenu con los 3 puntos (solo Atender y Cancelar) */}
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
+                          <button
+                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="w-5 h-5 text-gray-600" />
+                          </button>
+                        </DropdownMenu.Trigger>
+
+                        <DropdownMenu.Content align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
+                          {/* Marcar como Atendido */}
+                          {(t.estado === 'programado' || t.estado === 'pendiente') && (
+                            <DropdownMenu.Item
+                              className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-green-50 text-green-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
+                              onSelect={() => handleMarcarAtendido(t)}
+                              disabled={!turnoEsPropio}
+                            >
+                              <CheckCircle size={16} />
+                              Marcar como Atendido
+                            </DropdownMenu.Item>
+                          )}
+
+                          {/* Cancelar Turno */}
+                          {(t.estado === 'programado' || t.estado === 'pendiente') && (
+                            <DropdownMenu.Item
+                              className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-red-50 text-red-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
+                              onSelect={() => handleCancelar(t)}
+                              disabled={!turnoEsPropio}
+                            >
+                              <XCircle size={16} />
+                              Cancelar Turno
+                            </DropdownMenu.Item>
+                          )}
+
+                          {/* Fallback si no hay acciones extra disponibles para turnos completados/esCancelado */}
+                          {!(t.estado === 'programado' || t.estado === 'pendiente') && (
+                            <div className="px-4 py-2 text-sm text-gray-400 italic">
+                              Sin acciones extra
+                            </div>
+                          )}
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Root>
+                    </div>
                   )}
                 </td>
               </tr>

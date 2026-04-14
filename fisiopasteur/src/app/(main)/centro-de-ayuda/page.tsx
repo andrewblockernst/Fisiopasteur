@@ -763,7 +763,7 @@ export default function HelpPage() {
                       <div className="space-y-2 text-gray-600">
                         <p><strong>En el listado de especialistas:</strong></p>
                         <ul className="list-disc list-inside ml-2 space-y-1">
-                          <li><strong>Administrador:</strong> Ve columna "Acciones" con botones Editar e Inactivar</li>
+                          <li><strong>Administrador:</strong> Ve columna "Acciones" con botones Editar e Desac</li>
                           <li><strong>Especialista:</strong> Solo ve el listado sin opciones de edición</li>
                         </ul>
                         <p className="mt-3"><strong>En el perfil de un especialista:</strong></p>

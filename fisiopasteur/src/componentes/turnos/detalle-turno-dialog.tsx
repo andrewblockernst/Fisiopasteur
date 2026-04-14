@@ -183,29 +183,6 @@ export function DetalleTurnoDialog({
           )}
         </div>
 
-        {/* Fecha y Hora */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-          <div className="bg-white border border-gray-200 p-3 md:p-4 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Calendar className="w-4 h-4 text-gray-500" />
-              <span className="text-xs md:text-sm font-medium text-gray-600">Fecha</span>
-            </div>
-            <p className="text-sm md:text-base font-semibold text-gray-900 capitalize">
-              {formatearFecha(turno.fecha)}
-            </p>
-          </div>
-
-          <div className="bg-white border border-gray-200 p-3 md:p-4 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-gray-500" />
-              <span className="text-xs md:text-sm font-medium text-gray-600">Hora</span>
-            </div>
-            <p className="text-sm md:text-base font-semibold text-gray-900 font-mono">
-              {formatearHora(turno.hora)}
-            </p>
-          </div>
-        </div>
-
         {/* Paciente */}
         <div className="bg-white border border-gray-200 p-3 md:p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-3">

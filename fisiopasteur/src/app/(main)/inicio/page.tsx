@@ -54,16 +54,16 @@ export default function Inicio() {
     <div className="min-h-screen text-black p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 flex flex-col items-center md:block">
           {loading ? (
-            <div className="h-8 w-1/3 bg-gray-300 rounded animate-pulse"></div>
+            <div className="h-8 w-2/3 md:w-1/3 bg-gray-300 rounded animate-pulse"></div>
           ) : (
             <>
-              <h1 className="text-3xl font-bold text-gray-900">Bienvenido a {nombreOrganizacion}</h1>
-              <p className="text-gray-600 mt-2">Panel de control para especialistas y administradores</p>
+              <h1 className="text-3xl font-bold text-gray-900 text-center md:text-left">
+                Bienvenido a {nombreOrganizacion}
+              </h1>
             </>
           )}
-          
         </div>
 
         {/* Fila 1: KPIs con Filtro */}

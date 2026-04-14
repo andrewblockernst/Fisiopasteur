@@ -209,9 +209,9 @@ export default function PilatesCalendarioSemanal({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           {/* Título y botón Hoy */}
           <div className="flex items-center justify-between md:justify-start md:gap-4">
-            <h1 className="text-lg md:text-xl font-semibold text-gray-900">
+            <h3 className="text-lg md:text-xl font-semibold text-gray-900">
               Pilates
-            </h1>
+            </h3>
             <button
               onClick={irSemanaActual}
               className="px-3 py-1 text-sm bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors"
@@ -220,43 +220,43 @@ export default function PilatesCalendarioSemanal({
             </button>
           </div>
           
-          {/* Navegación de semanas */}
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={irSemanaAnterior}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            
-            <span className="text-sm font-medium text-gray-700 min-w-[160px] md:min-w-[200px] text-center">
-              {dayjs(diasSemana[0]).format("DD MMM")} - {dayjs(diasSemana[4]).format("DD MMM YYYY")}
-            </span>
-            
-            <button
-              onClick={irSemanaSiguiente}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+          {/* Leyenda de dificultades */}
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 md:gap-4 text-xs">
+            <span className="text-gray-600 w-full md:w-auto text-center md:text-left">Niveles:</span>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-green-200 rounded"></div>
+              <span className="text-gray-700">Principiante</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-yellow-200 rounded"></div>
+              <span className="text-gray-700">Intermedio</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-red-200 rounded"></div>
+              <span className="text-gray-700">Avanzado</span>
+            </div>
           </div>
         </div>
 
-        {/* Leyenda de dificultades */}
-        <div className="mt-3 flex flex-wrap items-center gap-2 md:gap-4 text-xs">
-          <span className="text-gray-600 w-full md:w-auto">Niveles:</span>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-green-200 rounded"></div>
-            <span className="text-gray-700">Principiante</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-yellow-200 rounded"></div>
-            <span className="text-gray-700">Intermedio</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-red-200 rounded"></div>
-            <span className="text-gray-700">Avanzado</span>
-          </div>
+        {/* Navegación de semanas */}
+        <div className="mt-3 flex items-center justify-center md:justify-start gap-2">
+          <button
+            onClick={irSemanaAnterior}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          
+          <span className="text-sm font-medium text-gray-700 min-w-[160px] md:min-w-[200px] text-center">
+            {dayjs(diasSemana[0]).format("DD MMM")} - {dayjs(diasSemana[4]).format("DD MMM YYYY")}
+          </span>
+          
+          <button
+            onClick={irSemanaSiguiente}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

@@ -1,21 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/service-role";
 
-/**
- * API para crear un nuevo usuario administrador
- * Flujo: Landing → Onboarding automático
- *
- * POST /api/onboarding/crear-organizacion
- * Body: {
- *   usuario: {
- *     email: string;
- *     password: string;
- *     nombre: string;
- *     apellido: string;
- *     telefono?: string;
- *   }
- * }
- */
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
