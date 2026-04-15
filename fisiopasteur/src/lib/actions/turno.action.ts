@@ -694,19 +694,14 @@ export async function eliminarTurno(id: number) {
 
     console.log(`✅ Turno ${id} marcado como eliminado (soft delete)`);
 
-    // Enviar aviso WhatsApp de cancelación (si el paciente tiene teléfono)
+    // Encolar aviso de cancelación en BD — el scheduler del bot lo envía
     const paciente = turnoVerificado.paciente as any;
     if (paciente?.telefono) {
       after(async () => {
         try {
-          const { enviarMensajePersonalizado } = await import(
-            "@/lib/services/whatsapp-bot.service"
-          );
-
           const especialista = turnoVerificado.especialista as any;
           const especialidad = turnoVerificado.especialidad as any;
           const box = turnoVerificado.box as any;
-
           const fechaFormateada = turnoVerificado.fecha
             ? turnoVerificado.fecha.split("-").reverse().join("/")
             : "—";
@@ -714,22 +709,23 @@ export async function eliminarTurno(id: number) {
           const nombrePaciente = `${paciente.nombre ?? ""} ${paciente.apellido ?? ""}`.trim();
           const boxLinea = box?.nombre ? `\n📦 Box: ${box.nombre}` : "";
 
-          const mensaje = `❌ *Turno cancelado*
+          const mensaje = `❌ *Turno cancelado*\n\nHola ${nombrePaciente},\n\nTu turno en *Fisiopasteur* fue cancelado.\n\n📅 ${fechaFormateada} — 🕐 ${horaFormateada}hs\n👤 ${especialista ? `${especialista.nombre} ${especialista.apellido}` : "Profesional"}\n🩺 ${especialidad?.nombre ?? "Consulta"}${boxLinea}\n\n📍 Pasteur 206, Libertador San Martín\nAnte cualquier duda, comunicate con el centro.`;
 
-Hola ${nombrePaciente},
+          const supabaseAfter = await createClient();
+          await supabaseAfter
+            .from("notificacion")
+            .insert({
+              id_turno: id,
+              mensaje,
+              medio: "whatsapp",
+              telefono: paciente.telefono,
+              estado: "pendiente",
+              fecha_programada: nowIso(),
+            });
 
-Tu turno en *Fisiopasteur* fue cancelado.
-
-📅 ${fechaFormateada} — 🕐 ${horaFormateada}hs
-👤 ${especialista ? `${especialista.nombre} ${especialista.apellido}` : "Profesional"}
-🩺 ${especialidad?.nombre ?? "Consulta"}${boxLinea}
-
-📍 Pasteur 206, Libertador San Martín
-Ante cualquier duda, comunicate con el centro.`;
-
-          await enviarMensajePersonalizado(paciente.telefono, mensaje);
+          console.log(`📋 [Cancelación] Notificación encolada en BD para ${paciente.telefono}`);
         } catch (err) {
-          console.error("[WhatsApp] Error enviando aviso cancelación turno:", err);
+          console.error("[WhatsApp] Error encolando aviso cancelación:", err);
         }
       });
     }
@@ -2048,65 +2044,53 @@ async function procesarNotificacionesRepeticion(turnos: any[]) {
   }
 }
 
-// ✅ FUNCIÓN SIMPLIFICADA - Solo delega al servicio de WhatsApp
+// Inserta la notificación en la BD para que el scheduler del bot la envíe de a una.
 async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
   try {
-    const supabase = await createClient();    // 1. Obtener datos del paciente
+    const supabase = await createClient();
     const { data: paciente } = await supabase
       .from("paciente")
       .select("nombre, telefono")
       .eq("id_paciente", parseInt(id_paciente))
       .single();
 
-    if (!paciente || !paciente.telefono) {
-      console.error("No se pudieron obtener datos del paciente o no tiene teléfono");
+    if (!paciente?.telefono) {
+      console.error("Paciente sin teléfono, se omite la notificación Pilates");
       return;
     }
 
-    // 2. Registrar notificación en BD - ✅ CORRECCIÓN: Agregar id_organizacion
-    const { data: notificacion } = await supabase
+    // Construir el texto del mensaje (misma lógica que el servicio de WhatsApp)
+    const diasSemana: Record<number, string> = {
+      0: "domingos", 1: "lunes", 2: "martes", 3: "miércoles",
+      4: "jueves", 5: "viernes", 6: "sábados",
+    };
+    const patronesSet = new Set<string>();
+    turnos.forEach((t: any) => {
+      const fecha = dayjs(t.fecha, "YYYY-MM-DD");
+      const hora = (t.hora || t.hora_inicio || "").substring(0, 5);
+      patronesSet.add(`${diasSemana[fecha.day()] ?? "desconocido"} a las ${hora}`);
+    });
+    const nombreMes = dayjs(turnos[0].fecha, "YYYY-MM-DD").format("MMMM");
+    const mes = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+    const patrones = [...patronesSet].map((p) => `• ${p}`).join("\n");
+
+    const mensajeTexto = `¡Hola ${paciente.nombre}! 🌟\n\nSe han confirmado tus turnos de Pilates por el mes de ${mes}:\n\n${patrones}\n\nTe esperamos en Fisiopasteur. ¡Nos vemos pronto! 💪\n\n_Recibirás recordatorios antes de cada clase._`;
+
+    // Guardar en BD — el scheduler del bot lo enviará con el delay adecuado
+    await supabase
       .from("notificacion")
       .insert({
         id_turno: turnos[0].id_turno,
-        mensaje: `Confirmación de ${turnos.length} turnos de Pilates`,
+        mensaje: mensajeTexto,
         medio: "whatsapp",
         telefono: paciente.telefono,
         estado: "pendiente",
-      })
-      .select()
-      .single();
+        fecha_programada: nowIso(),
+      });
 
-    // 3. Importar y llamar al servicio de WhatsApp (que tiene toda la lógica)
-    const whatsappService = await import('../services/whatsapp-bot.service');
-    const resultado = await whatsappService.enviarNotificacionGrupal(
-      paciente.telefono,
-      paciente.nombre,
-      turnos
-    );
-
-    // 4. Actualizar estado según resultado
-    if (resultado.status === 'success') {
-      if (notificacion) {
-        await supabase
-          .from("notificacion")
-          .update({
-            estado: "enviada",
-            fecha_envio: nowIso()
-          })
-          .eq("id_notificacion", notificacion.id_notificacion);
-      }
-    } else {
-      console.error(`❌ Error enviando notificación agrupada: ${resultado.message}`);
-
-      if (notificacion) {
-        await supabase
-          .from("notificacion")
-          .update({ estado: "fallida" })
-          .eq("id_notificacion", notificacion.id_notificacion);
-      }
-    }
+    console.log(`📋 [Pilates] Notificación encolada en BD para ${paciente.telefono}`);
   } catch (error) {
-    console.error("Error al enviar notificación agrupada:", error);
+    console.error("Error al encolar notificación Pilates:", error);
   }
 }
 
@@ -2153,11 +2137,21 @@ export async function notificarCancelacionPilates(turnoId: number) {
 
     after(async () => {
       try {
-        const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
+        const supabaseAfter = await createClient();
         const mensaje = `Hola ${nombrePaciente}, tu clase de Pilates del ${fecha} a las ${hora}hs fue cancelada.\n\nSi tenés alguna duda, comunicate con nosotros.`;
-        await enviarMensajePersonalizado(telefono, mensaje);
+        await supabaseAfter
+          .from("notificacion")
+          .insert({
+            id_turno: turnoId,
+            mensaje,
+            medio: "whatsapp",
+            telefono,
+            estado: "pendiente",
+            fecha_programada: nowIso(),
+          });
+        console.log(`📋 [CancelPilates] Notificación encolada para ${telefono}`);
       } catch (err) {
-        console.error("[Pilates] Error enviando cancelación:", err);
+        console.error("[Pilates] Error encolando cancelación:", err);
       }
     });
 
@@ -2475,25 +2469,46 @@ export async function crearPaqueteSesiones(params: {
 
     // ============= PASO 3: ENVIAR NOTIFICACIÓN GRUPAL =============
     if (turnosCreados && turnosCreados.length > 0) {
-      // Ejecutar en background sin bloquear
+      // Encolar notificación en BD — el scheduler del bot la envía
       Promise.resolve().then(async () => {
         try {
-          const { enviarNotificacionGrupalTurnos } = await import('@/lib/services/whatsapp-bot.service');
-
           const paciente = (turnosCreados[0] as any).paciente;
           const especialista = (turnosCreados[0] as any).especialista;
 
-          if (paciente?.telefono && especialista) {
-            await enviarNotificacionGrupalTurnos(
-              paciente.telefono,
-              paciente.nombre,
-              turnosCreados,
-              especialista.nombre
-            );
-          }
+          if (!paciente?.telefono) return;
+
+          const diasSemana = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+          const turnosOrdenados = [...turnosCreados].sort((a: any, b: any) =>
+            dayjs(`${a.fecha} ${a.hora}`).valueOf() - dayjs(`${b.fecha} ${b.hora}`).valueOf()
+          );
+          const listaTurnos = turnosOrdenados.map((t: any) => {
+            const fDayjs = dayjs(t.fecha, "YYYY-MM-DD");
+            const diaSemana = diasSemana[fDayjs.day()];
+            const fechaFmt = fDayjs.format("DD/MM");
+            const hora = (t.hora || "").substring(0, 5);
+            return `• ${diaSemana} ${fechaFmt} a las ${hora}hs`;
+          }).join("\n");
+          const especialidadNombre = (turnosCreados[0] as any).especialidad?.nombre || "Fisioterapia";
+          const conEspecialista = especialista ? ` con ${especialista.nombre}` : "";
+          const count = turnosCreados.length;
+
+          const mensaje = `¡Hola ${paciente.nombre}! 👋\n\nSe han confirmado tus ${count} turno${count > 1 ? "s" : ""} de ${especialidadNombre}${conEspecialista}:\n\n${listaTurnos}\n\n📍 Fisiopasteur\n⏰ Te enviaremos recordatorios antes de cada turno.\n\n¡Nos vemos pronto!`;
+
+          const supabaseNotif = await createClient();
+          await supabaseNotif
+            .from("notificacion")
+            .insert({
+              id_turno: (turnosCreados[0] as any).id_turno,
+              mensaje,
+              medio: "whatsapp",
+              telefono: paciente.telefono,
+              estado: "pendiente",
+              fecha_programada: nowIso(),
+            });
+
+          console.log(`📋 [Turnos] Notificación encolada para ${paciente.telefono}`);
         } catch (error) {
-          console.error('Error enviando notificación agrupada:', error);
-          // No fallar la operación por error en notificación
+          console.error('Error encolando notificación de turnos:', error);
         }
       });
     }
