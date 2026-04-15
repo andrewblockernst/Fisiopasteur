@@ -143,6 +143,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 id_notificacion,
                 id_turno,
                 mensaje,
+                telefono,
                 turno:id_turno(
                     fecha,
                     hora,
@@ -152,7 +153,6 @@ const procesarRecordatoriosAutonomo = async () => {
                 )
             `)
             .eq('estado', 'pendiente')
-            .ilike('mensaje', '%[RECORDATORIO%')
             .lte('fecha_programada', new Date().toISOString())
             .order('fecha_programada', { ascending: true })
 
@@ -172,41 +172,64 @@ const procesarRecordatoriosAutonomo = async () => {
         let fallidos = 0
 
         for (let i = 0; i < pendientes.length; i++) {
-            const notif = pendientes[i]
+            const notif = pendientes[i] as any
             const turno = notif.turno as any
 
-            if (!turno?.paciente?.telefono) {
+            // Determinar teléfono: columna directa o vía turno→paciente
+            const telefono: string = notif.telefono || turno?.paciente?.telefono || ''
+
+            if (!telefono) {
                 console.error(`❌ Notificación ${notif.id_notificacion} sin teléfono — marcando fallida`)
                 await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
                 fallidos++
                 continue
             }
 
-            const turnoData: TurnoData = {
-                pacienteNombre: turno.paciente.nombre || 'Paciente',
-                pacienteApellido: turno.paciente.apellido || '',
-                telefono: turno.paciente.telefono,
-                fecha: formatearFecha(turno.fecha),
-                hora: (turno.hora || '').substring(0, 5),
-                profesional: turno.especialista
-                    ? `${turno.especialista.nombre} ${turno.especialista.apellido}`
-                    : 'Profesional',
-                especialidad: turno.especialidad?.nombre || 'Consulta',
-                turnoId: String(notif.id_turno),
+            // Determinar mensaje:
+            // - Si el texto contiene [RECORDATORIO → generarlo desde los datos del turno
+            // - Si no → enviarlo tal cual está almacenado (confirmaciones, cancelaciones, etc.)
+            let mensaje: string
+            if (notif.mensaje?.includes('[RECORDATORIO')) {
+                if (!turno?.paciente) {
+                    console.error(`❌ Notificación ${notif.id_notificacion} recordatorio sin datos de turno`)
+                    await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
+                    fallidos++
+                    continue
+                }
+                const turnoData: TurnoData = {
+                    pacienteNombre: turno.paciente.nombre || 'Paciente',
+                    pacienteApellido: turno.paciente.apellido || '',
+                    telefono,
+                    fecha: formatearFecha(turno.fecha),
+                    hora: (turno.hora || '').substring(0, 5),
+                    profesional: turno.especialista
+                        ? `${turno.especialista.nombre} ${turno.especialista.apellido}`
+                        : 'Profesional',
+                    especialidad: turno.especialidad?.nombre || 'Consulta',
+                    turnoId: String(notif.id_turno),
+                }
+                mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
+            } else {
+                // Mensaje directo: confirmación Pilates, cancelación, modificación, etc.
+                mensaje = notif.mensaje || ''
+                if (!mensaje) {
+                    console.error(`❌ Notificación ${notif.id_notificacion} sin texto de mensaje`)
+                    await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
+                    fallidos++
+                    continue
+                }
             }
 
-            const mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
-
-            console.log(`📤 [${i + 1}/${pendientes.length}] Enviando recordatorio a ${turnoData.telefono}`)
+            console.log(`📤 [${i + 1}/${pendientes.length}] Enviando a ${telefono}`)
 
             if (process.env.WHATSAPP_ENABLED !== 'true') {
-                console.log(`⚠️ [DEV] Envío bloqueado (WHATSAPP_ENABLED no activo). Destinatario: ${turnoData.telefono}`)
+                console.log(`⚠️ [DEV] Envío bloqueado (WHATSAPP_ENABLED no activo). Destinatario: ${telefono}`)
                 await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
                 fallidos++
                 continue
             }
 
-        const envio = await sendQueued({ to: turnoData.telefono, text: mensaje })
+        const envio = await sendQueued({ to: telefono, text: mensaje })
 
             if (envio.success) {
                 console.log(`✅ Recordatorio ${notif.id_notificacion} enviado`)
