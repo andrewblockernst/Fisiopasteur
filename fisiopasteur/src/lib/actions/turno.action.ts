@@ -654,7 +654,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
 }
 
 // Eliminar un turno (soft delete - cambia estado a "eliminado")
-export async function eliminarTurno(id: number) {
+export async function eliminarTurno(id: number, opciones?: { notificar?: boolean }) {
   const supabase = await createClient();
 
   try {
@@ -694,9 +694,9 @@ export async function eliminarTurno(id: number) {
 
     console.log(`✅ Turno ${id} marcado como eliminado (soft delete)`);
 
-    // Enviar aviso de cancelación por WhatsApp
+    // Enviar aviso de cancelación por WhatsApp (salvo que se indique notificar: false)
     const paciente = turnoVerificado.paciente as any;
-    if (paciente?.telefono) {
+    if (paciente?.telefono && opciones?.notificar !== false) {
       after(async () => {
         try {
           const especialista = turnoVerificado.especialista as any;
@@ -2115,6 +2115,59 @@ export async function notificarCancelacionPilates(turnoId: number) {
     console.error("Error en notificarCancelacionPilates:", error);
     return { success: false, error: "Error al enviar notificación" };
   }
+}
+
+/**
+ * Enviar cancelación de clase Pilates a múltiples pacientes con 6s de pausa entre cada uno.
+ * Llama con los datos ya disponibles en el frontend para evitar consultas extra a la BD.
+ */
+export async function notificarCancelacionesPilates(
+  notifs: Array<{ nombre: string; telefono: string; fecha: string; hora: string }>
+) {
+  if (!notifs?.length) return { success: true };
+  after(async () => {
+    for (let i = 0; i < notifs.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 6000));
+      const n = notifs[i];
+      try {
+        const mensaje = `Hola ${n.nombre}, tu clase de Pilates del ${n.fecha} a las ${n.hora}hs fue cancelada.\n\nSi tenés alguna duda, comunicate con nosotros.`;
+        const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
+        await enviarMensajePersonalizado(n.telefono, mensaje);
+        console.log(`✅ [CancelPilates] Aviso enviado a ${n.telefono}`);
+      } catch (err) {
+        console.error("[Pilates] Error enviando notif cancelación:", err);
+      }
+    }
+  });
+  return { success: true };
+}
+
+/**
+ * Enviar aviso de modificación de turno a múltiples pacientes Pilates con 6s de pausa entre cada uno.
+ */
+export async function notificarModificacionesPilates(
+  notifs: Array<{
+    telefono: string;
+    nombrePaciente: string;
+    anterior: SnapshotTurnoParaAviso;
+    actual: SnapshotTurnoParaAviso;
+  }>
+) {
+  if (!notifs?.length) return { success: true };
+  after(async () => {
+    for (let i = 0; i < notifs.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 6000));
+      const n = notifs[i];
+      try {
+        const { enviarAvisoModificacionTurno } = await import("@/lib/services/whatsapp-bot.service");
+        await enviarAvisoModificacionTurno(n);
+        console.log(`✅ [ModifPilates] Aviso enviado a ${n.telefono}`);
+      } catch (err) {
+        console.error("[Pilates] Error enviando notif modificación:", err);
+      }
+    }
+  });
+  return { success: true };
 }
 
 // =====================================
