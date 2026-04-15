@@ -13,24 +13,49 @@ app.use(express.urlencoded({ extended: true }))
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// ===== RATE LIMITER WASENDER (1 mensaje cada 5 segundos) =====
-// WaSender "Account Protection" rechaza envíos más rápidos que 5s entre sí.
-// Este mutex serializa todos los envíos a través de los endpoints HTTP.
-let ultimoEnvioMs = 0
-const INTERVALO_WASENDER_MS = 5500 // 5.5s para tener margen
+// ===== QUEUE DE MENSAJES WASENDER =====
+// WaSender "Account Protection": máximo 1 mensaje cada 5 segundos.
+// Usamos una cola FIFO que procesa los mensajes de a uno con 6s de pausa entre cada uno.
+// Los endpoints HTTP responden 200 inmediatamente (el envío ocurre en background).
+// El procesador de recordatorios autónomo usa sendQueued() y espera el resultado real.
 
-async function sendWithRateLimit(params: { to: string; text: string; media?: string }) {
-    const ahora = Date.now()
-    const transcurrido = ahora - ultimoEnvioMs
+const SEND_INTERVAL_MS = 6000
 
-    if (ultimoEnvioMs > 0 && transcurrido < INTERVALO_WASENDER_MS) {
-        const espera = INTERVALO_WASENDER_MS - transcurrido
-        console.log(`⏳ Rate limit WaSender: esperando ${espera}ms antes de enviar a ${params.to}`)
-        await delay(espera)
+interface QueueEntry {
+    params: { to: string; text: string; media?: string }
+    resolve: (result: any) => void
+    reject: (error: any) => void
+}
+
+const msgQueue: QueueEntry[] = []
+let queueRunning = false
+
+async function drainQueue() {
+    if (queueRunning) return
+    queueRunning = true
+    while (msgQueue.length > 0) {
+        const entry = msgQueue.shift()!
+        console.log(`📤 [Queue] Enviando a ${entry.params.to} (${msgQueue.length} en espera)`)
+        try {
+            const result = await waSenderService.sendMessage(entry.params)
+            entry.resolve(result)
+        } catch (err) {
+            entry.reject(err)
+        }
+        if (msgQueue.length > 0) {
+            console.log(`⏳ [Queue] Pausa ${SEND_INTERVAL_MS}ms antes del próximo envío...`)
+            await delay(SEND_INTERVAL_MS)
+        }
     }
+    queueRunning = false
+}
 
-    ultimoEnvioMs = Date.now()
-    return waSenderService.sendMessage(params)
+// Encola un mensaje y devuelve una promesa que resuelve cuando el mensaje fue enviado.
+function sendQueued(params: { to: string; text: string; media?: string }): Promise<any> {
+    return new Promise((resolve, reject) => {
+        msgQueue.push({ params, resolve, reject })
+        drainQueue() // no-await: arranca la cola sin bloquear
+    })
 }
 
 // Tipos para los datos del turno
@@ -181,7 +206,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 continue
             }
 
-        const envio = await sendWithRateLimit({ to: turnoData.telefono, text: mensaje })
+        const envio = await sendQueued({ to: turnoData.telefono, text: mensaje })
 
             if (envio.success) {
                 console.log(`✅ Recordatorio ${notif.id_notificacion} enviado`)
@@ -193,7 +218,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 fallidos++
             }
 
-            // ⏰ El rate limit ya lo maneja sendWithRateLimit (5.5s automático)
+            // ⏰ El rate limit lo maneja la cola (sendQueued)
         }
 
         console.log(`✨ Completado en ${Date.now() - startTime}ms: ${enviados} enviados, ${fallidos} fallidos`)
@@ -259,23 +284,12 @@ app.post('/api/turno/confirmar', async (req, res) => {
         
         const mensaje = formatearMensajeTurno(datosNormalizados, 'confirmacion')
         
-        console.log(`📤 Enviando confirmación a ${telefono}`)
-        
-        // Enviar mensaje usando WaSenderAPI (con rate limit)
-        const resultado = await sendWithRateLimit({
-            to: telefono,
-            text: mensaje
-        })
+        console.log(`📤 Encolando confirmación para ${telefono}`)
+        sendQueued({ to: telefono, text: mensaje }) // fire-and-forget
 
-        if (!resultado.success) {
-            throw new Error(resultado.error || 'Error enviando mensaje')
-        }
-
-        console.log(`✅ Confirmación enviada exitosamente`)
-        
-        return res.status(200).json({ 
-            status: 'success', 
-            message: 'Confirmación enviada',
+        return res.status(200).json({
+            status: 'success',
+            message: 'Confirmación encolada',
             turnoId: turnoData.turnoId || turnoData.id_turno
         })
         
@@ -320,23 +334,12 @@ app.post('/api/turno/recordatorio', async (req, res) => {
         
         const mensaje = formatearMensajeTurno(datosNormalizados, 'recordatorio')
         
-        console.log(`📤 Enviando recordatorio a ${telefono}`)
-        
-        // Enviar mensaje usando WaSenderAPI (con rate limit)
-        const resultado = await sendWithRateLimit({
-            to: telefono,
-            text: mensaje
-        })
+        console.log(`📤 Encolando recordatorio para ${telefono}`)
+        sendQueued({ to: telefono, text: mensaje }) // fire-and-forget
 
-        if (!resultado.success) {
-            throw new Error(resultado.error || 'Error enviando mensaje')
-        }
-
-        console.log(`✅ Recordatorio enviado exitosamente`)
-        
-        return res.status(200).json({ 
-            status: 'success', 
-            message: 'Recordatorio enviado',
+        return res.status(200).json({
+            status: 'success',
+            message: 'Recordatorio encolado',
             turnoId: turnoData.turnoId
         })
         
@@ -362,25 +365,17 @@ app.post('/api/mensaje/enviar', async (req, res) => {
             })
         }
         
-        const resultado = await sendWithRateLimit({
-            to: telefono,
-            text: mensaje,
-            media: media
+        sendQueued({ to: telefono, text: mensaje, media }) // fire-and-forget
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Mensaje encolado'
         })
 
-        if (!resultado.success) {
-            throw new Error(resultado.error || 'Error enviando mensaje')
-        }
-        
-        return res.status(200).json({ 
-            status: 'success', 
-            message: 'Mensaje enviado correctamente'
-        })
-        
     } catch (error) {
-        console.error('❌ Error enviando mensaje:', error)
-        return res.status(500).json({ 
-            status: 'error', 
+        console.error('❌ Error encolando mensaje:', error)
+        return res.status(500).json({
+            status: 'error',
             message: 'Error interno del servidor'
         })
     }
