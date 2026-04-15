@@ -11,6 +11,28 @@ const app = express()
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// ===== RATE LIMITER WASENDER (1 mensaje cada 5 segundos) =====
+// WaSender "Account Protection" rechaza envíos más rápidos que 5s entre sí.
+// Este mutex serializa todos los envíos a través de los endpoints HTTP.
+let ultimoEnvioMs = 0
+const INTERVALO_WASENDER_MS = 5500 // 5.5s para tener margen
+
+async function sendWithRateLimit(params: { to: string; text: string; media?: string }) {
+    const ahora = Date.now()
+    const transcurrido = ahora - ultimoEnvioMs
+
+    if (ultimoEnvioMs > 0 && transcurrido < INTERVALO_WASENDER_MS) {
+        const espera = INTERVALO_WASENDER_MS - transcurrido
+        console.log(`⏳ Rate limit WaSender: esperando ${espera}ms antes de enviar a ${params.to}`)
+        await delay(espera)
+    }
+
+    ultimoEnvioMs = Date.now()
+    return waSenderService.sendMessage(params)
+}
+
 // Tipos para los datos del turno
 interface TurnoData {
     pacienteNombre: string
@@ -60,8 +82,6 @@ const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recorda
 // ===== SISTEMA DE RECORDATORIOS AUTOMÁTICOS =====
 
 let recordatoriosInterval: NodeJS.Timeout | null = null
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 const formatearFecha = (fecha: string): string => {
     const [year, month, day] = fecha.split('-')
@@ -161,7 +181,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 continue
             }
 
-        const envio = await waSenderService.sendMessage({ to: turnoData.telefono, text: mensaje })
+        const envio = await sendWithRateLimit({ to: turnoData.telefono, text: mensaje })
 
             if (envio.success) {
                 console.log(`✅ Recordatorio ${notif.id_notificacion} enviado`)
@@ -173,11 +193,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 fallidos++
             }
 
-            // ⏰ Rate limit WaSender Basic: 5s entre mensajes
-            if (i < pendientes.length - 1) {
-                console.log(`⏳ Esperando 5s (rate limit WaSender)...`)
-                await delay(5000)
-            }
+            // ⏰ El rate limit ya lo maneja sendWithRateLimit (5.5s automático)
         }
 
         console.log(`✨ Completado en ${Date.now() - startTime}ms: ${enviados} enviados, ${fallidos} fallidos`)
@@ -245,16 +261,16 @@ app.post('/api/turno/confirmar', async (req, res) => {
         
         console.log(`📤 Enviando confirmación a ${telefono}`)
         
-        // Enviar mensaje usando WaSenderAPI
-        const resultado = await waSenderService.sendMessage({
+        // Enviar mensaje usando WaSenderAPI (con rate limit)
+        const resultado = await sendWithRateLimit({
             to: telefono,
             text: mensaje
         })
-        
+
         if (!resultado.success) {
             throw new Error(resultado.error || 'Error enviando mensaje')
         }
-        
+
         console.log(`✅ Confirmación enviada exitosamente`)
         
         return res.status(200).json({ 
@@ -306,16 +322,16 @@ app.post('/api/turno/recordatorio', async (req, res) => {
         
         console.log(`📤 Enviando recordatorio a ${telefono}`)
         
-        // Enviar mensaje usando WaSenderAPI
-        const resultado = await waSenderService.sendMessage({
+        // Enviar mensaje usando WaSenderAPI (con rate limit)
+        const resultado = await sendWithRateLimit({
             to: telefono,
             text: mensaje
         })
-        
+
         if (!resultado.success) {
             throw new Error(resultado.error || 'Error enviando mensaje')
         }
-        
+
         console.log(`✅ Recordatorio enviado exitosamente`)
         
         return res.status(200).json({ 
@@ -346,12 +362,12 @@ app.post('/api/mensaje/enviar', async (req, res) => {
             })
         }
         
-        const resultado = await waSenderService.sendMessage({
+        const resultado = await sendWithRateLimit({
             to: telefono,
             text: mensaje,
             media: media
         })
-        
+
         if (!resultado.success) {
             throw new Error(resultado.error || 'Error enviando mensaje')
         }
