@@ -657,10 +657,20 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
 export async function eliminarTurno(id: number) {
   const supabase = await createClient();
 
-  try {    // Verificar que el turno pertenece a esta organización antes de eliminar
+  try {
+    // Obtener datos completos del turno antes de eliminar (necesario para la notificación)
     const { data: turnoVerificado, error: errorVerificar } = await supabase
       .from("turno")
-      .select("id_turno, estado")
+      .select(`
+        id_turno,
+        estado,
+        fecha,
+        hora,
+        paciente:id_paciente(nombre, apellido, telefono),
+        especialista:id_especialista(nombre, apellido),
+        especialidad:id_especialidad(nombre),
+        box:id_box(nombre)
+      `)
       .eq("id_turno", id)
       .single();
 
@@ -683,6 +693,46 @@ export async function eliminarTurno(id: number) {
     }
 
     console.log(`✅ Turno ${id} marcado como eliminado (soft delete)`);
+
+    // Enviar aviso WhatsApp de cancelación (si el paciente tiene teléfono)
+    const paciente = turnoVerificado.paciente as any;
+    if (paciente?.telefono) {
+      after(async () => {
+        try {
+          const { enviarMensajePersonalizado } = await import(
+            "@/lib/services/whatsapp-bot.service"
+          );
+
+          const especialista = turnoVerificado.especialista as any;
+          const especialidad = turnoVerificado.especialidad as any;
+          const box = turnoVerificado.box as any;
+
+          const fechaFormateada = turnoVerificado.fecha
+            ? turnoVerificado.fecha.split("-").reverse().join("/")
+            : "—";
+          const horaFormateada = turnoVerificado.hora?.substring(0, 5) ?? "—";
+          const nombrePaciente = `${paciente.nombre ?? ""} ${paciente.apellido ?? ""}`.trim();
+          const boxLinea = box?.nombre ? `\n📦 Box: ${box.nombre}` : "";
+
+          const mensaje = `❌ *Turno cancelado*
+
+Hola ${nombrePaciente},
+
+Tu turno en *Fisiopasteur* fue cancelado.
+
+📅 ${fechaFormateada} — 🕐 ${horaFormateada}hs
+👤 ${especialista ? `${especialista.nombre} ${especialista.apellido}` : "Profesional"}
+🩺 ${especialidad?.nombre ?? "Consulta"}${boxLinea}
+
+📍 Pasteur 206, Libertador San Martín
+Ante cualquier duda, comunicate con el centro.`;
+
+          await enviarMensajePersonalizado(paciente.telefono, mensaje);
+        } catch (err) {
+          console.error("[WhatsApp] Error enviando aviso cancelación turno:", err);
+        }
+      });
+    }
 
     return { success: true };
   } catch (error) {
