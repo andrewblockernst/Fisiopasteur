@@ -2072,13 +2072,10 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
  */
 export async function notificarParticipantesPilates(turnosCreados: any[]) {
   if (!turnosCreados?.length) return { success: true };
-  try {
+  after(async () => {
     await procesarNotificacionesRepeticion(turnosCreados);
-    return { success: true };
-  } catch (error) {
-    console.error("Error notificando participantes Pilates:", error);
-    return { success: false, error: "Error enviando notificaciones" };
-  }
+  });
+  return { success: true };
 }
 
 /**
