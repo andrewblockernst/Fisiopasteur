@@ -7,7 +7,7 @@ import { OcupacionBoxes } from '@/componentes/dashboard/ocupacion-boxes';
 import {
   obtenerProximosTurnos,
   obtenerOcupacionBoxes,
-  obtenerNombreOrganizacion,
+  obtenerNombreEspecialista, // <- Agregamos esta función
   type ProximoTurno,
   type OcupacionBox,
 } from '@/lib/actions/dashboard.action';
@@ -15,17 +15,17 @@ import {
 export default function Inicio() {
   const [proximosTurnos, setProximosTurnos] = useState<ProximoTurno[]>([]);
   const [ocupacionBoxes, setOcupacionBoxes] = useState<OcupacionBox[]>([]);
-  const [nombreOrganizacion, setNombreOrganizacion] = useState<string>("");
+  const [nombreEspecialista, setNombreEspecialista] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const cargarDatos = async () => {
       setLoading(true);
       try {
-        const [turnosData, boxesResult, nombreOrganizacionData] = await Promise.all([
+        const [turnosData, boxesResult, nombreData] = await Promise.all([
           obtenerProximosTurnos(),
           obtenerOcupacionBoxes(),
-          obtenerNombreOrganizacion(),
+          obtenerNombreEspecialista(), // <- Llamamos a la nueva función
         ]);
 
         setProximosTurnos(turnosData);
@@ -34,7 +34,7 @@ export default function Inicio() {
             setOcupacionBoxes(boxesResult.data);
         }
         
-        setNombreOrganizacion(nombreOrganizacionData);
+        setNombreEspecialista(nombreData); // <- Guardamos el resultado
       } catch (error) {
         console.error('Error cargando datos del dashboard:', error);
       } finally {
@@ -60,7 +60,7 @@ export default function Inicio() {
           ) : (
             <>
               <h1 className="text-3xl font-bold text-gray-900 text-center md:text-left">
-                Bienvenido a {nombreOrganizacion}
+                Bienvenido {nombreEspecialista}
               </h1>
             </>
           )}

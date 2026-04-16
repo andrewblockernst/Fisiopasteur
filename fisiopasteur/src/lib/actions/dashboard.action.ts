@@ -1,4 +1,4 @@
- "use server";
+"use server";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
@@ -51,6 +51,22 @@ export interface OcupacionBox {
 
 export async function obtenerNombreOrganizacion(): Promise<string> {
   return "Fisiopasteur";
+}
+
+// Añadir esta función en src/lib/actions/dashboard.action.ts
+export async function obtenerNombreEspecialista(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) return "Especialista";
+
+  const { data } = await supabase
+    .from("usuario")
+    .select("nombre")
+    .eq("id_usuario", user.id)
+    .single();
+
+  return data?.nombre || "Especialista";
 }
 
 // ✅ Obtener KPIs por periodo con historial

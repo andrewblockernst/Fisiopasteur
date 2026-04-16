@@ -5,12 +5,11 @@ import { PerfilCompleto, actualizarPerfil, obtenerPreciosUsuarioEspecialidades, 
 import { useToastStore } from '@/stores/toast-store';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Pencil, X, Phone, CalendarDays, Mail, User, CircleDollarSign, ChevronDown, LogOut,
-  Palette, Stethoscope, Award, Briefcase
+  ArrowLeft, Pencil, X, Phone, Mail, CircleDollarSign, ChevronDown, LogOut,
+  Palette
 } from 'lucide-react';
 import Button from '../boton';
 import { cerrarSesionServer } from '@/lib/actions/logOut.action';
-import { getSupabaseClient } from '@/lib/supabase/client';
 import EditarPerfilDialog from './editarperfil-dialog';
 import { formatoNumeroTelefono, formatARS } from '@/lib/utils';
 import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
