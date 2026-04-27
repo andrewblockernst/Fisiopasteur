@@ -8,7 +8,7 @@ import type { Database } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
 import { snapshotDesdeTurnoRelacionado } from "@/lib/utils/whatsapp.utils";
-import { nowIso, todayYmd } from "@/lib/dayjs";
+import { dayjs, nowIso, todayYmd } from "@/lib/dayjs";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
@@ -770,13 +770,23 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
 }
 
 // Eliminar un turno (soft delete - cambia estado a "eliminado")
-export async function eliminarTurno(id: number) {
+export async function eliminarTurno(id: number, opciones?: { notificar?: boolean }) {
   const supabase = await createClient();
 
-  try {    // Verificar que el turno pertenece a esta organización antes de eliminar
+  try {
+    // Obtener datos completos del turno antes de eliminar (necesario para la notificación)
     const { data: turnoVerificado, error: errorVerificar } = await supabase
       .from("turno")
-      .select("id_turno, estado")
+      .select(`
+        id_turno,
+        estado,
+        fecha,
+        hora,
+        paciente:id_paciente(nombre, apellido, telefono),
+        especialista:id_especialista(nombre, apellido),
+        especialidad:id_especialidad(nombre),
+        box:id_box(nombre)
+      `)
       .eq("id_turno", id)
       .single();
 
@@ -799,6 +809,32 @@ export async function eliminarTurno(id: number) {
     }
 
     console.log(`✅ Turno ${id} marcado como eliminado (soft delete)`);
+
+    // Enviar aviso de cancelación por WhatsApp (salvo que se indique notificar: false)
+    const paciente = turnoVerificado.paciente as any;
+    if (paciente?.telefono && opciones?.notificar !== false) {
+      after(async () => {
+        try {
+          const especialista = turnoVerificado.especialista as any;
+          const especialidad = turnoVerificado.especialidad as any;
+          const box = turnoVerificado.box as any;
+          const fechaFormateada = turnoVerificado.fecha
+            ? turnoVerificado.fecha.split("-").reverse().join("/")
+            : "—";
+          const horaFormateada = turnoVerificado.hora?.substring(0, 5) ?? "—";
+          const nombrePaciente = `${paciente.nombre ?? ""} ${paciente.apellido ?? ""}`.trim();
+          const boxLinea = box?.nombre ? `\n📦 Box: ${box.nombre}` : "";
+
+          const mensaje = `❌ *Turno cancelado*\n\nHola ${nombrePaciente},\n\nTu turno en *Fisiopasteur* fue cancelado.\n\n📅 ${fechaFormateada} — 🕐 ${horaFormateada}hs\n👤 ${especialista ? `${especialista.nombre} ${especialista.apellido}` : "Profesional"}\n🩺 ${especialidad?.nombre ?? "Consulta"}${boxLinea}\n\n📍 Pasteur 206, Libertador San Martín\nAnte cualquier duda, comunicate con el centro.`;
+
+          const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
+          await enviarMensajePersonalizado(String(paciente.telefono).trim(), mensaje);
+          console.log(`✅ [Cancelación] Aviso enviado a ${paciente.telefono}`);
+        } catch (err) {
+          console.error("[WhatsApp] Error enviando aviso cancelación:", err);
+        }
+      });
+    }
 
     return { success: true };
   } catch (error) {
@@ -2100,9 +2136,11 @@ export async function crearTurnosEnLote(turnos: Array<{
       }
     }
 
-    // Procesar notificaciones agrupadas de confirmación
+    // Procesar notificaciones agrupadas de confirmación (después de responder al usuario)
     if (turnosCreados.length > 0 && opciones?.enviarNotificacion !== false) {
-      await procesarNotificacionesRepeticion(turnosCreados);
+      after(async () => {
+        await procesarNotificacionesRepeticion(turnosCreados);
+      });
     }
 
     return {
@@ -2139,8 +2177,11 @@ async function procesarNotificacionesRepeticion(turnos: any[]) {
       return acc;
     }, {});
 
-    // Enviar notificación agrupada por cada paciente
-    for (const [id_paciente, turnosPaciente] of Object.entries(turnosPorPaciente)) {
+    // Enviar notificación agrupada por cada paciente con 6s de pausa entre cada uno
+    const entries = Object.entries(turnosPorPaciente);
+    for (let i = 0; i < entries.length; i++) {
+      const [id_paciente, turnosPaciente] = entries[i];
+      if (i > 0) await new Promise(resolve => setTimeout(resolve, 6000));
       await enviarNotificacionGrupal(id_paciente, turnosPaciente);
     }
   } catch (error) {
@@ -2148,65 +2189,25 @@ async function procesarNotificacionesRepeticion(turnos: any[]) {
   }
 }
 
-// ✅ FUNCIÓN SIMPLIFICADA - Solo delega al servicio de WhatsApp
 async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
   try {
-    const supabase = await createClient();    // 1. Obtener datos del paciente
+    const supabase = await createClient();
     const { data: paciente } = await supabase
       .from("paciente")
       .select("nombre, telefono")
       .eq("id_paciente", parseInt(id_paciente))
       .single();
 
-    if (!paciente || !paciente.telefono) {
-      console.error("No se pudieron obtener datos del paciente o no tiene teléfono");
+    if (!paciente?.telefono) {
+      console.error("Paciente sin teléfono, se omite la notificación Pilates");
       return;
     }
 
-    // 2. Registrar notificación en BD - ✅ CORRECCIÓN: Agregar id_organizacion
-    const { data: notificacion } = await supabase
-      .from("notificacion")
-      .insert({
-        id_turno: turnos[0].id_turno,
-        mensaje: `Confirmación de ${turnos.length} turnos de Pilates`,
-        medio: "whatsapp",
-        telefono: paciente.telefono,
-        estado: "pendiente",
-      })
-      .select()
-      .single();
-
-    // 3. Importar y llamar al servicio de WhatsApp (que tiene toda la lógica)
-    const whatsappService = await import('../services/whatsapp-bot.service');
-    const resultado = await whatsappService.enviarNotificacionGrupal(
-      paciente.telefono,
-      paciente.nombre,
-      turnos
-    );
-
-    // 4. Actualizar estado según resultado
-    if (resultado.status === 'success') {
-      if (notificacion) {
-        await supabase
-          .from("notificacion")
-          .update({
-            estado: "enviada",
-            fecha_envio: nowIso()
-          })
-          .eq("id_notificacion", notificacion.id_notificacion);
-      }
-    } else {
-      console.error(`❌ Error enviando notificación agrupada: ${resultado.message}`);
-
-      if (notificacion) {
-        await supabase
-          .from("notificacion")
-          .update({ estado: "fallida" })
-          .eq("id_notificacion", notificacion.id_notificacion);
-      }
-    }
+    const { enviarNotificacionGrupal: enviarGrupal } = await import("@/lib/services/whatsapp-bot.service");
+    await enviarGrupal(paciente.telefono, paciente.nombre, turnos);
+    console.log(`✅ [Pilates] Confirmación enviada a ${paciente.telefono}`);
   } catch (error) {
-    console.error("Error al enviar notificación agrupada:", error);
+    console.error("Error al enviar notificación Pilates:", error);
   }
 }
 
@@ -2221,13 +2222,10 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
  */
 export async function notificarParticipantesPilates(turnosCreados: any[]) {
   if (!turnosCreados?.length) return { success: true };
-  try {
+  after(async () => {
     await procesarNotificacionesRepeticion(turnosCreados);
-    return { success: true };
-  } catch (error) {
-    console.error("Error notificando participantes Pilates:", error);
-    return { success: false, error: "Error enviando notificaciones" };
-  }
+  });
+  return { success: true };
 }
 
 /**
@@ -2253,9 +2251,10 @@ export async function notificarCancelacionPilates(turnoId: number) {
 
     after(async () => {
       try {
-        const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
         const mensaje = `Hola ${nombrePaciente}, tu clase de Pilates del ${fecha} a las ${hora}hs fue cancelada.\n\nSi tenés alguna duda, comunicate con nosotros.`;
+        const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
         await enviarMensajePersonalizado(telefono, mensaje);
+        console.log(`✅ [CancelPilates] Aviso enviado a ${telefono}`);
       } catch (err) {
         console.error("[Pilates] Error enviando cancelación:", err);
       }
@@ -2266,6 +2265,59 @@ export async function notificarCancelacionPilates(turnoId: number) {
     console.error("Error en notificarCancelacionPilates:", error);
     return { success: false, error: "Error al enviar notificación" };
   }
+}
+
+/**
+ * Enviar cancelación de clase Pilates a múltiples pacientes con 6s de pausa entre cada uno.
+ * Llama con los datos ya disponibles en el frontend para evitar consultas extra a la BD.
+ */
+export async function notificarCancelacionesPilates(
+  notifs: Array<{ nombre: string; telefono: string; fecha: string; hora: string }>
+) {
+  if (!notifs?.length) return { success: true };
+  after(async () => {
+    for (let i = 0; i < notifs.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 6000));
+      const n = notifs[i];
+      try {
+        const mensaje = `Hola ${n.nombre}, tu clase de Pilates del ${n.fecha} a las ${n.hora}hs fue cancelada.\n\nSi tenés alguna duda, comunicate con nosotros.`;
+        const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
+        await enviarMensajePersonalizado(n.telefono, mensaje);
+        console.log(`✅ [CancelPilates] Aviso enviado a ${n.telefono}`);
+      } catch (err) {
+        console.error("[Pilates] Error enviando notif cancelación:", err);
+      }
+    }
+  });
+  return { success: true };
+}
+
+/**
+ * Enviar aviso de modificación de turno a múltiples pacientes Pilates con 6s de pausa entre cada uno.
+ */
+export async function notificarModificacionesPilates(
+  notifs: Array<{
+    telefono: string;
+    nombrePaciente: string;
+    anterior: SnapshotTurnoParaAviso;
+    actual: SnapshotTurnoParaAviso;
+  }>
+) {
+  if (!notifs?.length) return { success: true };
+  after(async () => {
+    for (let i = 0; i < notifs.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, 6000));
+      const n = notifs[i];
+      try {
+        const { enviarAvisoModificacionTurno } = await import("@/lib/services/whatsapp-bot.service");
+        await enviarAvisoModificacionTurno(n);
+        console.log(`✅ [ModifPilates] Aviso enviado a ${n.telefono}`);
+      } catch (err) {
+        console.error("[Pilates] Error enviando notif modificación:", err);
+      }
+    }
+  });
+  return { success: true };
 }
 
 // =====================================
@@ -2619,22 +2671,19 @@ export async function crearPaqueteSesiones(params: {
         const telefonoPaciente = String(turnosCreados[0]?.paciente?.telefono || '').trim();
 
         try {
-          const { enviarNotificacionGrupalTurnos } = await import('@/lib/services/whatsapp-bot.service');
-
           const paciente = (turnosCreados[0] as any).paciente;
           const especialista = (turnosCreados[0] as any).especialista;
 
-          if (paciente?.telefono && especialista) {
-            await enviarNotificacionGrupalTurnos(
-              paciente.telefono,
-              paciente.nombre,
-              turnosCreados,
-              especialista.nombre
-            );
-          }
+          if (!paciente?.telefono) return;
+
+          const { enviarNotificacionGrupalTurnos } = await import("@/lib/services/whatsapp-bot.service");
+          const nombreEspecialista = especialista
+            ? `${especialista.nombre} ${especialista.apellido}`.trim()
+            : undefined;
+          await enviarNotificacionGrupalTurnos(paciente.telefono, paciente.nombre, turnosCreados, nombreEspecialista);
+          console.log(`✅ [Turnos] Confirmación grupal enviada a ${paciente.telefono}`);
         } catch (error) {
-          console.error('Error enviando notificación agrupada:', error);
-          // No fallar la operación por error en notificación
+          console.error('Error enviando notificación de turnos:', error);
         }
 
         try {

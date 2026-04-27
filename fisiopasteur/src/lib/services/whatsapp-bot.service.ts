@@ -8,7 +8,6 @@ import {
   mapearTurnoParaBot,
   type SnapshotTurnoParaAviso,
 } from "@/lib/utils/whatsapp.utils";
-import { getBrandingConfig, getNombreOrganizacion } from "./branding.service";
 
 // Configuración del bot
 const BOT_URL =
@@ -173,18 +172,7 @@ export async function enviarConfirmacionTurno(
     };
   }
 
-  // Obtener branding de la clínica
-  let nombreOrganizacion = 'Centro Médico';
-  try {
-    const brandingResult = await getBrandingConfig();
-    if (brandingResult.success && brandingResult.data) {
-      nombreOrganizacion = brandingResult.data.nombre;
-    }
-  } catch (error) {
-    console.warn('No se pudo obtener branding, usando nombre por defecto');
-  }
-
-  const datosBot = mapearTurnoParaBot(turno, nombreOrganizacion);
+  const datosBot = mapearTurnoParaBot(turno, "Fisiopasteur");
   const resultado = await realizarPeticionBot("/api/turno/confirmar", datosBot);
 
   if (resultado.status === "success") {
@@ -200,7 +188,7 @@ export async function enviarConfirmacionTurno(
 
 /**
  * Enviar recordatorio de turno por WhatsApp
- * ✅ MULTI-ORG: Incluye branding de la organización
+ * Enviar recordatorio de turno por WhatsApp
  */
 export async function enviarRecordatorioTurno(
   turno: TurnoConDetalles,
@@ -215,18 +203,7 @@ export async function enviarRecordatorioTurno(
     };
   }
 
-  // Obtener branding de la clínica
-  let nombreOrganizacion = 'Centro Médico';
-  try {
-    const brandingResult = await getBrandingConfig();
-    if (brandingResult.success && brandingResult.data) {
-      nombreOrganizacion = brandingResult.data.nombre;
-    }
-  } catch (error) {
-    console.warn('No se pudo obtener branding, usando nombre por defecto');
-  }
-
-  const datosBot = mapearTurnoParaBot(turno, nombreOrganizacion);
+  const datosBot = mapearTurnoParaBot(turno, "Fisiopasteur");
   const resultado = await realizarPeticionBot(
     "/api/turno/recordatorio",
     datosBot,
@@ -280,13 +257,6 @@ export async function enviarAvisoModificacionTurno(params: {
     return { status: "error", message: "Sin teléfono" };
   }
 
-  let nombreCentro = "Fisiopasteur";
-  try {
-    nombreCentro = await getNombreOrganizacion();
-  } catch {
-    /* default */
-  }
-
   const linea = (s: SnapshotTurnoParaAviso) => {
     const box = s.boxLabel ? `\n📦 ${s.boxLabel}` : "";
     return `📅 ${s.fecha} — 🕐 ${s.hora}\n👤 ${s.profesional}\n🩺 ${s.especialidad}${box}`;
@@ -296,7 +266,7 @@ export async function enviarAvisoModificacionTurno(params: {
 
 Hola ${nombrePaciente},
 
-Tu turno en *${nombreCentro}* fue actualizado.
+Tu turno en *Fisiopasteur* fue actualizado.
 
 *Antes:*
 ${linea(anterior)}

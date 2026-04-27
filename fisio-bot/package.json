@@ -10,7 +10,8 @@
     "start:prod": "node ./dist/app.js",
     "lint": "eslint . --no-ignore",
     "dev": "npm run lint && nodemon ./src/app-wasender.ts",
-    "build:rollup": "npx rollup -c"
+    "build:rollup": "npx rollup -c",
+    "build": "tsc"
   },
   "keywords": [],
   "dependencies": {
