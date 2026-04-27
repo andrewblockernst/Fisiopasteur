@@ -389,7 +389,8 @@ useEffect(() => {
       // setHorasOcupadas([]);
 
       try {
-        const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha);
+        const pacienteSeleccionadoId = formData.id_paciente ? Number(formData.id_paciente) : undefined;
+        const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha, undefined, pacienteSeleccionadoId);
         if (res.success && res.data) {
           setHorasOcupadas(res.data);
         }
@@ -407,7 +408,7 @@ useEffect(() => {
       console.log(` Horarios ocupados actualizados:`, horasOcupadas);
     }
     
-  }, [formData.id_especialista, formData.fecha]);
+  }, [formData.id_especialista, formData.fecha, formData.id_paciente]);
 
   // ✅ Cargar horarios disponibles por día
   useEffect(() => {
@@ -428,7 +429,8 @@ useEffect(() => {
             const fechaDia = fechaBase.add(diferenciaDias, 'day');
             const fechaFormateada = fechaDia.format('YYYY-MM-DD');
 
-            const res = await obtenerSlotsOcupados(formData.id_especialista, fechaFormateada);
+            const pacienteSeleccionadoId = formData.id_paciente ? Number(formData.id_paciente) : undefined;
+            const res = await obtenerSlotsOcupados(formData.id_especialista, fechaFormateada, undefined, pacienteSeleccionadoId);
             
             let horasOcupadasDia: string[] = [];
             
@@ -459,7 +461,7 @@ useEffect(() => {
     };
 
     cargarHorariosDisponibles();
-  }, [mantenerHorario, diasSeleccionados, formData.id_especialista, formData.fecha]);
+  }, [mantenerHorario, diasSeleccionados, formData.id_especialista, formData.fecha, formData.id_paciente]);
 
   // ✅ VALIDACIÓN EN TIEMPO REAL - Verificar disponibilidad de todos los turnos
   useEffect(() => {
@@ -600,19 +602,8 @@ useEffect(() => {
   // Verificar si una hora específica está disponible
   const esHoraDisponible = (hora: string): boolean => {
     if (!hora || horasOcupadas.length === 0) return true;
-    
-    const inicioNuevoTurno = timeToMinutes(hora);
-    
-    for (let i = 0; i < 4; i++) {
-      // Creamos un clon de la fecha y le sumamos los minutos correspondientes
-      const slotStr = minutesToTime(inicioNuevoTurno + (i * 15));
-    
-      if (horasOcupadas.includes(slotStr)) {
-        return false;
-      }
-    }
-    
-    return true;
+
+    return !horasOcupadas.includes(hora);
   };
 
   // ✅ Generar opciones de hora disponibles (7am - 21pm, cada 15min)
@@ -1015,16 +1006,6 @@ useEffect(() => {
                   containerClassName="relative flex-1"
                   inputClassName="w-full pl-8 pr-2 md:pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                   dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
-                  renderOption={(paciente) => (
-                    <>
-                      <div className="text-sm font-medium">
-                        {paciente.nombre} {paciente.apellido}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
-                      </div>
-                    </>
-                  )}
                 />
                 <button
                   type="button"

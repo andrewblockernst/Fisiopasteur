@@ -2,7 +2,7 @@ create or replace function public.obtener_boxes_disponibles_rpc(
   p_fecha date,
   p_hora time,
   p_turno_id_excluir integer default null,
-  p_minutos_rango integer default 59,
+  p_minutos_rango integer default 14,
   p_id_especialidad_excluir integer default null
 )
 returns table(id_box integer)

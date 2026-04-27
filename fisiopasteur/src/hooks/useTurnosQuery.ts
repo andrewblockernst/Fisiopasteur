@@ -7,6 +7,18 @@ import type { TurnoConDetalles } from '@/stores/turno-store';
 type TurnosFilters = Record<string, any>;
 type EntityMap = Map<string, Record<string, any>>;
 
+export interface TurnosPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface TurnosPaginatedResult {
+  items: TurnoConDetalles[];
+  pagination: TurnosPagination;
+}
+
 // Paso 2: pool global opcional para compartir referencias entre distintas queries.
 const ENABLE_GLOBAL_ENTITY_POOL = true;
 
@@ -114,13 +126,37 @@ async function fetchTurnos(filters?: TurnosFilters): Promise<TurnoConDetalles[]>
     throw new Error(result.error || 'Error al obtener turnos');
   }
 
+  return normalizeTurnos(result.data || []);
+}
+
+async function fetchTurnosPaginated(filters?: TurnosFilters): Promise<TurnosPaginatedResult> {
+  const result = await obtenerTurnosConFiltros(filters);
+  if (!result.success) {
+    throw new Error(result.error || 'Error al obtener turnos');
+  }
+
+  const pageSize = Number(filters?.page_size ?? 20) || 20;
+  const page = Math.max(1, Number(filters?.page ?? 1) || 1);
+
+  return {
+    items: normalizeTurnos(result.data || []),
+    pagination: result.pagination || {
+      page,
+      pageSize,
+      total: Array.isArray(result.data) ? result.data.length : 0,
+      totalPages: 1,
+    },
+  };
+}
+
+function normalizeTurnos(rows: any[]): TurnoConDetalles[] {
   // Paso 1: deduplicacion por respuesta para entidades repetidas.
   const localEspecialistas: EntityMap = new Map();
   const localPacientes: EntityMap = new Map();
   const localBoxes: EntityMap = new Map();
   const localGrupos: EntityMap = new Map();
 
-  return (result.data || []).map((turno: any) => ({
+  return rows.map((turno: any) => ({
     ...turno,
     especialista: internEntity(turno.especialista ? {
       id_usuario: turno.especialista.id_usuario,
@@ -168,6 +204,27 @@ export function useTurnos(options?: {
     refetchOnMount,
     staleTime,
     gcTime: 10 * 60 * 1000, // 10 minutos en caché
+    enabled,
+  });
+}
+
+export function useTurnosPaginated(options?: {
+  filters?: TurnosFilters;
+  enabled?: boolean;
+  refetchOnMount?: boolean;
+}) {
+  const filters = options?.filters;
+  const enabled = options?.enabled ?? true;
+  const refetchOnMount = options?.refetchOnMount ?? false;
+  const staleTime = hasActiveFilters(filters) ? 2 * 60 * 1000 : 5 * 60 * 1000;
+
+  return useQuery({
+    queryKey: turnoKeys.list(filters),
+    queryFn: () => fetchTurnosPaginated(filters),
+    placeholderData: keepPreviousData,
+    refetchOnMount,
+    staleTime,
+    gcTime: 10 * 60 * 1000,
     enabled,
   });
 }

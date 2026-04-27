@@ -90,6 +90,7 @@ const cargarCatalogosTurno = async (): Promise<{ especialistas: EspecialistaAPI[
 
 export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: EditarTurnoModalProps) {
   const ultimaInicializacionRef = useRef<string | null>(null);
+  const inicializacionCompletaRef = useRef(false);
   const [formData, setFormData] = useState({
     fecha: turno.fecha,
     hora: turno.hora.slice(0, 5), // Remover segundos para mostrar solo HH:MM
@@ -136,6 +137,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
   useEffect(() => {
     if (!open) {
       ultimaInicializacionRef.current = null;
+      inicializacionCompletaRef.current = false;
       return;
     }
 
@@ -148,6 +150,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     const cargarDatos = async () => {
       setLoading(true);
       setIsInitializing(true);
+      inicializacionCompletaRef.current = false;
       try {
         const formDataInicial = {
           fecha: turno.fecha,
@@ -211,7 +214,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
         }
 
         if (formDataInicial.id_especialista && formDataInicial.fecha) {
-          const slotsRes = await obtenerSlotsOcupados(formDataInicial.id_especialista, formDataInicial.fecha, turno.id_turno);
+          const pacienteSeleccionadoId = formDataInicial.id_paciente ? Number(formDataInicial.id_paciente) : undefined;
+          const slotsRes = await obtenerSlotsOcupados(formDataInicial.id_especialista, formDataInicial.fecha, turno.id_turno, pacienteSeleccionadoId);
           if (slotsRes.success && slotsRes.data) {
             setHorasOcupadas(slotsRes.data);
           }
@@ -246,6 +250,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       } catch (error) {
         console.error('Error cargando datos:', error);
       } finally {
+        inicializacionCompletaRef.current = true;
         setIsInitializing(false);
         setLoading(false);
       }
@@ -310,7 +315,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
   // Verificar horarios ocupados cuando cambia especialista o fecha
   useEffect(() => {
-    if (isInitializing) return;
+    if (!open || isInitializing || !inicializacionCompletaRef.current) return;
 
     const verificarHorariosOcupados = async () => {
       if (!formData.id_especialista || !formData.fecha) {
@@ -320,7 +325,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
       setVerificandoDisponibilidad(true);
       try {
-        const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha, turno.id_turno);
+        const pacienteSeleccionadoId = formData.id_paciente ? Number(formData.id_paciente) : undefined;
+        const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha, turno.id_turno, pacienteSeleccionadoId);
         if (res.success && res.data) {
           setHorasOcupadas(res.data);
         }
@@ -332,11 +338,11 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
 
     verificarHorariosOcupados();
-  }, [formData.id_especialista, formData.fecha, turno.id_turno, isInitializing]);
+  }, [open, formData.id_especialista, formData.fecha, formData.id_paciente, turno.id_turno]);
 
   // Verificar boxes disponibles cuando cambia fecha y hora
   useEffect(() => {
-    if (isInitializing) return;
+    if (!open || isInitializing || !inicializacionCompletaRef.current) return;
 
     const verificarBoxesDisponibles = async () => {
       if (!formData.fecha || !formData.hora) {
@@ -373,27 +379,13 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
 
     verificarBoxesDisponibles();
-  }, [formData.fecha, formData.hora, boxes, turno.id_turno, formData.id_box, isInitializing]);
+  }, [open, formData.fecha, formData.hora, boxes, turno.id_turno]);
 
   // Función para verificar si una hora específica está disponible
   const esHoraDisponible = (hora: string): boolean => {
     if (!hora || horasOcupadas.length === 0) return true;
-    
-    // Verificar si la hora exacta está ocupada
-    if (horasOcupadas.includes(hora)) return false;
-    
-    // Verificar si hay conflicto con turnos existentes (duración de 1 hora)
-    const inicioNuevoTurno = timeToMinutes(hora);
-    
-    // Verificar conflictos con slots ocupados
-    for (let i = 0; i < 4; i++) { // 4 slots de 15 min = 1 hora
-      const slotStr = minutesToTime(inicioNuevoTurno + (i * 15));
-      if (horasOcupadas.includes(slotStr)) {
-        return false;
-      }
-    }
-    
-    return true;
+
+    return !horasOcupadas.includes(hora);
   };
 
   // Generar opciones de hora disponibles
@@ -697,16 +689,6 @@ const handleSubmit = async () => {
                 containerClassName="relative"
                 inputClassName="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-                renderOption={(paciente) => (
-                  <>
-                    <div className="font-medium">
-                      {paciente.nombre} {paciente.apellido}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
-                    </div>
-                  </>
-                )}
               />
             </div>
 

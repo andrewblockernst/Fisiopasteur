@@ -11,13 +11,153 @@ type Especialista = Tables<"usuario">;
 type EspecialistaInsert = TablesInsert<"usuario">;
 type EspecialistaUpdate = TablesUpdate<"usuario">;
 type UsuarioEspecialidad = Tables<"usuario_especialidad">;
+        
+type EspecialistasStatusFilter = "activos" | "inactivos" | "todos";
+
+type GetEspecialistasOptions = {
+  incluirInactivos?: boolean;
+  search?: string;
+  status?: EspecialistasStatusFilter;
+  page?: number;
+  pageSize?: number;
+};
 
 // Obtener todos los especialistas con sus especialidades
-export async function getEspecialistas({ incluirInactivos = false } = {}): Promise<
-  ActionResult
-> {
+export async function getEspecialistas(options: GetEspecialistasOptions = {}): Promise<ActionResult> {
   try {
     const supabase = await createClient();
+
+    const {
+      incluirInactivos = false,
+      search = "",
+      status,
+      page,
+      pageSize,
+    } = options;
+
+    const hasPaginationParams = page !== undefined || pageSize !== undefined;
+    const safePage = Math.max(1, Number(page ?? 1));
+    const safePageSize = Math.max(1, Number(pageSize ?? 20));
+    const normalizedStatus: EspecialistasStatusFilter = status ?? (incluirInactivos ? "todos" : "activos");
+    const trimmedSearch = search.trim();
+
+    if (trimmedSearch) {
+      const offset = hasPaginationParams ? (safePage - 1) * safePageSize : 0;
+      const maxRows = hasPaginationParams ? safePageSize : 200;
+
+      const { data: rpcRows, error: rpcError } = await (supabase as any).rpc('buscar_especialistas_general', {
+        search_term: trimmedSearch,
+        max_rows: maxRows,
+        p_status: normalizedStatus,
+        p_order_by: 'nombre',
+        p_order_direction: 'asc',
+        p_offset: offset,
+      });
+
+      if (rpcError) {
+        console.error('Error fetching especialistas via RPC buscar_especialistas_general:', rpcError);
+        return { success: false, error: 'Error al obtener especialistas' };
+      }
+
+      const rawRows = (rpcRows ?? []) as Array<{ data?: any; total_count?: number | string | null } | any>;
+      const usuarios = rawRows.map((row) => (row?.data ? row.data : row));
+      const totalCountRaw = rawRows.length > 0 ? (rawRows[0] as any).total_count : undefined;
+      const totalFromRpc = typeof totalCountRaw === 'number'
+        ? totalCountRaw
+        : typeof totalCountRaw === 'string'
+          ? Number(totalCountRaw)
+          : NaN;
+
+      if (!usuarios || usuarios.length === 0) {
+        if (hasPaginationParams) {
+          return {
+            success: true,
+            data: [],
+            pagination: {
+              page: safePage,
+              pageSize: safePageSize,
+              total: 0,
+              totalPages: 1,
+            },
+          } as any;
+        }
+        return { success: true, data: [] };
+      }
+
+      const rolIds = Array.from(new Set(usuarios.map((u) => u.id_rol).filter(Boolean)));
+      const { data: rolesRows } = await supabase
+        .from('rol')
+        .select('id, nombre')
+        .in('id', rolIds);
+      const rolesById = new Map((rolesRows ?? []).map((r: any) => [r.id, r]));
+
+      const usuariosConRol = usuarios.map((u) => ({ ...u, rol: rolesById.get(u.id_rol) || null }));
+
+      const usuariosIds = usuariosConRol.map((u: any) => u.id_usuario);
+
+      const { data: todasEspecialidades } = await supabase
+        .from("usuario_especialidad")
+        .select(`
+          id_usuario,
+          precio_particular,
+          precio_obra_social,
+          activo,
+          especialidad:id_especialidad(
+            id_especialidad,
+            nombre
+          )
+        `)
+        .in("id_usuario", usuariosIds)
+        .eq("activo", true);
+
+      const especialidadesPorUsuario = (todasEspecialidades || []).reduce((acc, item: any) => {
+        if (!acc[item.id_usuario]) {
+          acc[item.id_usuario] = [];
+        }
+        acc[item.id_usuario].push(item);
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      const especialistasConEspecialidades = usuariosConRol.map((usuario: any) => {
+        const especialidades = especialidadesPorUsuario[usuario.id_usuario] || [];
+
+        return {
+          id_usuario: usuario.id_usuario,
+          nombre: usuario.nombre,
+          apellido: usuario.apellido,
+          email: usuario.email,
+          telefono: usuario.telefono,
+          color: usuario.color,
+          activo: usuario.activo,
+          id_rol: usuario.id_rol,
+          rol: usuario.rol,
+          especialidades: especialidades.map((e: any) => ({
+            ...e.especialidad,
+            precio_particular: e.precio_particular,
+            precio_obra_social: e.precio_obra_social
+          })).filter((e: any) => e.id_especialidad),
+          usuario_especialidad: especialidades
+        };
+      });
+
+      if (hasPaginationParams) {
+        const total = Number.isFinite(totalFromRpc)
+          ? Number(totalFromRpc)
+          : especialistasConEspecialidades.length;
+        return {
+          success: true,
+          data: especialistasConEspecialidades,
+          pagination: {
+            page: safePage,
+            pageSize: safePageSize,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+          },
+        } as any;
+      }
+
+      return { success: true, data: especialistasConEspecialidades };
+    }
 
     let query = supabase
       .from("usuario")
@@ -34,16 +174,22 @@ export async function getEspecialistas({ incluirInactivos = false } = {}): Promi
           id,
           nombre
         )
-      `)
+      `, hasPaginationParams ? { count: "exact" } : undefined)
       .in("id_rol", ROLES_ESPECIALISTAS)
       .order("nombre", { ascending: true })
       .order("apellido", { ascending: true });
 
-    if (!incluirInactivos) {
+    if (normalizedStatus === "activos") {
       query = query.eq("activo", true);
+    } else if (normalizedStatus === "inactivos") {
+      query = query.eq("activo", false);
     }
 
-    const { data: usuarios, error } = await query;
+    if (hasPaginationParams) {
+      query = query.range((safePage - 1) * safePageSize, (safePage - 1) * safePageSize + safePageSize - 1);
+    }
+
+    const { data: usuarios, error, count } = await query;
 
     if (error) {
       console.error("Error fetching especialistas:", error);
@@ -102,6 +248,20 @@ export async function getEspecialistas({ incluirInactivos = false } = {}): Promi
         usuario_especialidad: especialidades
       };
     });
+
+    if (hasPaginationParams) {
+      const total = Number(count ?? 0);
+      return {
+        success: true,
+        data: especialistasConEspecialidades,
+        pagination: {
+          page: safePage,
+          pageSize: safePageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+        },
+      } as any;
+    }
 
     return { success: true, data: especialistasConEspecialidades };
   } catch (error) {

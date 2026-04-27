@@ -1,0 +1,558 @@
+nombre_funcion,definicion_completa
+asignar_numero_en_grupo_turno,"CREATE OR REPLACE FUNCTION public.asignar_numero_en_grupo_turno()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+declare
+  ultimo_numero integer;
+begin
+  if new.id_grupo_tratamiento is null then
+    return new;
+  end if;
+
+  -- Bloqueo por grupo para evitar colisiones concurrentes
+  perform 1
+  from public.grupo_tratamiento g
+  where g.id_grupo = new.id_grupo_tratamiento
+  for update;
+
+  if new.numero_en_grupo is null then
+    select coalesce(max(t.numero_en_grupo), 0)
+    into ultimo_numero
+    from public.turno t
+    where t.id_grupo_tratamiento = new.id_grupo_tratamiento;
+
+    new.numero_en_grupo := ultimo_numero + 1;
+  end if;
+
+  return new;
+end;
+$function$
+"
+asignar_precio_turno,"CREATE OR REPLACE FUNCTION public.asignar_precio_turno()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    precio_asignado numeric;
+BEGIN
+    -- Solo asignar si el precio no fue especificado
+    IF NEW.precio IS NULL THEN
+        -- Buscar el precio correspondiente al especialista, especialidad y tipo de plan
+        SELECT
+            CASE
+                WHEN NEW.tipo_plan = 'particular' THEN ue.precio_particular
+                WHEN NEW.tipo_plan = 'obra social' THEN ue.precio_obra_social
+                ELSE NULL
+            END
+        INTO precio_asignado
+        FROM usuario_especialidad ue
+        WHERE ue.id_usuario = NEW.id_especialista
+          AND ue.id_especialidad = NEW.id_especialidad
+        LIMIT 1;
+
+        -- Si encontró el precio, asignarlo
+        IF precio_asignado IS NOT NULL THEN
+            NEW.precio := precio_asignado;
+        ELSE
+            RAISE NOTICE 'No se encontró precio para el especialista %, especialidad %, plan %',
+                NEW.id_especialista, NEW.id_especialidad, NEW.tipo_plan;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+auth_bcrypt_hash,"CREATE OR REPLACE FUNCTION public.auth_bcrypt_hash(pass text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  SELECT crypt(pass, gen_salt('bf'));
+$function$
+"
+buscar_especialistas_general,"CREATE OR REPLACE FUNCTION public.buscar_especialistas_general(search_term text, max_rows integer, p_status text DEFAULT 'activos'::text, p_order_by text DEFAULT 'nombre'::text, p_order_direction text DEFAULT 'asc'::text, p_offset integer DEFAULT 0)
+ RETURNS SETOF usuario
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+DECLARE
+  v_status text := lower(coalesce(p_status, 'activos'));
+  v_order_by text := lower(coalesce(p_order_by, 'nombre'));
+  v_order_direction text := lower(coalesce(p_order_direction, 'asc'));
+  v_limit integer := greatest(coalesce(max_rows, 20), 1);
+  v_offset integer := greatest(coalesce(p_offset, 0), 0);
+BEGIN
+  IF v_status NOT IN ('activos', 'inactivos', 'todos') THEN
+    v_status := 'activos';
+  END IF;
+
+  IF v_order_by NOT IN ('id_usuario', 'nombre', 'apellido', 'email', 'telefono', 'created_at', 'updated_at') THEN
+    v_order_by := 'nombre';
+  END IF;
+
+  IF v_order_direction NOT IN ('asc', 'desc') THEN
+    v_order_direction := 'asc';
+  END IF;
+
+  RETURN QUERY EXECUTE format(
+    'SELECT *
+     FROM usuario
+     WHERE id_rol IN (1, 2)
+       AND (
+         (nombre || '' '' || apellido) ILIKE ''%%'' || $1 || ''%%''
+         OR (apellido || '' '' || nombre) ILIKE ''%%'' || $1 || ''%%''
+         OR coalesce(telefono, '''') ILIKE $1 || ''%%''
+       )
+       AND (
+         $2 = ''todos''
+         OR ($2 = ''activos'' AND activo = true)
+         OR ($2 = ''inactivos'' AND activo = false)
+       )
+     ORDER BY %I %s, id_usuario ASC
+     LIMIT $3 OFFSET $4',
+    v_order_by,
+    v_order_direction
+  )
+  USING search_term, v_status, v_limit, v_offset;
+END;
+$function$
+"
+buscar_especialistas_smart,"CREATE OR REPLACE FUNCTION public.buscar_especialistas_smart(search_term text, max_rows integer)
+ RETURNS SETOF usuario
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT *
+  FROM public.buscar_especialistas_general(
+    search_term,
+    max_rows,
+    'activos',
+    'nombre',
+    'asc',
+    0
+  );
+$function$
+"
+buscar_pacientes_general,"CREATE OR REPLACE FUNCTION public.buscar_pacientes_general(search_term text, max_rows integer, p_status text DEFAULT 'activos'::text, p_order_by text DEFAULT 'apellido'::text, p_order_direction text DEFAULT 'asc'::text, p_offset integer DEFAULT 0)
+ RETURNS TABLE(data paciente, total_count bigint)
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+DECLARE
+  v_status text := lower(coalesce(p_status, 'activos'));
+  v_order_by text := lower(coalesce(p_order_by, 'apellido'));
+  v_order_direction text := lower(coalesce(p_order_direction, 'asc'));
+  v_limit integer := greatest(coalesce(max_rows, 20), 1);
+  v_offset integer := greatest(coalesce(p_offset, 0), 0);
+BEGIN
+  IF v_status NOT IN ('activos', 'inactivos', 'todos') THEN
+    v_status := 'activos';
+  END IF;
+
+  IF v_order_by NOT IN ('id_paciente', 'nombre', 'apellido', 'dni', 'email', 'telefono', 'created_at', 'updated_at') THEN
+    v_order_by := 'apellido';
+  END IF;
+
+  IF v_order_direction NOT IN ('asc', 'desc') THEN
+    v_order_direction := 'asc';
+  END IF;
+
+  RETURN QUERY EXECUTE format(
+    'SELECT p, count(*) OVER()::bigint AS total_count
+     FROM paciente p
+     WHERE (
+       (p.nombre || '' '' || p.apellido) ILIKE ''%%'' || coalesce($1, '''') || ''%%''
+       OR (p.apellido || '' '' || p.nombre) ILIKE ''%%'' || coalesce($1, '''') || ''%%''
+       OR coalesce(p.dni, '''') ILIKE coalesce($1, '''') || ''%%''
+       OR coalesce(p.telefono, '''') ILIKE coalesce($1, '''') || ''%%''
+     )
+     AND (
+       $2 = ''todos''
+       OR ($2 = ''activos'' AND p.activo = true)
+       OR ($2 = ''inactivos'' AND p.activo = false)
+     )
+     ORDER BY p.%I %s, p.id_paciente ASC
+     LIMIT $3 OFFSET $4',
+    v_order_by,
+    v_order_direction
+  )
+  USING search_term, v_status, v_limit, v_offset;
+END;
+$function$
+"
+buscar_pacientes_smart,"CREATE OR REPLACE FUNCTION public.buscar_pacientes_smart(search_term text, max_rows integer, p_status text DEFAULT 'activos'::text, p_order_by text DEFAULT 'nombre'::text, p_order_direction text DEFAULT 'asc'::text, p_offset integer DEFAULT 0)
+ RETURNS SETOF paciente
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+DECLARE
+  v_status text := lower(coalesce(p_status, 'activos'));
+  v_order_by text := lower(coalesce(p_order_by, 'nombre'));
+  v_order_direction text := lower(coalesce(p_order_direction, 'asc'));
+  v_limit integer := greatest(coalesce(max_rows, 20), 1);
+  v_offset integer := greatest(coalesce(p_offset, 0), 0);
+BEGIN
+  IF v_status NOT IN ('activos', 'inactivos', 'todos') THEN
+    v_status := 'activos';
+  END IF;
+
+  IF v_order_by NOT IN (
+    'id_paciente',
+    'nombre',
+    'apellido',
+    'dni',
+    'email',
+    'telefono',
+    'created_at',
+    'updated_at'
+  ) THEN
+    v_order_by := 'nombre';
+  END IF;
+
+  IF v_order_direction NOT IN ('asc', 'desc') THEN
+    v_order_direction := 'asc';
+  END IF;
+
+  RETURN QUERY EXECUTE format(
+    'SELECT *
+     FROM public.paciente p
+     WHERE (
+       (p.nombre || '' '' || p.apellido) ILIKE ''%%'' || $1 || ''%%''
+       OR (p.apellido || '' '' || p.nombre) ILIKE ''%%'' || $1 || ''%%''
+       OR coalesce(p.dni, '''') ILIKE $1 || ''%%''
+       OR coalesce(p.telefono, '''') ILIKE $1 || ''%%''
+     )
+     AND (
+       $2 = ''todos''
+       OR ($2 = ''activos'' AND p.activo = true)
+       OR ($2 = ''inactivos'' AND p.activo = false)
+     )
+     ORDER BY %I %s, p.id_paciente ASC
+     LIMIT $3 OFFSET $4',
+    v_order_by,
+    v_order_direction
+  )
+  USING search_term, v_status, v_limit, v_offset;
+END;
+$function$
+"
+buscar_pacientes_smart,"CREATE OR REPLACE FUNCTION public.buscar_pacientes_smart(search_term text, max_rows integer)
+ RETURNS SETOF paciente
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT *
+  FROM public.buscar_pacientes_smart(
+    search_term,
+    max_rows,
+    'activos',
+    'nombre',
+    'asc',
+    0
+  );
+$function$
+"
+crear_paquete_sesiones_rpc,"CREATE OR REPLACE FUNCTION public.crear_paquete_sesiones_rpc(p_id_paciente integer, p_id_especialista uuid, p_id_especialidad integer, p_fecha_inicio date, p_tipo_plan text, p_titulo_tratamiento text DEFAULT NULL::text, p_turnos jsonb DEFAULT '[]'::jsonb)
+ RETURNS TABLE(id_turno integer, id_grupo_tratamiento uuid, fecha date, hora time without time zone, id_paciente integer, id_especialista uuid, id_especialidad integer, id_box integer, observaciones text, estado text, tipo_plan text, paciente_nombre text, paciente_apellido text, paciente_telefono text, especialista_nombre text, especialista_apellido text)
+ LANGUAGE plpgsql
+AS $function$
+declare
+  v_id_grupo uuid;
+  v_turno jsonb;
+  v_turno_id integer;
+  v_conflictos text;
+  v_duplicados text;
+  v_paciente_nombre text;
+  v_paciente_apellido text;
+  v_paciente_telefono text;
+  v_especialista_nombre text;
+  v_especialista_apellido text;
+  v_fecha date;
+  v_hora time;
+  v_id_box integer;
+  v_observaciones text;
+  v_estado text;
+  v_tipo_plan text;
+begin
+  if jsonb_typeof(p_turnos) is distinct from 'array' then
+    raise exception 'p_turnos debe ser un array jsonb';
+  end if;
+
+  if jsonb_array_length(p_turnos) = 0 then
+    raise exception 'p_turnos no puede ser vacio';
+  end if;
+
+  select p.nombre, p.apellido, p.telefono
+    into v_paciente_nombre, v_paciente_apellido, v_paciente_telefono
+  from public.paciente p
+  where p.id_paciente = p_id_paciente;
+
+  select u.nombre, u.apellido
+    into v_especialista_nombre, v_especialista_apellido
+  from public.usuario u
+  where u.id_usuario = p_id_especialista;
+
+  -- Serialize creates for same specialist in this transaction window.
+  perform pg_advisory_xact_lock(hashtext('turno_paquete_' || p_id_especialista::text));
+
+  -- Validate overlapping slots inside the payload (14-minute window).
+  with payload as (
+    select
+      row_number() over () as rid,
+      coalesce((t ->> 'fecha')::date, p_fecha_inicio) as fecha,
+      (t ->> 'hora')::time as hora,
+      nullif(t ->> 'id_box', '')::integer as id_box
+    from jsonb_array_elements(p_turnos) as t
+  ),
+  superpuestos as (
+    select
+      to_char(p1.fecha, 'DD/MM/YYYY') || ' ' || to_char(p1.hora, 'HH24:MI') || ' ~ ' || to_char(p2.hora, 'HH24:MI') as slot
+    from payload p1
+    join payload p2
+      on p1.rid < p2.rid
+     and p1.fecha = p2.fecha
+    and p1.hora < (p2.hora + interval '14 minutes')
+    and (p1.hora + interval '14 minutes') > p2.hora
+  )
+  select string_agg(slot, ', ')
+  into v_duplicados
+  from superpuestos;
+
+  if v_duplicados is not null then
+    raise exception 'CONFLICTOS_PAQUETE: hay horarios superpuestos en la solicitud (%).', v_duplicados
+      using errcode = 'P0001';
+  end if;
+
+  -- Validate overlapping collisions against existing appointments (14-minute window).
+  with payload as (
+    select
+      coalesce((t ->> 'fecha')::date, p_fecha_inicio) as fecha,
+      (t ->> 'hora')::time as hora,
+      nullif(t ->> 'id_box', '')::integer as id_box
+    from jsonb_array_elements(p_turnos) as t
+  ),
+  conflictos as (
+    select
+      to_char(p.fecha, 'DD/MM/YYYY') || ' ' || to_char(p.hora, 'HH24:MI') as slot
+    from payload p
+    join public.turno tr
+      on tr.fecha = p.fecha
+     and tr.estado <> 'cancelado'
+     and tr.estado <> 'eliminado'
+     and (
+       tr.id_especialista = p_id_especialista
+       or (p.id_box is not null and tr.id_box = p.id_box)
+     )
+    and tr.hora < (p.hora + interval '14 minutes')
+    and (tr.hora + interval '14 minutes') > p.hora
+    group by p.fecha, p.hora
+  )
+  select string_agg(slot, ', ')
+  into v_conflictos
+  from conflictos;
+
+  if v_conflictos is not null then
+    raise exception 'CONFLICTOS_PAQUETE: los siguientes horarios ya estan ocupados (%).', v_conflictos
+      using errcode = 'P0001';
+  end if;
+
+  if p_titulo_tratamiento is not null and btrim(p_titulo_tratamiento) <> '' then
+    insert into public.grupo_tratamiento (
+      id_paciente,
+      id_especialista,
+      id_especialidad,
+      nombre,
+      fecha_inicio,
+      tipo_plan,
+      cantidad_turnos_planificados
+    )
+    values (
+      p_id_paciente,
+      p_id_especialista,
+      p_id_especialidad,
+      p_titulo_tratamiento,
+      p_fecha_inicio,
+      p_tipo_plan,
+      jsonb_array_length(p_turnos)
+    )
+    returning id_grupo into v_id_grupo;
+  end if;
+
+  for v_turno in
+    select value from jsonb_array_elements(p_turnos)
+  loop
+    v_fecha := coalesce((v_turno ->> 'fecha')::date, p_fecha_inicio);
+    v_hora := (v_turno ->> 'hora')::time;
+    v_id_box := nullif(v_turno ->> 'id_box', '')::integer;
+    v_observaciones := nullif(v_turno ->> 'observaciones', '');
+    v_estado := coalesce(nullif(v_turno ->> 'estado', ''), 'programado');
+    v_tipo_plan := coalesce(nullif(v_turno ->> 'tipo_plan', ''), p_tipo_plan);
+
+    insert into public.turno (
+      fecha,
+      hora,
+      id_especialista,
+      id_paciente,
+      id_especialidad,
+      id_box,
+      observaciones,
+      estado,
+      tipo_plan,
+      id_grupo_tratamiento
+    )
+    values (
+      v_fecha,
+      v_hora,
+      p_id_especialista,
+      p_id_paciente,
+      p_id_especialidad,
+      v_id_box,
+      v_observaciones,
+      v_estado,
+      v_tipo_plan,
+      v_id_grupo
+    )
+    returning turno.id_turno into v_turno_id;
+
+    id_turno := v_turno_id;
+    id_grupo_tratamiento := v_id_grupo;
+    fecha := v_fecha;
+    hora := v_hora;
+    id_paciente := p_id_paciente;
+    id_especialista := p_id_especialista;
+    id_especialidad := p_id_especialidad;
+    id_box := v_id_box;
+    observaciones := v_observaciones;
+    estado := v_estado;
+    tipo_plan := v_tipo_plan;
+    paciente_nombre := v_paciente_nombre;
+    paciente_apellido := v_paciente_apellido;
+    paciente_telefono := v_paciente_telefono;
+    especialista_nombre := v_especialista_nombre;
+    especialista_apellido := v_especialista_apellido;
+    return next;
+  end loop;
+end;
+$function$
+"
+obtener_boxes_disponibles_rpc,"CREATE OR REPLACE FUNCTION public.obtener_boxes_disponibles_rpc(p_fecha date, p_hora time without time zone, p_turno_id_excluir integer DEFAULT NULL::integer, p_minutos_rango integer DEFAULT 14, p_id_especialidad_excluir integer DEFAULT NULL::integer)
+ RETURNS TABLE(id_box integer)
+ LANGUAGE sql
+ STABLE
+AS $function$
+  with boxes_ocupados as (
+    select distinct t.id_box
+    from public.turno t
+    where t.fecha = p_fecha
+      and t.id_box is not null
+      and t.estado <> 'cancelado'
+      and t.estado <> 'eliminado'
+      and (p_turno_id_excluir is null or t.id_turno <> p_turno_id_excluir)
+      and (p_id_especialidad_excluir is null or t.id_especialidad <> p_id_especialidad_excluir)
+      and (
+        p_hora is null
+        or abs(extract(epoch from (t.hora - p_hora))) <= (greatest(0, p_minutos_rango) * 60)
+      )
+  )
+  select b.id_box
+  from public.box b
+  where b.estado = 'activo'
+    and b.id_box not in (select bo.id_box from boxes_ocupados bo)
+  order by b.numero;
+$function$
+"
+sincronizar_total_turnos_grupo,"CREATE OR REPLACE FUNCTION public.sincronizar_total_turnos_grupo()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+declare
+  grupo_objetivo uuid;
+  total_actual integer;
+begin
+  if tg_op = 'DELETE' then
+    grupo_objetivo := old.id_grupo_tratamiento;
+  else
+    grupo_objetivo := new.id_grupo_tratamiento;
+  end if;
+
+  if grupo_objetivo is not null then
+    select max(t.numero_en_grupo)
+    into total_actual
+    from public.turno t
+    where t.id_grupo_tratamiento = grupo_objetivo
+      and t.estado is distinct from 'eliminado';
+
+    update public.grupo_tratamiento g
+    set cantidad_turnos_planificados = total_actual
+    where g.id_grupo = grupo_objetivo;
+  end if;
+
+  -- Si el turno cambio de grupo, sincronizar tambien el grupo anterior
+  if tg_op = 'UPDATE'
+     and old.id_grupo_tratamiento is distinct from new.id_grupo_tratamiento
+     and old.id_grupo_tratamiento is not null then
+    select max(t.numero_en_grupo)
+    into total_actual
+    from public.turno t
+    where t.id_grupo_tratamiento = old.id_grupo_tratamiento
+      and t.estado is distinct from 'eliminado';
+
+    update public.grupo_tratamiento g
+    set cantidad_turnos_planificados = total_actual
+    where g.id_grupo = old.id_grupo_tratamiento;
+  end if;
+
+  return null;
+end;
+$function$
+"
+update_updated_at_column,"CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"
+validar_turno_unico_por_paciente,"CREATE OR REPLACE FUNCTION public.validar_turno_unico_por_paciente()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.id_paciente is null or new.fecha is null or new.hora is null then
+    return new;
+  end if;
+
+  if new.estado in ('cancelado', 'eliminado') then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and coalesce(old.id_paciente, -1) = coalesce(new.id_paciente, -1)
+     and old.fecha = new.fecha
+     and old.hora = new.hora
+     and coalesce(old.estado, '') = coalesce(new.estado, '') then
+    return new;
+  end if;
+
+  if exists (
+    select 1
+    from public.turno t
+    where t.id_paciente = new.id_paciente
+      and t.fecha = new.fecha
+      and t.hora = new.hora
+      and t.id_turno <> coalesce(new.id_turno, -1)
+      and t.estado not in ('cancelado', 'eliminado')
+  ) then
+    raise exception 'El paciente ya tiene un turno asignado para ese día y hora'
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$function$
+"

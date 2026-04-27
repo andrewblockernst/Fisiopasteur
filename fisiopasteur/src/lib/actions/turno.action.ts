@@ -14,6 +14,56 @@ type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
 type TurnoUpdate = Database["public"]["Tables"]["turno"]["Update"];
 
+const DISPONIBILIDAD_MINUTOS_RANGO = 14;
+
+async function validarTurnoDuplicadoPaciente(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  params: {
+    id_paciente?: number | null;
+    fecha?: string | null;
+    hora?: string | null;
+    id_turno_excluir?: number;
+  },
+) {
+  const idPaciente = params.id_paciente;
+  const fecha = params.fecha;
+  const hora = params.hora ? String(params.hora).substring(0, 5) : null;
+
+  if (!idPaciente || !fecha || !hora) {
+    return { success: true } as const;
+  }
+
+  let query = supabase
+    .from("turno")
+    .select("id_turno")
+    .eq("id_paciente", idPaciente)
+    .eq("fecha", fecha)
+    .eq("hora", `${hora}:00`)
+    .neq("estado", "cancelado")
+    .neq("estado", "eliminado")
+    .limit(1);
+
+  if (params.id_turno_excluir !== undefined) {
+    query = query.neq("id_turno", params.id_turno_excluir);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error validando turno duplicado por paciente:", error);
+    return { success: false, error: error.message } as const;
+  }
+
+  if (data && data.length > 0) {
+    return {
+      success: false,
+      error: "El paciente ya tiene un turno asignado para ese día y hora",
+    } as const;
+  }
+
+  return { success: true } as const;
+}
+
 
 export async function obtenerTurno(id: number): Promise<
   | { success: true; data: any }
@@ -124,7 +174,7 @@ export async function obtenerTurnosParaValidarBoxes(
       p_fecha: fecha,
       p_hora: opciones?.hora ? `${opciones.hora}:00` : null,
       p_turno_id_excluir: opciones?.turnoIdExcluir ?? null,
-      p_minutos_rango: opciones?.minutosRango ?? 59,
+      p_minutos_rango: opciones?.minutosRango ?? DISPONIBILIDAD_MINUTOS_RANGO,
       p_id_especialidad_excluir: idPilates ?? null,
     });
 
@@ -157,10 +207,18 @@ export async function obtenerTurnosConFiltros(filtros?: {
   estados?: string[];
   paciente_id?: number;
   es_pilates?: boolean;
+  page?: number;
+  page_size?: number;
 }) {
   const supabase = await createClient();
 
   try {
+    const allowedPageSizes = [10, 20, 30, 50];
+    const requestedPageSize = Number(filtros?.page_size ?? 20);
+    const pageSize = allowedPageSizes.includes(requestedPageSize) ? requestedPageSize : 20;
+    const page = Math.max(1, Number(filtros?.page ?? 1) || 1);
+    const shouldPaginate = filtros?.page !== undefined || filtros?.page_size !== undefined;
+
     let query = supabase
       .from("turno")
       .select(`
@@ -176,7 +234,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
         especialidad:id_especialidad(id_especialidad, nombre),
         box:id_box(id_box, numero),
         grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
-      `)
+      `, shouldPaginate ? { count: "exact" } : undefined)
       .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
@@ -223,11 +281,33 @@ export async function obtenerTurnosConFiltros(filtros?: {
       query = query.eq("id_paciente", filtros.paciente_id);
     }
 
-    const { data, error } = await query;
+    if (shouldPaginate) {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      query = query.range(from, to);
+    }
+
+    const { data, error, count } = await query;
 
     if (error) {
       console.error("Error al obtener turnos con filtros:", error);
       return { success: false, error: error.message };
+    }
+
+    if (shouldPaginate) {
+      const total = count ?? 0;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+      return {
+        success: true,
+        data: data ?? [],
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages,
+        },
+      };
     }
 
     return { success: true, data };
@@ -288,6 +368,18 @@ export async function crearTurno(
     // ============= VERIFICAR DISPONIBILIDAD CON LÓGICA ESPECIAL PARA PILATES =============
     // ✅ Usar idPilates como especialidad cuando es_pilates=true, independientemente de lo que envíe el frontend
     const especialidadIdEfectiva = (idPilates && datos.es_pilates) ? idPilates : (datos.id_especialidad ?? undefined);
+
+    if (datos.fecha && datos.hora) {
+      const conflictoPaciente = await validarTurnoDuplicadoPaciente(supabase, {
+        id_paciente: datos.id_paciente,
+        fecha: datos.fecha,
+        hora: String(datos.hora),
+      });
+
+      if (!conflictoPaciente.success) {
+        return conflictoPaciente;
+      }
+    }
 
     if (datos.fecha && datos.hora && datos.id_especialista) {
       const disponibilidad = await verificarDisponibilidad(
@@ -446,6 +538,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
       .select(
         `
         id_turno,
+        id_paciente,
         fecha,
         hora,
         id_especialista,
@@ -481,9 +574,12 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
         datos.id_especialista ?? prevTurno.id_especialista;
       const nuevoBox =
         datos.id_box !== undefined ? datos.id_box : prevTurno.id_box;
+      const nuevoPaciente =
+        datos.id_paciente !== undefined ? datos.id_paciente : prevTurno.id_paciente;
       const especialidadId = prevTurno.id_especialidad;
 
       const cambioRelevante =
+        (datos.id_paciente !== undefined && datos.id_paciente !== prevTurno.id_paciente) ||
         (datos.fecha !== undefined && datos.fecha !== prevTurno.fecha) ||
         (datos.hora !== undefined &&
           normalizeHora(datos.hora as string) !==
@@ -491,6 +587,19 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
         (datos.id_especialista !== undefined &&
           datos.id_especialista !== prevTurno.id_especialista) ||
         (datos.id_box !== undefined && datos.id_box !== prevTurno.id_box);
+
+      if (cambioRelevante && nuevaFecha && nuevaHora) {
+        const conflictoPaciente = await validarTurnoDuplicadoPaciente(supabase, {
+          id_paciente: nuevoPaciente,
+          fecha: nuevaFecha,
+          hora: String(nuevaHora),
+          id_turno_excluir: id,
+        });
+
+        if (!conflictoPaciente.success) {
+          return conflictoPaciente;
+        }
+      }
 
       if (cambioRelevante && nuevoEspecialista && nuevaFecha && nuevaHora) {
         const disponibilidad = await verificarDisponibilidadParaActualizacion(
@@ -865,29 +974,66 @@ export async function obtenerAgendaEspecialista(
 export async function obtenerSlotsOcupados(
   especialista_id: string,
   fecha: string,
-  turno_id_excluir?: number
+  turno_id_excluir?: number,
+  paciente_id_seleccionado?: number
 ) {
   const supabase = await createClient();
 
   try {
     const idPilates = await obtenerIdPilates();
 
-    const { data, error } = await supabase
+    let queryEspecialista = supabase
       .from("turno")
       .select("id_turno, hora")
       .eq("id_especialista", especialista_id!)
       .eq("fecha", fecha)
       .neq("estado", "cancelado")
       .neq("estado", "eliminado")
-      .neq("id_especialidad", idPilates)
       .order("hora", { ascending: true });
 
-    if (error) {
-      console.error("Error al obtener slots ocupados:", error);
-      return { success: false, error: error.message };
+    if (idPilates) {
+      queryEspecialista = queryEspecialista.neq("id_especialidad", idPilates);
     }
 
-    // Calcular slots de 15 minutos para cada turno (asumiendo duración de 60 min)
+    const { data: turnosEspecialista, error: errorEspecialista } = await queryEspecialista;
+
+    if (errorEspecialista) {
+      console.error("Error al obtener slots ocupados del especialista:", errorEspecialista);
+      return { success: false, error: errorEspecialista.message };
+    }
+
+    const turnosMap = new Map<number, { id_turno: number; hora: string }>();
+
+    (turnosEspecialista || []).forEach((turno: any) => {
+      turnosMap.set(turno.id_turno, turno);
+    });
+
+    const pacienteId = Number(paciente_id_seleccionado);
+    const hayPacienteSeleccionado = Number.isFinite(pacienteId) && pacienteId > 0;
+
+    if (hayPacienteSeleccionado) {
+      const { data: turnosPaciente, error: errorPaciente } = await supabase
+        .from("turno")
+        .select("id_turno, hora")
+        .eq("id_paciente", pacienteId)
+        .eq("fecha", fecha)
+        .neq("estado", "cancelado")
+        .neq("estado", "eliminado")
+        .order("hora", { ascending: true });
+
+      if (errorPaciente) {
+        console.error("Error al obtener slots ocupados del paciente:", errorPaciente);
+        return { success: false, error: errorPaciente.message };
+      }
+
+      (turnosPaciente || []).forEach((turno: any) => {
+        turnosMap.set(turno.id_turno, turno);
+      });
+    }
+
+    const data = Array.from(turnosMap.values());
+
+    // Con turnos y grilla en multiplos de 15 minutos, el slot ocupado es el slot exacto.
     const slotsOcupados = new Set<string>();
 
     (data || []).forEach((turno: any) => {
@@ -896,17 +1042,9 @@ export async function obtenerSlotsOcupados(
         return;
       }
 
-      const [horas, minutos] = turno.hora.split(":").map(Number);
-
-      // Generar 4 slots de 15 minutos (60 minutos totales)
-      for (let i = 0; i < 4; i++) {
-        const slotDate = new Date();
-        slotDate.setHours(horas, minutos + i * 15, 0, 0);
-
-        const h = slotDate.getHours().toString().padStart(2, "0");
-        const m = slotDate.getMinutes().toString().padStart(2, "0");
-
-        slotsOcupados.add(`${h}:${m}`);
+      const horaTurno = String(turno.hora || "").substring(0, 5);
+      if (horaTurno.length === 5) {
+        slotsOcupados.add(horaTurno);
       }
     });
 
@@ -977,12 +1115,12 @@ export async function verificarDisponibilidad(
   hora: string,
   especialista_id?: string,
   box_id?: number,
-  especialidad_id?: number
+  especialidad_id?: number,
+  es_pilates?: boolean
 ) {
   const supabase = await createClient();
 
   try {
-    const idPilates = await obtenerIdPilates();
 
     let query = supabase
       .from("turno")
@@ -992,10 +1130,6 @@ export async function verificarDisponibilidad(
       .eq("hora", hora)
       .neq("estado", "cancelado")
       .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
-
-    if (box_id) {
-      query = query.eq("id_box", box_id);
-    }
 
     const { data, error } = await query;
     if (error) {
@@ -1141,8 +1275,8 @@ export async function verificarDisponibilidadPaquete(params: {
 
     const fechas = turnosObjetivo.map((t) => t.fecha).sort();
     const minutosObjetivo = turnosObjetivo.map((t) => toMinutes(t.hora));
-    const minMinutos = Math.min(...minutosObjetivo) - 59;
-    const maxMinutos = Math.max(...minutosObjetivo) + 59;
+    const minMinutos = Math.min(...minutosObjetivo) - DISPONIBILIDAD_MINUTOS_RANGO;
+    const maxMinutos = Math.max(...minutosObjetivo) + DISPONIBILIDAD_MINUTOS_RANGO;
 
     let query = supabase
       .from("turno")
@@ -1187,7 +1321,6 @@ export async function verificarDisponibilidadPaquete(params: {
     const ocupadosDetalle = turnosObjetivo
       .map((turnoObjetivo) => {
         const inicioObjetivo = toMinutes(turnoObjetivo.hora);
-        const finObjetivo = inicioObjetivo + 60;
         const existentes = turnosPorFecha.get(turnoObjetivo.fecha) || [];
 
         let conflictoEspecialista = false;
@@ -1202,9 +1335,8 @@ export async function verificarDisponibilidadPaquete(params: {
           }
 
           const inicioExistente = existente.inicio;
-          const finExistente = inicioExistente + 60;
-
-          const haySolapamiento = inicioExistente < finObjetivo && finExistente > inicioObjetivo;
+          const haySolapamiento =
+            Math.abs(inicioExistente - inicioObjetivo) <= DISPONIBILIDAD_MINUTOS_RANGO;
           if (!haySolapamiento) {
             continue;
           }
@@ -1609,9 +1741,13 @@ export async function obtenerPacientes(busqueda?: string, limit?: number) {
 
     // CASO A: Hay búsqueda -> Usamos la función inteligente (RPC)
     if (busqueda && busqueda.length >= 2) {
-      const result = await supabase.rpc('buscar_pacientes_smart', {
+      const result = await (supabase as any).rpc('buscar_pacientes_smart', {
         search_term: busqueda,
-        max_rows: limit
+        max_rows: limit,
+        p_status: 'activos',
+        p_order_by: 'nombre',
+        p_order_direction: 'asc',
+        p_offset: 0,
       });
 
       console.log("Resultado RPC buscar_pacientes_smart:", result);

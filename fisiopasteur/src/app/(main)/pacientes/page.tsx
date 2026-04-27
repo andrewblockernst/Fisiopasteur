@@ -1,8 +1,8 @@
 'use client'
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PacientesTable } from "@/componentes/paciente/paciente-listado";
-import { activarPaciente, getPacientes } from "@/lib/actions/paciente.action";
+import { activarPaciente } from "@/lib/actions/paciente.action";
 import type { Tables } from "@/types/database.types";
 import Button from "@/componentes/boton";
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
@@ -10,49 +10,81 @@ import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialo
 import { Search, Filter } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToastStore } from "@/stores/toast-store";
+import { pacienteKeys, useInvalidatePacientes, usePacientesPaginated } from "@/hooks/usePacientesQuery";
+import PaginacionBar from "@/componentes/paginacion/paginacion-bar";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Filter = 'activos' | 'inactivos' | 'todos';
 type Paciente = Tables<"paciente">;
 
 export default function PacientePage() {
 
-    const [pacientes, setPacientes] = useState<Paciente[]>([]);
     const [showDialog, setShowDialog] = useState(false);
-    const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<Filter>('activos');
     const [searchTerm, setSearchTerm] = useState("");
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+    const allowedPageSizes = [10, 20, 30, 50];
     const router = useRouter();
     const toast = useToastStore();
+    const invalidatePacientes = useInvalidatePacientes();
+    const queryClient = useQueryClient();
+
+    const pacientesFilters = useMemo(() => ({
+        search: debouncedSearchTerm,
+        status: filter,
+        page,
+        pageSize,
+        orderBy: 'nombre' as const,
+        orderDirection: 'asc' as const,
+    }), [debouncedSearchTerm, filter, page, pageSize]);
+
+    const {
+        data: pacientesPaginated,
+        isLoading,
+        isFetching,
+    } = usePacientesPaginated(pacientesFilters);
+
+    const pacientes = pacientesPaginated?.items ?? [];
+    const pagination = pacientesPaginated?.pagination;
 
     useEffect(() => {
-        const loadData = async () => {
-            try{
-                const result = await getPacientes();
-                if (result.success) {
-                    setPacientes(result.data);
-                } else {
-                    console.error("Error al cargar pacientes:", result.error);
-                }
-            } catch (error) {
-                console.error("Error al cargar los pacientes:", error);
-            } 
-            finally {
-                setLoading(false);
-            }
-        }
+        const timeoutId = setTimeout(() => {
+            // void queryClient.cancelQueries({ queryKey: pacienteKeys.all });
+            setPage(1);
+            const nextSearch = searchTerm.trim();
+            setDebouncedSearchTerm(nextSearch);
 
-        loadData();
-    }, []);
+            // Evita acumulacion de entradas de busqueda en cache (solo inactivas).
+            queryClient.removeQueries({
+                queryKey: pacienteKeys.all,
+                type: 'inactive',
+                predicate: (query) => {
+                    const queryKey = query.queryKey;
+                    if (!Array.isArray(queryKey)) return false;
+                    if (queryKey[0] !== pacienteKeys.all[0] || queryKey[1] !== 'paginated') return false;
+
+                    const filters = queryKey[2] as { search?: string } | undefined;
+                    const cachedSearch = (filters?.search ?? '').toString();
+                    return cachedSearch !== nextSearch;
+                },
+            });
+        }, 500);
+
+        return () => {
+            clearTimeout(timeoutId);
+            // void queryClient.cancelQueries({ queryKey: pacienteKeys.all });
+        };
+    }, [searchTerm, queryClient]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [filter]);
 
     const handleDialogClose = async () => {
         setShowDialog(false);
-        // Recargar la lista de pacientes después de crear uno nuevo
-        try {
-            const updatedPacientes = await getPacientes();
-            setPacientes(updatedPacientes.data);
-        } catch (error) {
-            console.error("Error reloading patients:", error);
-        }
+        await invalidatePacientes();
     };
 
     const handleActive = async (paciente: Paciente) => {
@@ -65,8 +97,7 @@ export default function PacientePage() {
                 });
                 return;
             }
-            const updatedPacientes = await getPacientes();
-            setPacientes(updatedPacientes.data);
+            await invalidatePacientes();
             toast.addToast({
                 variant: "success",
                 message: "El paciente se ha activado correctamente.",
@@ -85,7 +116,7 @@ export default function PacientePage() {
         router.back();
     }
 
-    if (loading) {
+    if (isLoading && !pacientesPaginated) {
         return <UnifiedSkeletonLoader type="table" />;
     }
 
@@ -144,13 +175,13 @@ export default function PacientePage() {
             </div>
 
             {/* Contenido Principal */}
-            <div className="sm:p-6 lg:pr-6 lg:pt-8">
+            <div className="mx-auto w-full bg-white p-4 sm:p-6 lg:px-6 lg:pt-8 sm:flex sm:flex-col sm:h-[calc(100vh-3rem)]">
                 {/* Desktop Header */}
-                <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
+                <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-4">
                     <h2 className="text-2xl sm:text-3xl font-bold">Pacientes</h2>
                 </div>
                 {/* Filtros y Búsqueda - Solo Desktop */}
-                <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+                <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                         
                         {/* Lado izquierdo: Búsqueda y Filtro */}
@@ -164,7 +195,7 @@ export default function PacientePage() {
                                 <input
                                     name="search"
                                     type="text"
-                                    placeholder="Buscar por nombre o apellido..."
+                                    placeholder="Buscar por nombre y apellido o DNI o teléfono"
                                     className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors duration-200"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -213,19 +244,7 @@ export default function PacientePage() {
                     {/* Contador de resultados */}
                     <div className="mt-3 pt-3 border-t border-gray-100">
                         <p className="text-sm text-gray-500">
-                            Mostrando {
-                                pacientes
-                                    .filter(p => {
-                                        if (filter === 'activos') return p.activo === true;
-                                        if (filter === 'inactivos') return p.activo === false;
-                                        return true;
-                                    })
-                                    .filter(p => {
-                                        if (!searchTerm) return true;
-                                        return p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                            p.apellido.toLowerCase().includes(searchTerm.toLowerCase());
-                                    }).length
-                            } de {pacientes.length} pacientes
+                            Mostrando {pacientes.length} de {pagination?.total ?? pacientes.length} pacientes
                             {searchTerm && (
                                 <span className="ml-1">
                                     que coinciden con "{searchTerm}"
@@ -235,27 +254,61 @@ export default function PacientePage() {
                     </div>
                 </div>
 
-                <PacientesTable 
-                    pacientes={
-                        pacientes
-                            .filter(p => {
-                                // Aplicar filtro de estado
-                                if (filter === 'activos') return p.activo === true;
-                                if (filter === 'inactivos') return p.activo === false;
-                                return true; // 'todos'
-                            })
-                            .filter(p => {
-                                // Aplicar filtro de búsqueda
-                                if (!searchTerm) return true;
-                                return p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                    p.apellido.toLowerCase().includes(searchTerm.toLowerCase());
-                            })
-                    } 
-                    onPacienteDeleted={handleDialogClose}
-                    onPacienteUpdated={handleDialogClose}
-                    onActivatePaciente={handleActive}
-                    handleToast={toast.addToast}
-                />
+                <div className="sm:flex-1 sm:min-h-0 sm:overflow-hidden">
+                    <PacientesTable 
+                        pacientes={pacientes}
+                        onPacienteDeleted={handleDialogClose}
+                        onPacienteUpdated={handleDialogClose}
+                        onActivatePaciente={handleActive}
+                        handleToast={toast.addToast}
+                    />
+                </div>
+
+                <div className="hidden sm:block pt-3 shrink-0 bg-white">
+                    {pagination ? (
+                        <PaginacionBar
+                            pagination={pagination}
+                            visibleCount={pacientes.length}
+                            pageSize={pageSize}
+                            allowedPageSizes={allowedPageSizes}
+                            itemLabel="pacientes"
+                            onPageChange={setPage}
+                            onPageSizeChange={(size) => {
+                                setPageSize(size);
+                                setPage(1);
+                            }}
+                            loading={isFetching}
+                            showSummary
+                        />
+                    ) : (
+                        <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-500">
+                            Sin resultados para paginar.
+                        </div>
+                    )}
+                </div>
+
+                <div className="sm:hidden px-3 pt-2">
+                    {pagination ? (
+                        <PaginacionBar
+                            variant="mobile"
+                            pagination={pagination}
+                            visibleCount={pacientes.length}
+                            pageSize={pageSize}
+                            allowedPageSizes={allowedPageSizes}
+                            itemLabel="pacientes"
+                            onPageChange={setPage}
+                            onPageSizeChange={(size) => {
+                                setPageSize(size);
+                                setPage(1);
+                            }}
+                            loading={isFetching}
+                        />
+                    ) : (
+                        <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-500">
+                            Sin resultados para paginar.
+                        </div>
+                    )}
+                </div>
             </div>
 
             <NuevoPacienteDialog

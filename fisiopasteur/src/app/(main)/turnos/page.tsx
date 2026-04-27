@@ -10,6 +10,7 @@ import { todayYmd } from "@/lib/dayjs";
 // Helper function to parse search params
 function parseSearchParams(params: { [key: string]: string | string[] | undefined }) {
   const hoy = todayYmd();
+  const allowedPageSizes = [10, 20, 30, 50];
   
   
   // Helper para convertir a array
@@ -18,12 +19,25 @@ function parseSearchParams(params: { [key: string]: string | string[] | undefine
     return Array.isArray(value) ? value : [value];
   };
   
+  const parsePageNumber = (value: string | string[] | undefined, fallback: number) => {
+    const raw = Array.isArray(value) ? value[0] : value;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+  };
+
+  const parsePageSize = (value: string | string[] | undefined, fallback: number) => {
+    const parsed = parsePageNumber(value, fallback);
+    return allowedPageSizes.includes(parsed) ? parsed : fallback;
+  };
+
   return {
     fecha_desde: Array.isArray(params?.desde) ? params.desde[0] : (params?.desde ?? hoy),
     fecha_hasta: Array.isArray(params?.hasta) ? params.hasta[0] : (params?.hasta ?? hoy),
     especialista_ids: toArray(params?.especialistas),
     especialidad_ids: toArray(params?.especialidades),
     estados: toArray(params?.estados),
+    page: parsePageNumber(params?.page, 1),
+    page_size: parsePageSize(params?.page_size, 20),
     paciente_id: params?.paciente_id
       ? parseInt(Array.isArray(params.paciente_id) ? params.paciente_id[0] : params.paciente_id)
       : undefined,
@@ -67,6 +81,8 @@ export default async function TurnosPage({
     filtros.especialista_ids.forEach((id) => usp.append("especialistas", id));
     filtros.especialidad_ids.forEach((id) => usp.append("especialidades", id));
     filtros.estados.forEach((estado) => usp.append("estados", estado));
+    usp.set("page", String(filtros.page ?? 1));
+    usp.set("page_size", String(filtros.page_size ?? 20));
     if (typeof filtros.paciente_id === "number") usp.set("paciente_id", String(filtros.paciente_id));
     redirect(`/turnos?${usp.toString()}`);
   }

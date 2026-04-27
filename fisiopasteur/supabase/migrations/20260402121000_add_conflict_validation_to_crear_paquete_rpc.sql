@@ -28,7 +28,7 @@ begin
   -- Serialize creates for same specialist in this transaction window.
   perform pg_advisory_xact_lock(hashtext('turno_paquete_' || p_id_especialista::text));
 
-  -- Validate overlapping slots inside the payload (60-minute duration).
+  -- Validate overlapping slots inside the payload (14-minute window).
   with payload as (
     select
       row_number() over () as rid,
@@ -44,8 +44,8 @@ begin
     join payload p2
       on p1.rid < p2.rid
      and p1.fecha = p2.fecha
-     and p1.hora < (p2.hora + interval '60 minutes')
-     and (p1.hora + interval '60 minutes') > p2.hora
+    and p1.hora < (p2.hora + interval '14 minutes')
+    and (p1.hora + interval '14 minutes') > p2.hora
   )
   select string_agg(slot, ', ')
   into v_duplicados
@@ -56,7 +56,7 @@ begin
       using errcode = 'P0001';
   end if;
 
-  -- Validate overlapping collisions against existing appointments (60-minute duration).
+  -- Validate overlapping collisions against existing appointments (14-minute window).
   with payload as (
     select
       coalesce((t ->> 'fecha')::date, p_fecha_inicio) as fecha,
@@ -76,8 +76,8 @@ begin
        tr.id_especialista = p_id_especialista
        or (p.id_box is not null and tr.id_box = p.id_box)
      )
-     and tr.hora < (p.hora + interval '60 minutes')
-     and (tr.hora + interval '60 minutes') > p.hora
+    and tr.hora < (p.hora + interval '14 minutes')
+    and (tr.hora + interval '14 minutes') > p.hora
     group by p.fecha, p.hora
   )
   select string_agg(slot, ', ')

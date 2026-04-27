@@ -1,17 +1,19 @@
 "use client";
 
-import { getEspecialistas } from "@/lib/actions/especialista.action";
 import { getEspecialidades } from "@/lib/actions/especialidad.action";
 import Button from "@/componentes/boton";
 import { EspecialistasTable } from "@/componentes/especialista/especialista-listado";
 import { NuevoEspecialistaDialog } from "@/componentes/especialista/nuevo-especialista-dialog";
 import { GestionEspecialidadesDialog } from "@/componentes/especialista/gestion-especialidades-dialog";
 import { GestionBoxesDialog } from "@/componentes/especialista/gestion-boxes-dialog";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { Tables } from "@/types/database.types";
 import { ArrowLeft, Plus, Search, Filter, GraduationCap, Box } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/usePerfil";
+import { especialistaKeys, useEspecialistasPaginated, useInvalidateEspecialistas } from "@/hooks/useEspecialistasQuery";
+import PaginacionBar from "@/componentes/paginacion/paginacion-bar";
+import { useQueryClient } from "@tanstack/react-query";
 
 // type Especialidad = Tables<"especialidad">;
 type Especialidad = {
@@ -62,49 +64,82 @@ export default function EspecialistasPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [showEspecialidadesDialog, setShowEspecialidadesDialog] = useState(false);
   const [showBoxesDialog, setShowBoxesDialog] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [filter, setFilter] = useState<Filter>("activos");
-  const [especialistas, setEspecialistas] = useState<EspecialistaConDatos[]>([]);
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const allowedPageSizes = [10, 20, 30, 50];
+  const queryClient = useQueryClient();
+  const invalidateEspecialistas = useInvalidateEspecialistas();
+
+  const especialistasFilters = useMemo(() => ({
+    incluirInactivos: filter !== "activos",
+    status: filter,
+    search: debouncedSearchTerm,
+    page,
+    pageSize,
+  }), [filter, debouncedSearchTerm, page, pageSize]);
+
+  const {
+    data: especialistasPaginated,
+    isLoading,
+    isFetching,
+  } = useEspecialistasPaginated(especialistasFilters);
+
+  const especialistas = (especialistasPaginated?.items ?? []) as EspecialistaConDatos[];
+  const pagination = especialistasPaginated?.pagination;
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadEspecialidades = async () => {
       try {
-        const incluirInactivos = filter !== "activos";
-        const [especialistasResult, especialidadesResult] = await Promise.all([
-          getEspecialistas({ incluirInactivos }),
-          getEspecialidades()
-        ]);
-        
-        const especialistas = especialistasResult.success ? especialistasResult.data : [];
-        const especialidades = especialidadesResult.success ? especialidadesResult.data : [];
-        
-        setEspecialistas(especialistas);
-        setEspecialidades(especialidades);
+        const especialidadesResult = await getEspecialidades();
+        const loaded = especialidadesResult.success ? especialidadesResult.data : [];
+        setEspecialidades(loaded);
       } catch (error) {
-        console.error("Error loading data:", error);
-      } finally {
-        setLoading(false);
+        console.error("Error loading specialties:", error);
       }
     };
 
-    loadData();
-  }, [filter]); // ✅ Solo depende de filter, igual que pacientes
+    loadEspecialidades();
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      // void queryClient.cancelQueries({ queryKey: especialistaKeys.all });
+      const nextSearch = searchTerm.trim();
+      setPage(1);
+      setDebouncedSearchTerm(nextSearch);
+
+      queryClient.removeQueries({
+        queryKey: especialistaKeys.all,
+        type: 'inactive',
+        predicate: (query) => {
+          const queryKey = query.queryKey;
+          if (!Array.isArray(queryKey)) return false;
+          if (queryKey[0] !== especialistaKeys.all[0] || queryKey[1] !== 'paginated') return false;
+
+          const filters = queryKey[2] as { search?: string } | undefined;
+          const cachedSearch = (filters?.search ?? '').toString().trim();
+          return cachedSearch.length > 0;
+        },
+      });
+    }, 500);
+
+    return () => {
+      clearTimeout(timeoutId);
+      // void queryClient.cancelQueries({ queryKey: especialistaKeys.all });
+    };
+  }, [searchTerm, queryClient]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
 
   const handleDialogClose = async () => {
     setShowDialog(false);
-    // Recargar la lista de especialistas después de crear uno nuevo
-    try {
-      const incluirInactivos = filter !== "activos";
-      const updatedEspecialistasResult = await getEspecialistas({ incluirInactivos });
-
-      const updatedEspecialistas = updatedEspecialistasResult.success ? updatedEspecialistasResult.data : [];
-
-      setEspecialistas(updatedEspecialistas);
-    } catch (error) {
-      console.error("Error reloading specialists:", error);
-    }
+    await invalidateEspecialistas();
   };
 
   const handleEspecialidadesDialogClose = async () => {
@@ -134,24 +169,8 @@ export default function EspecialistasPage() {
     router.back();
   };
 
-  // Filtrado en frontend (por estado y término de búsqueda)
-  const especialistasFiltrados = especialistas.filter(e => {
-    // Filtro por estado
-    const passFilterEstado = 
-      filter === "activos" ? e.activo === true :
-      filter === "inactivos" ? e.activo === false :
-      true;
-    
-    // Filtro por búsqueda
-    const passFilterBusqueda = searchTerm === "" || 
-      e.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      e.apellido.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    return passFilterEstado && passFilterBusqueda;
-  });
-
   // ✅ Mostrar skeleton mientras cargan los datos
-  if (loading) {
+  if (isLoading && !especialistasPaginated) {
     return (
       <div className="min-h-screen text-black">
         {/* Mobile Header Skeleton */}
@@ -314,6 +333,17 @@ export default function EspecialistasPage() {
               </div>
             </div>
 
+            <select
+              name="filter"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as Filter)}
+              className="bg-[#9C1838] text-white px-3 py-2 rounded-lg text-sm font-medium border-0 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:ring-opacity-50"
+            >
+              <option value="activos" className="bg-white text-gray-900">Activos</option>
+              <option value="inactivos" className="bg-white text-gray-900">Inactivos</option>
+              <option value="todos" className="bg-white text-gray-900">Todos</option>
+            </select>
+
 
           </div>
         </div>
@@ -321,14 +351,14 @@ export default function EspecialistasPage() {
       </div>
 
       {/* Contenido Principal */}
-  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
+  <div className="mx-auto w-full bg-white p-4 sm:p-6 lg:px-6 lg:pt-8 sm:flex sm:flex-col sm:h-[calc(100vh-3rem)]">
         {/* Desktop Header */}
-        <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
+        <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-4">
           <h2 className="text-2xl sm:text-3xl font-bold">Especialistas</h2>
         </div>
 
         {/* Filtros y Búsqueda - Solo Desktop */}
-        <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4">
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
             {/* Lado izquierdo: Búsqueda y Filtro */}
             <div className="flex flex-col sm:flex-row gap-3 flex-1">
@@ -405,7 +435,7 @@ export default function EspecialistasPage() {
           {/* Contador de resultados */}
           <div className="mt-3 pt-3 border-t border-gray-100">
             <span className="text-sm text-gray-500">
-              Mostrando {especialistasFiltrados.length}{" "}
+              Mostrando {especialistas.length}{" "}
               {filter === "activos" && "activos"}
               {filter === "inactivos" && "inactivos"}
               {filter === "todos" && "especialistas"}.
@@ -413,33 +443,65 @@ export default function EspecialistasPage() {
           </div>
         </div>
 
-        <EspecialistasTable 
-          especialistas={especialistasFiltrados}
-          especialidades={especialidades}
-          onEspecialistaDeleted={async () => {
-            // Recargar la lista después de eliminar
-            try {
-              const incluirInactivos = filter !== "activos";
-              const updatedEspecialistasResult = await getEspecialistas({ incluirInactivos });
-              const updatedEspecialistas = updatedEspecialistasResult.success ? updatedEspecialistasResult.data : [];
-              setEspecialistas(updatedEspecialistas);
-            } catch (error) {
-              console.error("Error reloading specialists:", error);
-            }
-          }}
-          onEspecialistaUpdated={async () => {
-            // Recargar la lista después de actualizar
-            try {
-              const incluirInactivos = filter !== "activos";
-              const updatedEspecialistasResult = await getEspecialistas({ incluirInactivos });
-              const updatedEspecialistas = updatedEspecialistasResult.success ? updatedEspecialistasResult.data : [];
-              setEspecialistas(updatedEspecialistas);
-            } catch (error) {
-              console.error("Error reloading specialists:", error);
-            }
-          }}
-          setShowDialog={setShowDialog}
+        <div className="sm:flex-1 sm:min-h-0 sm:overflow-hidden">
+          <EspecialistasTable 
+            especialistas={especialistas}
+            especialidades={especialidades}
+            onEspecialistaDeleted={async () => {
+              await invalidateEspecialistas();
+            }}
+            onEspecialistaUpdated={async () => {
+              await invalidateEspecialistas();
+            }}
+            setShowDialog={setShowDialog}
           />
+        </div>
+
+        <div className="hidden sm:block pt-3 shrink-0 bg-white">
+          {pagination ? (
+            <PaginacionBar
+              pagination={pagination}
+              visibleCount={especialistas.length}
+              pageSize={pageSize}
+              allowedPageSizes={allowedPageSizes}
+              itemLabel="especialistas"
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+              loading={isFetching}
+              showSummary
+            />
+          ) : (
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-500">
+              Sin resultados para paginar.
+            </div>
+          )}
+        </div>
+
+        <div className="sm:hidden px-3 pt-2">
+          {pagination ? (
+            <PaginacionBar
+              variant="mobile"
+              pagination={pagination}
+              visibleCount={especialistas.length}
+              pageSize={pageSize}
+              allowedPageSizes={allowedPageSizes}
+              itemLabel="especialistas"
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+              loading={isFetching}
+            />
+          ) : (
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-500">
+              Sin resultados para paginar.
+            </div>
+          )}
+        </div>
       </div>
 
       <NuevoEspecialistaDialog

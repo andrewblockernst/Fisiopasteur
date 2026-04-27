@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DetalleTurnoDialog } from "@/componentes/turnos/detalle-turno-dialog";
 import { marcarComoAtendido, cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
@@ -13,6 +13,8 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import UnifiedSkeletonLoader from "../unified-skeleton-loader";
 import { nowIso } from "@/lib/dayjs";
+import { isPastDateTime } from "@/lib/dayjs";
+import CompactListTable from "@/componentes/tablas/compact-list-table";
 
 type TurnosTableProps = {
   turnos: TurnoWithRelations[];
@@ -29,10 +31,10 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   const queryClient = useQueryClient();
 
   const getTurnosSnapshots = () => {
-    return queryClient.getQueriesData<TurnoWithRelations[]>({ queryKey: turnoKeys.lists() });
+    return queryClient.getQueriesData<unknown>({ queryKey: turnoKeys.lists() });
   };
 
-  const restoreTurnosSnapshots = (snapshots: Array<[readonly unknown[], TurnoWithRelations[] | undefined]>) => {
+  const restoreTurnosSnapshots = (snapshots: Array<[readonly unknown[], unknown]>) => {
     for (const [queryKey, data] of snapshots) {
       queryClient.setQueryData(queryKey, data);
     }
@@ -41,9 +43,43 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   const updateTurnosLists = (updater: (rows: TurnoWithRelations[]) => TurnoWithRelations[]) => {
     queryClient.setQueriesData(
       { queryKey: turnoKeys.lists() },
-      (oldData: TurnoWithRelations[] | undefined) => {
+      (oldData: unknown) => {
         if (!oldData) return oldData;
-        return updater(oldData);
+
+        // Soporta listas planas y caches paginados sin asumir forma única.
+        if (Array.isArray(oldData)) {
+          return updater(oldData as TurnoWithRelations[]);
+        }
+
+        if (
+          typeof oldData === "object" &&
+          oldData !== null &&
+          "pages" in oldData &&
+          Array.isArray((oldData as { pages: unknown[] }).pages)
+        ) {
+          const paged = oldData as { pages: unknown[] };
+          return {
+            ...paged,
+            pages: paged.pages.map((page) =>
+              Array.isArray(page) ? updater(page as TurnoWithRelations[]) : page
+            ),
+          };
+        }
+
+        if (
+          typeof oldData === "object" &&
+          oldData !== null &&
+          "data" in oldData &&
+          Array.isArray((oldData as { data: unknown }).data)
+        ) {
+          const withData = oldData as { data: TurnoWithRelations[] } & Record<string, unknown>;
+          return {
+            ...withData,
+            data: updater(withData.data),
+          };
+        }
+
+        return oldData;
       }
     );
   };
@@ -73,6 +109,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   // ============= ESTADO PARA MODAL DE CONFIRMACIÓN =============
   const [confirmDialogAbierto, setConfirmDialogAbierto] = useState(false);
   const [turnoParaEliminar, setTurnoParaEliminar] = useState<TurnoWithRelations | null>(null);
+  const [selectedTurnoIds, setSelectedTurnoIds] = useState<number[]>([]);
+  const [selectionAnchorTurnoId, setSelectionAnchorTurnoId] = useState<number | null>(null);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
   // ============= FUNCIONES DE ACCIONES =============
   const handleMarcarAtendido = async (turno: TurnoWithRelations) => {
@@ -245,34 +284,36 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   };
 
   // Filtrar turnos: excluir Pilates y luego ordenar
-  const turnosOrdenados = turnos
-    ?.filter(turno => !esTurnoPilates(turno)) // Filtrar Pilates
-    ?.sort((a, b) => {
-      // Prioridad por estado: pendiente (0), programado (1), atendido (2), cancelado (3)
-      const prioridadEstado = (estado: string) => {
-        switch (estado?.toLowerCase()) {
-          case 'pendiente': return 0; // ⚠️ Los pendientes primero para que se vean
-          case 'programado': return 1;
-          case 'atendido': return 2;
-          case 'cancelado': return 3;
-          case '': return 4;
-          default: return 5;
+  const turnosOrdenados = useMemo(() => {
+    return turnos
+      ?.filter(turno => !esTurnoPilates(turno)) // Filtrar Pilates
+      ?.sort((a, b) => {
+        // Prioridad por estado: pendiente (0), programado (1), atendido (2), cancelado (3)
+        const prioridadEstado = (estado: string) => {
+          switch (estado?.toLowerCase()) {
+            case 'pendiente': return 0; // ⚠️ Los pendientes primero para que se vean
+            case 'programado': return 1;
+            case 'atendido': return 2;
+            case 'cancelado': return 3;
+            case '': return 4;
+            default: return 5;
+          }
+        };
+
+        const prioridadA = prioridadEstado(a.estado || '');
+        const prioridadB = prioridadEstado(b.estado || '');
+
+        // Si tienen diferente estado, ordenar por prioridad
+        if (prioridadA !== prioridadB) {
+          return prioridadA - prioridadB;
         }
-      };
 
-      const prioridadA = prioridadEstado(a.estado || '');
-      const prioridadB = prioridadEstado(b.estado || '');
-
-      // Si tienen diferente estado, ordenar por prioridad
-      if (prioridadA !== prioridadB) {
-        return prioridadA - prioridadB;
-      }
-
-      // Si tienen el mismo estado, ordenar por fecha y hora
-      const fechaA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
-      const fechaB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
-      return fechaA.getTime() - fechaB.getTime();
-    }) || [];
+        // Si tienen el mismo estado, ordenar por fecha y hora
+        const fechaA = new Date(`${a.fecha}T${a.hora || '00:00'}`);
+        const fechaB = new Date(`${b.fecha}T${b.hora || '00:00'}`);
+        return fechaA.getTime() - fechaB.getTime();
+      }) || [];
+  }, [turnos]);
 
   // ✅ FUNCIÓN: Calcular número de turno en el paquete (talonario) usando datos persistidos
   const calcularNumeroTalonario = (turno: any) => {
@@ -293,6 +334,109 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
     setModalDetalleAbierto(true);
   };
 
+  const toggleTurnoSelection = (turnoId: number, checked: boolean, useShiftRange = false) => {
+    if (useShiftRange && selectionAnchorTurnoId !== null && selectionAnchorTurnoId !== turnoId) {
+      const startIndex = turnosOrdenados.findIndex((t) => t.id_turno === selectionAnchorTurnoId);
+      const endIndex = turnosOrdenados.findIndex((t) => t.id_turno === turnoId);
+
+      if (startIndex !== -1 && endIndex !== -1) {
+        const [from, to] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+        const rangeIds = turnosOrdenados.slice(from, to + 1).map((t) => t.id_turno);
+
+        setSelectedTurnoIds((prev) => {
+          const next = new Set(prev);
+          for (const id of rangeIds) {
+            if (checked) {
+              next.add(id);
+            } else {
+              next.delete(id);
+            }
+          }
+          return Array.from(next);
+        });
+        setSelectionAnchorTurnoId(turnoId);
+        return;
+      }
+    }
+
+    setSelectedTurnoIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(turnoId);
+      } else {
+        next.delete(turnoId);
+      }
+      return Array.from(next);
+    });
+    setSelectionAnchorTurnoId(turnoId);
+  };
+
+  const clearSelection = () => {
+    setSelectedTurnoIds([]);
+    setSelectionAnchorTurnoId(null);
+  };
+
+  useEffect(() => {
+    // Ante cualquier cambio del listado visible, resetea selección masiva.
+    setSelectedTurnoIds((prev) => (prev.length > 0 ? [] : prev));
+    setSelectionAnchorTurnoId(null);
+  }, [turnos]);
+
+  const handleBulkAction = async (action: "atendido" | "cancelado") => {
+    if (bulkSubmitting || selectedTurnoIds.length === 0) return;
+
+    const seleccionados = turnosOrdenados.filter((t) => selectedTurnoIds.includes(t.id_turno));
+    const elegibles = seleccionados.filter((t) => t.estado === "programado" || t.estado === "pendiente");
+    const accionables = elegibles.filter((t) => puedeAccionarTurno(t));
+
+    if (accionables.length === 0) {
+      toast.addToast({
+        variant: "error",
+        message: "No hay turnos accionables",
+        description: "Selecciona turnos en estado programado o pendiente y con permisos para gestionarlos.",
+      });
+      return;
+    }
+
+    setBulkSubmitting(true);
+
+    const results = await Promise.all(
+      accionables.map((turno) =>
+        action === "atendido"
+          ? marcarComoAtendido(turno.id_turno)
+          : cancelarTurno(turno.id_turno)
+      )
+    );
+
+    const successCount = results.filter((r) => r.success).length;
+    const failCount = results.length - successCount;
+
+    if (successCount > 0) {
+      invalidateTurnos({
+        scope: "statuses",
+        statuses: action === "atendido"
+          ? ["programado", "pendiente", "atendido"]
+          : ["programado", "pendiente", "cancelado"],
+      });
+      toast.addToast({
+        variant: "success",
+        message: action === "atendido"
+          ? `${successCount} turno(s) marcados como atendidos`
+          : `${successCount} turno(s) cancelados`,
+      });
+    }
+
+    if (failCount > 0) {
+      toast.addToast({
+        variant: "error",
+        message: `No se pudieron actualizar ${failCount} turno(s)`,
+      });
+    }
+
+    clearSelection();
+    setBulkSubmitting(false);
+  };
+
   if (turnosLoading) {
     return (
       <UnifiedSkeletonLoader
@@ -307,19 +451,52 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   }
 
   return (
-    <>
-      <div className="block bg-white shadow-md rounded-lg overflow-hidden h-full">
-        <div className="overflow-x-auto overflow-y-auto max-h-full">
-          <table className="min-w-full divide-y divide-gray-200">
+    <div className="flex h-full min-h-0 flex-col">
+      {selectedTurnoIds.length > 0 && (
+        <div className="mb-3 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2">
+          <span className="text-sm text-gray-700">
+            {selectedTurnoIds.length} turno(s) seleccionado(s)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="h-8 rounded border border-green-300 bg-green-50 px-3 text-xs text-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => handleBulkAction("atendido")}
+              disabled={bulkSubmitting}
+            >
+              Marcar como atendidos
+            </button>
+            <button
+              type="button"
+              className="h-8 rounded border border-red-300 bg-red-50 px-3 text-xs text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => handleBulkAction("cancelado")}
+              disabled={bulkSubmitting}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="h-8 rounded border border-gray-300 px-3 text-xs text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={clearSelection}
+              disabled={bulkSubmitting}
+            >
+              Limpiar
+            </button>
+          </div>
+        </div>
+      )}
+
+        <CompactListTable className="flex-1 min-h-0">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Hora</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialista</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialidad</th>
-              <th className="px-4 py-1 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">N°</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider w-14">Acciones</th>
+              <th className="w-10 px-2 py-2" />
+              <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+              <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Hora</th>
+              <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
+              <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialista</th>
+              <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialidad</th>
+              <th className="px-4 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">N°</th>
+              <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider w-14">Acciones</th>
             </tr>
           </thead>
 
@@ -327,6 +504,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
             {turnosOrdenados.map((t) => {
               const numeroTalonario = calcularNumeroTalonario(t);
               const turnoEsPropio = puedeAccionarTurno(t);
+              const turnoEditable = !isPastDateTime(t.fecha, t.hora || "00:00");
               
               return (
               <tr 
@@ -334,16 +512,32 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                 className={`${getRowClassName(t)} cursor-pointer hover:bg-gray-100 transition-colors`}
                 onClick={() => abrirDetalleTurno(t)}
               >
-                <td className={`px-4 py-1 text-sm ${getTextStyle(t)}`}>
+                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer rounded border-gray-300 text-[#9C1838] focus:ring-[#9C1838]"
+                    checked={selectedTurnoIds.includes(t.id_turno)}
+                    readOnly
+                    onClick={(e) =>
+                      toggleTurnoSelection(
+                        t.id_turno,
+                        !selectedTurnoIds.includes(t.id_turno),
+                        e.shiftKey
+                      )
+                    }
+                    aria-label={`Seleccionar turno ${t.id_turno}`}
+                  />
+                </td>
+                <td className={`px-4 py-2 text-sm ${getTextStyle(t)}`}>
                   {formatearFecha(t.fecha)}
                 </td>
-                <td className={`px-4 py-1 text-sm font-mono ${getTextStyle(t)}`}>
+                <td className={`px-4 py-2 text-sm font-mono ${getTextStyle(t)}`}>
                   {formatearHora(t.hora)}
                 </td>
-                <td className={`px-4 py-1 text-sm ${getTextStyle(t)}`}>
+                <td className={`px-4 py-2 text-sm ${getTextStyle(t)}`}>
                   {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : "Sin asignar"}
                 </td>
-                <td className={`px-4 py-1 text-sm ${getTextStyle(t)}`}>
+                <td className={`px-4 py-2 text-sm ${getTextStyle(t)}`}>
                   {t.especialista ? (
                     <span className="inline-flex items-center gap-2">
                       <span 
@@ -354,11 +548,11 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                     </span>
                   ) : "Sin asignar"}
                 </td>
-                <td className={`px-4 py-1 text-sm ${getTextStyle(t)}`}>
+                <td className={`px-4 py-2 text-sm ${getTextStyle(t)}`}>
                   {t.especialidad ? t.especialidad.nombre : "Sin asignar"}
                 </td>
                 {/* ✅ COLUMNA: Número de talonario */}
-                <td className="px-4 py-1 text-center text-black text-sm">
+                <td className="px-4 py-2 text-center text-black text-sm">
                   {numeroTalonario ? (
                     <span className="text-xs font-semibold">{numeroTalonario}</span>
                   ) : (
@@ -366,7 +560,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                   )}
                 </td>
                 {/* ✅ COLUMNA DE ACCIONES - Evitar propagación del click */}
-                <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
+                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                   {t.id_paciente && (
                     <DropdownMenu.Root>
                       <DropdownMenu.Trigger asChild>
@@ -411,9 +605,9 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                         {/* Editar */}
                         {t.estado !== 'atendido' && (
                           <DropdownMenu.Item
-                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-gray-50 text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
+                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio && turnoEditable ? 'hover:bg-gray-50 text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
                             onSelect={() => handleEditar(t)}
-                            disabled={!turnoEsPropio}
+                            disabled={!turnoEsPropio || !turnoEditable}
                           >
                             <Edit size={16} />
                             Editar
@@ -437,7 +631,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
             )})}
             {(!turnosOrdenados || turnosOrdenados.length === 0) && (
               <tr>
-                <td className="p-6 text-center text-gray-500" colSpan={7}>
+                <td className="p-6 text-center text-gray-500" colSpan={8}>
                   <div className="flex flex-col items-center gap-2">
                     <span>No hay turnos para mostrar</span>
                   </div>
@@ -445,9 +639,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
               </tr>
             )}
           </tbody>
-        </table>
-      </div>
-    </div>
+      </CompactListTable>
 
     {/* Modal de Detalle del Turno */}
     <DetalleTurnoDialog
@@ -495,6 +687,6 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
         },
       }}
     />
-  </>
+  </div>
   );
 }

@@ -29,8 +29,8 @@ const AgregarBoton = () => {
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, loading } = useAuth();
-  const { tienePilates, puedeGestionar } = usePerfilNav();
-  const verTurnos = puedeGestionar || !tienePilates;
+  const { tieneEspecialidadNoPilates, puedeGestionar } = usePerfilNav();
+  const verTurnos = puedeGestionar || tieneEspecialidadNoPilates;
 
   // Definir todas las opciones posibles
   const allMenuOptions: MenuOption[] = [

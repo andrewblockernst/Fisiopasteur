@@ -7,6 +7,7 @@ export type { PerfilNavFlags };
 
 const defaultFlags: PerfilNavFlags = {
   tienePilates: false,
+  tieneEspecialidadNoPilates: false,
   puedeGestionar: false,
 };
 

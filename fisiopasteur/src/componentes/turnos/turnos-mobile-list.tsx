@@ -13,15 +13,17 @@ import {
   Search,
   ArrowLeft,
   Filter,
-  X
+  X,
+  ArrowRight
 } from 'lucide-react';
 import { NuevoTurnoModal } from '../calendario/nuevo-turno-dialog';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import type { Tables, EspecialistaWithSpecialties } from "@/types";
-import type { InvalidateTurnosOptions } from '@/hooks/useTurnosQuery';
+import type { InvalidateTurnosOptions, TurnosPagination } from '@/hooks/useTurnosQuery';
 import { turnoKeys } from '@/hooks/useTurnosQuery';
 import UnifiedSkeletonLoader from '../unified-skeleton-loader';
 import { dayjs, todayYmd } from '@/lib/dayjs';
+import PaginacionBar from '@/componentes/paginacion/paginacion-bar';
 
 interface TurnosMobileListProps {
   turnos: TurnoConDetalles[];
@@ -38,6 +40,8 @@ interface TurnosMobileListProps {
     especialista_ids: string[];
     especialidad_ids: string[];
     estados: string[];
+    page: number;
+    page_size: number;
     paciente_id?: number;
   };
   activeFilters: {
@@ -46,8 +50,14 @@ interface TurnosMobileListProps {
     especialista_ids: string[];
     especialidad_ids: string[];
     estados: string[];
+    page: number;
+    page_size: number;
     paciente_id?: number;
   };
+  pagination?: TurnosPagination;
+  allowedPageSizes: number[];
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
 }
 
 export default function TurnosMobileList({ 
@@ -60,7 +70,11 @@ export default function TurnosMobileList({
   especialidades,
   loadingTurnos,
   initialFilters,
-  activeFilters
+  activeFilters,
+  pagination,
+  allowedPageSizes,
+  onPageChange,
+  onPageSizeChange,
 }: TurnosMobileListProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -161,10 +175,12 @@ export default function TurnosMobileList({
     }
     if (especialidadId) params.append('especialidades', especialidadId);
     if (filtroEstado !== 'todos') params.append('estados', filtroEstado);
+    params.set('page', '1');
+    params.set('page_size', String(activeFilters.page_size || 20));
     
     router.push(`/turnos?${params.toString()}`);
     setShowFilters(false);
-  }, [fechaDesde, fechaHasta, especialistaId, especialidadId, filtroEstado, router]);
+  }, [fechaDesde, fechaHasta, especialistaId, especialidadId, filtroEstado, router, activeFilters.page_size]);
 
   // Función para limpiar filtros y aplicar inmediatamente
   const limpiarFiltros = useCallback(() => {
@@ -175,10 +191,12 @@ export default function TurnosMobileList({
     params.set('desde', hoy);
     params.set('hasta', hoy);
     params.set('ver_todos', '1');
+    params.set('page', '1');
+    params.set('page_size', String(activeFilters.page_size || 20));
     
     router.push(`/turnos?${params.toString()}`);
     setShowFilters(false);
-  }, [router]);
+  }, [router, activeFilters.page_size]);
 
   // Contar filtros activos
   const contarFiltrosActivos = useMemo(() => {
@@ -326,6 +344,22 @@ export default function TurnosMobileList({
             className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
           />
         </div>
+
+        {pagination && (
+          <PaginacionBar
+            className="mt-2"
+            variant="mobile"
+            pagination={pagination}
+            visibleCount={turnos.length}
+            pageSize={activeFilters.page_size}
+            allowedPageSizes={allowedPageSizes}
+            itemLabel="turnos"
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+            loading={loadingTurnos}
+            top={true}
+          />
+        )}
       </div>
 
       {/* Contenido */}

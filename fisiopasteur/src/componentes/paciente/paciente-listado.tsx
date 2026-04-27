@@ -3,13 +3,13 @@ import Button from "../boton";
 import { useState, useEffect, use } from "react";
 import { DeletePacienteDialog } from "./eliminar-dialog";
 import { EditarPacienteDialog } from "./editar-paciente-dialog";
-import { ConsultaPacienteMobile } from "./consulta-paciente-mobile";
 import { useRouter } from "next/navigation";
 import { NuevoPacienteDialog } from "./nuevo-paciente-dialog";
 import { activarPaciente, getPacientes } from "@/lib/actions/paciente.action";
 import { ChevronUp, EllipsisVertical, Plus } from "lucide-react";
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 import { ToastItem, useToastStore } from "@/stores/toast-store";
+import CompactListTable from "@/componentes/tablas/compact-list-table";
 
 
 
@@ -229,30 +229,29 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
         </div>
 
         {/* NIVEL 3: Vista Desktop (lg+) - Tabla optimizada */}
-        <div className="hidden lg:block bg-white shadow-md rounded-lg overflow-visible">
-            <div className="overflow-x-auto overflow-y-visible">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 justify-between">
+        <div className="hidden lg:block h-full">
+            <CompactListTable className="flex-1 min-h-0" >
+                <thead className="bg-gray-50 justify-between">
                         <tr className="justify-between">
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
                                 Paciente
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
                                 DNI
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
                                 Contacto
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
                                 F. Nacimiento
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
                                 Edad
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
                                 Estado
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
                                 Acciones
                             </th>
                         </tr>
@@ -261,33 +260,33 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                         <tbody className="bg-white divide-y divide-gray-200">
                         {pacientes.map((paciente) => (
                             <tr key={paciente.id_paciente} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-4 py-1 whitespace-nowrap">
                                     <div className="flex flex-col">
                                         <div className="text-sm font-medium text-gray-900">
                                             {paciente.nombre} {paciente.apellido}
                                         </div>
-                                        <div className="text-sm text-gray-500 truncate max-w-48" title={paciente.email || '...'}>
+                                        <div className="text-xs text-gray-500 truncate max-w-48" title={paciente.email || '...'}>
                                             {paciente.email || ''}
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
                                     {formatoDNI(paciente.dni || '...')}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
                                     {formatoNumeroTelefono(paciente.telefono || '...')}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
                                     {paciente.fecha_nacimiento ? 
                                         paciente.fecha_nacimiento.split('-').reverse().join('/') : '...'
                                     }
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
                                     {calculateAge(paciente.fecha_nacimiento) ? 
                                         `${calculateAge(paciente.fecha_nacimiento)} años` : '...'
                                     }
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
+                                <td className="px-4 py-1 whitespace-nowrap">
                                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                         paciente.activo 
                                             ? 'bg-green-100 text-green-800' 
@@ -296,13 +295,13 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                         {paciente.activo ? "Activo" : "Inactivo"}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <td className="px-4 py-1 whitespace-nowrap text-sm font-medium">
                                     {/* Botones individuales para pantallas grandes (xl+) */}
                                     <div className="hidden xl:flex gap-2">
 
                                         <Button 
                                             variant="secondary" 
-                                            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
+                                            className="text-xs px-2.5 py-1 h-7 min-w-14 flex items-center justify-center"
                                             onClick={() => setEditingPaciente(paciente)}
                                         >
                                             Editar
@@ -311,7 +310,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                         {paciente.activo && (
                                             <Button
                                                 variant="danger"
-                                                className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
+                                                className="text-xs px-2.5 py-1 h-7 min-w-14 flex items-center justify-center"
                                                 onClick={() => setDeletingPaciente(paciente)}
                                             >
                                                 Inactivar
@@ -321,7 +320,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                         {!(paciente.activo) && (
                                             <Button
                                                 variant="success"
-                                                className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
+                                                className="text-xs px-2.5 py-1 h-7 min-w-14 flex items-center justify-center"
                                                 onClick={() => onActivatePaciente(paciente)}
                                             >
                                                 Activar
@@ -329,7 +328,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                         )}
                                         <Button
                                             variant="secondary"
-                                            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center"
+                                            className="text-xs px-2.5 py-1 h-7 min-w-14 flex items-center justify-center"
                                             onClick={() => router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`)}
                                         >
                                             Historial
@@ -344,7 +343,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                                 e.stopPropagation();
                                                 setDropdownOpen(dropdownOpen === paciente.id_paciente ? null : paciente.id_paciente);
                                             }}
-                                            className="text-xs px-3 py-2 h-8 min-w-16 flex items-center justify-center hover:bg-slate-50 transition-colors"
+                                            className="text-xs px-2 py-1 h-7 min-w-14 flex items-center justify-center hover:bg-slate-50 transition-colors"
                                         >   
                                             <div className="relative w-5 h-5">
                                                 <ChevronUp 
@@ -366,7 +365,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
 
                                         {dropdownOpen === paciente.id_paciente && (
                                             <div 
-                                                className={`absolute right-0 w-40 bg-white rounded-md shadow-xl border border-gray-200 z-[100] ${
+                                                className={`absolute right-0 w-40 bg-white rounded-md shadow-xl border border-gray-200 z-[1000] ${
                                                     pacientes.indexOf(paciente) >= pacientes.length - 2 
                                                         ? 'bottom-full mb-1' 
                                                         : 'top-full mt-1'
@@ -391,7 +390,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                                                         }}
                                                         className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-red-600 hover:bg-red-50 transition-colors"
                                                     >
-                                                        Inactivar
+                                                        Desactivar
                                                     </button>
                                                     )}
                                                     {!(paciente.activo) && (
@@ -423,21 +422,10 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                             </tr>
                             ))}
                         </tbody>
-                </table>
-                
-            </div>
+            </CompactListTable>
         </div>
             
-        
-        {/* Modal de consulta - Solo Mobile */}
-        {viewingPaciente && (
-            <ConsultaPacienteMobile
-                viewingPaciente={viewingPaciente}
-                onClose={() => setViewingPaciente(null)}
-                onEdit={handleEditFromView}
-                onDelete={() => setDeletingPaciente(viewingPaciente)}
-            />
-        )}
+
 
         {/* Modal de edición - Todas las vistas */}
         {editingPaciente && (

@@ -1,6 +1,7 @@
 import { Clock, FileText, Phone, Pen, Trash, Handshake, MapPin } from "lucide-react";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { formatoNumeroTelefono } from "@/lib/utils";
+import { isPastDateTime } from "@/lib/dayjs";
 
 interface TurnoCardProps {
   turno: TurnoConDetalles;
@@ -17,6 +18,8 @@ export default function TurnoCard({
   getEstadoColor,
   formatearHora,
 }: TurnoCardProps) {
+  const mostrarEditar = !isPastDateTime(turno.fecha, turno.hora || "00:00");
+
   return (
     <div
       className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
@@ -46,12 +49,14 @@ export default function TurnoCard({
           </span>
 
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => onEdit(turno)}
-              className="p-2 bg-[#9C1838] hover:bg-[#5b0f22] rounded-full transition-colors"
-            >
-              <Pen className="w-4 h-4 text-white" />
-            </button>
+            {mostrarEditar && (
+              <button
+                onClick={() => onEdit(turno)}
+                className="p-2 bg-[#9C1838] hover:bg-[#5b0f22] rounded-full transition-colors"
+              >
+                <Pen className="w-4 h-4 text-white" />
+              </button>
+            )}
             <button
               onClick={() => onDelete(turno)}
               className="p-2 bg-[#9C1838] hover:bg-[#5b0f22] rounded-full transition-colors"
