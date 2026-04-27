@@ -117,6 +117,35 @@ export function CalendarioTurnos({
     return fecha.toDateString() === hoy.toDateString();
   };
 
+  const isFechaPasada = (fecha: Date) => {
+    const hoy = new Date();
+    const inicioFecha = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return inicioFecha.getTime() < inicioHoy.getTime();
+  };
+
+  const isHorarioPasado = (fecha: Date, hora: string) => {
+    const [horasRaw, minutosRaw] = hora.split(':');
+    const horas = Number.parseInt(horasRaw, 10);
+    const minutos = Number.parseInt(minutosRaw ?? '0', 10);
+
+    if (Number.isNaN(horas) || Number.isNaN(minutos)) {
+      return false;
+    }
+
+    const horario = new Date(
+      fecha.getFullYear(),
+      fecha.getMonth(),
+      fecha.getDate(),
+      horas,
+      minutos,
+      0,
+      0
+    );
+
+    return horario.getTime() <= Date.now();
+  };
+
   const navegarFecha = (direccion: 'anterior' | 'siguiente') => {
     const nuevaFecha = new Date(fechaActual);
     
@@ -207,6 +236,7 @@ export function CalendarioTurnos({
             
             const turnosDelDia = getTurnosParaDia(fecha);
             const esHoy = esDiaActual(fecha);
+            const puedeAgregarEnFecha = !isFechaPasada(fecha);
             
             return (
               <div 
@@ -265,15 +295,17 @@ export function CalendarioTurnos({
                   </div>
                   
                   {/* Botón crear turno (visible en hover) */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCreateTurno(fecha);
-                    }}
-                    className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-1 rounded text-xs"
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
+                  {puedeAgregarEnFecha && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCreateTurno(fecha);
+                      }}
+                      className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-1 rounded text-xs"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -348,6 +380,8 @@ export function CalendarioTurnos({
                   {diasSemana.map((fecha, di) => {
                     const turnosEnHora = getTurnoEnHora(fecha, hora);
                     const turnosDelDiaCompleto = getTurnosParaDia(fecha);
+                    const horaString = `${hora.toString().padStart(2, '0')}:00`;
+                    const puedeAgregarEnSlot = !isHorarioPasado(fecha, horaString);
 
                     return (
                       <div 
@@ -399,16 +433,17 @@ export function CalendarioTurnos({
                           </div>
                         )}
 
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const horaString = `${hora.toString().padStart(2, '0')}:00`;
-                            onCreateTurno(fecha, horaString);
-                          }}
-                          className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-[#9C1838] hover:bg-[#7D1329] text-white p-1 rounded-full shadow-md hover:shadow-lg hover:scale-110"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
+                        {puedeAgregarEnSlot && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onCreateTurno(fecha, horaString);
+                            }}
+                            className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-[#9C1838] hover:bg-[#7D1329] text-white p-1 rounded-full shadow-md hover:shadow-lg hover:scale-110"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -497,6 +532,7 @@ export function CalendarioTurnos({
                     {horas.map((hora) => {
                         const turnosHora = getTurnosEnHora(hora);
                         const horaStr = `${hora.toString().padStart(2, '0')}:00`;
+                      const puedeAgregarEnSlot = !isHorarioPasado(fechaActual, horaStr);
                         
                         return (
                             <div key={hora} className="border-b border-gray-200 min-h-[60px]">
@@ -547,15 +583,22 @@ export function CalendarioTurnos({
                                                 ))}
                                             </div>
                                         ) : (
-                                            <div 
-                                                className="text-gray-400 text-sm cursor-pointer hover:text-[#9C1838] transition-colors py-2"
-                                                onClick={() => {
-                                                    const horaString = `${hora.toString().padStart(2, '0')}:00`;
-                                                    onCreateTurno(fechaActual, horaString); // Pasar hora como string
-                                                }}
-                                            >
-                                                Sin turnos - Toca para agregar
-                                            </div>
+                                            <>
+                                              {puedeAgregarEnSlot ? (
+                                                <div 
+                                                  className="text-gray-400 text-sm cursor-pointer hover:text-[#9C1838] transition-colors py-2"
+                                                  onClick={() => {
+                                                    onCreateTurno(fechaActual, horaStr);
+                                                  }}
+                                                >
+                                                  Sin turnos - Toca para agregar
+                                                </div>
+                                              ) : (
+                                                <div className="text-gray-400 text-sm py-2">
+                                                  Sin turnos
+                                                </div>
+                                              )}
+                                            </>
                                         )}
                                     </div>
                                 </div>

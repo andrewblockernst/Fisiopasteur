@@ -5,12 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import FiltrosTurnos from './filtros-turnos';
 import TablaTurnos from './listado-turnos';
 import TurnosMobileList from './turnos-mobile-list';
+import PaginacionBar from '@/componentes/paginacion/paginacion-bar';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import type { Tables, EspecialistaWithSpecialties } from "@/types";
 import { actualizarTurnosPendientes } from '@/lib/actions/turno.action';
-import { useTurnos, useInvalidateTurnos } from '@/hooks/useTurnosQuery';
+import { useInvalidateTurnos, useTurnosPaginated } from '@/hooks/useTurnosQuery';
 
 interface TurnosPageContainerProps {
   // initialTurnos: TurnoConDetalles[]; // ✅ Ahora son datos iniciales del servidor
@@ -23,6 +24,8 @@ interface TurnosPageContainerProps {
     especialista_ids: string[];
     especialidad_ids: string[];
     estados: string[];
+    page: number;
+    page_size: number;
     paciente_id?: number;
   };
 }
@@ -38,6 +41,7 @@ export default function TurnosPageContainer({
   const searchParams = useSearchParams();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [selectedDate, setSelectedDate] = useState(initialFilters.fecha_desde);
+  const allowedPageSizes = [10, 20, 30, 50];
   // const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const filters = useMemo(() => {
@@ -50,12 +54,19 @@ export default function TurnosPageContainer({
     const especialidadIds = getAllParams('especialidades');
     const estados = getAllParams('estados');
 
+    const pageRaw = Number(searchParams.get('page') ?? initialFilters.page ?? 1);
+    const pageSizeRaw = Number(searchParams.get('page_size') ?? initialFilters.page_size ?? 20);
+    const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
+    const page_size = allowedPageSizes.includes(pageSizeRaw) ? pageSizeRaw : 20;
+
     return {
       fecha_desde: searchParams.get('desde') ?? initialFilters.fecha_desde,
       fecha_hasta: searchParams.get('hasta') ?? initialFilters.fecha_hasta,
       especialista_ids: especialistaIds.length > 0 ? especialistaIds : initialFilters.especialista_ids,
       especialidad_ids: especialidadIds.length > 0 ? especialidadIds : initialFilters.especialidad_ids,
       estados: estados.length > 0 ? estados : initialFilters.estados,
+      page,
+      page_size,
       paciente_id: (() => {
         const pacienteId = searchParams.get('paciente_id');
         return pacienteId ? parseInt(pacienteId) : initialFilters.paciente_id;
@@ -63,12 +74,15 @@ export default function TurnosPageContainer({
     };
   }, [searchParams, initialFilters]);
 
-  // ✅ React Query con datos iniciales del servidor (SSR + Client Cache)
-  const { data: turnos = [], isLoading: turnosLoading } = useTurnos({
+  const { data: paginatedTurnos, isLoading: paginatedLoading } = useTurnosPaginated({
     filters,
+    enabled: true,
     refetchOnMount: true,
-    // initialData: shouldUseInitialData ? initialTurnos : undefined
   });
+
+  const turnos = paginatedTurnos?.items ?? [];
+  const turnosLoading = paginatedLoading;
+  const pagination = paginatedTurnos?.pagination;
   const invalidateTurnos = useInvalidateTurnos();
 
   useEffect(() => {
@@ -108,6 +122,23 @@ export default function TurnosPageContainer({
     const params = new URLSearchParams(searchParams.toString());
     params.set('desde', newDate);
     params.set('hasta', newDate);
+    params.set('page', '1');
+    router.push(`/turnos?${params.toString()}`);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (!pagination) return;
+    const bounded = Math.max(1, Math.min(newPage, pagination.totalPages));
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', String(bounded));
+    params.set('page_size', String(filters.page_size));
+    router.push(`/turnos?${params.toString()}`);
+  };
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page_size', String(newPageSize));
+    params.set('page', '1');
     router.push(`/turnos?${params.toString()}`);
   };
 
@@ -116,21 +147,25 @@ export default function TurnosPageContainer({
     invalidateTurnos();
   };
 
+  const mobileListProps = {
+    turnos,
+    fecha: selectedDate,
+    onDateChange: handleDateChange,
+    onTurnoCreated: handleTurnoCreated,
+    invalidateTurnos,
+    especialistas,
+    especialidades,
+    loadingTurnos: turnosLoading,
+    initialFilters,
+    activeFilters: filters,
+    pagination,
+    allowedPageSizes,
+    onPageChange: handlePageChange,
+    onPageSizeChange: handlePageSizeChange,
+  };
+
   if (isMobile) {
-    return (
-      <TurnosMobileList 
-        turnos={turnos}
-        fecha={selectedDate}
-        onDateChange={handleDateChange}
-        onTurnoCreated={handleTurnoCreated}
-        invalidateTurnos={invalidateTurnos}
-        especialistas={especialistas}
-        especialidades={especialidades}
-        loadingTurnos={turnosLoading}
-        initialFilters={initialFilters}
-        activeFilters={filters}
-      />
-    );
+    return <TurnosMobileList {...(mobileListProps as any)} />;
   }
 
   // Vista desktop
@@ -162,6 +197,23 @@ export default function TurnosPageContainer({
             isMobile={isMobile}
           />
         </div>
+
+        {pagination && (
+          <div className="hidden sm:block pt-3">
+            <PaginacionBar
+              pagination={pagination}
+              visibleCount={turnos.length}
+              pageSize={filters.page_size}
+              allowedPageSizes={allowedPageSizes}
+              itemLabel="turnos"
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+              loading={turnosLoading}
+              showSummary
+              showFirstLastJump
+            />
+          </div>
+        )}
       </div>
     </div>
   );

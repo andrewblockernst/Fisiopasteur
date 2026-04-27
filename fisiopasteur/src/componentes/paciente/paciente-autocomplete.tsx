@@ -62,6 +62,7 @@ export default function PacienteAutocomplete({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const skipNextSearchRef = useRef(false);
 
   const sugerenciasFiltradas = useMemo(() => {
     if (!Array.isArray(excludePatientIds) || excludePatientIds.length === 0) {
@@ -87,6 +88,19 @@ export default function PacienteAutocomplete({
   }, []);
 
   useEffect(() => {
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      setBuscando(false);
+      setMostrarLista(false);
+      setIndiceActivo(-1);
+      setSugerencias([]);
+
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      return;
+    }
+
     const termino = value.trim();
     const valorSeleccionado = (selectedDisplayValue || selectedLabelInterno || "").trim();
 
@@ -145,7 +159,8 @@ export default function PacienteAutocomplete({
   }, [value, minChars, limit, selectedDisplayValue, selectedLabelInterno]);
 
   const seleccionar = (paciente: any) => {
-    setSelectedLabelInterno(`${paciente.nombre} ${paciente.apellido}`.trim());
+    skipNextSearchRef.current = true;
+    setSelectedLabelInterno(`${paciente.apellido}, ${paciente.nombre}`.trim());
     onSelect(paciente);
     setMostrarLista(false);
     setIndiceActivo(-1);
@@ -266,8 +281,12 @@ export default function PacienteAutocomplete({
                 renderOption(paciente)
               ) : (
                 <>
-                  <div className="text-sm font-medium">{paciente.nombre} {paciente.apellido}</div>
-                  <div className="text-xs text-gray-500">DNI: {paciente.dni || "-"}</div>
+                  <div className="text-sm font-medium">
+                    {paciente.apellido}, {paciente.nombre} 
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
+                  </div>
                 </>
               )}
             </button>

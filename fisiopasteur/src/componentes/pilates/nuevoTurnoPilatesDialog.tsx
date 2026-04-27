@@ -590,16 +590,6 @@ export function NuevoTurnoPilatesModal({
                     inputClassName="w-full pl-8 pr-2 md:pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                     dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
                     showMinCharsHint
-                    renderOption={(paciente) => (
-                      <>
-                        <div className="text-sm font-medium">
-                          {paciente.nombre} {paciente.apellido}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
-                        </div>
-                      </>
-                    )}
                   />
                 </div>
               </div>

@@ -13,12 +13,12 @@ import { usePerfilNav } from '@/hooks/PerfilNavContext';
 
 const BarraCelular = () => {
   const router = useRouter();
-  const { tienePilates, puedeGestionar } = usePerfilNav();
+  const { tienePilates, tieneEspecialidadNoPilates, puedeGestionar } = usePerfilNav();
   const verPilates    = puedeGestionar || tienePilates;
-  const verCalendario = puedeGestionar || !tienePilates;
+  const verCalendario = puedeGestionar || tieneEspecialidadNoPilates;
 
   // Especialista exclusivo de Pilates: navbar simplificada sin AgregarBoton
-  const esSoloPilates = tienePilates && !puedeGestionar;
+  const esSoloPilates = tienePilates && !tieneEspecialidadNoPilates && !puedeGestionar;
 
   if (esSoloPilates) {
     return (

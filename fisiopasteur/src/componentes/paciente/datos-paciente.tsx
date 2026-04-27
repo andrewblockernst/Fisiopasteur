@@ -18,8 +18,13 @@ export default function DatosPaciente({ paciente, observaciones }: Props) {
   const [cargando, setCargando] = useState(true);
 
   const cargarHistorial = async () => {
+    if (!Number.isFinite(Number(paciente.id_paciente))) {
+      setHistorialClinico([]);
+      setCargando(false);
+      return;
+    }
+
     setCargando(true);
-    // ✅ Convertir number a string
     const resultado = await obtenerHistorialClinicoPorPaciente(String(paciente.id_paciente));
     
     if (resultado.success) {

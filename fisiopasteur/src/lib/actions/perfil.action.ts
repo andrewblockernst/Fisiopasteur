@@ -6,13 +6,15 @@ import { redirect } from 'next/navigation';
 import { Database } from '@/types/database.types';
 import type { ActionResult } from '@/lib/actions/action-result';
 import { puedeGestionarTurnos } from '@/lib/constants/roles';
+import { obtenerIdPilates } from '@/lib/utils/especialidad-utils';
 
 // Datos de navegación computados en el servidor
-// Con estos dos valores se deriva todo lo demás en cada componente:
-//   verTurnos / verCalendario = puedeGestionar || !tienePilates
+// Con estos valores se deriva todo lo demás en cada componente:
+//   verTurnos / verCalendario = puedeGestionar || tieneEspecialidadNoPilates
 //   verPilates                = puedeGestionar || tienePilates
 export interface PerfilNavFlags {
   tienePilates: boolean;
+  tieneEspecialidadNoPilates: boolean;
   puedeGestionar: boolean;
 }
 
@@ -276,20 +278,33 @@ export async function obtenerPermisosNav(): Promise<PerfilNavFlags | null> {
 
     const idRol: number | undefined = (userData as any).id_rol ?? undefined;
     const gestiona = puedeGestionarTurnos(idRol);
+    const idPilates = await obtenerIdPilates();
 
     // Obtener especialidades activas
     const { data: ueData } = await supabase
       .from('usuario_especialidad')
-      .select('especialidad:id_especialidad(nombre)')
+      .select('id_especialidad, especialidad:id_especialidad(nombre)')
       .eq('id_usuario', (userData as any).id_usuario)
       .eq('activo', true);
 
-    const nombres = (ueData || []).map(
-      (ue: any) => (ue.especialidad?.nombre ?? '').toLowerCase()
-    );
-    const tienePilates = nombres.includes('pilates');
+    const idsEspecialidad: number[] = (ueData || [])
+      .map((ue: any) => ue.id_especialidad)
+      .filter((id: unknown): id is number => typeof id === 'number');
 
-    return { tienePilates, puedeGestionar: gestiona };
+    // Fallback por nombre si no se pudo resolver el ID de Pilates.
+    const nombres = (ueData || []).map(
+      (ue: any) => (ue.especialidad?.nombre ?? '').toLowerCase().trim()
+    );
+
+    const tienePilates = idPilates !== null
+      ? idsEspecialidad.includes(idPilates)
+      : nombres.includes('pilates');
+
+    const tieneEspecialidadNoPilates = idPilates !== null
+      ? idsEspecialidad.some((id) => id !== idPilates)
+      : nombres.some((nombre: string) => nombre.length > 0 && nombre !== 'pilates');
+
+    return { tienePilates, tieneEspecialidadNoPilates, puedeGestionar: gestiona };
   } catch {
     return null;
   }

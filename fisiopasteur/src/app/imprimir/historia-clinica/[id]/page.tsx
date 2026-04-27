@@ -21,7 +21,9 @@ export default async function ImprimirHistorialPage({ params, searchParams }: Pr
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;
   
-  const pacienteId = parseInt(resolvedParams.id);
+
+  let pacienteId = parseInt(resolvedParams.id);
+  console.log(`ID del paciente recibido: ${resolvedParams.id} (parsed: ${pacienteId})`);
   
   if (isNaN(pacienteId)) {
     notFound();
@@ -38,6 +40,7 @@ export default async function ImprimirHistorialPage({ params, searchParams }: Pr
     }
     
     // Obtener historial clínico agrupado por tratamientos
+    pacienteId = paciente?.id_paciente || pacienteId; // Asegurar que usamos el ID correcto
     const historialResult = await obtenerHistorialClinicoPorPaciente(pacienteId);
     
     if (historialResult.success && historialResult.data) {

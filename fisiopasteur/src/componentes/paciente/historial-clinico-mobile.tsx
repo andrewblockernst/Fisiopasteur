@@ -49,6 +49,12 @@ export function HistorialClinicoMobile({ pacienteId }: HistorialClinicoMobilePro
   const { addToast } = useToastStore();
 
   const cargarHistorial = async () => {
+    if (!Number.isFinite(Number(pacienteId))) {
+      setHistorialClinico([]);
+      setCargando(false);
+      return;
+    }
+
     setCargando(true);
     const resultado = await obtenerHistorialClinicoPorPaciente(String(pacienteId));
     

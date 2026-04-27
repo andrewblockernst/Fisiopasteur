@@ -17,8 +17,8 @@ import { usePerfilNav } from '@/hooks/PerfilNavContext';
 
 const Herramientas = () => {
   const router = useRouter();
-  const { tienePilates, puedeGestionar } = usePerfilNav();
-  const verTurnos    = puedeGestionar || !tienePilates;
+  const { tienePilates, tieneEspecialidadNoPilates, puedeGestionar } = usePerfilNav();
+  const verTurnos    = puedeGestionar || tieneEspecialidadNoPilates;
   const verPilates   = puedeGestionar || tienePilates;
   const verCalendario = verTurnos;
 

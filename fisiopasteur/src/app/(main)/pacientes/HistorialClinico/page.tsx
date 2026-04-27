@@ -19,7 +19,11 @@ function HistorialClinicoContent() {
     async function cargarDatos() {
       if (!idPaciente) return;
       const pacienteData = await getPaciente(idPaciente);
-      setPaciente(pacienteData);
+      if (pacienteData.success) {
+        setPaciente(pacienteData.data);
+      } else {
+        setPaciente(null);
+      }
     }
     cargarDatos();
   }, [idPaciente]);

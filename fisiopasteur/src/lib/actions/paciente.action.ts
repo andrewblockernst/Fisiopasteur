@@ -100,14 +100,107 @@ export async function getPacientes(options?: {
   search?: string;
   orderBy?: keyof Paciente;
   orderDirection?: 'asc' | 'desc';
+  status?: 'activos' | 'inactivos' | 'todos';
+  page?: number;
+  pageSize?: number;
 }) {
   const supabase = await createClient();
   
   const {  
     search = "",
     orderBy = "nombre",
-    orderDirection = "asc"
+    orderDirection = "asc",
+    status = "todos",
+    page,
+    pageSize,
   } = options || {};
+
+  const hasPaginationParams = page !== undefined || pageSize !== undefined;
+  const safePage = Math.max(1, Number(page ?? 1));
+  const safePageSize = Math.max(1, Number(pageSize ?? 20));
+  const trimmedSearch = search.trim();
+
+  // Si hay busqueda, usar RPC inteligente en lugar de ILIKE.
+  if (trimmedSearch) {
+    const offset = hasPaginationParams ? (safePage - 1) * safePageSize : 0;
+    const maxRows = hasPaginationParams ? safePageSize : 200;
+
+    const { data, error } = await (supabase as any).rpc('buscar_pacientes_general', {
+      search_term: trimmedSearch,
+      max_rows: maxRows,
+      p_status: status,
+      p_order_by: String(orderBy),
+      p_order_direction: orderDirection,
+      p_offset: offset,
+    });
+
+    if (error) {
+      console.error('Error fetching pacientes via RPC buscar_pacientes_general:', error);
+      return { success: false, error: error.message };
+    }
+
+    type RpcPacientePlano = Paciente & { total_count?: number | string | null };
+    type RpcPacienteCompuesto = { data: Paciente; total_count?: number | string | null };
+    const rawRows = (data ?? []) as Array<RpcPacientePlano | RpcPacienteCompuesto>;
+
+    const pacientes = rawRows.map((row) => {
+      if ('data' in row && row.data) {
+        return row.data;
+      }
+      return row as Paciente;
+    });
+
+    const totalCountRaw = rawRows.length > 0 ? (rawRows[0] as any).total_count : undefined;
+    const totalFromRpc = typeof totalCountRaw === 'number'
+      ? totalCountRaw
+      : typeof totalCountRaw === 'string'
+        ? Number(totalCountRaw)
+        : NaN;
+
+    let total = Number.isFinite(totalFromRpc) ? totalFromRpc : pacientes.length;
+
+    // Para mantener metadata de paginacion exacta cuando hay LIMIT/OFFSET en RPC,
+    // contamos filas del mismo criterio de busqueda/estado.
+    if (hasPaginationParams && !Number.isFinite(totalFromRpc)) {
+      let countQuery = supabase
+        .from('paciente')
+        .select('id_paciente', { count: 'exact', head: true })
+        .or(`nombre.ilike.%${trimmedSearch}%,apellido.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%,dni.ilike.%${trimmedSearch}%,telefono.ilike.%${trimmedSearch}%`);
+
+      if (status === 'activos') {
+        countQuery = countQuery.eq('activo', true);
+      } else if (status === 'inactivos') {
+        countQuery = countQuery.eq('activo', false);
+      }
+
+      const { count, error: countError } = await countQuery;
+      if (countError) {
+        console.error('Error counting pacientes for search pagination:', countError);
+      } else {
+        total = count ?? total;
+      }
+    }
+
+    if (hasPaginationParams) {
+      return {
+        success: true,
+        data: pacientes,
+        total,
+        pagination: {
+          page: safePage,
+          pageSize: safePageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+        },
+      } as any;
+    }
+
+    return {
+      success: true,
+      data: pacientes,
+      total,
+    } as any;
+  }
 
   // ✅ Obtener pacientes
   
@@ -115,13 +208,18 @@ export async function getPacientes(options?: {
     .from("paciente")
     .select("*", { count: "exact" });
 
-  // Filtro de búsqueda
-  if (search.trim()) {
-    query = query.or(`nombre.ilike.%${search}%,apellido.ilike.%${search}%,email.ilike.%${search}%,documento.ilike.%${search}%`);
+  if (status === 'activos') {
+    query = query.eq('activo', true);
+  } else if (status === 'inactivos') {
+    query = query.eq('activo', false);
   }
 
   // Ordenamiento
   query = query.order(orderBy as string, { ascending: orderDirection === "asc" });
+
+  if (hasPaginationParams) {
+    query = query.range((safePage - 1) * safePageSize, (safePage - 1) * safePageSize + safePageSize - 1);
+  }
 
 
 
@@ -133,10 +231,26 @@ export async function getPacientes(options?: {
   }
 
 
+  const total = count || 0;
+
+  if (hasPaginationParams) {
+    return {
+      success: true,
+      data: data || [],
+      total,
+      pagination: {
+        page: safePage,
+        pageSize: safePageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / safePageSize)),
+      },
+    } as any;
+  }
+
   return {
     success: true,
     data: data || [],
-    total: count || 0,
+    total,
   } as any;
 }
 

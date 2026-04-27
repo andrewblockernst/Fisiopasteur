@@ -128,7 +128,7 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
             const valorOriginal = (datosOriginales as any)[key];
             
             // Protección: si value es null/undefined, lo convertimos a string vacío
-            const valorString = value || ''; 
+            const valorString = value.toString() || ''; 
             const valorLimpio = valorString.trim();
 
             // Solo pasamos a minúsculas los campos que definimos así en datosOriginales

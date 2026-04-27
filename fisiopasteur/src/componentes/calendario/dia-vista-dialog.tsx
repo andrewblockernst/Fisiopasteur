@@ -11,7 +11,7 @@ import { eliminarTurno as eliminarTurnoAction } from "@/lib/actions/turno.action
 import { turnoKeys, useInvalidateTurnos } from "@/hooks/useTurnosQuery";
 import Image from "next/image";
 import TurnoCard from "./turno-card";
-import { dayjs } from "@/lib/dayjs";
+import { dayjs, isPastDateTime } from "@/lib/dayjs";
 
 interface DayViewModalProps {
   isOpen: boolean;
@@ -73,13 +73,13 @@ export function DayViewModal({
 
   const getEstadoColor = (estado: string) => {
     switch (estado.toLowerCase()) {
-      case 'confirmado':
+      case 'atendido':
         return 'bg-green-100 text-green-800 border-green-200';
-      case 'programado':
+      case 'pendiente':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'cancelado':
         return 'bg-red-100 text-red-800 border-red-200';
-      case 'completado':
+      case 'programado':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -87,6 +87,9 @@ export function DayViewModal({
   };
 
   const handleEdit = (turno: TurnoConDetalles) => {
+    if (isPastDateTime(turno.fecha, turno.hora || "00:00")) {
+      return;
+    }
     setTurnoEditando(turno);
   };
 

@@ -9,6 +9,7 @@ import { toggleEspecialistaActivo } from "@/lib/actions/especialista.action";
 import { useToastStore } from "@/stores/toast-store";
 import { useAuth } from "@/hooks/usePerfil";
 import { Plus } from "lucide-react";
+import CompactListTable from "@/componentes/tablas/compact-list-table";
 
 type Especialidad = Tables<"especialidad">;
 
@@ -98,34 +99,34 @@ export function EspecialistasTable({
   return (
     <>
       {/* Tabla desktop */}
-      <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="hidden md:block h-full">
+        <CompactListTable lockToViewport>
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Especialidades</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Email</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialidades</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Color</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Estado</th>
               {/* Solo mostrar columna de acciones si puede gestionar turnos */}
               {user?.puedeGestionarTurnos && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {especialistas.map((especialista) => (
-              <tr key={especialista.id_usuario} className={!especialista.activo ? "opacity-60" : ""}>
-                <td className="px-6 py-4 whitespace-nowrap">
+              <tr key={especialista.id_usuario} className={`${!especialista.activo ? "opacity-60" : ""} hover:bg-gray-50 transition-colors`}>
+                <td className="px-4 py-1 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
                     {especialista.nombre} {especialista.apellido}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
                   {especialista.email}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-4 py-1 whitespace-nowrap">
                   <div className="flex flex-wrap gap-1">
                     {especialista.especialidades && especialista.especialidades.length > 0 ? (
                       especialista.especialidades.map((especialidad) => (
@@ -141,35 +142,35 @@ export function EspecialistasTable({
                     )}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-4 py-1 whitespace-nowrap">
                   <div className="flex items-center">
                     <div
-                      className="w-6 h-6 rounded border border-gray-300 mr-2"
+                      className="w-5 h-5 rounded border border-gray-300 mr-2"
                       style={{ backgroundColor: especialista.color || "#6B7280" }}
                     />         
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
                   {formatoNumeroTelefono(especialista.telefono || "No disponible")}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-4 py-1 whitespace-nowrap">
                   <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${especialista.activo ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-600"}`}>
                     {especialista.activo ? "Activo" : "Inactivo"}
                   </span>
                 </td>
                 {/* Solo mostrar acciones si puede gestionar turnos */}
                 {user?.puedeGestionarTurnos && (
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                  <td className="px-4 py-1 whitespace-nowrap text-sm font-medium space-x-2">
                     <Button 
                       variant="secondary" 
-                      className="text-xs"
+                      className="text-xs h-7 px-2.5"
                       onClick={() => setEditingEspecialista(especialista)}
                     >
                       Editar
                     </Button>
                     <Button
                       variant={especialista.activo ? "danger" : "success"}
-                      className="text-xs"
+                      className="text-xs h-7 px-2.5"
                       disabled={isPending}
                       onClick={() => handleToggleActivo(especialista)}
                     >
@@ -180,7 +181,7 @@ export function EspecialistasTable({
               </tr>
             ))}
           </tbody>
-        </table>
+        </CompactListTable>
       </div>
 
       {/* Vista de cards para mobile */}

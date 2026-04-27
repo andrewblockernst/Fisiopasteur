@@ -1,3 +1,13 @@
+drop function if exists public.crear_paquete_sesiones_rpc(
+  integer,
+  uuid,
+  integer,
+  date,
+  text,
+  text,
+  jsonb
+);
+
 create or replace function public.crear_paquete_sesiones_rpc(
   p_id_paciente integer,
   p_id_especialista uuid,
@@ -7,7 +17,24 @@ create or replace function public.crear_paquete_sesiones_rpc(
   p_titulo_tratamiento text default null,
   p_turnos jsonb default '[]'::jsonb
 )
-returns table(id_turno integer, id_grupo_tratamiento uuid)
+returns table(
+  id_turno integer,
+  id_grupo_tratamiento uuid,
+  fecha date,
+  hora time,
+  id_paciente integer,
+  id_especialista uuid,
+  id_especialidad integer,
+  id_box integer,
+  observaciones text,
+  estado text,
+  tipo_plan text,
+  paciente_nombre text,
+  paciente_apellido text,
+  paciente_telefono text,
+  especialista_nombre text,
+  especialista_apellido text
+)
 language plpgsql
 as $$
 declare
@@ -16,6 +43,17 @@ declare
   v_turno_id integer;
   v_conflictos text;
   v_duplicados text;
+  v_paciente_nombre text;
+  v_paciente_apellido text;
+  v_paciente_telefono text;
+  v_especialista_nombre text;
+  v_especialista_apellido text;
+  v_fecha date;
+  v_hora time;
+  v_id_box integer;
+  v_observaciones text;
+  v_estado text;
+  v_tipo_plan text;
 begin
   if jsonb_typeof(p_turnos) is distinct from 'array' then
     raise exception 'p_turnos debe ser un array jsonb';
@@ -24,6 +62,16 @@ begin
   if jsonb_array_length(p_turnos) = 0 then
     raise exception 'p_turnos no puede ser vacio';
   end if;
+
+  select p.nombre, p.apellido, p.telefono
+    into v_paciente_nombre, v_paciente_apellido, v_paciente_telefono
+  from public.paciente p
+  where p.id_paciente = p_id_paciente;
+
+  select u.nombre, u.apellido
+    into v_especialista_nombre, v_especialista_apellido
+  from public.usuario u
+  where u.id_usuario = p_id_especialista;
 
   -- Serialize creates for same specialist in this transaction window.
   perform pg_advisory_xact_lock(hashtext('turno_paquete_' || p_id_especialista::text));
@@ -114,6 +162,13 @@ begin
   for v_turno in
     select value from jsonb_array_elements(p_turnos)
   loop
+    v_fecha := coalesce((v_turno ->> 'fecha')::date, p_fecha_inicio);
+    v_hora := (v_turno ->> 'hora')::time;
+    v_id_box := nullif(v_turno ->> 'id_box', '')::integer;
+    v_observaciones := nullif(v_turno ->> 'observaciones', '');
+    v_estado := coalesce(nullif(v_turno ->> 'estado', ''), 'programado');
+    v_tipo_plan := coalesce(nullif(v_turno ->> 'tipo_plan', ''), p_tipo_plan);
+
     insert into public.turno (
       fecha,
       hora,
@@ -127,22 +182,39 @@ begin
       id_grupo_tratamiento
     )
     values (
-      coalesce((v_turno ->> 'fecha')::date, p_fecha_inicio),
-      (v_turno ->> 'hora')::time,
+      v_fecha,
+      v_hora,
       p_id_especialista,
       p_id_paciente,
       p_id_especialidad,
-      nullif(v_turno ->> 'id_box', '')::integer,
-      nullif(v_turno ->> 'observaciones', ''),
-      coalesce(nullif(v_turno ->> 'estado', ''), 'programado'),
-      coalesce(nullif(v_turno ->> 'tipo_plan', ''), p_tipo_plan),
+      v_id_box,
+      v_observaciones,
+      v_estado,
+      v_tipo_plan,
       v_id_grupo
     )
     returning turno.id_turno into v_turno_id;
 
     id_turno := v_turno_id;
     id_grupo_tratamiento := v_id_grupo;
+    fecha := v_fecha;
+    hora := v_hora;
+    id_paciente := p_id_paciente;
+    id_especialista := p_id_especialista;
+    id_especialidad := p_id_especialidad;
+    id_box := v_id_box;
+    observaciones := v_observaciones;
+    estado := v_estado;
+    tipo_plan := v_tipo_plan;
+    paciente_nombre := v_paciente_nombre;
+    paciente_apellido := v_paciente_apellido;
+    paciente_telefono := v_paciente_telefono;
+    especialista_nombre := v_especialista_nombre;
+    especialista_apellido := v_especialista_apellido;
     return next;
   end loop;
 end;
 $$;
+
+grant execute on function public.crear_paquete_sesiones_rpc(integer, uuid, integer, date, text, text, jsonb) to authenticated;
+grant execute on function public.crear_paquete_sesiones_rpc(integer, uuid, integer, date, text, text, jsonb) to service_role;

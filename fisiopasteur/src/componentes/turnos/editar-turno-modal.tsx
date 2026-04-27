@@ -43,14 +43,6 @@ type EspecialistaAPI = {
   usuario_especialidad?: Array<{ especialidad: Especialidad }>;
 };
 
-// Tipo para el turno con relaciones incluidas (como viene del JOIN)
-// type TurnoConRelaciones = Turno & {
-//   paciente?: PacienteCompleto;
-//   especialista?: Usuario;
-//   especialidad?: Especialidad;
-//   box?: Box;
-// };
-
 interface EditarTurnoModalProps {
   turno: TurnoWithRelations;
   open: boolean;
@@ -98,6 +90,7 @@ const cargarCatalogosTurno = async (): Promise<{ especialistas: EspecialistaAPI[
 
 export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: EditarTurnoModalProps) {
   const ultimaInicializacionRef = useRef<string | null>(null);
+  const inicializacionCompletaRef = useRef(false);
   const [formData, setFormData] = useState({
     fecha: turno.fecha,
     hora: turno.hora.slice(0, 5), // Remover segundos para mostrar solo HH:MM
@@ -144,6 +137,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
   useEffect(() => {
     if (!open) {
       ultimaInicializacionRef.current = null;
+      inicializacionCompletaRef.current = false;
       return;
     }
 
@@ -156,6 +150,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     const cargarDatos = async () => {
       setLoading(true);
       setIsInitializing(true);
+      inicializacionCompletaRef.current = false;
       try {
         const formDataInicial = {
           fecha: turno.fecha,
@@ -219,7 +214,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
         }
 
         if (formDataInicial.id_especialista && formDataInicial.fecha) {
-          const slotsRes = await obtenerSlotsOcupados(formDataInicial.id_especialista, formDataInicial.fecha, turno.id_turno);
+          const pacienteSeleccionadoId = formDataInicial.id_paciente ? Number(formDataInicial.id_paciente) : undefined;
+          const slotsRes = await obtenerSlotsOcupados(formDataInicial.id_especialista, formDataInicial.fecha, turno.id_turno, pacienteSeleccionadoId);
           if (slotsRes.success && slotsRes.data) {
             setHorasOcupadas(slotsRes.data);
           }
@@ -228,26 +224,12 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
         }
 
         if (formDataInicial.fecha && formDataInicial.hora) {
-          const turnosRes = await obtenerTurnosParaValidarBoxes(formDataInicial.fecha);
+          const turnosRes = await obtenerTurnosParaValidarBoxes(formDataInicial.fecha, {
+            hora: formDataInicial.hora,
+            turnoIdExcluir: turno.id_turno,
+          });
           if (turnosRes.success && turnosRes.data) {
-            const [horaInicio, minutoInicio] = formDataInicial.hora.split(':').map(Number);
-            const inicioTurno = (horaInicio * 60) + minutoInicio;
-            const finTurno = inicioTurno + 60;
-
-            const turnosConflicto = turnosRes.data.filter((turnoCheck: any) => {
-              if (turnoCheck.estado === 'cancelado' || !turnoCheck.id_box || turnoCheck.id_turno === turno.id_turno) {
-                return false;
-              }
-
-              const [horaTurno, minutoTurno] = turnoCheck.hora.split(':').map(Number);
-              const inicioTurnoExistente = (horaTurno * 60) + minutoTurno;
-              const finTurnoExistente = inicioTurnoExistente + 60;
-
-              return inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente;
-            });
-
-            const boxesOcupados = turnosConflicto.map((turnoCheck: any) => turnoCheck.id_box);
-            const disponibles = boxesData.filter((box) => !boxesOcupados.includes(box.id_box));
+            const disponibles = boxesData.filter((box) => turnosRes.data.includes(box.id_box));
 
             if (formDataInicial.id_box && !disponibles.some((box) => String(box.id_box) === formDataInicial.id_box)) {
               const boxActual = boxesData.find((box) => String(box.id_box) === formDataInicial.id_box);
@@ -268,6 +250,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       } catch (error) {
         console.error('Error cargando datos:', error);
       } finally {
+        inicializacionCompletaRef.current = true;
         setIsInitializing(false);
         setLoading(false);
       }
@@ -332,7 +315,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
   // Verificar horarios ocupados cuando cambia especialista o fecha
   useEffect(() => {
-    if (isInitializing) return;
+    if (!open || isInitializing || !inicializacionCompletaRef.current) return;
 
     const verificarHorariosOcupados = async () => {
       if (!formData.id_especialista || !formData.fecha) {
@@ -342,7 +325,8 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
       setVerificandoDisponibilidad(true);
       try {
-        const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha, turno.id_turno);
+        const pacienteSeleccionadoId = formData.id_paciente ? Number(formData.id_paciente) : undefined;
+        const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha, turno.id_turno, pacienteSeleccionadoId);
         if (res.success && res.data) {
           setHorasOcupadas(res.data);
         }
@@ -354,11 +338,11 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
 
     verificarHorariosOcupados();
-  }, [formData.id_especialista, formData.fecha, turno.id_turno, isInitializing]);
+  }, [open, formData.id_especialista, formData.fecha, formData.id_paciente, turno.id_turno]);
 
   // Verificar boxes disponibles cuando cambia fecha y hora
   useEffect(() => {
-    if (isInitializing) return;
+    if (!open || isInitializing || !inicializacionCompletaRef.current) return;
 
     const verificarBoxesDisponibles = async () => {
       if (!formData.fecha || !formData.hora) {
@@ -368,37 +352,15 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
       setVerificandoBoxes(true);
       try {
-        // Obtener todos los turnos en esa fecha y hora específica
-        const res = await obtenerTurnosParaValidarBoxes(formData.fecha);
+        const res = await obtenerTurnosParaValidarBoxes(formData.fecha, {
+          hora: formData.hora,
+          turnoIdExcluir: turno.id_turno,
+        });
         
         if (res.success && res.data) {
-          // Calcular el rango de tiempo del turno (1 hora)
-          const [horaInicio, minutoInicio] = formData.hora.split(':').map(Number);
-          const inicioTurno = (horaInicio * 60) + minutoInicio;
-          const finTurno = inicioTurno + 60;
-
-          // Filtrar turnos que se solapan con nuestro horario (excluyendo el turno actual)
-          const turnosConflicto = res.data.filter((turnoCheck: any) => {
-            if (turnoCheck.estado === 'cancelado' || 
-                !turnoCheck.id_box || 
-                turnoCheck.id_turno === turno.id_turno) return false;
-            
-            const [horaTurno, minutoTurno] = turnoCheck.hora.split(':').map(Number);
-            const inicioTurnoExistente = (horaTurno * 60) + minutoTurno;
-            const finTurnoExistente = inicioTurnoExistente + 60;
-
-            // Verificar solapamiento
-            return (inicioTurno < finTurnoExistente && finTurno > inicioTurnoExistente);
-          });
-
-          // Obtener IDs de boxes ocupados
-          const boxesOcupados = turnosConflicto.map((turnoCheck: any) => turnoCheck.id_box);
-
-          // Filtrar boxes disponibles
-          const disponibles = boxes.filter(box => !boxesOcupados.includes(box.id_box));
+          const disponibles = boxes.filter(box => res.data.includes(box.id_box));
           setBoxesDisponibles(disponibles);
 
-          // Si el box actual ya no está disponible pero es el que tenía asignado, incluirlo
           if (formData.id_box && !disponibles.some(b => String(b.id_box) === formData.id_box)) {
             const boxActual = boxes.find(b => String(b.id_box) === formData.id_box);
             if (boxActual) {
@@ -417,27 +379,13 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     };
 
     verificarBoxesDisponibles();
-  }, [formData.fecha, formData.hora, boxes, turno.id_turno, formData.id_box, isInitializing]);
+  }, [open, formData.fecha, formData.hora, boxes, turno.id_turno]);
 
   // Función para verificar si una hora específica está disponible
   const esHoraDisponible = (hora: string): boolean => {
     if (!hora || horasOcupadas.length === 0) return true;
-    
-    // Verificar si la hora exacta está ocupada
-    if (horasOcupadas.includes(hora)) return false;
-    
-    // Verificar si hay conflicto con turnos existentes (duración de 1 hora)
-    const inicioNuevoTurno = timeToMinutes(hora);
-    
-    // Verificar conflictos con slots ocupados
-    for (let i = 0; i < 4; i++) { // 4 slots de 15 min = 1 hora
-      const slotStr = minutesToTime(inicioNuevoTurno + (i * 15));
-      if (horasOcupadas.includes(slotStr)) {
-        return false;
-      }
-    }
-    
-    return true;
+
+    return !horasOcupadas.includes(hora);
   };
 
   // Generar opciones de hora disponibles
@@ -741,16 +689,6 @@ const handleSubmit = async () => {
                 containerClassName="relative"
                 inputClassName="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
                 dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-                renderOption={(paciente) => (
-                  <>
-                    <div className="font-medium">
-                      {paciente.nombre} {paciente.apellido}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      DNI: {formatoDNI(paciente.dni)} • Tel: {formatoNumeroTelefono(paciente.telefono || 'No disponible')}
-                    </div>
-                  </>
-                )}
               />
             </div>
 

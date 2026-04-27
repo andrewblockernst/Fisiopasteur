@@ -28,3 +28,15 @@ body {
 :root {
   --brand: #9C1838;
 }
+
+html,
+body {
+  background-color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  html,
+  body {
+    background-color: #ffffff;
+  }
+}

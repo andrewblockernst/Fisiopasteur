@@ -111,6 +111,7 @@ export default function FiltrosTurnos({
 
   const aplicarFiltros = useCallback((filtros: any) => {
     const usp = new URLSearchParams();
+    const pageSizeActual = params.get("page_size");
     if (filtros.fecha_desde) usp.set("desde", filtros.fecha_desde);
     if (filtros.fecha_hasta) usp.set("hasta", filtros.fecha_hasta);
     
@@ -136,9 +137,14 @@ export default function FiltrosTurnos({
     if (filtros.paciente_id) {
       usp.set("paciente_id", filtros.paciente_id.toString());
     }
+
+    usp.set("page", "1");
+    if (pageSizeActual && ["10", "20", "30", "50"].includes(pageSizeActual)) {
+      usp.set("page_size", pageSizeActual);
+    }
     
     router.push(`/turnos?${usp.toString()}`);
-  }, [router]);
+  }, [router, params]);
 
   const handleFechaDesdeChange = useCallback((fecha: string) => {
     let fechaDesde = fecha || undefined;
@@ -233,7 +239,7 @@ export default function FiltrosTurnos({
       estados: [],
     };
     setFilter(filtrosBase);
-    aplicarFiltros(filtrosBase);
+    aplicarFiltros({ ...filtrosBase, page: 1 });
   }, [aplicarFiltros, user]);
 
   const filtrosActivos = useMemo(() => {
@@ -268,20 +274,7 @@ export default function FiltrosTurnos({
 
       {/* Fila 1: Título + Botón */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-2xl sm:text-3xl font-bold shrink-0">Turnos</h3>
-        <Button
-          variant="primary"
-          onClick={() => setOpenNew(true)}
-          className="flex items-center gap-1.5 h-[34px] shrink-0 text-sm px-3"
-        >
-          <Plus size={15} />
-          <span className="hidden sm:inline">Nuevo turno</span>
-          <span className="sm:hidden">Turno</span>
-        </Button>
-      </div>
-
-      {/* Fila 2: Filtros */}
-      <div className="flex flex-wrap items-end gap-x-2 gap-y-2">
+          <div className="flex flex-wrap items-end gap-x-2 gap-y-2">
             {/* Filtro Fecha Desde */}
             <div className="flex flex-col">
               <label className="text-xs font-medium text-gray-600 mb-1">Desde</label>
@@ -414,6 +407,9 @@ export default function FiltrosTurnos({
                   setBusquedaPaciente(valor);
                   if (pacienteSeleccionado && valor !== `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}`) {
                     setPacienteSeleccionado(null);
+                    const nuevosFiltros = { ...filter, paciente_id: undefined };
+                    setFilter(nuevosFiltros);
+                    aplicarFiltros(nuevosFiltros);
                   }
                 }}
                 onSelect={handleSeleccionarPaciente}
@@ -450,104 +446,16 @@ export default function FiltrosTurnos({
               </Button>
             )}
       </div>
-
-      {/* Mostrar filtros activos - Panel resumen */}
-      {/* {filtrosActivos > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="text-sm font-medium text-gray-700 mb-2">Filtros Aplicados:</div> 
-          <div className="flex flex-wrap gap-2">
-            Filtros aplicados:
-            {filter.fecha_desde && (
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center gap-1">
-                Desde: {formatearFecha(filter.fecha_desde)}
-                <button
-                  onClick={() => handleRemoverFiltro('fecha_desde')}
-                  className="ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors"
-                  aria-label="Remover filtro de fecha desde"
-                >
-                  <X size={12} className="text-blue-600 hover:text-blue-800" />
-                </button>
-              </span>
-            )}
-            {filter.fecha_hasta && (
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs flex items-center gap-1">
-                Hasta: {formatearFecha(filter.fecha_hasta)}
-                <button
-                  onClick={() => handleRemoverFiltro('fecha_hasta')}
-                  className="ml-1 hover:bg-blue-200 rounded-full p-0.5 transition-colors"
-                  aria-label="Remover filtro de fecha hasta"
-                >
-                  <X size={12} className="text-blue-600 hover:text-blue-800" />
-                </button>
-              </span>
-            )}
-            {Array.isArray(filter.especialista_ids) && ( // && filter.especialista_ids.length > 0 
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center gap-1">
-                Especialistas: {
-                filter.especialista_ids.length === especialistas.length || filter.especialista_ids.length === 0
-                  ? 'Todos'
-                  : filter.especialista_ids.map((id: string) => {
-                  const especialista = especialistas.find(e => e.id_usuario === id);
-                  return especialista ? especialista.apellido : id;
-                }).join(', ')} 
-                <button
-                  onClick={() => handleRemoverFiltro('especialistas')}
-                  className="ml-1 hover:bg-green-200 rounded-full p-0.5 transition-colors"
-                  aria-label="Remover filtro de especialista"
-                >
-                  <X size={12} className="text-green-600 hover:text-green-800" />
-                </button>
-              </span>
-            )}
-            {Array.isArray(filter.especialidad_ids) && ( // filter.especialidad_ids.length > 0
-              <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs flex items-center gap-1">
-                Especialidades: {  filter.especialidad_ids.length === especialidadesFiltradas.length || filter.especialidad_ids.length === 0
-                  ? 'Todas'
-                  : filter.especialidad_ids.map((id: string) => {
-                  const especialidad = especialidadesFiltradas.find(e => e.id_especialidad.toString() === id);
-                  return especialidad ? especialidad.nombre : id;
-                }).join(', ')}
-                <button
-                  onClick={() => handleRemoverFiltro('especialidades')}
-                  className="ml-1 hover:bg-purple-200 rounded-full p-0.5 transition-colors"
-                  aria-label="Remover filtro de especialidad"
-                >
-                  <X size={12} className="text-purple-600 hover:text-purple-800" />
-                </button>
-              </span>
-            )}
-            {Array.isArray(filter.estados) && ( //  && filter.estados.length > 0
-              <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs flex items-center gap-1">
-                Estados: {filter.estados.length === estadosPosibles.filter(e => e.value).length || filter.estados.length === 0
-                  ? 'Todos'
-                  : filter.estados.map((estado: string) => {
-                      const estadoInfo = estadosPosibles.find(e => e.value === estado);
-                      return estadoInfo ? estadoInfo.label : estado;
-                    }).join(', ')}
-                <button
-                  onClick={() => handleRemoverFiltro('estados')}
-                  className="ml-1 hover:bg-orange-200 rounded-full p-0.5 transition-colors"
-                  aria-label="Remover filtro de estado"
-                >
-                  <X size={12} className="text-orange-600 hover:text-orange-800" />
-                </button>
-              </span>
-            )}
-            {pacienteSeleccionado && (
-              <span className="px-2 py-1 bg-teal-100 text-teal-800 rounded-full text-xs flex items-center gap-1">
-                Paciente: {pacienteSeleccionado.apellido}, {pacienteSeleccionado.nombre}
-                <button
-                  onClick={() => handleRemoverFiltro('paciente')}
-                  className="ml-1 hover:bg-teal-200 rounded-full p-0.5 transition-colors"
-                  aria-label="Remover filtro de paciente"
-                >
-                  <X size={12} className="text-teal-600 hover:text-teal-800" />
-                </button>
-              </span>
-            )}
-          </div>
-        </div>
-      )} */}
+        <Button
+          variant="primary"
+          onClick={() => setOpenNew(true)}
+          className="flex items-center gap-1.5 h-[34px] shrink-0 text-sm px-3"
+        >
+          <Plus size={15} />
+          <span className="hidden sm:inline">Nuevo turno</span>
+          <span className="sm:hidden">Turno</span>
+        </Button>
+      </div>
 
       <NuevoTurnoModal 
         isOpen={openNew} 
