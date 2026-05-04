@@ -811,6 +811,19 @@ export async function eliminarTurno(id: number, opciones?: { notificar?: boolean
 
     console.log(`✅ Turno ${id} marcado como eliminado (soft delete)`);
 
+    // Cancelar notificaciones pendientes para evitar recordatorios fantasma
+    const { error: notifError } = await supabase
+      .from("notificacion")
+      .delete()
+      .eq("id_turno", id)
+      .eq("estado", "pendiente");
+
+    if (notifError) {
+      console.error(`⚠️ Error cancelando notificaciones del turno ${id}:`, notifError.message);
+    } else {
+      console.log(`🗑️ Notificaciones pendientes del turno ${id} eliminadas`);
+    }
+
     // Enviar aviso de cancelación por WhatsApp (salvo que se indique notificar: false)
     const paciente = turnoVerificado.paciente as any;
     if (paciente?.telefono && opciones?.notificar !== false) {
@@ -948,6 +961,19 @@ export async function cancelarTurno(id: number, motivo?: string) {
     }
 
     console.log(`✅ Turno ${id} cancelado (desde estado: ${turnoActual.estado})`);
+
+    // Cancelar notificaciones pendientes para evitar recordatorios fantasma
+    const { error: notifError } = await supabase
+      .from("notificacion")
+      .delete()
+      .eq("id_turno", id)
+      .eq("estado", "pendiente");
+
+    if (notifError) {
+      console.error(`⚠️ Error cancelando notificaciones del turno ${id}:`, notifError.message);
+    } else {
+      console.log(`🗑️ Notificaciones pendientes del turno ${id} eliminadas`);
+    }
 
     return { success: true, data };
   } catch (error) {

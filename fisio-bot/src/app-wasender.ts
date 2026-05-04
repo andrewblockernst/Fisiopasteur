@@ -147,6 +147,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 turno:id_turno(
                     fecha,
                     hora,
+                    estado,
                     paciente:id_paciente(nombre, apellido, telefono),
                     especialista:id_especialista(nombre, apellido),
                     especialidad:id_especialidad(nombre)
@@ -174,6 +175,14 @@ const procesarRecordatoriosAutonomo = async () => {
         for (let i = 0; i < pendientes.length; i++) {
             const notif = pendientes[i] as any
             const turno = notif.turno as any
+
+            // Saltar recordatorios de turnos eliminados o cancelados (defensa ante limpieza fallida)
+            if (turno?.estado === 'eliminado' || turno?.estado === 'cancelado') {
+                console.log(`⏭️ Notificación ${notif.id_notificacion} omitida — turno ${notif.id_turno} está ${turno.estado}`)
+                await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
+                fallidos++
+                continue
+            }
 
             // Determinar teléfono: columna directa o vía turno→paciente
             const telefono: string = notif.telefono || turno?.paciente?.telefono || ''
