@@ -510,7 +510,7 @@ export function CalendarioTurnos({
                         <ChevronLeft className="w-4 h-4 text-gray-800" />
                     </button>
                     
-                    <h3 className="text-xl font-bold text-gray-900 text-center flex-1">
+            <h3 className="text-xl font-bold text-gray-900 text-center flex-1 capitalize">
                         {fechaActual.toLocaleDateString('es-AR', {
                             weekday: 'long',
                             day: 'numeric',

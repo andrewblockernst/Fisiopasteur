@@ -369,17 +369,17 @@ export async function crearTurno(
     // ✅ Usar idPilates como especialidad cuando es_pilates=true, independientemente de lo que envíe el frontend
     const especialidadIdEfectiva = (idPilates && datos.es_pilates) ? idPilates : (datos.id_especialidad ?? undefined);
 
-    if (datos.fecha && datos.hora) {
-      const conflictoPaciente = await validarTurnoDuplicadoPaciente(supabase, {
-        id_paciente: datos.id_paciente,
-        fecha: datos.fecha,
-        hora: String(datos.hora),
-      });
+    // if (datos.fecha && datos.hora) {
+    //   const conflictoPaciente = await validarTurnoDuplicadoPaciente(supabase, {
+    //     id_paciente: datos.id_paciente,
+    //     fecha: datos.fecha,
+    //     hora: String(datos.hora),
+    //   });
 
-      if (!conflictoPaciente.success) {
-        return conflictoPaciente;
-      }
-    }
+    //   if (!conflictoPaciente.success) {
+    //     return conflictoPaciente;
+    //   }
+    // }
 
     if (datos.fecha && datos.hora && datos.id_especialista) {
       const disponibilidad = await verificarDisponibilidad(
@@ -387,7 +387,8 @@ export async function crearTurno(
         datos.hora,
         datos.id_especialista,
         datos.id_box || undefined,
-        especialidadIdEfectiva
+        especialidadIdEfectiva,
+        idPilates ? datos.es_pilates : false,
       );
 
       if (!disponibilidad.success || !disponibilidad.disponible) {
@@ -1157,7 +1158,6 @@ export async function verificarDisponibilidad(
   const supabase = await createClient();
 
   try {
-
     let query = supabase
       .from("turno")
       .select("id_turno, estado, hora, id_especialidad")
@@ -1173,8 +1173,9 @@ export async function verificarDisponibilidad(
       return { success: false, error: error.message };
     }
 
+    const idPilates = await obtenerIdPilates();
     // ============= LÓGICA ESPECIAL PARA PILATES =============
-    if (idPilates && especialidad_id === idPilates) {
+    if (es_pilates && especialidad_id === idPilates) {
       const pilatesTurnos = data.filter(t => t.id_especialidad === idPilates);
       const disponible = pilatesTurnos.length < 4;
 

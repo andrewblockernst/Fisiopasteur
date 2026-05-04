@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { crearTurno, crearTurnosEnLote, notificarParticipantesPilates } from "@/lib/actions/turno.action";
 import { dayjs, isPastDateTime, toYmd } from "@/lib/dayjs";
+import { HORARIOS_PILATES_30MIN } from "@/lib/constants/especialidades";
 import { useToastStore } from '@/stores/toast-store';
 import { AlertTriangle, Users, Clock, Info, Plus, Trash2, CalendarDays } from "lucide-react"; 
 import Image from "next/image";
@@ -27,6 +28,9 @@ interface NuevoTurnoPilatesModalProps {
   pacientes: any[];
   slotInfo?: SlotInfo | null;
   userRole?: number;
+  puedeGestionarTurnos?: boolean;
+  currentUserId?: string;
+  turnosPorSlot?: Map<string, number>;
 }
 
 // Días de la semana (solo lunes a viernes)
@@ -47,6 +51,37 @@ function esFechaHoraPasada(fecha: string, hora: string): boolean {
   }
 }
 
+function shiftHora(hora: string, deltaMin: number): string | null {
+  const [hStr, mStr] = hora.split(':');
+  const h = Number(hStr);
+  const m = Number(mStr || 0);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  const total = h * 60 + m + deltaMin;
+  if (total < 0 || total > 24 * 60) return null;
+  const hh = Math.floor(total / 60).toString().padStart(2, '0');
+  const mm = (total % 60).toString().padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+/**
+ * Obtiene las fechas disponibles a partir de hoy (L-V solamente, próximos 90 días)
+ */
+function obtenerFechasDisponibles(cantidadDias: number = 90): Date[] {
+  const fechas: Date[] = [];
+  let fecha = dayjs();
+
+  while (fechas.length < cantidadDias) {
+    // Solo incluir L-V (1-5, donde 0 = domingo, 6 = sábado)
+    const dayOfWeek = fecha.day();
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      fechas.push(fecha.toDate());
+    }
+    fecha = fecha.add(1, 'day');
+  }
+
+  return fechas;
+}
+
 export function NuevoTurnoPilatesModal({
   isOpen,
   onClose,
@@ -56,15 +91,21 @@ export function NuevoTurnoPilatesModal({
   especialistas,
   pacientes,
   slotInfo,
-  userRole = 2
+  userRole = 2,
+  puedeGestionarTurnos = false,
+  currentUserId,
+  turnosPorSlot
 }: NuevoTurnoPilatesModalProps) {
   const { addToast } = useToastStore();
   
+  // ============= ESTADO DEL FORMULARIO =============
   const [formData, setFormData] = useState({
     especialistaId: '',
     pacientesSeleccionados: [] as number[],
     observaciones: '',
     dificultad: 'principiante' as 'principiante' | 'intermedio' | 'avanzado',
+    fecha: fechaSeleccionada || null,
+    hora: horaSeleccionada || null,
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,53 +114,115 @@ export function NuevoTurnoPilatesModal({
   // ============= ESTADOS PARA BÚSQUEDA DE PACIENTES =============
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
 
-  // ============= NUEVOS ESTADOS PARA REPETICIÓN =============
+  // ============= ESTADOS PARA SELECTORES DE FECHA/HORA =============
+  const [fechasDisponibles, setFechasDisponibles] = useState<Date[]>([]);
+  const [horariosDisponibles, setHorariosDisponibles] = useState<string[]>([]);
+
+  // ============= ESTADOS PARA REPETICIÓN =============
   const [mostrarRepeticion, setMostrarRepeticion] = useState(false);
   const [diasSeleccionados, setDiasSeleccionados] = useState<number[]>([]);
   const [semanas, setSemanas] = useState<number>(4);
   const [validandoDisponibilidad, setValidandoDisponibilidad] = useState(false);
   const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
   const [hayConflictos, setHayConflictos] = useState(false);
+  const [errorFecha, setErrorFecha] = useState('');
 
-  // ✅ VALIDAR SI LA FECHA Y HORA SELECCIONADAS ESTÁN EN EL PASADO
-  const esHoraPasada = fechaSeleccionada && horaSeleccionada 
-    ? esFechaHoraPasada(
-        toYmd(fechaSeleccionada),
-        horaSeleccionada
-      )
-    : false;
-
-  // ============= INICIALIZAR FORMULARIO =============
+  // ============= INICIALIZAR FORMULARIO Y FECHAS DISPONIBLES =============
   useEffect(() => {
     if (isOpen) {
-      if (slotInfo?.tipo === 'existente' && slotInfo.especialistaAsignado) {
-        setFormData({
-          especialistaId: slotInfo.especialistaAsignado,
-          pacientesSeleccionados: [],
-          observaciones: '',
-          dificultad: 'principiante'
-        });
+      // Generar fechas disponibles
+      setFechasDisponibles(obtenerFechasDisponibles(90));
+
+      // Pre-llenar fecha y hora si vienen seleccionadas
+      if (fechaSeleccionada) {
+        setFormData(prev => ({
+          ...prev,
+          fecha: fechaSeleccionada,
+          hora: horaSeleccionada || null
+        }));
       } else {
-        setFormData({
-          especialistaId: '',
-          pacientesSeleccionados: [],
-          observaciones: '',
-          dificultad: 'principiante'
-        });
+        setFormData(prev => ({
+          ...prev,
+          fecha: null,
+          hora: null
+        }));
       }
-      
+
+      // Pre-llenar especialista si hay slot existente
+      if (slotInfo?.tipo === 'existente' && slotInfo.especialistaAsignado) {
+        setFormData(prev => ({
+          ...prev,
+          especialistaId: slotInfo.especialistaAsignado || '',
+        }));
+      }
+
+      if (!puedeGestionarTurnos && currentUserId) {
+        setFormData(prev => ({
+          ...prev,
+          especialistaId: String(currentUserId),
+        }));
+      }
+
       setNotifParticipantes(true);
       setBusquedaPaciente('');
       setMostrarRepeticion(false);
       setDiasSeleccionados([]);
       setSemanas(4);
+      setHorariosOcupados([]);
+      setHayConflictos(false);
     }
-  }, [isOpen, slotInfo]);
+  }, [isOpen, fechaSeleccionada, horaSeleccionada, slotInfo, puedeGestionarTurnos, currentUserId]);
 
-  // ============= FUNCIONES PARA MANEJAR PACIENTES =============
+  // ============= CALCULAR ESPACIOS DISPONIBLES =============
   const espaciosDisponibles = slotInfo?.tipo === 'existente' 
     ? 4 - (slotInfo.participantes || 0)
     : 4;
+
+  // ============= VERIFICAR SI FECHA/HORA ESTÁN EN EL PASADO =============
+  const esHoraPasada = formData.fecha && formData.hora
+    ? esFechaHoraPasada(
+      toYmd(formData.fecha),
+      formData.hora
+    )
+    : false;
+
+  // ============= VERIFICAR CAPACIDAD DEL SLOT EN REAL-TIME =============
+  useEffect(() => {
+    if (!isOpen || isSubmitting) return;
+    console.log('Validando disponibilidad para fecha:', formData.fecha, 'hora:', formData.hora);
+
+    if (!formData.fecha || !formData.hora) {
+      setHorariosDisponibles(HORARIOS_PILATES_30MIN);
+      return;
+    }
+
+    const fechaStr = dayjs(formData.fecha).format('YYYY-MM-DD');
+    const key = `${fechaStr}:${formData.hora}`;
+    const prev = shiftHora(formData.hora, -30);
+    const next = shiftHora(formData.hora, 30);
+    const conflictos = [formData.hora, prev, next].filter(Boolean) as string[];
+    const hayConflicto = conflictos.some((hora) => {
+      const k = `${fechaStr}:${hora}`;
+      return (turnosPorSlot?.get(k) || 0) > 0;
+    });
+    const participantesActuales = turnosPorSlot?.get(key) || 0;
+    const horaEstaDisponible = !hayConflicto && participantesActuales < 4;
+
+    if (!horaEstaDisponible && formData.hora) {
+      // Si la hora actual no está disponible, limpiarla
+      setFormData(prev => ({
+        ...prev,
+        hora: null
+      }));
+      addToast({
+        variant: 'warning',
+        message: 'Horario completo',
+        description: 'Este horario tiene su capacidad máxima (4/4)',
+      });
+    }
+  }, [formData.fecha, turnosPorSlot, addToast, isOpen, isSubmitting]);
+
+  // ============= FUNCIONES PARA MANEJAR PACIENTES =============
 
   const agregarPaciente = (paciente: any) => {
     if (formData.pacientesSeleccionados.length >= espaciosDisponibles) {
@@ -156,11 +259,10 @@ export function NuevoTurnoPilatesModal({
     );
   };
 
-  // ============= VALIDACIÓN EN TIEMPO REAL DE DISPONIBILIDAD =============
+  // ============= VALIDACIÓN EN TIEMPO REAL DE DISPONIBILIDAD (REPETICIÓN) =============
   useEffect(() => {
     const validarDisponibilidad = async () => {
-      // Solo validar si está activa la repetición y hay días seleccionados
-      if (!mostrarRepeticion || diasSeleccionados.length === 0 || !fechaSeleccionada || !horaSeleccionada) {
+      if (!mostrarRepeticion || diasSeleccionados.length === 0 || !formData.fecha || !formData.hora) {
         setHorariosOcupados([]);
         setHayConflictos(false);
         return;
@@ -170,20 +272,19 @@ export function NuevoTurnoPilatesModal({
 
       try {
         const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
-        const diaBaseNumero = dayjs(fechaSeleccionada).day();
+        const diaBaseNumero = dayjs(formData.fecha).day();
         const ahora = dayjs();
         const ocupados: string[] = [];
 
-        // Verificar cada combinación de fecha/hora
         for (let semana = 0; semana < semanas; semana++) {
           for (const diaSeleccionado of diasSeleccionados) {
             const diasDiferencia = (diaSeleccionado - diaBaseNumero + 7) % 7;
-            const fechaTurno = dayjs(fechaSeleccionada).add(diasDiferencia + (semana * 7), 'day');
+            const fechaTurno = dayjs(formData.fecha).add(diasDiferencia + (semana * 7), 'day');
             
             if (fechaTurno.isBefore(ahora)) continue;
             
             const fechaStr = fechaTurno.format("YYYY-MM-DD");
-            const horaStr = horaSeleccionada + ':00';
+            const horaStr = formData.hora + ':00';
             
             const disponibilidad = await verificarDisponibilidadPilates(fechaStr, horaStr);
             
@@ -203,16 +304,16 @@ export function NuevoTurnoPilatesModal({
       }
     };
 
-    // Debounce para evitar múltiples llamadas
     const timeoutId = setTimeout(() => {
       validarDisponibilidad();
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [mostrarRepeticion, diasSeleccionados, semanas, fechaSeleccionada, horaSeleccionada]);
+  }, [mostrarRepeticion, diasSeleccionados, semanas, formData.fecha, formData.hora]);
 
+  // ============= HANDLE SUBMIT =============
   const handleSubmit = async () => {
-    // ✅ VALIDACIÓN: Bloquear si la fecha/hora ya pasaron
+    // Validación: Bloquear si la fecha/hora ya pasaron
     if (esHoraPasada) {
       addToast({
         variant: 'error',
@@ -222,16 +323,17 @@ export function NuevoTurnoPilatesModal({
       return;
     }
 
-    if (!fechaSeleccionada || !horaSeleccionada || !formData.especialistaId || formData.pacientesSeleccionados.length === 0) {
+    // Validación: Campos requeridos
+    if (!formData.fecha || !formData.hora || !formData.especialistaId || formData.pacientesSeleccionados.length === 0) {
       addToast({
         variant: 'error',
         message: 'Campos requeridos',
-        description: 'Por favor completa todos los campos requeridos',
+        description: 'Por favor completa todos los campos requeridos (Fecha, Hora, Especialista, Participantes)',
       });
       return;
     }
 
-    // ✅ BLOQUEAR si hay conflictos detectados
+    // Validación: Bloquear si hay conflictos en repetición
     if (mostrarRepeticion && hayConflictos) {
       addToast({
         variant: 'error',
@@ -243,7 +345,7 @@ export function NuevoTurnoPilatesModal({
     }
 
     // Validación de permisos
-    if (slotInfo?.tipo === 'existente' && userRole !== 1 && formData.especialistaId !== slotInfo.especialistaAsignado) {
+    if (slotInfo?.tipo === 'existente' && !puedeGestionarTurnos && formData.especialistaId !== slotInfo.especialistaAsignado) {
       addToast({
         variant: 'error',
         message: 'Sin permisos',
@@ -255,8 +357,8 @@ export function NuevoTurnoPilatesModal({
     setIsSubmitting(true);
     
     try {
-      const fecha = toYmd(fechaSeleccionada);
-      const hora = horaSeleccionada;
+      const fecha = toYmd(formData.fecha);
+      const hora = formData.hora;
 
       // ============= SIN REPETICIÓN: CREAR TURNOS SIMPLES =============
       if (!mostrarRepeticion || diasSeleccionados.length === 0) {
@@ -264,6 +366,8 @@ export function NuevoTurnoPilatesModal({
         const resultados = [];
         const turnosCreados: any[] = [];
         for (const pacienteId of formData.pacientesSeleccionados) {
+          console.log('Creando turno para paciente ID:', pacienteId, 'en fecha:', fecha, 'hora:', hora);
+
           const resultado = await crearTurno(
             {
               fecha,
@@ -304,6 +408,14 @@ export function NuevoTurnoPilatesModal({
         });
 
         if (onTurnoCreated) {
+          setFormData(prev => ({
+            ...prev,
+            especialistaId: '',
+            fecha: null,
+            hora: null,
+            pacientesSeleccionados: [],
+            observaciones: ''
+          }));
           await Promise.resolve(onTurnoCreated());
         }
         
@@ -314,31 +426,23 @@ export function NuevoTurnoPilatesModal({
       }
 
       // ============= CON REPETICIÓN: CREAR TURNOS EN LOTE =============
-      
       const turnosParaCrear = [];
-      const diaBaseNumero = dayjs(fechaSeleccionada).day();
+      const diaBaseNumero = dayjs(formData.fecha).day();
 
-      // Por cada paciente seleccionado
       for (const pacienteId of formData.pacientesSeleccionados) {
-        // ✅ SIEMPRE empezar desde la semana 0 (actual) cuando creamos nuevo turno
         const semanaInicial = 0;
 
-        // Por cada semana
         for (let semana = semanaInicial; semana < semanas + semanaInicial; semana++) {
-          // Por cada día seleccionado
           for (const diaSeleccionado of diasSeleccionados) {
-            // Calcular la diferencia de días
             let diferenciaDias = diaSeleccionado - diaBaseNumero;
             if (diferenciaDias < 0) diferenciaDias += 7;
 
-            const fechaTurno = dayjs(fechaSeleccionada).add((semana * 7) + diferenciaDias, 'day');
+            const fechaTurno = dayjs(formData.fecha).add((semana * 7) + diferenciaDias, 'day');
             const fechaFormateada = fechaTurno.format("YYYY-MM-DD");
-            
-            // ✅ VALIDACIÓN: Solo verificar si ya pasó, NO excluir la fecha actual
+
             const esPasado = esFechaHoraPasada(fechaFormateada, hora);
 
             if (!esPasado) {
-              
               turnosParaCrear.push({
                 id_paciente: pacienteId.toString(),
                 id_especialista: formData.especialistaId,
@@ -349,7 +453,6 @@ export function NuevoTurnoPilatesModal({
                 dificultad: formData.dificultad,
                 es_pilates: true
               });
-            } else {
             }
           }
         }
@@ -386,6 +489,14 @@ export function NuevoTurnoPilatesModal({
         }
         
         if (onTurnoCreated) {
+          setFormData(prev => ({
+            ...prev,
+            esopecialistaId: '',
+            fecha: null,
+            hora: null,
+            pacientesSeleccionados: [],
+            observaciones: ''
+          }));
           await Promise.resolve(onTurnoCreated());
         }
         
@@ -490,31 +601,124 @@ export function NuevoTurnoPilatesModal({
         <div className="space-y-3 md:space-y-4 text-left max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1">
           {renderSlotInfo()}
 
-          {/* Información básica del turno */}
-          <div className="p-2 md:p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs md:text-sm">
-              <span className="font-medium text-gray-700">Día:</span> {fechaSeleccionada ? dayjs(fechaSeleccionada).format("dddd DD/MM") : ""}
-              <br />
-              <span className="font-medium text-gray-700">Horario:</span> {horaSeleccionada}
-              {esHoraPasada && (
-                <span className="ml-2 text-xs text-red-600 font-medium">(ya pasó)</span>
-              )}
-            </p>
+          {/* Selector de Fecha */}
+          {/* {!fechaSeleccionada && ( */}
+          <div>
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+              Fecha*
+            </label>
+            <input
+              type="date"
+              value={formData.fecha ? dayjs(formData.fecha).format('YYYY-MM-DD') : ''}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const [y, m, d] = e.target.value.split('-');
+                  const nuevaFecha = new Date(Number(y), Number(m) - 1, Number(d));
+                  
+                  const diaSemana = nuevaFecha.getDay();
+                  if (diaSemana === 0 || diaSemana === 6) {
+                    setErrorFecha('Los fines de semana no están disponibles para Pilates.');
+                    return;
+                  }
+
+                  setErrorFecha('');
+                  setFormData(prev => ({
+                    ...prev,
+                    fecha: nuevaFecha,
+                    hora: null
+                  }));
+                } else {
+                  setErrorFecha('');
+                  setFormData(prev => ({ ...prev, fecha: null, hora: null }));
+                }
+              }}
+              min={dayjs().format('YYYY-MM-DD')}
+              max={dayjs().add(90, 'days').format('YYYY-MM-DD')}
+              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            />
+            {errorFecha ? (
+              <p className="text-xs text-red-500 mt-1 font-medium">{errorFecha}</p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1">Selecciona un día de lunes a viernes</p>
+            )}
           </div>
+          {/* )} */}
+
+          {/* Selector de Hora */}
+          {/* {!horaSeleccionada && ( */}
+          <div>
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+              Hora*
+            </label>
+            <select
+              value={formData.hora || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, hora: e.target.value || null }))}
+              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            >
+              <option value="">Seleccionar hora</option>
+              {HORARIOS_PILATES_30MIN.map((hora) => {
+                const fechaStr = dayjs(formData.fecha).format('YYYY-MM-DD');
+                const key = `${fechaStr}:${hora}`;
+                const prev = shiftHora(hora, -30);
+                const next = shiftHora(hora, 30);
+                const conflictos = [hora, prev, next].filter(Boolean) as string[];
+                const hayConflicto = conflictos.some((h) => {
+                  const k = `${fechaStr}:${h}`;
+                  return (turnosPorSlot?.get(k) || 0) > 0;
+                });
+                const participantesActuales = turnosPorSlot?.get(key) || 0;
+                const disponible = !hayConflicto && participantesActuales < 4;
+
+                return (
+                  <option key={hora} value={hora} disabled={!disponible}>
+                    {hora} {disponible ? '' : '(Ocupado)'}
+                  </option>
+                );
+              })}
+            </select>
+            {/* <p className="text-xs text-gray-500 mt-1">Solo se muestran horarios sin superposiciones</p> */}
+          </div>
+          {/* )} */}
+
+          {/* Información básica del turno */}
+          {/* {formData.fecha && formData.hora && (
+            <div className="p-2 md:p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-xs md:text-sm">
+                <span className="font-medium text-gray-700">Fecha:</span> {dayjs(formData.fecha).format("dddd DD/MM")}
+                <br />
+                <span className="font-medium text-gray-700">Hora:</span> {formData.hora}
+                {esHoraPasada && (
+                  <span className="ml-2 text-xs text-red-600 font-medium">(ya pasó)</span>
+                )}
+              </p>
+            </div>
+          )} */}
+
+          {/* Información básica del turno (ANTIGUO - ELIMINAR) */}
+          {/* {fechaSeleccionada && horaSeleccionada && (
+            <div className="p-2 md:p-3 bg-gray-50 rounded-lg">
+              <p className="text-xs md:text-sm">
+                <span className="font-medium text-gray-700">Día:</span> {dayjs(fechaSeleccionada).format("dddd DD/MM")}
+                <br />
+                <span className="font-medium text-gray-700">Horario:</span> {horaSeleccionada}
+                {esHoraPasada && (
+                  <span className="ml-2 text-xs text-red-600 font-medium">(ya pasó)</span>
+                )}
+              </p>
+            </div>
+          )} */}
 
           {/* Selección de especialista */}
           <div>
             <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
-              Especialista*
-              {slotInfo?.tipo === 'existente' && userRole !== 1 && (
-                <span className="block md:inline text-xs text-gray-500 md:ml-2">(Preseleccionado)</span>
-              )}
+              Especialista*              
             </label>
             <select
               value={formData.especialistaId}
               onChange={(e) => setFormData(prev => ({ ...prev, especialistaId: e.target.value }))}
-              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-              disabled={slotInfo?.tipo === 'existente' && userRole !== 1}
+              className={`w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent 
+              ${puedeGestionarTurnos ? '' : 'cursor-not-allowed bg-gray-50'}`}
+              disabled={!puedeGestionarTurnos}
               required
             >
               <option value="">Seleccionar especialista</option>
@@ -623,7 +827,7 @@ export function NuevoTurnoPilatesModal({
           </div>
 
           {/* ============= SECCIÓN DE REPETICIÓN ============= */}
-          {!esHoraPasada && (
+          {!esHoraPasada && formData.fecha && formData.hora && (
             <div className="border-t pt-3 md:pt-4 space-y-2 md:space-y-3">
               <div className="flex items-center gap-2">
                 <input
@@ -702,7 +906,7 @@ export function NuevoTurnoPilatesModal({
                           <div className="max-h-20 overflow-y-auto bg-red-100 p-2 rounded space-y-1">
                             {horariosOcupados.slice(0, 10).map((horario, idx) => (
                               <div key={idx} className="text-xs text-red-900">
-                                • {horario} a las {horaSeleccionada}hs
+                                • {horario} a las {formData.hora}hs
                               </div>
                             ))}
                             {horariosOcupados.length > 10 && (
@@ -767,7 +971,7 @@ export function NuevoTurnoPilatesModal({
                 ? "Agregar Participantes" 
                 : "Crear Clase",
         onClick: handleSubmit,
-        disabled: isSubmitting || esHoraPasada || (mostrarRepeticion && hayConflictos) || validandoDisponibilidad,
+        disabled: isSubmitting || esHoraPasada || (mostrarRepeticion && hayConflictos) || validandoDisponibilidad || !formData.fecha || !formData.hora,
       }}
       secondaryButton={{
         text: "Cancelar",

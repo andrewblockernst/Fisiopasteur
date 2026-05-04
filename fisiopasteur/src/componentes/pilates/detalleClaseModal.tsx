@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { eliminarTurno, crearTurno, actualizarTurno, crearTurnosEnLote, notificarCancelacionesPilates, notificarModificacionesPilates } from "@/lib/actions/turno.action";
+import { HORARIOS_PILATES_30MIN } from "@/lib/constants/especialidades";
 import { dayjs, isPastDateTime } from "@/lib/dayjs";
 import { useToastStore } from '@/stores/toast-store';
 import { Users, Clock, Calendar, User, AlertTriangle, Trash2, UserPlus, Settings, Plus, Repeat } from "lucide-react";
@@ -16,6 +17,8 @@ interface DetalleClaseModalProps {
   especialistas: any[];
   pacientes: any[];
   userRole?: number;
+  puedeGestionarTurnos?: boolean;
+  currentUserId?: string;
 }
 
 // Días de la semana (solo lunes a viernes)
@@ -34,16 +37,13 @@ export function DetalleClaseModal({
   turnos: turnosIniciales,
   especialistas,
   pacientes,
-  userRole = 2
+  userRole = 2,
+  puedeGestionarTurnos = false,
+  currentUserId
 }: DetalleClaseModalProps) {
   const { addToast } = useToastStore();
   
   // ============= ESTADO INTERNO PARA LOS TURNOS =============
-  // Horarios válidos para Pilates (igual que componenteSemanal)
-  const HORARIOS_PILATES = [
-    "08:00", "09:00", "10:00", "11:00",
-    "14:30", "15:30", "16:30", "17:30", "18:30", "19:30", "20:30", "21:30"
-  ];
   const [turnos, setTurnos] = useState(turnosIniciales);
   const [modoResolucionConflicto, setModoResolucionConflicto] = useState(false);
   const [especialistaSeleccionado, setEspecialistaSeleccionado] = useState('');
@@ -83,6 +83,9 @@ export function DetalleClaseModal({
   useEffect(() => {
     setTurnos(turnosIniciales);
   }, [turnosIniciales]);
+
+  const especialistaClaseId = turnos[0]?.id_especialista ?? turnosIniciales[0]?.id_especialista;
+  const puedeEditar = puedeGestionarTurnos || (currentUserId && String(especialistaClaseId) === String(currentUserId));
 
   // ============= FILTRAR PACIENTES SEGÚN BÚSQUEDA =============
   useEffect(() => {
@@ -550,6 +553,14 @@ export function DetalleClaseModal({
 
   // ============= GUARDAR CAMBIOS NORMALES =============
   const handleGuardarCambios = async () => {
+    if (!puedeEditar) {
+      addToast({
+        variant: 'error',
+        message: 'Sin permisos',
+        description: 'Solo puedes editar clases propias o si eres administrador.',
+      });
+      return;
+    }
     setIsSubmitting(true);
     
     try {
@@ -686,6 +697,14 @@ export function DetalleClaseModal({
 
   // ============= ELIMINAR CLASE =============
   const handleEliminarClase = async () => {
+    if (!puedeEditar) {
+      addToast({
+        variant: 'error',
+        message: 'Sin permisos',
+        description: 'Solo puedes eliminar clases propias o si eres administrador.',
+      });
+      return;
+    }
     setIsSubmitting(true);
     
     try {
@@ -736,6 +755,14 @@ export function DetalleClaseModal({
 
   // ============= FUNCIÓN PARA REPETIR CLASE (SIMPLIFICADA) =============
   const handleRepetirClase = async () => {
+    if (!puedeEditar) {
+      addToast({
+        variant: 'error',
+        message: 'Sin permisos',
+        description: 'Solo puedes repetir clases propias o si eres administrador.',
+      });
+      return;
+    }
     if (diasSeleccionados.length === 0) {
       addToast({
         variant: 'error',
@@ -1304,14 +1331,16 @@ export function DetalleClaseModal({
                   value={movingClaseFecha ?? ''}
                   onChange={(e) => setMovingClaseFecha(e.target.value)}
                   className="px-2 py-1 border border-gray-300 rounded text-sm"
+                  disabled={!puedeEditar}
                 />
                 <select
                   value={movingClaseHora ?? ''}
                   onChange={(e) => handleMovingClaseHoraChange(e.target.value)}
                   className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+                  disabled={!puedeEditar}
                 >
                   <option value="">Seleccionar hora</option>
-                  {HORARIOS_PILATES.map(t => (
+                  {HORARIOS_PILATES_30MIN.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
@@ -1320,6 +1349,10 @@ export function DetalleClaseModal({
               <div>
                 <button
                   onClick={async () => {
+                    if (!puedeEditar) {
+                      addToast({ variant: 'error', message: 'Sin permisos', description: 'Solo puedes editar clases propias o si eres administrador.' });
+                      return;
+                    }
                     if (!movingClaseFecha || !movingClaseHora) {
                       addToast({ variant: 'error', message: 'Fecha/hora incompleta', description: 'Completá fecha y hora antes de mover la clase.' });
                       return;
@@ -1361,6 +1394,7 @@ export function DetalleClaseModal({
                     }
                   }}
                   disabled={
+                    !puedeEditar ||
                     movingClaseLoading ||
                     !(
                       movingClaseFecha && movingClaseHora && (movingClaseFecha !== fechaClase || movingClaseHora !== horaClase)
@@ -1442,6 +1476,7 @@ export function DetalleClaseModal({
             value={dificultadSeleccionada}
             onChange={(e) => setDificultadSeleccionada(e.target.value as any)}
             className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            disabled={!puedeEditar}
           >
             <option value="principiante">🟢 Principiante</option>
             <option value="intermedio">🟡 Intermedio</option>
@@ -1490,8 +1525,9 @@ export function DetalleClaseModal({
 
                         <button
                           onClick={() => eliminarPaciente(pacienteId)}
-                          className="text-red-500 hover:text-red-700 transition-colors"
+                          className={`text-red-500 hover:text-red-700 transition-colors ${!puedeEditar ? 'opacity-50 cursor-not-allowed' : ''}`}
                           title="Eliminar participante"
+                          disabled={!puedeEditar}
                         >
                           <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
@@ -1501,7 +1537,7 @@ export function DetalleClaseModal({
             </div>
           )}
 
-          {pacientesSeleccionados.length < 4 && (
+          {puedeEditar && pacientesSeleccionados.length < 4 && (
             <div className="relative">
               <div className="flex items-center gap-2">
                 <Plus className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
@@ -1574,7 +1610,8 @@ export function DetalleClaseModal({
         <div className="flex flex-col md:flex-row gap-2 pt-3 md:pt-4 border-t">
           <button
             onClick={() => setMostrarConfirmacionEliminar(true)}
-            className="flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors"
+            className={`flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-red-50 text-red-600 rounded-md hover:bg-red-100 transition-colors ${!puedeEditar ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={!puedeEditar}
           >
             <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
             <span className="hidden md:inline">Eliminar clase</span>
@@ -1583,7 +1620,8 @@ export function DetalleClaseModal({
           
           <button
             onClick={() => setMostrarModalRepetir(true)}
-            className="flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 transition-colors"
+            className={`flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 transition-colors ${!puedeEditar ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={!puedeEditar}
           >
             <Repeat className="w-3 h-3 md:w-4 md:h-4" />
             <span className="hidden md:inline">Repetir clase</span>
@@ -1595,7 +1633,7 @@ export function DetalleClaseModal({
           {cambiosPendientes && (
             <button
               onClick={handleGuardarCambios}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !puedeEditar}
               className="px-4 md:px-6 py-2 text-sm bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors font-medium"
             >
               {isSubmitting ? 'Guardando...' : 'Guardar cambios'}

@@ -67,6 +67,15 @@ export async function middleware(request: NextRequest) {
     }
     user = currentUser;
 
+    // const { data: { session } } = await supabase.auth.getSession();
+    // let user = session?.user ?? null;
+
+    // // Si queres validar el token contra Auth:
+    // if (session?.access_token) {
+    //   const { data: { user: verifiedUser }, error } = await supabase.auth.getUser();
+    //   if (!error) user = verifiedUser;
+    // }
+
 
     // const { data: currentSession, error: sessionError } = await supabase.auth.getSession();
     // if (sessionError) {
