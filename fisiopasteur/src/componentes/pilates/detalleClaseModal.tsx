@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { eliminarTurno, crearTurno, actualizarTurno, crearTurnosEnLote, notificarCancelacionPilates } from "@/lib/actions/turno.action";
+import { eliminarTurno, crearTurno, actualizarTurno, crearTurnosEnLote, notificarCancelacionesPilates, notificarModificacionesPilates } from "@/lib/actions/turno.action";
 import { HORARIOS_PILATES_30MIN } from "@/lib/constants/especialidades";
 import { dayjs, isPastDateTime } from "@/lib/dayjs";
 import { useToastStore } from '@/stores/toast-store';
@@ -571,41 +571,79 @@ export function DetalleClaseModal({
       const pacientesAEliminar = pacientesActuales.filter(id => !pacientesSeleccionados.includes(id));
       const pacientesNuevos = pacientesSeleccionados.filter(id => !pacientesActuales.includes(id));
       
-      // 1. Eliminar turnos (notificar al paciente antes de eliminar)
+      // 1. Eliminar turnos — acumular datos para notificaciones batch
+      const notifsCancel: Array<{ nombre: string; telefono: string; fecha: string; hora: string }> = [];
       for (const pacienteId of pacientesAEliminar) {
         const turnoAEliminar = turnos.find(t => t.id_paciente === pacienteId);
         if (turnoAEliminar) {
-          await notificarCancelacionPilates(turnoAEliminar.id_turno);
-          const resultado = await eliminarTurno(turnoAEliminar.id_turno);
+          if (turnoAEliminar.paciente?.telefono) {
+            notifsCancel.push({
+              nombre: turnoAEliminar.paciente.nombre,
+              telefono: String(turnoAEliminar.paciente.telefono),
+              fecha: dayjs(turnoAEliminar.fecha).format("DD/MM/YYYY"),
+              hora: String(turnoAEliminar.hora).substring(0, 5),
+            });
+          }
+          const resultado = await eliminarTurno(turnoAEliminar.id_turno, { notificar: false });
           if (!resultado.success) {
             throw new Error(`Error eliminando turno: ${resultado.error}`);
           }
         }
       }
+      if (notifsCancel.length > 0) {
+        await notificarCancelacionesPilates(notifsCancel); // after() internamente → retorna inmediato
+      }
 
-      // 2. Actualizar especialista y dificultad en turnos existentes  
+      // 2. Actualizar especialista y dificultad — acumular datos para notificaciones batch
       const pacientesExistentes = pacientesSeleccionados.filter(id => pacientesActuales.includes(id));
-      
+      const nuevoEspecialista = especialistas.find(e => String(e.id_usuario) === especialistaSeleccionado);
+      const notifsModif: Array<{ telefono: string; nombrePaciente: string; anterior: any; actual: any }> = [];
+
       for (const pacienteId of pacientesExistentes) {
         const turnoExistente = turnos.find(t => t.id_paciente === pacienteId);
         if (turnoExistente) {
           const actualizaciones: any = {};
-          
-          if (userRole === 1 && turnoExistente.id_especialista !== especialistaSeleccionado) {
+          const especialistaCambia = userRole === 1 && String(turnoExistente.id_especialista) !== especialistaSeleccionado;
+
+          if (especialistaCambia) {
             actualizaciones.id_especialista = especialistaSeleccionado;
           }
-          
           if (turnoExistente.dificultad !== dificultadSeleccionada) {
             actualizaciones.dificultad = dificultadSeleccionada;
           }
-          
+
           if (Object.keys(actualizaciones).length > 0) {
-            const resultado = await actualizarTurno(turnoExistente.id_turno, actualizaciones);
+            const resultado = await actualizarTurno(turnoExistente.id_turno, actualizaciones, { notificar: false });
             if (!resultado.success) {
               throw new Error(`Error actualizando turno: ${resultado.error}`);
             }
+
+            if (especialistaCambia && turnoExistente.paciente?.telefono) {
+              const fechaFmt = dayjs(turnoExistente.fecha).format("DD/MM/YYYY");
+              const horaFmt = String(turnoExistente.hora).substring(0, 5);
+              const espAnterior = turnoExistente.especialista;
+              notifsModif.push({
+                telefono: String(turnoExistente.paciente.telefono),
+                nombrePaciente: `${turnoExistente.paciente.nombre ?? ''} ${turnoExistente.paciente.apellido ?? ''}`.trim(),
+                anterior: {
+                  fecha: fechaFmt, hora: horaFmt,
+                  profesional: espAnterior ? `${espAnterior.nombre} ${espAnterior.apellido}`.trim() : 'Profesional',
+                  especialidad: turnoExistente.especialidad?.nombre || 'Pilates',
+                  boxLabel: turnoExistente.box?.numero ? `Box ${turnoExistente.box.numero}` : null,
+                },
+                actual: {
+                  fecha: fechaFmt, hora: horaFmt,
+                  profesional: nuevoEspecialista ? `${nuevoEspecialista.nombre} ${nuevoEspecialista.apellido}`.trim() : 'Profesional',
+                  especialidad: turnoExistente.especialidad?.nombre || 'Pilates',
+                  boxLabel: turnoExistente.box?.numero ? `Box ${turnoExistente.box.numero}` : null,
+                },
+              });
+            }
           }
         }
+      }
+      if (notifsModif.length > 0) {
+        await notificarModificacionesPilates(notifsModif); // after() internamente → retorna inmediato
       }
 
       // 3. Crear nuevos turnos
@@ -670,8 +708,22 @@ export function DetalleClaseModal({
     setIsSubmitting(true);
     
     try {
+      // Acumular datos de notificación antes de eliminar
+      const notifsCancel = turnos
+        .filter(t => t.paciente?.telefono)
+        .map(t => ({
+          nombre: t.paciente.nombre,
+          telefono: String(t.paciente.telefono),
+          fecha: dayjs(t.fecha).format("DD/MM/YYYY"),
+          hora: String(t.hora).substring(0, 5),
+        }));
+
       for (const turno of turnos) {
-        await eliminarTurno(turno.id_turno);
+        await eliminarTurno(turno.id_turno, { notificar: false });
+      }
+
+      if (notifsCancel.length > 0) {
+        await notificarCancelacionesPilates(notifsCancel); // after() internamente → retorna inmediato
       }
 
       addToast({

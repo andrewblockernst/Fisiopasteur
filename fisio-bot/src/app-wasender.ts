@@ -11,6 +11,53 @@ const app = express()
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// ===== QUEUE DE MENSAJES WASENDER =====
+// WaSender "Account Protection": máximo 1 mensaje cada 5 segundos.
+// Usamos una cola FIFO que procesa los mensajes de a uno con 6s de pausa entre cada uno.
+// Los endpoints HTTP responden 200 inmediatamente (el envío ocurre en background).
+// El procesador de recordatorios autónomo usa sendQueued() y espera el resultado real.
+
+const SEND_INTERVAL_MS = 6000
+
+interface QueueEntry {
+    params: { to: string; text: string; media?: string }
+    resolve: (result: any) => void
+    reject: (error: any) => void
+}
+
+const msgQueue: QueueEntry[] = []
+let queueRunning = false
+
+async function drainQueue() {
+    if (queueRunning) return
+    queueRunning = true
+    while (msgQueue.length > 0) {
+        const entry = msgQueue.shift()!
+        console.log(`📤 [Queue] Enviando a ${entry.params.to} (${msgQueue.length} en espera)`)
+        try {
+            const result = await waSenderService.sendMessage(entry.params)
+            entry.resolve(result)
+        } catch (err) {
+            entry.reject(err)
+        }
+        if (msgQueue.length > 0) {
+            console.log(`⏳ [Queue] Pausa ${SEND_INTERVAL_MS}ms antes del próximo envío...`)
+            await delay(SEND_INTERVAL_MS)
+        }
+    }
+    queueRunning = false
+}
+
+// Encola un mensaje y devuelve una promesa que resuelve cuando el mensaje fue enviado.
+function sendQueued(params: { to: string; text: string; media?: string }): Promise<any> {
+    return new Promise((resolve, reject) => {
+        msgQueue.push({ params, resolve, reject })
+        drainQueue() // no-await: arranca la cola sin bloquear
+    })
+}
+
 // Tipos para los datos del turno
 interface TurnoData {
     pacienteNombre: string
@@ -61,8 +108,6 @@ const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recorda
 
 let recordatoriosInterval: NodeJS.Timeout | null = null
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
 const formatearFecha = (fecha: string): string => {
     const [year, month, day] = fecha.split('-')
     return `${day}/${month}/${year}`
@@ -98,6 +143,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 id_notificacion,
                 id_turno,
                 mensaje,
+                telefono,
                 turno:id_turno(
                     fecha,
                     hora,
@@ -107,7 +153,6 @@ const procesarRecordatoriosAutonomo = async () => {
                 )
             `)
             .eq('estado', 'pendiente')
-            .ilike('mensaje', '%[RECORDATORIO%')
             .lte('fecha_programada', new Date().toISOString())
             .order('fecha_programada', { ascending: true })
 
@@ -127,41 +172,64 @@ const procesarRecordatoriosAutonomo = async () => {
         let fallidos = 0
 
         for (let i = 0; i < pendientes.length; i++) {
-            const notif = pendientes[i]
+            const notif = pendientes[i] as any
             const turno = notif.turno as any
 
-            if (!turno?.paciente?.telefono) {
+            // Determinar teléfono: columna directa o vía turno→paciente
+            const telefono: string = notif.telefono || turno?.paciente?.telefono || ''
+
+            if (!telefono) {
                 console.error(`❌ Notificación ${notif.id_notificacion} sin teléfono — marcando fallida`)
                 await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
                 fallidos++
                 continue
             }
 
-            const turnoData: TurnoData = {
-                pacienteNombre: turno.paciente.nombre || 'Paciente',
-                pacienteApellido: turno.paciente.apellido || '',
-                telefono: turno.paciente.telefono,
-                fecha: formatearFecha(turno.fecha),
-                hora: (turno.hora || '').substring(0, 5),
-                profesional: turno.especialista
-                    ? `${turno.especialista.nombre} ${turno.especialista.apellido}`
-                    : 'Profesional',
-                especialidad: turno.especialidad?.nombre || 'Consulta',
-                turnoId: String(notif.id_turno),
+            // Determinar mensaje:
+            // - Si el texto contiene [RECORDATORIO → generarlo desde los datos del turno
+            // - Si no → enviarlo tal cual está almacenado (confirmaciones, cancelaciones, etc.)
+            let mensaje: string
+            if (notif.mensaje?.includes('[RECORDATORIO')) {
+                if (!turno?.paciente) {
+                    console.error(`❌ Notificación ${notif.id_notificacion} recordatorio sin datos de turno`)
+                    await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
+                    fallidos++
+                    continue
+                }
+                const turnoData: TurnoData = {
+                    pacienteNombre: turno.paciente.nombre || 'Paciente',
+                    pacienteApellido: turno.paciente.apellido || '',
+                    telefono,
+                    fecha: formatearFecha(turno.fecha),
+                    hora: (turno.hora || '').substring(0, 5),
+                    profesional: turno.especialista
+                        ? `${turno.especialista.nombre} ${turno.especialista.apellido}`
+                        : 'Profesional',
+                    especialidad: turno.especialidad?.nombre || 'Consulta',
+                    turnoId: String(notif.id_turno),
+                }
+                mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
+            } else {
+                // Mensaje directo: confirmación Pilates, cancelación, modificación, etc.
+                mensaje = notif.mensaje || ''
+                if (!mensaje) {
+                    console.error(`❌ Notificación ${notif.id_notificacion} sin texto de mensaje`)
+                    await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
+                    fallidos++
+                    continue
+                }
             }
 
-            const mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
-
-            console.log(`📤 [${i + 1}/${pendientes.length}] Enviando recordatorio a ${turnoData.telefono}`)
+            console.log(`📤 [${i + 1}/${pendientes.length}] Enviando a ${telefono}`)
 
             if (process.env.WHATSAPP_ENABLED !== 'true') {
-                console.log(`⚠️ [DEV] Envío bloqueado (WHATSAPP_ENABLED no activo). Destinatario: ${turnoData.telefono}`)
+                console.log(`⚠️ [DEV] Envío bloqueado (WHATSAPP_ENABLED no activo). Destinatario: ${telefono}`)
                 await actualizarEstadoNotificacion(notif.id_notificacion, 'fallido')
                 fallidos++
                 continue
             }
 
-        const envio = await waSenderService.sendMessage({ to: turnoData.telefono, text: mensaje })
+        const envio = await sendQueued({ to: telefono, text: mensaje })
 
             if (envio.success) {
                 console.log(`✅ Recordatorio ${notif.id_notificacion} enviado`)
@@ -173,11 +241,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 fallidos++
             }
 
-            // ⏰ Rate limit WaSender Basic: 5s entre mensajes
-            if (i < pendientes.length - 1) {
-                console.log(`⏳ Esperando 5s (rate limit WaSender)...`)
-                await delay(5000)
-            }
+            // ⏰ El rate limit lo maneja la cola (sendQueued)
         }
 
         console.log(`✨ Completado en ${Date.now() - startTime}ms: ${enviados} enviados, ${fallidos} fallidos`)
@@ -243,23 +307,12 @@ app.post('/api/turno/confirmar', async (req, res) => {
         
         const mensaje = formatearMensajeTurno(datosNormalizados, 'confirmacion')
         
-        console.log(`📤 Enviando confirmación a ${telefono}`)
-        
-        // Enviar mensaje usando WaSenderAPI
-        const resultado = await waSenderService.sendMessage({
-            to: telefono,
-            text: mensaje
-        })
-        
-        if (!resultado.success) {
-            throw new Error(resultado.error || 'Error enviando mensaje')
-        }
-        
-        console.log(`✅ Confirmación enviada exitosamente`)
-        
-        return res.status(200).json({ 
-            status: 'success', 
-            message: 'Confirmación enviada',
+        console.log(`📤 Encolando confirmación para ${telefono}`)
+        sendQueued({ to: telefono, text: mensaje }) // fire-and-forget
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Confirmación encolada',
             turnoId: turnoData.turnoId || turnoData.id_turno
         })
         
@@ -304,23 +357,12 @@ app.post('/api/turno/recordatorio', async (req, res) => {
         
         const mensaje = formatearMensajeTurno(datosNormalizados, 'recordatorio')
         
-        console.log(`📤 Enviando recordatorio a ${telefono}`)
-        
-        // Enviar mensaje usando WaSenderAPI
-        const resultado = await waSenderService.sendMessage({
-            to: telefono,
-            text: mensaje
-        })
-        
-        if (!resultado.success) {
-            throw new Error(resultado.error || 'Error enviando mensaje')
-        }
-        
-        console.log(`✅ Recordatorio enviado exitosamente`)
-        
-        return res.status(200).json({ 
-            status: 'success', 
-            message: 'Recordatorio enviado',
+        console.log(`📤 Encolando recordatorio para ${telefono}`)
+        sendQueued({ to: telefono, text: mensaje }) // fire-and-forget
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Recordatorio encolado',
             turnoId: turnoData.turnoId
         })
         
@@ -346,25 +388,17 @@ app.post('/api/mensaje/enviar', async (req, res) => {
             })
         }
         
-        const resultado = await waSenderService.sendMessage({
-            to: telefono,
-            text: mensaje,
-            media: media
+        sendQueued({ to: telefono, text: mensaje, media }) // fire-and-forget
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Mensaje encolado'
         })
-        
-        if (!resultado.success) {
-            throw new Error(resultado.error || 'Error enviando mensaje')
-        }
-        
-        return res.status(200).json({ 
-            status: 'success', 
-            message: 'Mensaje enviado correctamente'
-        })
-        
+
     } catch (error) {
-        console.error('❌ Error enviando mensaje:', error)
-        return res.status(500).json({ 
-            status: 'error', 
+        console.error('❌ Error encolando mensaje:', error)
+        return res.status(500).json({
+            status: 'error',
             message: 'Error interno del servidor'
         })
     }

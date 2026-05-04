@@ -23,10 +23,9 @@ export function formatearHoraParaBot(hora: string): string {
 
 /**
  * Convertir datos del turno al formato esperado por el bot
- * ✅ MULTI-ORG: Ahora recibe brandingConfig para personalización
  */
 export function mapearTurnoParaBot(
-  turno: TurnoConDetalles, 
+  turno: TurnoConDetalles,
   centroMedico?: string
 ) {
   return {
@@ -35,12 +34,12 @@ export function mapearTurnoParaBot(
     telefono: turno.paciente?.telefono || '',
     fecha: formatearFechaParaBot(turno.fecha),
     hora: formatearHoraParaBot(turno.hora),
-    profesional: turno.especialista ? 
-      `${turno.especialista.nombre} ${turno.especialista.apellido}` : 
+    profesional: turno.especialista ?
+      `${turno.especialista.nombre} ${turno.especialista.apellido}` :
       'Profesional',
     especialidad: turno.especialidad?.nombre || 'Consulta',
     turnoId: turno.id_turno.toString(),
-    centroMedico: centroMedico || 'Centro Médico' // ✅ Personalizable
+    centroMedico: centroMedico || 'Fisiopasteur'
   };
 }
 
