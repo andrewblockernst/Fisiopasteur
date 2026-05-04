@@ -44,3 +44,19 @@ export function esPilatesById(
   const esp = especialidades.find((e) => e.id_especialidad === id_especialidad);
   return esPilates(esp);
 }
+
+/**
+ * Horarios disponibles para Pilates: 08:00 a 22:00 en intervalos de 30 minutos
+ * Formato: HH:mm (solo :00 y :30 permitidos)
+ */
+export const HORARIOS_PILATES_30MIN = (() => {
+  const horarios: string[] = [];
+  // Empezar desde las 08:00
+  for (let hora = 8; hora < 22; hora++) {
+    horarios.push(`${String(hora).padStart(2, '0')}:00`);
+    horarios.push(`${String(hora).padStart(2, '0')}:30`);
+  }
+  // Agregar 22:00
+  horarios.push('22:00');
+  return horarios;
+})();

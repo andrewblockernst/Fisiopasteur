@@ -1,15 +1,17 @@
 'use client'
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Plus } from "lucide-react";
 import PilatesCalendarioSemanal from "@/componentes/pilates/componenteSemanal";
 import { NuevoTurnoPilatesModal } from "@/componentes/pilates/nuevoTurnoPilatesDialog";
 import { DetalleClaseModal } from "@/componentes/pilates/detalleClaseModal";
-import { obtenerTurnosConFiltros, obtenerEspecialistasPilates, obtenerPacientes } from "@/lib/actions/turno.action";
+import { obtenerEspecialistasPilates, obtenerPacientes } from "@/lib/actions/turno.action";
 import { getIdPilates } from "@/lib/constants/especialidades";
-import { dayjs } from "@/lib/dayjs";
-import { useToastStore } from '@/stores/toast-store';
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
+import { usePilatesTurnos, useInvalidatePilatesTurnos, usePrefetchPilatesTurnos, getCacheWindowRange } from "@/hooks/usePilatesTurnosQuery";
+import type { TurnoConDetalles } from "@/stores/turno-store";
+import { useAuth } from "@/hooks/usePerfil";
 
-// ============= DEFINIR TIPOS COMPARTIDOS =============
 interface SlotInfo {
   disponible: boolean;
   razon: string;
@@ -18,81 +20,78 @@ interface SlotInfo {
   participantes?: number;
 }
 
-export default function PilatesPage() {
-  // ============= ESTADOS PARA CREAR NUEVOS TURNOS =============
-  const [showDialog, setShowDialog] = useState(false);
-  const [horarioSeleccionado, setHorarioSeleccionado] = useState<string | null>(null);
-  const [diaSeleccionado, setDiaSeleccionado] = useState<Date | null>(null);
+const formatDateISO = (date: Date) => date.toISOString().split('T')[0];
 
-  // ============= ESTADOS PARA VER DETALLES DE CLASES EXISTENTES =============
-  const [showDetalleDialog, setShowDetalleDialog] = useState(false);
-  const [turnosSeleccionados, setTurnosSeleccionados] = useState<any[]>([]);
+export default function PilatesPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+
+  // ============= ESTADOS PARA MODALES =============
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isDayModalOpen, setIsDayModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDayTurnos, setSelectedDayTurnos] = useState<TurnoConDetalles[]>([]);
+  const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
 
   // ============= ESTADOS GENERALES =============
-  const [turnos, setTurnos] = useState<any[]>([]);
-  const [semanaBase, setSemanaBase] = useState<Date>(new Date());
+  // const [especialistaFiltro, setEspecialistaFiltro] = useState<string>("");
   const [especialistas, setEspecialistas] = useState<any[]>([]);
   const [pacientes, setPacientes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState(1); // CAMBIO TEMPORAL PARA PROBAR COMO ADMIN
-  const [idPilates, setIdPilates] = useState<number | null>(null); // ID dinámico de Pilates
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [fechaVisible, setFechaVisible] = useState<Date>(new Date());
+  const [idPilates, setIdPilates] = useState<number | null>(null);
+  const puedeGestionarTurnos = Boolean(user?.puedeGestionarTurnos);
+  const currentUserId = user?.id_usuario ?? user?.id ?? null;
+  const userRole = puedeGestionarTurnos ? 1 : 2;
 
-  // ============= TOAST PARA MENSAJES =============
-  const { addToast } = useToastStore();
+  // ============= CALCULAR RANGO DE FECHAS PARA CACHÉ =============
+  const filters = useMemo(() => {
+    const range = getCacheWindowRange(fechaVisible);
 
-  // ============= FUNCIÓN PARA CARGAR TURNOS =============
-  const cargarTurnos = async () => {
-    const inicioSemana = dayjs(semanaBase).startOf("week"); // locale "es": lunes
-    const desde = inicioSemana.format("YYYY-MM-DD");
-    const hasta = inicioSemana.add(6, "day").format("YYYY-MM-DD");
-    
-    try {
-      const res = await obtenerTurnosConFiltros({ 
-        fecha_desde: desde, 
-        fecha_hasta: hasta,
-        especialidad_ids: [String(idPilates)]
-      });
+    return {
+      ...range,
+      especialidad_ids: idPilates ? [String(idPilates)] : undefined,
+      // especialista_ids: especialistaFiltro ? [especialistaFiltro] : undefined,
+    };
+  }, [fechaVisible, idPilates]); // especialistaFiltro
 
-      console.log('Turnos obtenidos:', res);
-      
-      if (res.success && Array.isArray(res.data)) {
-        
-        const turnosConColor = res.data.map((t: any) => {
-          const especialista = especialistas.find(e => String(e.id_usuario) === String(t.id_especialista));
-          return {
-            ...t,
-            especialista_color: especialista?.color || "#e0e7ff"
-          };
-        });
-        setTurnos(turnosConColor);
-      } else {
-        console.error('❌ Error en respuesta de turnos:', res.error);
-        setTurnos([]);
-      }
-    } catch (error) {
-      console.error('💥 Error cargando turnos de Pilates:', error);
-      setTurnos([]);
-    }
-  };
+  // ============= REACT QUERY - OBTENER TURNOS CON CACHÉ =============
+  const { data: turnos = [], isLoading: turnosLoading } = usePilatesTurnos({ 
+    filters,
+    enabled: idPilates !== null
+  });
+  const invalidatePilatesTurnos = useInvalidatePilatesTurnos();
+  const prefetchPilatesTurnos = usePrefetchPilatesTurnos();
 
-  // ============= CARGAR TURNOS CUANDO CAMBIA LA SEMANA, ESPECIALISTAS O ID DE PILATES =============
+  // ============= CREAR MAPA DE TURNOS POR SLOT PARA VALIDACIÓN =============
+  const turnosPorSlot = useMemo(() => {
+    const map = new Map<string, number>();
+    turnos.forEach(turno => {
+      const key = `${turno.fecha}:${turno.hora?.substring(0, 5)}`;
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return map;
+  }, [turnos]);
+
+  // ============= EFECTO PARA MOSTRAR SKELETON EN CARGA INICIAL =============
   useEffect(() => {
-    if (especialistas.length > 0 && idPilates) {
-      cargarTurnos();
-    }
-  }, [semanaBase, especialistas, idPilates]);
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // ============= CARGAR DATOS INICIALES =============
   useEffect(() => {
     const cargarDatos = async () => {
-      setLoading(true);
       try {
-        // Cargar solo especialistas de Pilates desde el servidor
+        // Cargar especialistas de Pilates
         const resEspecialistas = await obtenerEspecialistasPilates();
         if (resEspecialistas.success && Array.isArray(resEspecialistas.data)) {
           const especialistasPilates = resEspecialistas.data;
 
-          // Obtener el ID de Pilates a partir de las especialidades de los especialistas
+          // Obtener el ID de Pilates
           const todasEspecialidades = especialistasPilates.flatMap((e: any) =>
             (e.usuario_especialidad || []).map((ue: any) => ue.especialidad)
           );
@@ -108,198 +107,174 @@ export default function PilatesPage() {
           setPacientes(resPacientes.data);
         }
       } catch (error) {
-        console.error('Error cargando datos:', error);
-      } finally {
-        setLoading(false);
+        console.error('Error cargando datos iniciales:', error);
       }
     };
 
     cargarDatos();
   }, []);
 
-  // ============= FUNCIÓN PARA VERIFICAR SI SLOT ESTÁ DISPONIBLE PARA NUEVOS TURNOS =============
-  const verificarDisponibilidadSlot = (dia: Date, horario: string): SlotInfo => {
-    const fechaStr = dayjs(dia).format("YYYY-MM-DD");
-    const turnosEnSlot = turnos.filter(turno => 
-      turno.fecha === fechaStr && 
-      turno.hora?.substring(0, 5) === horario
+  useEffect(() => {
+    if (authLoading || !currentUserId) return; //|| especialistaFiltro
+    const esEspecialistaActivo = especialistas.some((esp) =>
+      String(esp.id_usuario) === String(currentUserId)
     );
+    // if (!puedeGestionarTurnos && esEspecialistaActivo) {
+    //   setEspecialistaFiltro(String(currentUserId));
+    // }
+  }, [authLoading, currentUserId, especialistas, puedeGestionarTurnos]); // especialistaFiltro
 
-    // Verificar si ya está completa (4 participantes)
-    if (turnosEnSlot.length >= 4) {
-      return {
-        disponible: false,
-        razon: 'La clase está completa (4/4 participantes)',
-        tipo: 'completa' as const
-      };
-    }
+  // ============= PREFETCH AUTOMÁTICO DE BLOQUES ADYACENTES =============
+  useEffect(() => {
+    const prevRange = getCacheWindowRange(fechaVisible, -1);
+    const nextRange = getCacheWindowRange(fechaVisible, 1);
 
-    // Verificar si ya hay un especialista asignado (solo admin puede crear con otro especialista)
-    if (turnosEnSlot.length > 0) {
-      const especialistaExistente = turnosEnSlot[0].especialista;
-      return {
-        disponible: true,
-        razon: `Clase existente con ${especialistaExistente?.nombre} ${especialistaExistente?.apellido}`,
-        tipo: 'existente' as const,
-        especialistaAsignado: turnosEnSlot[0].id_especialista,
-        participantes: turnosEnSlot.length
-      };
-    }
-
-    // Slot completamente libre
-    return {
-      disponible: true,
-      razon: 'Slot disponible para nueva clase',
-      tipo: 'libre' as const
+    const base = {
+      especialidad_ids: idPilates ? [String(idPilates)] : undefined,
+      // ...(especialistaFiltro ? { especialista_ids: [especialistaFiltro] } : {}),
     };
+
+    prefetchPilatesTurnos({ ...prevRange, ...base });
+    prefetchPilatesTurnos({ ...nextRange, ...base });
+  }, [fechaVisible, idPilates, prefetchPilatesTurnos]);// especialistaFiltro
+
+  // ============= HANDLERS =============
+  const handleBack = () => {
+    router.push('/inicio');
   };
 
-  // ============= HANDLERS PARA CREAR NUEVOS TURNOS =============
-  const handleAgregarTurno = (dia: Date, horario: string) => {
-    
-    const disponibilidad = verificarDisponibilidadSlot(dia, horario);
-    
-    if (!disponibilidad.disponible) {
-      addToast({
-        variant: 'warning',
-        message: 'Slot no disponible',
-        description: disponibilidad.razon,
-      });
-      return;
-    }
-
-    // Si hay una clase existente, verificar permisos para cambiar especialista
-    if (disponibilidad.tipo === 'existente' && userRole !== 1) {
-      addToast({
-        variant: 'info',
-        message: 'Clase existente',
-        description: `${disponibilidad.razon}. Solo puedes agregar participantes con el mismo especialista.`,
-      });
-    }
-
-    setDiaSeleccionado(dia);
-    setHorarioSeleccionado(horario);
-    setShowDialog(true);
+  const handleCreateTurno = () => {
+    setSelectedDate(null);
+    setHoraSeleccionada('');
+    setIsCreateModalOpen(true);
   };
 
-  const handleCloseDialog = () => {
-    setShowDialog(false);
-    setHorarioSeleccionado(null);
-    setDiaSeleccionado(null);
+  const handleAgregarTurnoSlot = (dia: Date, horario: string) => {
+    setSelectedDate(dia);
+    setHoraSeleccionada(horario);
+    setIsCreateModalOpen(true);
   };
 
-  // ============= HANDLERS PARA VER DETALLES DE CLASES EXISTENTES =============
-  const handleVerTurno = (turnos: any[]) => {
-    
-    // Verificar que todos los turnos sean del mismo especialista (validación extra)
-    const especialistasUnicos = [...new Set(turnos.map(t => t.id_especialista))];
-    
-    if (especialistasUnicos.length > 1) {
-      console.warn('⚠️ Detectado conflicto de especialistas:', especialistasUnicos);
-      
-      // Solo bloquear si NO es administrador
-      if (userRole !== 1) {
-        addToast({
-          variant: 'error',
-          message: 'Conflicto detectado',
-          description: 'Esta clase tiene múltiples especialistas. Contacta al administrador.',
-        });
-        return;
-      }
-      
-      // Si es administrador, permitir acceso con advertencia
-      addToast({
-        variant: 'warning',
-        message: 'Conflicto de especialistas detectado',
-        description: 'Como administrador puedes resolver este conflicto desde el modal.',
-      });
-    }
-
-    setTurnosSeleccionados(turnos);
-    setShowDetalleDialog(true);
+  const handleSuccessfulTurnoCreation = () => {
+    invalidatePilatesTurnos({ scope: 'lists' });
   };
 
-  // ============= HANDLER PARA CERRAR MODAL DE DETALLES (ESTA FUNCIÓN FALTABA) =============
-  const handleCloseDetalleDialog = () => {
-    setShowDetalleDialog(false);
-    setTurnosSeleccionados([]);
-  };
-
-  // ============= HANDLER PARA REFRESCAR DATOS DESPUÉS DE CAMBIOS =============
-  const handleTurnoCreated = async () => {
-  
-  try {
-    // Esperar un poco más para asegurar que la BD esté actualizada
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    await cargarTurnos();
-  } catch (error) {
-    console.error('❌ Error recargando turnos:', error);
-    addToast({
-      variant: 'error',
-      message: 'Error actualizando datos',
-      description: 'No se pudieron recargar los turnos automáticamente. Recarga la página.',
-    });
-  }
-};
-
-  // ============= OBTENER INFORMACIÓN DE SLOT PARA PASAR AL MODAL =============
-  const getSlotInfo = (): SlotInfo | null => {
-    if (!diaSeleccionado || !horarioSeleccionado) return null;
-    
-    return verificarDisponibilidadSlot(diaSeleccionado, horarioSeleccionado);
-  };
-
-  // ============= LOADING STATE =============
-  if (loading) {
-      return (
-        <div className="min-h-screen">
-          <UnifiedSkeletonLoader type="calendar" showHeader={false} showFilters={false} />
-        </div>
-      );
+  // ============= MOSTRAR SKELETON DURANTE CARGA INICIAL =============
+  if (!idPilates || turnosLoading) {
+    return (
+      <UnifiedSkeletonLoader
+        type="calendar"
+        showHeader={true}
+        showFilters={false}
+      />
+    );
   }
 
   // ============= RENDER PRINCIPAL =============
   return (
-    <div className="min-h-screen">
-      <div className="max-w-[1500px] mx-auto p-6 sm:p-8 lg:px-6 lg:pt-8">
-    
-        {/* ============= CALENDARIO PRINCIPAL ============= */}
-        <PilatesCalendarioSemanal
-        turnos={turnos}
-        semanaBase={semanaBase}
-        onSemanaChange={setSemanaBase}
-        onAgregarTurno={handleAgregarTurno}     // ← Para crear nuevos turnos (con validaciones)
-        onVerTurno={handleVerTurno}             // ← Para ver detalles de clases existentes
-        especialistas={especialistas}
-      />
-      
-      {/* ============= MODAL PARA CREAR NUEVOS TURNOS ============= */}
+    <div className="min-h-screen text-black">
+      {/* Mobile Header */}
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={handleBack}
+            className="p-2 -ml-2 rounded-md active:scale-95 transition hover:bg-gray-100"
+            aria-label="Volver"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-lg font-semibold text-center flex-1">Pilates</h1>
+          <div className="w-6" />
+        </div>
+      </header>
+
+      {/* Desktop Header */}
+      <div className="hidden sm:block">
+        <div className="max-w-[1800px] mx-auto p-4 sm:p-6 lg:px-8 lg:pt-8">
+          <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
+            <h2 className="text-2xl sm:text-3xl font-bold">Pilates</h2>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Filter */}
+      <div className="sm:hidden px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <select
+            // value={especialistaFiltro}
+            // onChange={(e) => setEspecialistaFiltro(e.target.value)}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent bg-white"
+          >
+            <option value="">Todos los especialistas</option>
+            {especialistas.map((especialista) => (
+              <option key={especialista.id_usuario} value={especialista.id_usuario}>
+                {especialista.apellido}, {especialista.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Calendario principal */}
+      <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-0">
+        <div className="rounded-lg">
+          <PilatesCalendarioSemanal
+            turnos={turnos}
+            semanaBase={fechaVisible}
+            onSemanaChange={setFechaVisible}
+            onAgregarTurno={handleAgregarTurnoSlot}
+            onNuevoTurno={handleCreateTurno}
+            onVerTurno={(turnos) => {
+              setSelectedDayTurnos(turnos);
+              setIsDayModalOpen(true);
+            }}
+            especialistas={especialistas}
+          />
+        </div>
+      </div>
+
+      {/* Modal de crear turno */}
       <NuevoTurnoPilatesModal
-        isOpen={showDialog}
-        onClose={handleCloseDialog}
-        onTurnoCreated={handleTurnoCreated}
-        fechaSeleccionada={diaSeleccionado}
-        horaSeleccionada={horarioSeleccionado}
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setHoraSeleccionada('');
+          setSelectedDate(null);
+        }}
+        fechaSeleccionada={selectedDate}
+        horaSeleccionada={horaSeleccionada}
         especialistas={especialistas}
         pacientes={pacientes}
-        slotInfo={getSlotInfo()} // ← Pasar información del slot para restricciones
-        userRole={userRole}      // ← Pasar rol del usuario para permisos
+        turnosPorSlot={turnosPorSlot}
+        onTurnoCreated={handleSuccessfulTurnoCreation}
+        userRole={userRole}
+        puedeGestionarTurnos={puedeGestionarTurnos}
+        currentUserId={currentUserId ? String(currentUserId) : undefined}
       />
 
-      {/* ============= MODAL PARA VER/EDITAR DETALLES DE CLASES EXISTENTES ============= */}
+      {/* Modal de detalles de clase existente */}
       <DetalleClaseModal
-        isOpen={showDetalleDialog}
-        onClose={() => setShowDetalleDialog(false)}
+        isOpen={isDayModalOpen}
+        onClose={() => setIsDayModalOpen(false)}
         onTurnosActualizados={async () => {
-          await cargarTurnos(); // ← Hacer esta función async si no lo es
+          invalidatePilatesTurnos({ scope: 'lists' });
         }}
-        turnos={turnosSeleccionados}
+        turnos={selectedDayTurnos}
         especialistas={especialistas}
         pacientes={pacientes}
         userRole={userRole}
+        puedeGestionarTurnos={puedeGestionarTurnos}
+        currentUserId={currentUserId ? String(currentUserId) : undefined}
       />
-      </div>
+
+      {/* Botón flotante para agregar turno - Solo móvil */}
+      <button
+        onClick={handleCreateTurno}
+        className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center sm:hidden"
+        aria-label="Agregar nuevo turno"
+      >
+        <Plus size={30} />
+      </button>
     </div>
   );
 }
