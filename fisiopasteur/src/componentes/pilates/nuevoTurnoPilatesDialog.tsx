@@ -110,6 +110,7 @@ export function NuevoTurnoPilatesModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notifParticipantes, setNotifParticipantes] = useState(true);
+  const [recordatoriosSeleccionados, setRecordatoriosSeleccionados] = useState<('1d' | '2h' | '1h')[]>(['1d', '2h', '1h']);
 
   // ============= ESTADOS PARA BÚSQUEDA DE PACIENTES =============
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
@@ -164,6 +165,7 @@ export function NuevoTurnoPilatesModal({
       }
 
       setNotifParticipantes(true);
+      setRecordatoriosSeleccionados(['1d', '2h', '1h']);
       setBusquedaPaciente('');
       setMostrarRepeticion(false);
       setDiasSeleccionados([]);
@@ -380,10 +382,10 @@ export function NuevoTurnoPilatesModal({
               dificultad: formData.dificultad,
               es_pilates: true,
             },
-            ['1d', '2h', '1h'],  // programar recordatorios
-            true,                 // enviarNotificacion=true para registrar recordatorios
+            recordatoriosSeleccionados,
+            true,
             undefined,
-            { enviarConfirmacion: false }  // omitir confirmación individual
+            { enviarConfirmacion: false }
           );
           resultados.push(resultado);
           if (resultado.success && resultado.data) {
@@ -469,7 +471,7 @@ export function NuevoTurnoPilatesModal({
       }
 
 
-      const resultado = await crearTurnosEnLote(turnosParaCrear, { enviarNotificacion: notifParticipantes });
+      const resultado = await crearTurnosEnLote(turnosParaCrear, { enviarNotificacion: notifParticipantes, tiposRecordatorio: recordatoriosSeleccionados });
 
       if (resultado.success) {
         const { exitosos, fallidos } = resultado.data as { exitosos: number; fallidos: number; };
@@ -803,8 +805,8 @@ export function NuevoTurnoPilatesModal({
           {/* ============= NOTIFICACIONES WHATSAPP ============= */}
           <div className="border-t pt-3 md:pt-4">
             <p className="text-xs md:text-sm font-medium text-gray-700 mb-2">Notificaciones WhatsApp</p>
-            <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-              <div className="flex items-center justify-between">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 divide-y divide-gray-200">
+              <div className="flex items-center justify-between p-3">
                 <div>
                   <span className="text-xs md:text-sm text-gray-700">Confirmar a los participantes</span>
                   <p className="text-xs text-gray-500">Enviar mensaje de confirmación de la clase</p>
@@ -822,6 +824,44 @@ export function NuevoTurnoPilatesModal({
                     notifParticipantes ? 'translate-x-5' : 'translate-x-0'
                   }`} />
                 </button>
+              </div>
+              <div className="p-3 space-y-2">
+                <div>
+                  <span className="text-xs md:text-sm text-gray-700">Recordatorios automáticos</span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Seleccioná cuándo enviar el recordatorio. Desactivá los que no quieras.
+                    {recordatoriosSeleccionados.length === 0 && (
+                      <span className="text-orange-500 font-medium"> No se enviará ningún recordatorio.</span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {([
+                    { tipo: '1d', label: '1 día antes' },
+                    { tipo: '2h', label: '2 hs antes' },
+                    { tipo: '1h', label: '1 hs antes' },
+                  ] as const).map(({ tipo, label }) => {
+                    const activo = recordatoriosSeleccionados.includes(tipo);
+                    return (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() =>
+                          setRecordatoriosSeleccionados(prev =>
+                            activo ? prev.filter(t => t !== tipo) : [...prev, tipo]
+                          )
+                        }
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                          activo
+                            ? 'bg-[#9C1838] text-white border-[#9C1838]'
+                            : 'bg-white text-gray-500 border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

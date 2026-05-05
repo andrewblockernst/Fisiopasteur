@@ -2080,7 +2080,7 @@ export async function crearTurnosEnLote(turnos: Array<{
   estado?: string;
   dificultad?: 'principiante' | 'intermedio' | 'avanzado';
   es_pilates?: boolean;
-}>, opciones?: { enviarNotificacion?: boolean }) {
+}>, opciones?: { enviarNotificacion?: boolean; tiposRecordatorio?: ('1d' | '2h' | '1h')[] }) {
   try {
     const supabase = await createClient();
 
@@ -2118,12 +2118,12 @@ export async function crearTurnosEnLote(turnos: Array<{
         turnosCreados.push(turno);
 
         // Programar recordatorios individuales para cada turno
+        const tiposRecordatorio = opciones?.tiposRecordatorio ?? ['1d', '2h', '1h'];
+        if (tiposRecordatorio.length === 0) continue;
         try {
           const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
           const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
 
-          // ✅ Por defecto: 1 día antes, 2 horas antes Y 1 hora antes
-          const tiposRecordatorio: ('1d' | '2h' | '1h')[] = ['1d', '2h', '1h'];
           const tiemposRecordatorio = calcularTiemposRecordatorio(turno.fecha, turno.hora, tiposRecordatorio);
 
           if (turno.id_paciente) {
