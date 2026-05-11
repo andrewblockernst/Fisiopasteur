@@ -525,24 +525,17 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
     // Si se proporciona una nueva contraseña, actualizarla en Supabase Auth primero
     const contraseña = formData.get("contraseña") as string;
     if (contraseña && contraseña.trim() !== "") {
-      const { data: authUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(id);
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+        id,
+        { password: contraseña }
+      );
 
-      if (getUserError || !authUser) {
-        console.error("Usuario no encontrado en Auth:", getUserError);
-        console.log("Continuando con actualización solo en tabla usuario");
-      } else {
-        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-          id,
-          { password: contraseña }
-        );
-
-        if (authError) {
-          console.error("Error updating password in Auth:", authError);
-          return {
-            success: false,
-            error: 'No se pudo actualizar la contraseña en el sistema de autenticación'
-          };
-        }
+      if (authError) {
+        console.error("Error updating password in Auth:", authError);
+        return {
+          success: false,
+          error: authError.message || 'No se pudo actualizar la contraseña en el sistema de autenticación'
+        };
       }
     }
 
