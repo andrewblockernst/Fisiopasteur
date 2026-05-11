@@ -185,7 +185,7 @@ function PacienteEditFormForDialog({paciente, onSuccess, onError, onCancel}: Pac
                 return;
             }
 
-            console.error("Error:", error);
+            console.error("Error al editar paciente:", error);
             onError(error);
             setIsSubmitting(false);
         }

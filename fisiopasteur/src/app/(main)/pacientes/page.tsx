@@ -103,7 +103,7 @@ export default function PacientePage() {
                 message: "El paciente se ha activado correctamente.",
             });
         } catch (error) {
-            console.error("Error activating patient:", error);
+            console.error("Error al activar paciente:", error);
             toast.addToast({
                 variant: "error",
                 message: "Error al activar el paciente.",

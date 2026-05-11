@@ -98,7 +98,7 @@ export default function EspecialistasPage() {
         const loaded = especialidadesResult.success ? especialidadesResult.data : [];
         setEspecialidades(loaded);
       } catch (error) {
-        console.error("Error loading specialties:", error);
+        console.error("Error cargando especialidades:", error);
       }
     };
 

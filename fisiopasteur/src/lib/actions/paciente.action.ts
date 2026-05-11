@@ -135,7 +135,7 @@ export async function getPacientes(options?: {
     });
 
     if (error) {
-      console.error('Error fetching pacientes via RPC buscar_pacientes_general:', error);
+      console.error('Error obteniendo pacientes via RPC buscar_pacientes_general:', error);
       return { success: false, error: error.message };
     }
 
@@ -226,7 +226,7 @@ export async function getPacientes(options?: {
   const { data, error, count } = await query;
 
   if (error) {
-    console.error("Error fetching pacientes:", error);
+    console.error("Error obteniendo pacientes:", error);
     return { success: false, error: error.message };
   }
 

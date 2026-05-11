@@ -374,7 +374,7 @@ export async function createEspecialista(formData: FormData): Promise<ActionResu
     });
 
     if (authError || !authUser) {
-      console.error("Error creando user en Auth:", authError);
+      console.error("Error al crear usuario en Auth:", authError);
       return {
         success: false,
         error: authError?.message || 'No se pudo crear el usuario en el sistema de autenticación'
@@ -531,7 +531,7 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       );
 
       if (authError) {
-        console.error("Error updating password in Auth:", authError);
+        console.error("Error al actualizar contraseña en Auth:", authError);
         return {
           success: false,
           error: authError.message || 'No se pudo actualizar la contraseña en el sistema de autenticación'

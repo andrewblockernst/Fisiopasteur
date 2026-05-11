@@ -63,7 +63,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                 const updatedPacientes = await getPacientes();
                 pacientes = updatedPacientes.data;
             } catch (error) {
-                console.error("Error reloading patients:", error);
+                console.error("Error recargando pacientes:", error);
             }
         };
 
