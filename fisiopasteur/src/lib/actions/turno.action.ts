@@ -837,9 +837,9 @@ export async function eliminarTurno(id: number, opciones?: { notificar?: boolean
             : "—";
           const horaFormateada = turnoVerificado.hora?.substring(0, 5) ?? "—";
           const nombrePaciente = `${paciente.nombre ?? ""} ${paciente.apellido ?? ""}`.trim();
-          const boxLinea = box?.nombre ? `\n📦 Box: ${box.nombre}` : "";
+          const boxLinea = box?.nombre ? `\n Box: ${box.nombre}` : "";
 
-          const mensaje = `❌ *Turno cancelado*\n\nHola ${nombrePaciente},\n\nTu turno en *Fisiopasteur* fue cancelado.\n\n📅 ${fechaFormateada} — 🕐 ${horaFormateada}hs\n👤 ${especialista ? `${especialista.nombre} ${especialista.apellido}` : "Profesional"}\n🩺 ${especialidad?.nombre ?? "Consulta"}${boxLinea}\n\n📍 Pasteur 206, Libertador San Martín\nAnte cualquier duda, comunicate con el centro.`;
+          const mensaje = `❌ *Turno cancelado*\n\nHola ${nombrePaciente},\n\nTu turno en *Fisiopasteur* fue cancelado.\n\n📅 ${fechaFormateada} — 🕐 ${horaFormateada}hs\n ${especialista ? `${especialista.nombre} ${especialista.apellido}` : "Profesional"}\n ${especialidad?.nombre ?? "Consulta"}${boxLinea}\n\n📍 Pasteur 206, Libertador San Martín\nAnte cualquier duda, comunicate con el centro.`;
 
           const { enviarMensajePersonalizado } = await import("@/lib/services/whatsapp-bot.service");
           await enviarMensajePersonalizado(String(paciente.telefono).trim(), mensaje);

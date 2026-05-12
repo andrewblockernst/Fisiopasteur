@@ -258,8 +258,8 @@ export async function enviarAvisoModificacionTurno(params: {
   }
 
   const linea = (s: SnapshotTurnoParaAviso) => {
-    const box = s.boxLabel ? `\n📦 ${s.boxLabel}` : "";
-    return `📅 ${s.fecha} — 🕐 ${s.hora}\n👤 ${s.profesional}\n🩺 ${s.especialidad}${box}`;
+    const box = s.boxLabel ? `\n ${s.boxLabel}` : "";
+    return `📅 ${s.fecha} — 🕐 ${s.hora}\n ${s.profesional}\n ${s.especialidad}${box}`;
   };
 
   const mensaje = `📝 *Cambio en tu turno*
