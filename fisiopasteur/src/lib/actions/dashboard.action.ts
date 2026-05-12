@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
 import { dayjs, todayYmd } from "@/lib/dayjs";
+import { ROLES } from "@/lib/constants/roles";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type Box = Database["public"]["Tables"]["box"]["Row"];
@@ -55,7 +56,8 @@ export async function obtenerNombreOrganizacion(): Promise<string> {
 
 // ✅ Obtener KPIs por periodo con historial
 export async function obtenerKPIsConHistorial(
-  periodo: PeriodoFiltro
+  periodo: PeriodoFiltro,
+  especialista_id?: string
 ): Promise<
   | { success: true; datos: KPIHistorico[]; total: KPIsDashboard }
   | { success: false; error: string }
@@ -63,6 +65,24 @@ export async function obtenerKPIsConHistorial(
   const supabase = await createClient();
 
   try {
+    // Verificar rol del usuario logueado y forzar filtro si es especialista
+    const { data: { user } } = await supabase.auth.getUser();
+    let filtroEspecialistaId = especialista_id;
+
+    if (user) {
+      const { data: usuarioData } = await supabase
+        .from("usuario")
+        .select("id_rol")
+        .eq("id_usuario", user.id)
+        .single();
+
+      const idRol = (usuarioData as any)?.id_rol;
+      if (idRol === ROLES.ESPECIALISTA) {
+        // Especialista solo puede ver sus propios ingresos
+        filtroEspecialistaId = user.id;
+      }
+    }
+
     const hoy = new Date();
     let fechaInicio = new Date();
     let fechaFin = new Date(hoy);
@@ -103,6 +123,10 @@ export async function obtenerKPIsConHistorial(
 
     if (idPilates) {
       queryTurnos = queryTurnos.neq("id_especialidad", idPilates);
+    }
+
+    if (filtroEspecialistaId) {
+      queryTurnos = queryTurnos.eq("id_especialista", filtroEspecialistaId);
     }
 
     const { data: turnos, error: errorTurnos } = await queryTurnos;
@@ -184,13 +208,6 @@ export async function obtenerKPIsConHistorial(
           if (turno.precio) {
             dato.Ingresos += turno.precio;
           }
-
-          // await asignarIngresos(dato, turno, supabase);
-
-          console.log(`Ingresos asignados para turno ${turno.id_turno}: $${dato.Ingresos}`);
-
-          console.log(dato)
-
         }
       };
     }

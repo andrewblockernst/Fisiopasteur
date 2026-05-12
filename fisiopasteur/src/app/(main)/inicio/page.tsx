@@ -11,8 +11,12 @@ import {
   type ProximoTurno,
   type OcupacionBox,
 } from '@/lib/actions/dashboard.action';
+import { useAuth } from '@/hooks/AuthContext';
 
 export default function Inicio() {
+  const { user, loading: authLoading } = useAuth();
+  const puedeVerBoxes = user?.puedeGestionarTurnos ?? false;
+
   const [proximosTurnos, setProximosTurnos] = useState<ProximoTurno[]>([]);
   const [ocupacionBoxes, setOcupacionBoxes] = useState<OcupacionBox[]>([]);
   const [nombreOrganizacion, setNombreOrganizacion] = useState<string>("");
@@ -71,10 +75,12 @@ export default function Inicio() {
           <KPIsCardsConFiltro loading={loading} />
         </div>
 
-        {/* Fila 2: Próximos Turnos + Ocupación de Boxes */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Fila 2: Próximos Turnos + Ocupación de Boxes (boxes solo para admin/programador) */}
+        <div className={`grid grid-cols-1 ${!authLoading && puedeVerBoxes ? 'lg:grid-cols-2' : ''} gap-8 mb-8`}>
           <ProximosTurnosDia turnos={proximosTurnos} isLoading={loading} />
-          <OcupacionBoxes boxes={ocupacionBoxes} isLoading={loading} />
+          {!authLoading && puedeVerBoxes && (
+            <OcupacionBoxes boxes={ocupacionBoxes} isLoading={loading} />
+          )}
         </div>
 
       </div>
