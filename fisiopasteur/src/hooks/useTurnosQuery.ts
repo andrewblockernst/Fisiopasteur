@@ -316,8 +316,41 @@ export function useInvalidateTurnos() {
  */
 export function useUpdateTurnosCache() {
   const queryClient = useQueryClient();
-  
-  return (updater: (oldData: TurnoConDetalles[] | undefined) => TurnoConDetalles[]) => {
-    queryClient.setQueriesData({ queryKey: turnoKeys.lists() }, updater);
+
+  return (updater: (rows: TurnoConDetalles[]) => TurnoConDetalles[]) => {
+    queryClient.setQueriesData({ queryKey: turnoKeys.lists() }, (oldData: unknown) => {
+      if (!oldData) return oldData;
+
+      if (Array.isArray(oldData)) {
+        return updater(oldData as TurnoConDetalles[]);
+      }
+
+      if (
+        typeof oldData === "object" &&
+        oldData !== null &&
+        "pages" in oldData &&
+        Array.isArray((oldData as { pages: unknown[] }).pages)
+      ) {
+        const paged = oldData as { pages: unknown[] };
+        return {
+          ...paged,
+          pages: paged.pages.map((page) =>
+            Array.isArray(page) ? updater(page as TurnoConDetalles[]) : page
+          ),
+        };
+      }
+
+      if (
+        typeof oldData === "object" &&
+        oldData !== null &&
+        "data" in oldData &&
+        Array.isArray((oldData as { data: unknown }).data)
+      ) {
+        const withData = oldData as { data: TurnoConDetalles[] } & Record<string, unknown>;
+        return { ...withData, data: updater(withData.data) };
+      }
+
+      return oldData;
+    });
   };
 }

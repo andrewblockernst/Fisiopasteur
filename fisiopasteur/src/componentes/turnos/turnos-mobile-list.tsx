@@ -92,9 +92,42 @@ export default function TurnosMobileList({
   const updateTurnosLists = (updater: (rows: TurnoConDetalles[]) => TurnoConDetalles[]) => {
     queryClient.setQueriesData(
       { queryKey: turnoKeys.lists() },
-      (oldData: TurnoConDetalles[] | undefined) => {
+      (oldData: unknown) => {
         if (!oldData) return oldData;
-        return updater(oldData);
+
+        if (Array.isArray(oldData)) {
+          return updater(oldData as TurnoConDetalles[]);
+        }
+
+        if (
+          typeof oldData === "object" &&
+          oldData !== null &&
+          "pages" in oldData &&
+          Array.isArray((oldData as { pages: unknown[] }).pages)
+        ) {
+          const paged = oldData as { pages: unknown[] };
+          return {
+            ...paged,
+            pages: paged.pages.map((page) =>
+              Array.isArray(page) ? updater(page as TurnoConDetalles[]) : page
+            ),
+          };
+        }
+
+        if (
+          typeof oldData === "object" &&
+          oldData !== null &&
+          "data" in oldData &&
+          Array.isArray((oldData as { data: unknown }).data)
+        ) {
+          const withData = oldData as { data: TurnoConDetalles[] } & Record<string, unknown>;
+          return {
+            ...withData,
+            data: updater(withData.data),
+          };
+        }
+
+        return oldData;
       }
     );
   };
