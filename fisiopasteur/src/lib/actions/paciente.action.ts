@@ -388,12 +388,14 @@ export async function updatePaciente(id: number, formData: FormData): Promise<Ac
   // ✅ Normalizar número de teléfono al formato internacional
   const telefonoRaw = formData.get("telefono") as string;
   const telefonoNormalizado = normalizePhoneNumber(telefonoRaw);
+  const dniRaw = (formData.get("dni") as string | null) ?? "";
+  const dniNormalizado = dniRaw.trim() === "" ? null : dniRaw.trim();
 
   const updateData: PacienteUpdate = {
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
     email: formData.get("email") as string || null,
-    dni: formData.get("dni") as string,
+    dni: dniNormalizado,
     telefono: telefonoNormalizado,
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
