@@ -1,11 +1,47 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { z } from 'zod';
+
 import { actualizarPerfil, PerfilCompleto } from '@/lib/actions/perfil.action';
 import { useToastStore } from '@/stores/toast-store';
-import { useRouter } from 'next/navigation';
 import BaseDialog from '@/componentes/dialog/base-dialog';
-import Button from '@/componentes/boton';
+import { DiscardChangesDialog } from '@/componentes/dialog/discard-changes-dialog';
+import {
+  Button,
+  Input,
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormDescription,
+  FormMessage,
+} from '@/componentes/ui';
+import { useModalForm } from '@/hooks/use-modal-form';
+import { LIMITES } from '@/lib/validators/common';
+
+const FORM_ID = 'editar-perfil-form';
+
+const perfilSchema = z.object({
+  nombre: z
+    .string()
+    .trim()
+    .min(2, 'Mínimo 2 caracteres')
+    .max(LIMITES.nombrePersonaMax, `Máximo ${LIMITES.nombrePersonaMax} caracteres`),
+  apellido: z
+    .string()
+    .trim()
+    .min(2, 'Mínimo 2 caracteres')
+    .max(LIMITES.nombrePersonaMax, `Máximo ${LIMITES.nombrePersonaMax} caracteres`),
+  telefono: z.string().trim().optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'Color inválido')
+    .or(z.literal('')),
+});
+
+type PerfilFormValues = z.infer<typeof perfilSchema>;
 
 interface EditarPerfilDialogProps {
   open: boolean;
@@ -13,143 +49,185 @@ interface EditarPerfilDialogProps {
   perfil: PerfilCompleto;
 }
 
-const BRAND = '#9C1838';
-
-export default function EditarPerfilDialog({ open, onClose, perfil }: EditarPerfilDialogProps) {
-  const [isPending, startTransition] = useTransition();
+export default function EditarPerfilDialog({
+  open,
+  onClose,
+  perfil,
+}: EditarPerfilDialogProps) {
   const { addToast } = useToastStore();
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    
-    startTransition(async () => {
-      const result = await actualizarPerfil(formData);
-      addToast({
-        variant: result.success ? 'success' : 'error',
-        message: result.success ? 'Perfil actualizado' : 'Error al actualizar perfil',
-        description: result.success ? undefined : result.error,
-      });
-      
-      if (result.success) {
-        onClose();
-        router.refresh();
-      }
-    });
-  };
+  const form = useModalForm({
+    schema: perfilSchema,
+    mode: 'edit',
+    resetKey: `${perfil.id_usuario}:${open}`,
+    onClose,
+    defaultValues: {
+      nombre: perfil.nombre ?? '',
+      apellido: perfil.apellido ?? '',
+      telefono: perfil.telefono ?? '',
+      color: perfil.color ?? '#9C1838',
+    },
+  });
+
+  const onSubmit = (values: PerfilFormValues) =>
+    form.submit(
+      () => {
+        const formData = new FormData();
+        formData.set('nombre', values.nombre);
+        formData.set('apellido', values.apellido);
+        formData.set('telefono', values.telefono ?? '');
+        formData.set('color', values.color ?? '');
+        return actualizarPerfil(formData) as any;
+      },
+      {
+        onSuccess: () => {
+          addToast({ variant: 'success', message: 'Perfil actualizado' });
+          onClose();
+          router.refresh();
+        },
+        onError: (error) =>
+          addToast({ variant: 'error', message: 'Error al actualizar perfil', description: error }),
+      },
+    );
 
   return (
-    <BaseDialog
-      isOpen={open}
-      onClose={onClose}
-      title="Editar Perfil"
-      size="md"
-      showCloseButton
-      customColor={BRAND}
-      customIcon={
-        <img
-          src="/favicon.svg"
-          alt="Fisio Pasteur"
-          className="h-10 w-10 rounded-full"
-        />
-      }
-      message={
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-            {/* Nombre */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Nombre
-              </label>
-              <input
-                type="text"
-                name="nombre"
-                defaultValue={perfil.nombre}
-                className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-[--brand] focus:border-[--brand] transition"
-                style={{ ['--brand' as any]: BRAND }}
-                required
-              />
-            </div>
-
-            {/* Apellido */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Apellido
-              </label>
-              <input
-                type="text"
-                name="apellido"
-                defaultValue={perfil.apellido}
-                className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-[--brand] focus:border-[--brand] transition"
-                style={{ ['--brand' as any]: BRAND }}
-                required
-              />
-            </div>
-
-            {/* Email (solo lectura) */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={perfil.email}
-                readOnly
-                className="w-full px-4 py-3 border border-neutral-200 bg-neutral-50 rounded-xl text-neutral-600"
-              />
-            </div>
-
-            {/* Teléfono */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Teléfono
-              </label>
-              <input
-                type="tel"
-                name="telefono"
-                defaultValue={perfil.telefono || ''}
-                placeholder="549..."
-                className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-[--brand] focus:border-[--brand] transition"
-                style={{ ['--brand' as any]: BRAND }}
-              />
-            </div>
-
-            {/* Color */}
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Color
-              </label>
-              <input
-                type="color"
-                name="color"
-                defaultValue={perfil.color || BRAND}
-                className="h-12 w-12 cursor-pointer rounded-xl"
-              />
-            </div>
-          </div>
-
-          {/* Botones */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-6">
+    <>
+      <BaseDialog
+        isOpen={open}
+        onClose={form.requestClose}
+        title="Editar Perfil"
+        size="md"
+        showCloseButton
+        closeButtonAlert={form.hasUnsavedChanges ? 'Cambios sin guardar' : undefined}
+        customIcon={
+          <img
+            src="/favicon.svg"
+            alt="Fisio Pasteur"
+            className="h-10 w-10 rounded-full"
+          />
+        }
+        message={
+          <Form {...form}>
+            <form
+              id={FORM_ID}
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-5"
+              noValidate
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="nombre"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Nombre</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Juan" autoComplete="given-name" maxLength={LIMITES.nombrePersonaMax} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="apellido"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Apellido</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Pérez" autoComplete="family-name" maxLength={LIMITES.nombrePersonaMax} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormItem className="md:col-span-2">
+                  <FormLabel>Email</FormLabel>
+                  <Input value={perfil.email} readOnly />
+                  <FormDescription>El email no se puede modificar desde aquí.</FormDescription>
+                </FormItem>
+                <FormField
+                  control={form.control}
+                  name="telefono"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Teléfono</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="tel"
+                          inputMode="tel"
+                          placeholder="549..."
+                          autoComplete="tel"
+                          {...field}
+                          value={field.value ?? ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="color"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Color identificador</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            aria-label="Selector de color"
+                            className="h-10 w-12 cursor-pointer rounded-md border border-input bg-background p-0.5"
+                            value={field.value || '#9C1838'}
+                            onChange={(e) => field.onChange(e.target.value)}
+                          />
+                          <Input
+                            placeholder="#9C1838"
+                            value={field.value ?? ''}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            className="font-mono"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormDescription>Se usa para identificarte en el calendario.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </form>
+          </Form>
+        }
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             <Button
               type="button"
-              onClick={onClose}
-              variant="secondary"
-              className="flex-1"
+              onClick={form.requestClose}
+              variant="outline"
+              fullWidth
+              className="sm:flex-1"
+              disabled={form.isSubmitting}
             >
               Cancelar
             </Button>
             <Button
-              type="submit"
-              disabled={isPending}
+              form={FORM_ID}
               variant="primary"
-              className="flex-1"
+              fullWidth
+              className="sm:flex-1"
+              {...form.submitButtonProps}
             >
-              {isPending ? 'Guardando…' : 'Actualizar'}
+              {form.isSubmitting ? 'Guardando…' : 'Actualizar'}
             </Button>
           </div>
-        </form>
-      }
-    />
+        }
+      />
+      <DiscardChangesDialog
+        isOpen={form.discardConfirm.isOpen}
+        onCancel={form.discardConfirm.onCancel}
+        onConfirm={form.discardConfirm.onConfirm}
+      />
+    </>
   );
 }
