@@ -50,7 +50,7 @@ export default function PaginacionBar({
 
   if (variant === "mobile") {
     return (
-      <div className={`rounded-lg px-3 ${top ? "py-1" : "pb-12"} ${className}`.trim()}>
+      <div className={`rounded-lg px-3 ${top ? "py-1" : ''} ${className}`.trim()}>
 
         <div className="flex items-center justify-between gap-2">
           <button
