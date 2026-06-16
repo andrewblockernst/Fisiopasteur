@@ -7,7 +7,6 @@ import type { Tables } from './database.types';
 /**
  * Tipo para turnos con relaciones completas
  * Usado en listados, detalles y componentes de turnos
- * Modelo simplificado sin multi-organizacion
  */
 export type TurnoWithRelations = {
   id_turno: number;

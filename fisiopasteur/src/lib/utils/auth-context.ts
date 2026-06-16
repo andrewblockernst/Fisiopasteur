@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * Obtiene el usuario autenticado actual.
- * Sin lógica multi-organizacional — un único contexto global.
  */
 export async function getAuthContext(): Promise<{
   userId: string;

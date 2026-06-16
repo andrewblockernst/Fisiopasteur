@@ -20,17 +20,13 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // ✅ Rutas públicas (landing + auth)
+  // ✅ Rutas públicas (auth)
   const publicPaths = [
-    '/landing',
     '/login',
     '/not-found',
     '/centro-de-ayuda',
     '/recuperarContra',
     '/restablecerContra',
-    '/success',
-    '/failure',
-    '/pending',
   ];
 
   const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
@@ -121,8 +117,8 @@ export async function middleware(request: NextRequest) {
     return redirectWithCookies(loginUrl);
   }
 
-  // Usuario autenticado intentando acceder a login/landing → redirigir al dashboard
-  if (['/login', '/landing', '/recuperarContra'].includes(request.nextUrl.pathname)) {
+  // Usuario autenticado intentando acceder a login → redirigir al dashboard
+  if (['/login', '/recuperarContra'].includes(request.nextUrl.pathname)) {
     return redirectWithCookies(new URL('/inicio', request.url));
   }
 
