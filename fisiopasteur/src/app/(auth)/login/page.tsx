@@ -1,16 +1,24 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
-import { getSupabaseClient } from "@/lib/supabase/client"; 
+import { Suspense, useState, useEffect } from "react";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import Head from "next/head";
 import Link from "next/link";
 import Boton from "@/componentes/boton";
-import { useAuth } from "@/hooks/usePerfil"; 
+import { useAuth } from "@/hooks/usePerfil";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [checkingAuth, setCheckingAuth] = useState(true); // Nuevo estado para verificación inicial
   const [email, setEmail] = useState("");
