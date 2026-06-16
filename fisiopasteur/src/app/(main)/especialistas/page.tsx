@@ -1,19 +1,19 @@
 "use client";
 
 import { getEspecialidades } from "@/lib/actions/especialidad.action";
-import Button from "@/componentes/boton";
 import { EspecialistasTable } from "@/componentes/especialista/especialista-listado";
 import { NuevoEspecialistaDialog } from "@/componentes/especialista/nuevo-especialista-dialog";
 import { GestionEspecialidadesDialog } from "@/componentes/especialista/gestion-especialidades-dialog";
 import { GestionBoxesDialog } from "@/componentes/especialista/gestion-boxes-dialog";
 import { useState, useEffect, useMemo } from "react";
 import type { Tables } from "@/types/database.types";
-import { ArrowLeft, Plus, Search, Filter, GraduationCap, Box } from "lucide-react";
+import { ArrowLeft, Plus, Search, Filter, GraduationCap, Box, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/usePerfil";
 import { especialistaKeys, useEspecialistasPaginated, useInvalidateEspecialistas } from "@/hooks/useEspecialistasQuery";
 import PaginacionBar from "@/componentes/paginacion/paginacion-bar";
 import { useQueryClient } from "@tanstack/react-query";
+import { Button, Card, IconButton, Input, PageHeader, Skeleton } from "@/componentes/ui";
 
 // type Especialidad = Tables<"especialidad">;
 type Especialidad = {
@@ -53,8 +53,6 @@ type EspecialistaConDatos = {
 };
 
 type Especialista = Tables<"usuario">;
-
-const BRAND = '#9C1838';
 
 type Filter = "activos" | "inactivos" | "todos";
 
@@ -169,119 +167,42 @@ export default function EspecialistasPage() {
     router.back();
   };
 
-  // ✅ Mostrar skeleton mientras cargan los datos
+  // ✅ Skeleton mientras cargan los datos
   if (isLoading && !especialistasPaginated) {
     return (
-      <div className="min-h-screen text-black">
-        {/* Mobile Header Skeleton */}
-        <div className="sm:hidden bg-white border-b border-gray-200">
-          <div className="flex items-center px-4 py-3">
-            <div className="animate-pulse rounded-md bg-gray-300 h-6 w-6 mr-3"></div>
-            <div className="animate-pulse rounded-md bg-gray-300 h-6 w-32 flex-1 mr-9"></div>
+      <div className="min-h-screen text-foreground">
+        {/* Mobile header skeleton */}
+        <div className="sm:hidden bg-background border-b border-border">
+          <div className="flex items-center px-4 py-3 gap-3">
+            <Skeleton className="h-6 w-6" />
+            <Skeleton className="h-6 flex-1" />
           </div>
           <div className="px-4 pb-3">
-            <div className="animate-pulse rounded-lg bg-gray-100 h-10 w-full"></div>
+            <Skeleton className="h-10 w-full" />
           </div>
         </div>
 
-        {/* Contenido Principal Skeleton */}
-  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8">
-          {/* Desktop Header Skeleton */}
-          <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
-            <div className="animate-pulse rounded-md bg-gray-300 h-8 w-64"></div>
+        <div className="mx-auto w-full bg-background p-4 sm:p-6 lg:px-8 lg:pt-6">
+          {/* Desktop header skeleton — imita el padding interno de <PageHeader /> */}
+          <div className="hidden sm:block px-4 sm:px-6 lg:px-8 pt-4 sm:pt-8 pb-4 sm:pb-6 mb-4">
+            <Skeleton className="h-8 sm:h-9 w-64" />
           </div>
 
-          {/* Filtros y Búsqueda Skeleton - Solo Desktop */}
-          <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-            <div className="animate-pulse">
-              <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                <div className="flex flex-col sm:flex-row gap-3 flex-1">
-                  <div className="rounded-lg bg-gray-300 h-10 w-80"></div>
-                  <div className="flex items-center gap-2">
-                    <div className="rounded bg-gray-300 h-4 w-16"></div>
-                    <div className="rounded-lg bg-gray-300 h-10 w-32"></div>
-                  </div>
-                </div>
-                <div className="rounded-lg bg-gray-300 h-10 w-40"></div>
+          {/* Filtros skeleton */}
+          <Card className="hidden sm:block mb-4" padding="md">
+            <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+              <div className="flex gap-3 flex-1">
+                <Skeleton className="h-10 w-80" />
+                <Skeleton className="h-10 w-32" />
               </div>
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <div className="rounded bg-gray-300 h-4 w-48"></div>
-              </div>
+              <Skeleton className="h-10 w-40" />
             </div>
-          </div>
+          </Card>
 
-          {/* Table Skeleton para Desktop */}
-          <div className="hidden md:block bg-white shadow-md rounded-lg overflow-hidden">
-            <div className="animate-pulse">
-              {/* Table Header */}
-              <div className="bg-gray-50 px-6 py-3 flex space-x-4">
-                <div className="h-4 bg-gray-300 rounded w-32"></div>
-                <div className="h-4 bg-gray-300 rounded w-40"></div>
-                <div className="h-4 bg-gray-300 rounded w-36"></div>
-                <div className="h-4 bg-gray-300 rounded w-24"></div>
-                <div className="h-4 bg-gray-300 rounded w-28"></div>
-                <div className="h-4 bg-gray-300 rounded w-24"></div>
-              </div>
-              
-              {/* Table Rows */}
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="border-t border-gray-200 px-6 py-4 flex items-center space-x-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="rounded-full bg-gray-300 h-10 w-10"></div>
-                    <div className="space-y-2">
-                      <div className="h-4 bg-gray-300 rounded w-32"></div>
-                      <div className="h-3 bg-gray-300 rounded w-24"></div>
-                    </div>
-                  </div>
-                  <div className="h-4 bg-gray-300 rounded w-40"></div>
-                  <div className="flex space-x-1">
-                    <div className="h-6 bg-gray-300 rounded-full w-20"></div>
-                    <div className="h-6 bg-gray-300 rounded-full w-16"></div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="h-6 w-6 bg-gray-300 rounded"></div>
-                    <div className="h-4 bg-gray-300 rounded w-16"></div>
-                  </div>
-                  <div className="h-4 bg-gray-300 rounded w-28"></div>
-                  <div className="flex space-x-2">
-                    <div className="h-8 bg-gray-300 rounded w-16"></div>
-                    <div className="h-8 bg-gray-300 rounded w-20"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Cards Skeleton para Mobile */}
-          <div className="md:hidden space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div className="animate-pulse">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="rounded-full bg-gray-300 h-12 w-12"></div>
-                    <div className="space-y-2">
-                      <div className="h-4 bg-gray-300 rounded w-32"></div>
-                      <div className="h-3 bg-gray-300 rounded w-24"></div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2 mb-3">
-                    <div className="h-3 bg-gray-300 rounded w-40"></div>
-                    <div className="h-3 bg-gray-300 rounded w-28"></div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <div className="flex space-x-1">
-                      <div className="h-6 bg-gray-300 rounded-full w-16"></div>
-                      <div className="h-6 bg-gray-300 rounded-full w-20"></div>
-                    </div>
-                    <div className="flex space-x-2">
-                      <div className="h-8 bg-gray-300 rounded w-16"></div>
-                      <div className="h-8 bg-gray-300 rounded w-20"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          {/* Table/cards skeleton */}
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
         </div>
@@ -290,104 +211,140 @@ export default function EspecialistasPage() {
   }
 
   return (
-    <div className="min-h-screen text-black">
-
-      {/* Mobile Header */}
-      <div className="sm:hidden bg-white border-b border-gray-200">
-        <div className="flex items-center px-4 py-3">
-          {/* Boton de regreso */}
-          <button
-            className="mr-3 p-1"
+    <div className="h-[calc(100dvh-5rem)] lg:h-[100dvh] flex flex-col text-foreground overflow-hidden">
+      {/* Mobile Header (<md) */}
+      <div className="md:hidden bg-background/95 backdrop-blur-sm border-b border-border sticky top-0 z-20 shrink-0">
+        <div className="flex items-center px-4 py-3 gap-2">
+          <IconButton
+            aria-label="Volver"
+            variant="ghost"
+            size="sm"
+            icon={<ArrowLeft className="w-5 h-5" />}
             onClick={handleBack}
-          >
-            <svg
-              className="w-6 h-6 text-gray-600" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-
-          {/* Titulo */}
-          <h1 className="text-lg font-medium text-gray-900 flex-1 text-center mr-9">
+            className="-ml-2"
+          />
+          <h1 className="text-base font-semibold text-foreground flex-1 text-center truncate">
             Especialistas
           </h1>
+          <span className="w-9" aria-hidden />
         </div>
 
-        {/* Campo de búsqueda mobile */}
         <div className="px-4 pb-3">
           <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                name="search"
-                type="text"
-                placeholder="Buscar"
-                className="w-full px-4 py-2 bg-gray-100 border-0 rounded-lg focus:outline-none focus:ring-0 focus:bg-white focus:shadow-sm transition-all duration-200"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-            </div>
-
+            <Input
+              type="text"
+              name="search"
+              placeholder="Buscar"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              leftIcon={<Search />}
+              className="flex-1"
+            />
             <select
               name="filter"
               value={filter}
               onChange={(e) => setFilter(e.target.value as Filter)}
-              className="bg-[#9C1838] text-white px-3 py-2 rounded-lg text-sm font-medium border-0 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:ring-opacity-50"
+              aria-label="Filtrar por estado"
+              className="h-10 px-3 py-2 bg-brand text-brand-foreground rounded-md text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             >
-              <option value="activos" className="bg-white text-gray-900">Activos</option>
-              <option value="inactivos" className="bg-white text-gray-900">Inactivos</option>
-              <option value="todos" className="bg-white text-gray-900">Todos</option>
+              <option value="activos" className="bg-popover text-foreground">Activos</option>
+              <option value="inactivos" className="bg-popover text-foreground">Inactivos</option>
+              <option value="todos" className="bg-popover text-foreground">Todos</option>
             </select>
-
-
           </div>
         </div>
-
       </div>
 
       {/* Contenido Principal */}
-  <div className="mx-auto w-full bg-white p-4 sm:p-6 lg:px-6 lg:pt-8 sm:flex sm:flex-col sm:h-[calc(100vh-3rem)]">
-        {/* Desktop Header */}
-        <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-4">
-          <h2 className="text-2xl sm:text-3xl font-bold">Especialistas</h2>
+      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background md:p-6 md:pb-0 lg:p-6 lg:px-8 lg:pt-6 overflow-hidden">
+        {/* md..<lg: PageHeader con acción + search row compacta */}
+        <div className="hidden md:block lg:hidden">
+          <PageHeader
+            title="Especialistas"
+            actions={
+              user?.puedeGestionarTurnos ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Plus className="w-4 h-4" />}
+                  onClick={() => setShowDialog(true)}
+                >
+                  Nuevo especialista
+                </Button>
+              ) : null
+            }
+          />
+          <div className="flex gap-2 items-center mb-4 mt-2">
+            <Input
+              name="search"
+              type="text"
+              placeholder="Buscar por nombre o apellido..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              leftIcon={<Search />}
+              rightIcon={
+                searchTerm ? (
+                  <button
+                    type="button"
+                    aria-label="Limpiar búsqueda"
+                    onClick={() => setSearchTerm("")}
+                    className="text-muted-foreground hover:text-foreground transition-colors pointer-events-auto"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                ) : undefined
+              }
+              className="flex-1"
+            />
+            <select
+              name="filter"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as Filter)}
+              aria-label="Filtrar por estado"
+              className="h-10 px-3 py-2 border border-input rounded-md bg-background text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand transition-colors cursor-pointer shrink-0"
+            >
+              <option value="activos">Activos</option>
+              <option value="inactivos">Inactivos</option>
+              <option value="todos">Todos</option>
+            </select>
+          </div>
         </div>
 
-        {/* Filtros y Búsqueda - Solo Desktop */}
-        <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4">
-          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-            {/* Lado izquierdo: Búsqueda y Filtro */}
-            <div className="flex flex-col sm:flex-row gap-3 flex-1">
-              {/* Campo de búsqueda con ícono */}
+        {/* ≥lg: Page header + filter Card */}
+        <div className="hidden lg:block">
+          <PageHeader title="Especialistas"/>
+        </div>
+
+        {/* Filtros y Búsqueda — ≥lg */}
+        <Card className="hidden lg:block mb-4" padding="md">
+          <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+            {/* Búsqueda y Filtro */}
+            <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full">
               <div className="relative flex-1 max-w-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
+                <Input
                   name="search"
                   type="text"
                   placeholder="Buscar por nombre o apellido..."
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors duration-200"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  leftIcon={<Search />}
+                  rightIcon={
+                    searchTerm ? (
+                      <button
+                        type="button"
+                        aria-label="Limpiar búsqueda"
+                        onClick={() => setSearchTerm("")}
+                        className="text-muted-foreground hover:text-foreground transition-colors pointer-events-auto"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    ) : undefined
+                  }
                 />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm("")}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <span className="text-sm">✕</span>
-                  </button>
-                )}
               </div>
 
-              {/* Filtro de estado */}
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 text-gray-600">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
                   <Filter className="h-4 w-4" />
                   <span className="text-sm font-medium">Estado:</span>
                 </div>
@@ -395,56 +352,49 @@ export default function EspecialistasPage() {
                   name="filter"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value as Filter)}
-                  className="px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:border-[#9C1838] transition-colors duration-200 cursor-pointer"
+                  aria-label="Filtrar por estado"
+                  className="h-10 px-3 py-2 border border-input rounded-md bg-background text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand transition-colors cursor-pointer"
                 >
-                  <option id="filter-activos" value="activos">Activos</option>
-                  <option id="filter-inactivos" value="inactivos">Inactivos</option>
-                  <option id="filter-todos" value="todos">Todos</option>
+                  <option value="activos">Activos</option>
+                  <option value="inactivos">Inactivos</option>
+                  <option value="todos">Todos</option>
                 </select>
               </div>
+
             </div>
 
-            {/* Lado derecho: Botones - Solo para Admin y Programadores */}
+            {/* Botones (solo Admin/Programador) */}
             {user?.puedeGestionarTurnos && (
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="secondary"
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  leftIcon={<Box className="w-4 h-4" />}
                   onClick={() => setShowBoxesDialog(true)}
-                  className="whitespace-nowrap px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-2"
                 >
                   Boxes
                 </Button>
-                <Button 
-                  variant="secondary"
+                <Button
+                  variant="outline"
+                  leftIcon={<GraduationCap className="w-4 h-4" />}
                   onClick={() => setShowEspecialidadesDialog(true)}
-                  className="whitespace-nowrap px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow duration-200 flex items-center gap-2"
                 >
                   Especialidades
                 </Button>
-                <Button 
+                <Button
                   variant="primary"
+                  leftIcon={<Plus className="w-4 h-4" />}
                   onClick={() => setShowDialog(true)}
-                  className="whitespace-nowrap px-4 py-2.5 shadow-sm hover:shadow-md transition-shadow duration-200"
                 >
-                  Nuevo Especialista
+                  Nuevo especialista
                 </Button>
               </div>
             )}
           </div>
 
-          {/* Contador de resultados */}
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <span className="text-sm text-gray-500">
-              Mostrando {especialistas.length}{" "}
-              {filter === "activos" && "activos"}
-              {filter === "inactivos" && "inactivos"}
-              {filter === "todos" && "especialistas"}.
-            </span>
-          </div>
-        </div>
+        </Card>
 
-        <div className="sm:flex-1 sm:min-h-0 sm:overflow-hidden">
-          <EspecialistasTable 
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <EspecialistasTable
             especialistas={especialistas}
             especialidades={especialidades}
             onEspecialistaDeleted={async () => {
@@ -457,47 +407,45 @@ export default function EspecialistasPage() {
           />
         </div>
 
-        <div className="hidden sm:block pt-3 shrink-0 bg-white">
+        {/* Paginación sticky al bottom — mobile variant <lg, desktop variant ≥lg */}
+        <div className="shrink-0 pt-2 lg:pt-3 px-3 lg:px-0 bg-background border-t border-border lg:border-0">
           {pagination ? (
-            <PaginacionBar
-              pagination={pagination}
-              visibleCount={especialistas.length}
-              pageSize={pageSize}
-              allowedPageSizes={allowedPageSizes}
-              itemLabel="especialistas"
-              onPageChange={setPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setPage(1);
-              }}
-              loading={isFetching}
-              showSummary
-            />
+            <>
+              <div className="lg:hidden">
+                <PaginacionBar
+                  variant="mobile"
+                  pagination={pagination}
+                  visibleCount={especialistas.length}
+                  pageSize={pageSize}
+                  allowedPageSizes={allowedPageSizes}
+                  itemLabel="especialistas"
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(1);
+                  }}
+                  loading={isFetching}
+                />
+              </div>
+              <div className="hidden lg:block">
+                <PaginacionBar
+                  pagination={pagination}
+                  visibleCount={especialistas.length}
+                  pageSize={pageSize}
+                  allowedPageSizes={allowedPageSizes}
+                  itemLabel="especialistas"
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(1);
+                  }}
+                  loading={isFetching}
+                  showSummary
+                />
+              </div>
+            </>
           ) : (
-            <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-500">
-              Sin resultados para paginar.
-            </div>
-          )}
-        </div>
-
-        <div className="sm:hidden px-3 pt-2">
-          {pagination ? (
-            <PaginacionBar
-              variant="mobile"
-              pagination={pagination}
-              visibleCount={especialistas.length}
-              pageSize={pageSize}
-              allowedPageSizes={allowedPageSizes}
-              itemLabel="especialistas"
-              onPageChange={setPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setPage(1);
-              }}
-              loading={isFetching}
-            />
-          ) : (
-            <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-500">
+            <div className="rounded-lg border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
               Sin resultados para paginar.
             </div>
           )}

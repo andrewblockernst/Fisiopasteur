@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react';
 import BaseDialog from '../dialog/base-dialog';
-import Button from '../boton';
+import { Button, Input, IconButton, EmptyState } from "@/componentes/ui";
 import { useToastStore } from '@/stores/toast-store';
 import { obtenerBoxes, crearBox, actualizarBox, eliminarBox } from '@/lib/actions/box.action';
 import { Pencil, Trash, X } from 'lucide-react';
@@ -21,6 +21,8 @@ export function GestionBoxesDialog({
   const [boxes, setBoxes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({ numero: '', nombre: '' });
+  const [createErrors, setCreateErrors] = useState<{ numero?: string; nombre?: string }>({});
+  const [editErrors, setEditErrors] = useState<{ numero?: string; nombre?: string }>({});
   const [editando, setEditando] = useState<{ id: number; numero: string; nombre: string } | null>(null);
   const [boxAEliminar, setBoxAEliminar] = useState<any>(null);
   const [isPending, startTransition] = useTransition();
@@ -57,14 +59,11 @@ export function GestionBoxesDialog({
   };
 
   const handleCrear = () => {
-    if (!formData.numero.trim() || !formData.nombre.trim()) {
-      addToast({
-        variant: "error",
-        message: "Campos requeridos",
-        description: "El número y nombre del box no pueden estar vacíos"
-      });
-      return;
-    }
+    const errs: { numero?: string; nombre?: string } = {};
+    if (!formData.numero.trim()) errs.numero = "Requerido";
+    if (!formData.nombre.trim()) errs.nombre = "Requerido";
+    setCreateErrors(errs);
+    if (Object.keys(errs).length > 0) return;
 
     startTransition(async () => {
       try {
@@ -109,14 +108,12 @@ export function GestionBoxesDialog({
   };
 
   const handleGuardarEdicion = () => {
-    if (!editando || !editando.numero.trim() || !editando.nombre.trim()) {
-      addToast({
-        variant: "error",
-        message: "Campos requeridos",
-        description: "El número y nombre del box no pueden estar vacíos"
-      });
-      return;
-    }
+    if (!editando) return;
+    const errs: { numero?: string; nombre?: string } = {};
+    if (!editando.numero.trim()) errs.numero = "Requerido";
+    if (!editando.nombre.trim()) errs.nombre = "Requerido";
+    setEditErrors(errs);
+    if (Object.keys(errs).length > 0) return;
 
     startTransition(async () => {
       try {
@@ -213,38 +210,46 @@ export function GestionBoxesDialog({
       >
         <div className="space-y-6">
           {/* Formulario para crear nuevo box */}
-          <div className="grid grid-cols-1 md:grid-cols-[120px_1fr_auto] gap-2">
-            <input
-              type="number"
-              min="1"
-              value={formData.numero}
-              onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isPending) {
-                  handleCrear();
-                }
-              }}
-              placeholder="N° BOX"
-              className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:red-blue-200"
-              disabled={isPending}
-            />
-            <input
-              type="text"
-              value={formData.nombre}
-              onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isPending) {
-                  handleCrear();
-                }
-              }}
-              placeholder="Ej: RPG, KINESIO, FISIO..."
-              className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:red-blue-200"
-              disabled={isPending}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-[120px_1fr_auto] gap-2 items-start">
+            <div>
+              <Input
+                type="number"
+                min="1"
+                value={formData.numero}
+                onChange={(e) => {
+                  setFormData({ ...formData, numero: e.target.value });
+                  if (createErrors.numero) setCreateErrors((p) => ({ ...p, numero: undefined }));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isPending) handleCrear();
+                }}
+                placeholder="N° BOX"
+                disabled={isPending}
+                error={!!createErrors.numero}
+              />
+              {createErrors.numero && <p className="text-destructive text-xs mt-1">{createErrors.numero}</p>}
+            </div>
+            <div>
+              <Input
+                type="text"
+                value={formData.nombre}
+                onChange={(e) => {
+                  setFormData({ ...formData, nombre: e.target.value });
+                  if (createErrors.nombre) setCreateErrors((p) => ({ ...p, nombre: undefined }));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isPending) handleCrear();
+                }}
+                placeholder="Ej: RPG, KINESIO, FISIO..."
+                disabled={isPending}
+                error={!!createErrors.nombre}
+              />
+              {createErrors.nombre && <p className="text-destructive text-xs mt-1">{createErrors.nombre}</p>}
+            </div>
             <Button
               variant="primary"
               onClick={handleCrear}
-              disabled={isPending || !formData.numero.trim() || !formData.nombre.trim()}
+              disabled={isPending}
               className="whitespace-nowrap"
             >
               Agregar
@@ -253,103 +258,100 @@ export function GestionBoxesDialog({
 
           {/* Lista de boxes */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+            <h3 className="text-sm font-semibold text-foreground mb-3">
               Boxes ({boxes.length})
             </h3>
-            
+
             {loading ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-muted-foreground">
                 <p className="text-sm">Cargando boxes...</p>
               </div>
             ) : boxes.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <p className="text-sm">No hay boxes registrados</p>
-                <p className="text-xs mt-1">Agrega tu primer box arriba</p>
-              </div>
+              <EmptyState
+                title="No hay boxes registrados"
+                description="Agregá tu primer box usando el formulario de arriba."
+                className="py-6"
+              />
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {boxes.map((box) => {
                   const isEditando = editando?.id === box.id_box;
-                  
+
                   return (
                     <div
                       key={box.id_box}
-                      className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                      className="flex items-center gap-2 p-3 bg-card border border-border rounded-lg hover:border-muted-foreground/30 transition-colors"
                     >
                       {isEditando ? (
                         <>
-                          <input
+                          <Input
                             type="number"
                             min="1"
                             value={editando?.numero ?? ''}
                             onChange={(e) => editando && setEditando({ ...editando, numero: e.target.value })}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !isPending) {
-                                handleGuardarEdicion();
-                              } else if (e.key === 'Escape') {
-                                setEditando(null);
-                              }
+                              if (e.key === 'Enter' && !isPending) handleGuardarEdicion();
+                              else if (e.key === 'Escape') setEditando(null);
                             }}
-                            className="w-20 px-3 py-1.5 border border-red-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-200"
                             disabled={isPending}
                             autoFocus
+                            size="sm"
+                            className="w-24"
                           />
-                          <input
+                          <Input
                             type="text"
                             value={editando?.nombre ?? ''}
                             onChange={(e) => editando && setEditando({ ...editando, nombre: e.target.value })}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !isPending) {
-                                handleGuardarEdicion();
-                              } else if (e.key === 'Escape') {
-                                setEditando(null);
-                              }
+                              if (e.key === 'Enter' && !isPending) handleGuardarEdicion();
+                              else if (e.key === 'Escape') setEditando(null);
                             }}
-                            className="flex-1 px-3 py-1.5 border border-red-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-200"
                             disabled={isPending}
+                            size="sm"
+                            className="flex-1"
                           />
                           <Button
                             variant="primary"
+                            size="sm"
                             onClick={handleGuardarEdicion}
                             disabled={isPending || !editando?.numero.trim() || !editando?.nombre.trim()}
-                            className="px-3 text-xs"
                           >
                             Actualizar
                           </Button>
-                          <Button
-                            variant="secondary"
+                          <IconButton
+                            aria-label="Cancelar edición"
+                            variant="ghost"
+                            size="sm"
+                            icon={<X className="w-4 h-4" />}
                             onClick={() => setEditando(null)}
                             disabled={isPending}
-                            className="px-3"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
+                          />
                         </>
                       ) : (
                         <>
-                          <div className="w-10 h-10 bg-[#9C1838] text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">
+                          <div className="w-10 h-10 bg-brand text-brand-foreground rounded-full flex items-center justify-center font-bold text-sm shrink-0">
                             {box.numero}
                           </div>
-                          <span className="flex-1 text-sm font-medium text-gray-900">
+                          <span className="flex-1 text-sm font-medium text-foreground truncate">
                             {box.nombre}
                           </span>
                           <div className="flex gap-1">
-                            <button
+                            <IconButton
+                              aria-label="Editar box"
+                              variant="ghost"
+                              size="sm"
+                              icon={<Pencil className="w-4 h-4" />}
                               onClick={() => handleEditar(box)}
                               disabled={isPending}
-                              className="p-2 text-slate-400 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Editar"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
+                            />
+                            <IconButton
+                              aria-label="Eliminar box"
+                              variant="ghost"
+                              size="sm"
+                              icon={<Trash className="w-4 h-4 text-destructive" />}
                               onClick={() => handleEliminar(box)}
                               disabled={isPending}
-                              className="p-2 text-red-400 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Eliminar"
-                            >
-                              <Trash className="w-4 h-4" />
-                            </button>
+                            />
                           </div>
                         </>
                       )}

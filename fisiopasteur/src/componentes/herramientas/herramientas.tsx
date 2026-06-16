@@ -10,23 +10,42 @@ import {
   HelpCircle,
   Bed,
   LogOut,
+  Loader2,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState, useTransition } from 'react';
 import { cerrarSesionServer } from '@/lib/actions/logOut.action';
 import { usePerfilNav } from '@/hooks/PerfilNavContext';
+import { cn } from '@/lib/utils';
 
 const Herramientas = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const { tienePilates, tieneEspecialidadNoPilates, puedeGestionar } = usePerfilNav();
   const verTurnos    = puedeGestionar || tieneEspecialidadNoPilates;
   const verPilates   = puedeGestionar || tienePilates;
   const verCalendario = verTurnos;
 
+  const [isPending, startTransition] = useTransition();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  // Cuando termina la transición (la nueva ruta ya renderizó) limpiamos el spinner.
+  useEffect(() => {
+    if (!isPending) setPendingHref(null);
+  }, [isPending, pathname]);
+
+  const navigate = (href: string) => {
+    if (pathname === href) return;
+    setPendingHref(href);
+    startTransition(() => router.push(href));
+  };
+
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
+
   const onCerrarSesion = async () => {
     try {
-      console.log('🔐 Cerrando sesión...');
       await cerrarSesionServer();
-      console.log('✅ Logout exitoso, redirigiendo...');
       window.location.href = '/login';
     } catch (error) {
       console.error('❌ Error en onCerrarSesion:', error);
@@ -35,29 +54,47 @@ const Herramientas = () => {
   }
 
   return (
-    <aside className="hidden lg:flex fixed top-1/2 left-0 -translate-y-1/2 bg-[#9C1838] py-6 px-2 flex-col items-center gap-6 shadow-lg rounded-r-lg z-50">
-      <IconWrapper label="Inicio" icon={<Home size={28} />} onClick={() => router.push('/inicio')} />
-      {verTurnos && <IconWrapper label="Turnos" icon={<ClipboardList size={28} />} onClick={() => router.push('/turnos')} />}
-      {verPilates && <IconWrapper label="Pilates" icon={<Bed size={28} />} onClick={() => router.push('/pilates')} />}
-      {verCalendario && <IconWrapper label="Calendario" icon={<CalendarDays size={28} />} onClick={() => router.push('/calendario')} />}
-      <IconWrapper label="Pacientes" icon={<Accessibility size={28} />} onClick={() => router.push('/pacientes')} />
-      <IconWrapper label="Especialistas" icon={<FileBadge size={28} />} onClick={() => router.push('/especialistas')} />
-      <IconWrapper label="Perfil" icon={<User size={28} />} onClick={() => router.push('/perfil')} />
-      <IconWrapper label="Ayuda" icon={<HelpCircle size={28} />} onClick={() => router.push('/centro-de-ayuda')} />
+    <aside className="hidden lg:flex fixed top-1/2 left-0 -translate-y-1/2 bg-brand py-6 px-1 flex-col items-center gap-3 shadow-lg rounded-r-lg z-50">
+      <IconWrapper label="Inicio" icon={<Home size={28} />} onClick={() => navigate('/inicio')} active={isActive('/inicio')} loading={pendingHref === '/inicio'} />
+      {verTurnos && <IconWrapper label="Turnos" icon={<ClipboardList size={28} />} onClick={() => navigate('/turnos')} active={isActive('/turnos')} loading={pendingHref === '/turnos'} />}
+      {verPilates && <IconWrapper label="Pilates" icon={<Bed size={28} />} onClick={() => navigate('/pilates')} active={isActive('/pilates')} loading={pendingHref === '/pilates'} />}
+      {verCalendario && <IconWrapper label="Calendario" icon={<CalendarDays size={28} />} onClick={() => navigate('/calendario')} active={isActive('/calendario')} loading={pendingHref === '/calendario'} />}
+      <IconWrapper label="Pacientes" icon={<Accessibility size={28} />} onClick={() => navigate('/pacientes')} active={isActive('/pacientes')} loading={pendingHref === '/pacientes'} />
+      <IconWrapper label="Especialistas" icon={<FileBadge size={28} />} onClick={() => navigate('/especialistas')} active={isActive('/especialistas')} loading={pendingHref === '/especialistas'} />
+      <IconWrapper label="Perfil" icon={<User size={28} />} onClick={() => navigate('/perfil')} active={isActive('/perfil')} loading={pendingHref === '/perfil'} />
+      <IconWrapper label="Ayuda" icon={<HelpCircle size={28} />} onClick={() => navigate('/centro-de-ayuda')} active={isActive('/centro-de-ayuda')} loading={pendingHref === '/centro-de-ayuda'} />
       <IconWrapper label="Cerrar Sesión" icon={<LogOut size={28} />} onClick={onCerrarSesion} />
     </aside>
   );
 };
 
-const IconWrapper = ({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) => (
+const IconWrapper = ({
+  icon,
+  label,
+  onClick,
+  active = false,
+  loading = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  active?: boolean;
+  loading?: boolean;
+}) => (
   <button
-    className="relative group text-white hover:scale-110 transition-transform duration-200"
+    className={cn(
+      "relative group rounded-md p-1.5 transition-colors duration-150",
+      active
+        ? "bg-white text-brand"
+        : "text-white hover:bg-white/10",
+    )}
     onClick={onClick}
     aria-label={label}
+    aria-current={active ? "page" : undefined}
   >
-    {icon}
+    {loading ? <Loader2 size={28} className="animate-spin" /> : icon}
     <span
-      className="absolute left-full ml-3 top-1/2 -translate-y-1/2 whitespace-nowrap bg-[#9C1838] text-white px-3 py-1 rounded-md shadow opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 ease-out pointer-events-none"
+      className="absolute left-full ml-3 top-1/2 -translate-y-1/2 whitespace-nowrap bg-brand text-white px-3 py-1 rounded-md shadow opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 ease-out pointer-events-none"
     >
       {label}
     </span>

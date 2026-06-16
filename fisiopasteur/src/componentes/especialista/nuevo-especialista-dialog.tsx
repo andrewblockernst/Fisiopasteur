@@ -1,15 +1,35 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import BaseDialog from "@/componentes/dialog/base-dialog";
 import Image from "next/image";
+import BaseDialog from "@/componentes/dialog/base-dialog";
+import { DiscardChangesDialog } from "@/componentes/dialog/discard-changes-dialog";
 import type { Tables } from "@/types/database.types";
 import { createEspecialista } from "@/lib/actions/especialista.action";
-import Button from "@/componentes/boton";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+} from "@/componentes/ui";
 import ColorPicker from "@/componentes/color-selector";
-import { useToastStore } from '@/stores/toast-store';
+import { useToastStore } from "@/stores/toast-store";
+import { useModalForm } from "@/hooks/use-modal-form";
+import {
+  especialistaCreateSchema,
+  type EspecialistaCreateInput,
+} from "@/lib/schemas/especialista.schema";
+import { getPhoneInputHint } from "@/lib/utils/phone.utils";
+import { LIMITES } from "@/lib/validators/common";
 
 type Especialidad = Tables<"especialidad">;
+
+const FORM_ID = "nuevo-especialista-form";
 
 interface NuevoEspecialistaDialogProps {
   isOpen: boolean;
@@ -17,27 +37,66 @@ interface NuevoEspecialistaDialogProps {
   especialidades: Especialidad[];
 }
 
-export function NuevoEspecialistaDialog({ 
-  isOpen, 
-  onClose, 
-  especialidades 
+export function NuevoEspecialistaDialog({
+  isOpen,
+  onClose,
+  especialidades,
 }: NuevoEspecialistaDialogProps) {
-  const [isPending, startTransition] = useTransition();
+  const { showServerActionResponse, addToast } = useToastStore();
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    
-    startTransition(async () => {
-      const result = await createEspecialista(formData);
-      
-      if (result.success) {
-        setTimeout(() => {
+  const form = useModalForm({
+    schema: especialistaCreateSchema,
+    mode: "create",
+    resetKey: isOpen,
+    onClose,
+    defaultValues: {
+      nombre: "",
+      apellido: "",
+      email: "",
+      contraseña: "",
+      telefono: "",
+      color: "#3B82F6",
+      especialidades: [] as number[],
+    },
+  });
+
+  const onSubmit = (values: EspecialistaCreateInput) =>
+    form.submit(
+      () => {
+        const fd = new FormData();
+        fd.set("nombre", values.nombre);
+        fd.set("apellido", values.apellido);
+        fd.set("email", values.email);
+        fd.set("contraseña", values.contraseña);
+        fd.set("telefono", values.telefono);
+        fd.set("color", values.color);
+        values.especialidades.forEach((id, i) =>
+          fd.append(`especialidades[${i}]`, id.toString()),
+        );
+        return createEspecialista(fd);
+      },
+      {
+        onSuccess: () => {
+          showServerActionResponse({
+            success: true,
+            message: "Especialista creado",
+            description: "El especialista se ha creado exitosamente",
+            toastType: "success",
+          });
           onClose();
-        }, 1500);
-      }
+        },
+        onError: (error) =>
+          addToast({ message: error, variant: "error" }),
+      },
+    );
+
+  const phoneValue = form.watch("telefono");
+  const selected = form.watch("especialidades") ?? [];
+  const setSelected = (next: number[]) =>
+    form.setValue("especialidades", next, {
+      shouldDirty: true,
+      shouldValidate: true,
     });
-  };
 
   return (
     <>
@@ -56,304 +115,150 @@ export function NuevoEspecialistaDialog({
         }
         message={
           <div className="text-left">
-            <div className="text-gray-600 mb-6 text-center">Completa la información para crear un nuevo especialista.</div>
-            <EspecialistaFormWrapper 
-              especialidades={especialidades}
-              onSuccess={onClose}
-            />
+            <div className="text-muted-foreground mb-6 text-center">
+              Completá la información para crear un nuevo especialista.
+            </div>
+            <Form {...form}>
+              <form id={FORM_ID} onSubmit={form.handleSubmit(onSubmit)} noValidate>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <FormField control={form.control} name="nombre" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Nombre</FormLabel>
+                      <FormControl><Input placeholder="Ingresa el nombre" maxLength={LIMITES.nombrePersonaMax} {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="apellido" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Apellido</FormLabel>
+                      <FormControl><Input placeholder="Ingresa el apellido" maxLength={LIMITES.nombrePersonaMax} {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="email" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Email</FormLabel>
+                      <FormControl><Input type="email" placeholder="correo@ejemplo.com" maxLength={LIMITES.emailMax} {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="contraseña" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Contraseña</FormLabel>
+                      <FormControl><Input type="password" placeholder="Mínimo 6 caracteres" maxLength={72} {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="telefono" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Teléfono</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej: 1166782051 o +5491166782051" inputMode="tel" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                      {!form.formState.errors.telefono && phoneValue && (
+                        <p className={`text-xs mt-1 ${getPhoneInputHint(phoneValue).startsWith("✓") ? "text-success" : "text-muted-foreground"}`}>
+                          {getPhoneInputHint(phoneValue)}
+                        </p>
+                      )}
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="color" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Color de identificación</FormLabel>
+                      <FormControl>
+                        <ColorPicker
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={form.isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="especialidades"
+                  render={() => (
+                    <FormItem className="mt-4">
+                      <FormLabel required>Especialidades</FormLabel>
+                      {selected.length > 0 && (
+                        <div className="mb-3 p-2 bg-muted/40 rounded-md">
+                          <div className="flex flex-wrap gap-1.5">
+                            {selected.map((id) => {
+                              const esp = especialidades.find((e) => e.id_especialidad === id);
+                              if (!esp) return null;
+                              return (
+                                <Badge key={id} variant="brand" size="sm" className="gap-1 pr-1">
+                                  {esp.nombre}
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelected(selected.filter((x) => x !== id))}
+                                    aria-label={`Quitar ${esp.nombre}`}
+                                    className="rounded-full p-0.5 hover:bg-white/20 transition-colors"
+                                  >
+                                    ×
+                                  </button>
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      <div className="border border-input rounded-md max-h-40 overflow-y-auto bg-background">
+                        {especialidades.map((esp) => {
+                          const isSelected = selected.includes(esp.id_especialidad);
+                          return (
+                            <label
+                              key={esp.id_especialidad}
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/40 border-b border-border last:border-b-0 ${isSelected ? "bg-brand-soft/40 border-l-2 border-l-brand" : ""}`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() =>
+                                  setSelected(
+                                    isSelected
+                                      ? selected.filter((x) => x !== esp.id_especialidad)
+                                      : [...selected, esp.id_especialidad],
+                                  )
+                                }
+                              />
+                              <span className={`text-sm ${isSelected ? "font-medium text-brand" : "text-foreground"}`}>
+                                {esp.nombre}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </form>
+            </Form>
+          </div>
+        }
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+            <Button type="button" variant="outline" onClick={form.requestClose} disabled={form.isSubmitting}>
+              Cancelar
+            </Button>
+            <Button form={FORM_ID} variant="primary" {...form.submitButtonProps}>
+              Crear especialista
+            </Button>
           </div>
         }
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={form.requestClose}
         showCloseButton={true}
       />
-    </>
-  );
-}
-
-interface EspecialistaFormWrapperProps {
-  especialidades: Especialidad[];
-  onSuccess: () => void;
-}
-
-function EspecialistaFormWrapper({ especialidades, onSuccess }: EspecialistaFormWrapperProps) {
-  return (
-    <div className="max-w-4xl">
-      <EspecialistaFormForDialog 
-        especialidades={especialidades}
-        mode="create"
-        onSuccess={onSuccess}
+      <DiscardChangesDialog
+        isOpen={form.discardConfirm.isOpen}
+        onCancel={form.discardConfirm.onCancel}
+        onConfirm={form.discardConfirm.onConfirm}
       />
-    </div>
-  );
-}
-
-// Versión modificada del formulario para el dialog
-interface EspecialistaFormForDialogProps {
-  especialidades: Especialidad[];
-  mode: "create" | "edit";
-  onSuccess: () => void;
-}
-
-function EspecialistaFormForDialog({ 
-  especialidades, 
-  mode,
-  onSuccess
-}: EspecialistaFormForDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [selectedEspecialidades, setSelectedEspecialidades] = useState<number[]>([]);
-  const [selectedColor, setSelectedColor] = useState("#3B82F6");
-  const { showServerActionResponse } = useToastStore();
-
-  const validateForm = (formData: FormData): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.get("nombre")) newErrors.nombre = "El nombre es requerido";
-    if (!formData.get("apellido")) newErrors.apellido = "El apellido es requerido";
-    if (!formData.get("email")) newErrors.email = "El email es requerido";
-    if (!formData.get("contraseña")) newErrors.contraseña = "La contraseña es requerida";
-
-    const email = formData.get("email") as string;
-    if (email && !/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = "Email inválido";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    
-    if (!validateForm(formData)) return;
-
-    selectedEspecialidades.forEach((especialidadId, index) => {
-      formData.append(`especialidades[${index}]`, especialidadId.toString());
-    });
-
-    formData.set("color", selectedColor);
-
-    try {
-      setIsSubmitting(true);
-      const result = await createEspecialista(formData);
-      showServerActionResponse({
-        ...result,
-        message: result.success ? "Especialista creado" : "Error al crear especialista",
-        description: result.success ? "El especialista se ha creado exitosamente" : (result.error || "Ocurrió un error inesperado"),
-        toastType: result.success ? "success" : "error"
-      });
-      
-      if (result.success) {
-        setTimeout(() => {
-          onSuccess(); // Cerrar el dialog después del éxito
-        }, 1500);
-      } else {
-        setIsSubmitting(false);
-      }
-    } catch (error: any) {
-      if (error?.digest?.includes('NEXT_REDIRECT')) {
-        onSuccess(); // También cerrar en caso de redirect exitoso
-        return;
-      }
-      
-      console.error("Error:", error);
-      showServerActionResponse({
-        success: false,
-        message: "Error al crear especialista",
-        toastType: "error"
-      });
-      setIsSubmitting(false);
-    }
-  };
-
-  const toggleEspecialidad = (especialidadId: number) => {
-    setSelectedEspecialidades(prev => {
-      if (prev.includes(especialidadId)) {
-        return prev.filter(id => id !== especialidadId);
-      } else {
-        return [...prev, especialidadId];
-      }
-    });
-  };
-
-  const removeEspecialidad = (especialidadId: number) => {
-    setSelectedEspecialidades(prev => prev.filter(id => id !== especialidadId));
-  };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Nombre */}
-        <div>
-          <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre*
-          </label>
-          <input
-            type="text"
-            id="nombre"
-            name="nombre"
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.nombre ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="Ingresa el nombre"
-          />
-          {errors.nombre && <p className="text-red-500 text-xs mt-1">{errors.nombre}</p>}
-        </div>
-
-        {/* Apellido */}
-        <div>
-          <label htmlFor="apellido" className="block text-sm font-medium text-gray-700 mb-1">
-            Apellido*
-          </label>
-          <input
-            type="text"
-            id="apellido"
-            name="apellido"
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.apellido ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="Ingresa el apellido"
-          />
-          {errors.apellido && <p className="text-red-500 text-xs mt-1">{errors.apellido}</p>}
-        </div>
-
-        {/* Email */}
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Email*
-          </label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.email ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="correo@ejemplo.com"
-          />
-          {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-        </div>
-
-        {/* Contraseña */}
-        <div>
-          <label htmlFor="contraseña" className="block text-sm font-medium text-gray-700 mb-1">
-            Contraseña*
-          </label>
-          <input
-            type="password"
-            id="contraseña"
-            name="contraseña"
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.contraseña ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="Ingresa la contraseña"
-          />
-          {errors.contraseña && <p className="text-red-500 text-xs mt-1">{errors.contraseña}</p>}
-        </div>
-
-        {/* Teléfono - movido aquí */}
-        <div>
-          <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
-        Contacto
-          </label>
-          <input
-        type="tel"
-        id="telefono"
-        name="telefono"
-        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
-        placeholder="549..."
-          />
-        </div>
-
-        {/* Color de identificación */}
-        <div>
-          <label htmlFor="color" className="block text-sm font-medium text-gray-700 mb-1">
-        Color de identificación
-          </label>
-          <ColorPicker
-        value={selectedColor}
-        onChange={setSelectedColor}
-        disabled={isSubmitting}
-          />
-        </div>
-      </div>
-
-      {/* Especialidades */}
-      <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Especialidades *
-        </label>
-        
-        {selectedEspecialidades.length > 0 && (
-          <div className="mb-3 p-2 bg-gray-50 rounded-md">
-            <div className="flex flex-wrap gap-1">
-              {selectedEspecialidades.map((especialidadId) => {
-                const especialidad = especialidades.find(e => e.id_especialidad === especialidadId);
-                return (
-                  <span
-                    key={especialidadId}
-                    className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-[#9C1838]"
-                  >
-                    {especialidad?.nombre}
-                    <button
-                      type="button"
-                      onClick={() => removeEspecialidad(especialidadId)}
-                      className="ml-1 text-[#9C1838] hover:text-red-800 text-sm"
-                    >
-                      ×
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="border border-gray-300 rounded-md max-h-32 overflow-y-auto">
-          {especialidades.map((especialidad) => {
-            const isSelected = selectedEspecialidades.includes(especialidad.id_especialidad);
-            return (
-              <label
-                key={especialidad.id_especialidad}
-                className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
-                  isSelected ? 'bg-red-50 border-l-2' : ''
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => toggleEspecialidad(especialidad.id_especialidad)}
-                  className="mr-2 h-3 w-3 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                />
-                <span className={`text-xs ${isSelected ? 'font-medium text-red-900' : 'text-gray-700'}`}>
-                  {especialidad.nombre}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Botones */}
-      <div className="flex justify-end space-x-3 mt-6">
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={isSubmitting}
-          onClick={onSuccess}
-        >
-          Cancelar
-        </Button>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Creando..." : "Crear Especialista"}
-        </Button>
-      </div>
-    </form>
+    </>
   );
 }

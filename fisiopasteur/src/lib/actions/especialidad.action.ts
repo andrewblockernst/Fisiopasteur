@@ -4,6 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/database.types";
 import type { ActionResult } from "@/lib/actions/action-result";
+import { textoCorto } from "@/lib/validators/common";
+
+const nombreEspecialidadSchema = textoCorto("nombre de la especialidad", 60).min(
+  2,
+  "El nombre de la especialidad debe tener al menos 2 caracteres.",
+);
 
 type Especialidad = Database["public"]["Tables"]["especialidad"]["Row"];
 type EspecialidadInsert = Database["public"]["Tables"]["especialidad"]["Insert"];
@@ -52,13 +58,11 @@ export async function createEspecialidad(nombre: string): Promise<ActionResult> 
   const supabase = await createClient();
   
   try {
-    // Validar que el nombre no esté vacío
-    if (!nombre || nombre.trim().length === 0) {
-      return {
-        success: false,
-        error : "El nombre de la especialidad es requerido"
-      };
+    const parsed = nombreEspecialidadSchema.safeParse(nombre);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
     }
+    nombre = parsed.data;
 
     // Verificar que no exista una especialidad con el mismo nombre
     // const { data: existente, error: errorCheck } = await supabase
@@ -138,13 +142,11 @@ export async function updateEspecialidad(id: number, nombre: string): Promise<Ac
   const supabase = await createClient();
   
   try {
-    // Validar que el nombre no esté vacío
-    if (!nombre || nombre.trim().length === 0) {
-      return {
-        success: false,
-        error : "El nombre de la especialidad es requerido"
-      };
+    const parsed = nombreEspecialidadSchema.safeParse(nombre);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
     }
+    nombre = parsed.data;
 
     // Verificar que la especialidad exista
     // const { data: especialidadActual, error: errorCheck } = await supabase

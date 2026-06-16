@@ -1,4 +1,4 @@
-'use clent'
+'use client'
 
 import { useState } from "react";
 import BaseDialog from "../dialog/base-dialog";
@@ -42,14 +42,14 @@ export function DeleteEspecialistaDialog({isOpen, onClose, especialista, handleT
         <>
             <BaseDialog
                 type="warning"
-                title="confirmar eliminacion de especialista"
+                title="Confirmar eliminación de especialista"
                 message={
                     <>
-                        ¿Estás seguro de que deseas eliminar al especialista "<b>{especialista.nombre + ' ' + especialista.apellido}</b>"?
+                        ¿Estás seguro de que deseas eliminar al especialista <b>{especialista.nombre} {especialista.apellido}</b>?
                         <br />
-                        <i style={{ marginTop: 12, display: "block", fontSize: 12, fontWeight: "bold" }}>
-                            Esta acción no se puede deshacer.
-                        </i>
+                        <span className="mt-3 block text-xs font-semibold text-muted-foreground">
+                            Podrás reactivar al especialista más tarde si lo necesitás.
+                        </span>
                     </>
                 }
                 isOpen={isOpen}
