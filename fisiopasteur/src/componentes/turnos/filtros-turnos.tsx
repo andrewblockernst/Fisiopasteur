@@ -1,11 +1,12 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Filter, X, Plus, ChevronDown } from "lucide-react";
-import Button from "@/componentes/boton";
+import { Button, Input, Checkbox } from "@/componentes/ui";
 import NuevoTurnoModal from "../calendario/nuevo-turno-dialog";
 import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 import { useAuth } from "@/hooks/AuthContext";
+import { cn } from "@/lib/utils";
 
 interface FiltrosTurnosProps {
   especialistas: any[];
@@ -39,11 +40,26 @@ export default function FiltrosTurnos({
   const [openNew, setOpenNew] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null); // Estado para dropdowns abiertos
 
+  // Cola de URLs que pusheamos nosotros y que aún no se reflejaron en `params`.
+  // Sirve para evitar que el sync URL → estado local pise selecciones recién hechas
+  // por el usuario mientras navegaciones anteriores siguen propagándose.
+  const pendingPushesRef = useRef<string[]>([]);
+
   // ============= ESTADO PARA BÚSQUEDA DE PACIENTE =============
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<{ id_paciente: number; nombre: string; apellido: string, dni: string, telefono: string } | null>(null);
 
   useEffect(() => {
+    // Si esta URL coincide con una que pusheamos nosotros, descartar esa y todas
+    // las anteriores de la cola, y NO resincronizar el estado local (ya es coherente
+    // o, si quedan pushes más nuevos pendientes, el local está adelantado).
+    const currentUrl = params.toString();
+    const idx = pendingPushesRef.current.indexOf(currentUrl);
+    if (idx >= 0) {
+      pendingPushesRef.current = pendingPushesRef.current.slice(idx + 1);
+      return;
+    }
+
     const filterBase = initial || {};
     const especialistasFromUrl = params.getAll('especialistas');
     const especialidadesFromUrl = params.getAll('especialidades');
@@ -55,7 +71,7 @@ export default function FiltrosTurnos({
       setPacienteSeleccionado(null);
       setBusquedaPaciente('');
     }
-    
+
     setFilter({
       ...filterBase,
       especialista_ids: especialistasFromUrl.length > 0 ? especialistasFromUrl : (Array.isArray(filterBase.especialista_ids) ? filterBase.especialista_ids : []),
@@ -142,8 +158,10 @@ export default function FiltrosTurnos({
     if (pageSizeActual && ["10", "20", "30", "50"].includes(pageSizeActual)) {
       usp.set("page_size", pageSizeActual);
     }
-    
-    router.push(`/turnos?${usp.toString()}`);
+
+    const urlStr = usp.toString();
+    pendingPushesRef.current.push(urlStr);
+    router.push(`/turnos?${urlStr}`);
   }, [router, params]);
 
   const handleFechaDesdeChange = useCallback((fecha: string) => {
@@ -269,138 +287,148 @@ export default function FiltrosTurnos({
     aplicarFiltros(nuevosFiltros);
   }, [filter, aplicarFiltros]);
 
-  return (
-    <div className="bg-white p-4 rounded-lg border border-gray-200 mb-0">
+  // Estilos comunes para los triggers de los dropdowns multiselect (estética coherente con <Input>).
+  const triggerCn = "h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground flex items-center justify-between gap-1.5 transition-colors hover:border-muted-foreground/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand";
+  const popoverCn = "absolute top-full left-0 mt-1 bg-popover border border-border rounded-md shadow-lg z-50 w-[calc(100vw-2rem)] sm:w-auto sm:min-w-[200px] max-h-60 overflow-y-auto p-1";
+  const optionCn = "flex items-center gap-2 px-2 py-1.5 hover:bg-muted rounded-sm cursor-pointer transition-colors";
+  const labelCn = "text-xs font-medium text-muted-foreground mb-1";
 
-      {/* Fila 1: Título + Botón */}
-      <div className="flex items-center justify-between mb-3">
-          <div className="flex flex-wrap items-end gap-x-2 gap-y-2">
+  return (
+    <div className="bg-card p-4 rounded-lg border border-border mb-0">
+      {/* Fila 1: Filtros + Botones */}
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
+        <div className="flex flex-wrap items-end gap-x-2 gap-y-2">
             {/* Filtro Fecha Desde */}
             <div className="flex flex-col">
-              <label className="text-xs font-medium text-gray-600 mb-1">Desde</label>
-              <input
+              <label className={labelCn}>Desde</label>
+              <Input
                 type="date"
                 value={filter.fecha_desde || ""}
                 max={filter.fecha_hasta || undefined}
                 onChange={(e) => handleFechaDesdeChange(e.target.value)}
-                className="border rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-[138px]"
+                size="sm"
+                className="w-[150px]"
               />
             </div>
 
             {/* Filtro Fecha Hasta */}
             <div className="flex flex-col">
-              <label className="text-xs font-medium text-gray-600 mb-1">Hasta</label>
-              <input
+              <label className={labelCn}>Hasta</label>
+              <Input
                 type="date"
                 value={filter.fecha_hasta || ""}
                 min={filter.fecha_desde || undefined}
                 onChange={(e) => handleFechaHastaChange(e.target.value)}
-                className="border rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-[138px]"
+                size="sm"
+                className="w-[150px]"
               />
             </div>
 
             {/* Filtro Especialista */}
             <div className="flex flex-col relative">
-              <label className="text-xs font-medium text-gray-600 mb-1">Especialista</label>
+              <label className={labelCn}>Especialista</label>
               <button
+                type="button"
                 data-dropdown-trigger
+                aria-haspopup="listbox"
+                aria-expanded={openDropdown === 'especialista'}
                 onClick={() => setOpenDropdown(openDropdown === 'especialista' ? null : 'especialista')}
-                className="border rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white flex items-center justify-between gap-1.5 w-[130px]"
+                className={cn(triggerCn, "w-[140px]")}
               >
                 <span className="truncate">
                   {(!Array.isArray(filter.especialista_ids) || filter.especialista_ids.length === 0 || filter.especialista_ids.length === especialistas.length)
                     ? 'Todos'
                     : `${filter.especialista_ids.length} selec.`}
                 </span>
-                <ChevronDown size={14} className={`shrink-0 transition-transform ${openDropdown === 'especialista' ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={cn("shrink-0 transition-transform text-muted-foreground", openDropdown === 'especialista' && "rotate-180")} />
               </button>
-              
+
               {openDropdown === 'especialista' && (
-                <div data-dropdown-content className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[200px] max-h-60 overflow-y-auto">
-                  {especialistas.map((esp: any) => (
-                    <label key={esp.id_usuario} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={Array.isArray(filter.especialista_ids) && filter.especialista_ids.includes(esp.id_usuario)}
-                        onChange={() => handleEspecialistaToggle(esp.id_usuario)}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{esp.apellido}, {esp.nombre}</span>
-                    </label>
-                  ))}
+                <div data-dropdown-content role="listbox" aria-multiselectable className={popoverCn}>
+                  {especialistas.map((esp: any) => {
+                    const checked = Array.isArray(filter.especialista_ids) && filter.especialista_ids.includes(esp.id_usuario);
+                    return (
+                      <label key={esp.id_usuario} className={optionCn}>
+                        <Checkbox checked={checked} onCheckedChange={() => handleEspecialistaToggle(esp.id_usuario)} />
+                        <span className="text-sm">{esp.apellido}, {esp.nombre}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
             {/* Filtro Especialidad */}
             <div className="flex flex-col relative">
-              <label className="text-xs font-medium text-gray-600 mb-1">Especialidad</label>
+              <label className={labelCn}>Especialidad</label>
               <button
+                type="button"
                 data-dropdown-trigger
+                aria-haspopup="listbox"
+                aria-expanded={openDropdown === 'especialidad'}
                 onClick={() => setOpenDropdown(openDropdown === 'especialidad' ? null : 'especialidad')}
-                className="border rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white flex items-center justify-between gap-1.5 w-[130px]"
+                className={cn(triggerCn, "w-[140px]")}
               >
                 <span className="truncate">
                   {(!Array.isArray(filter.especialidad_ids) || filter.especialidad_ids.length === 0 || filter.especialidad_ids.length === especialidadesFiltradas.length)
                     ? 'Todas'
                     : `${filter.especialidad_ids.length} selec.`}
                 </span>
-                <ChevronDown size={14} className={`shrink-0 transition-transform ${openDropdown === 'especialidad' ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={cn("shrink-0 transition-transform text-muted-foreground", openDropdown === 'especialidad' && "rotate-180")} />
               </button>
-              
+
               {openDropdown === 'especialidad' && (
-                <div data-dropdown-content className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[200px] max-h-60 overflow-y-auto">
-                  {especialidadesFiltradas.map((esp: any) => (
-                    <label key={esp.id_especialidad} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={Array.isArray(filter.especialidad_ids) && filter.especialidad_ids.includes(esp.id_especialidad.toString())}
-                        onChange={() => handleEspecialidadToggle(esp.id_especialidad.toString())}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{esp.nombre}</span>
-                    </label>
-                  ))}
+                <div data-dropdown-content role="listbox" aria-multiselectable className={popoverCn}>
+                  {especialidadesFiltradas.map((esp: any) => {
+                    const checked = Array.isArray(filter.especialidad_ids) && filter.especialidad_ids.includes(esp.id_especialidad.toString());
+                    return (
+                      <label key={esp.id_especialidad} className={optionCn}>
+                        <Checkbox checked={checked} onCheckedChange={() => handleEspecialidadToggle(esp.id_especialidad.toString())} />
+                        <span className="text-sm">{esp.nombre}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
             {/* Filtro Estado */}
             <div className="flex flex-col relative">
-              <label className="text-xs font-medium text-gray-600 mb-1">Estado</label>
+              <label className={labelCn}>Estado</label>
               <button
+                type="button"
                 data-dropdown-trigger
+                aria-haspopup="listbox"
+                aria-expanded={openDropdown === 'estado'}
                 onClick={() => setOpenDropdown(openDropdown === 'estado' ? null : 'estado')}
-                className="border rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white flex items-center justify-between gap-1.5 w-[120px]"
+                className={cn(triggerCn, "w-[130px]")}
               >
                 <span className="truncate">
                   {(!Array.isArray(filter.estados) || filter.estados.length === 0 || filter.estados.length === estadosPosibles.filter(e => e.value).length)
                     ? 'Todos'
                     : `${filter.estados.length} selec.`}
                 </span>
-                <ChevronDown size={14} className={`shrink-0 transition-transform ${openDropdown === 'estado' ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={cn("shrink-0 transition-transform text-muted-foreground", openDropdown === 'estado' && "rotate-180")} />
               </button>
-              
+
               {openDropdown === 'estado' && (
-                <div data-dropdown-content className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[180px]">
-                  {estadosPosibles.filter(e => e.value).map((estado) => (
-                    <label key={estado.value} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={Array.isArray(filter.estados) && filter.estados.includes(estado.value)}
-                        onChange={() => handleEstadoToggle(estado.value)}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{estado.label}</span>
-                    </label>
-                  ))}
+                <div data-dropdown-content role="listbox" aria-multiselectable className={popoverCn}>
+                  {estadosPosibles.filter(e => e.value).map((estado) => {
+                    const checked = Array.isArray(filter.estados) && filter.estados.includes(estado.value);
+                    return (
+                      <label key={estado.value} className={optionCn}>
+                        <Checkbox checked={checked} onCheckedChange={() => handleEstadoToggle(estado.value)} />
+                        <span className="text-sm">{estado.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
             {/* Filtro Paciente */}
             <div className="flex flex-col relative">
-              <label className="text-xs font-medium text-gray-600 mb-1">Paciente</label>
+              <label className={labelCn}>Paciente</label>
               <PacienteAutocomplete
                 value={busquedaPaciente}
                 onChange={(valor) => {
@@ -418,13 +446,13 @@ export default function FiltrosTurnos({
                 limit={5}
                 showMinCharsHint={false}
                 placeholder="Buscar paciente..."
-                inputClassName="border rounded pl-6 pr-6 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-[170px]"
-                dropdownClassName="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 min-w-[220px] max-h-60 overflow-y-auto"
-                optionClassName="px-3 py-2 hover:bg-blue-50 text-sm flex flex-col"
+                inputClassName="h-9 w-[200px] pl-8 pr-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand transition-colors"
+                dropdownClassName="absolute top-full left-0 mt-1 bg-popover border border-border rounded-md shadow-lg z-50 min-w-[240px] max-h-60 overflow-y-auto p-1"
+                optionClassName="px-2 py-1.5 hover:bg-muted rounded-sm text-sm flex flex-col cursor-pointer"
                 renderOption={(pac) => (
                   <>
-                    <span className="font-medium">{pac.apellido}, {pac.nombre}</span>
-                    <span className="text-xs text-gray-500">
+                    <span className="font-medium text-foreground">{pac.apellido}, {pac.nombre}</span>
+                    <span className="text-xs text-muted-foreground">
                       {pac.dni && <span className="mr-2">{pac.dni}</span>}
                       {pac.dni && pac.telefono && <span className="mr-2">•</span>}
                       {pac.telefono && <span>{pac.telefono}</span>}
@@ -437,21 +465,24 @@ export default function FiltrosTurnos({
             {/* Botón Limpiar */}
             {filtrosActivos > 0 && (
               <Button
-                variant="secondary"
+                variant="outline"
+                size="sm"
                 onClick={limpiarFiltros}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm h-[34px] self-end"
+                leftIcon={<X size={14} />}
+                className="self-end"
               >
-                <X size={14} />
-                <span>Limpiar ({filtrosActivos})</span>
+                Limpiar ({filtrosActivos})
               </Button>
             )}
-      </div>
+        </div>
+
         <Button
           variant="primary"
+          size="sm"
           onClick={() => setOpenNew(true)}
-          className="flex items-center gap-1.5 h-[34px] shrink-0 text-sm px-3"
+          leftIcon={<Plus size={15} />}
+          className="shrink-0 self-end"
         >
-          <Plus size={15} />
           <span className="hidden sm:inline">Nuevo turno</span>
           <span className="sm:hidden">Turno</span>
         </Button>

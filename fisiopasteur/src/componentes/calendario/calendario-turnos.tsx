@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock } from "lucide-react";
 import type { TurnoConDetalles } from "@/stores/turno-store";
-import Button from "../boton";
+import { Button, IconButton, Card } from "@/componentes/ui";
+import { cn } from "@/lib/utils";
+import { useHorizontalSwipe } from "@/hooks/useHorizontalSwipe";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 interface CalendarioTurnosProps {
   turnos: TurnoConDetalles[];
@@ -51,15 +54,11 @@ export function CalendarioTurnos({
 }: CalendarioTurnosProps & CalendarioTurnosExtraProps) {
   const [fechaActual, setFechaActual] = useState(new Date());
   const [vistaInternal, setVistaInternal] = useState<VistaCalendario>('mes');
+  // Alto del contenedor scrollable de la vista mes. Lo usamos para cotar el
+  // alto MÁXIMO de cada fila a (alto/6), garantizando que entren 6 filas.
+  const mesScrollRef = useRef<HTMLDivElement | null>(null);
+  const [mesScrollHeight, setMesScrollHeight] = useState<number>(0);
   const vista = vistaProp ?? vistaInternal;
-  // ✅ Inicializar con valor por defecto basado en window (evita undefined en SSR)
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 768;
-    }
-    return false; // Default para SSR
-  });
-
   const turnosPorFecha = useMemo(() => {
     const index = new Map<string, TurnoConDetalles[]>();
 
@@ -79,20 +78,25 @@ export function CalendarioTurnos({
   const formatDateKey = (fecha: Date) => fecha.toISOString().split('T')[0];
 
   useEffect(() => {
-    // Solo se ejecuta en el cliente
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile(); // ✅ Verificar inmediatamente al montar
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  useEffect(() => {
     if (!onViewContextChange) return;
     onViewContextChange({
       vista,
       fecha: new Date(fechaActual),
     });
   }, [vista, fechaActual, onViewContextChange]);
+
+  // Observa el alto del contenedor scrollable del mes para cotar las filas.
+  // Se re-monta cuando cambia la vista (porque el ref del DOM cambia).
+  useLayoutEffect(() => {
+    if (vista !== 'mes') return;
+    const el = mesScrollRef.current;
+    if (!el) return;
+    const recompute = () => setMesScrollHeight(el.clientHeight);
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [vista]);
 
   // Maneja el estado para abrir/cerrar el modal de creación de turno
 // const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -124,6 +128,21 @@ export function CalendarioTurnos({
     return inicioFecha.getTime() < inicioHoy.getTime();
   };
 
+  const getEstadoColor = (estado: string) => {
+    switch (estado.toLowerCase()) {
+      case 'atendido':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'pendiente':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'cancelado':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'programado':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
   const isHorarioPasado = (fecha: Date, hora: string) => {
     const [horasRaw, minutosRaw] = hora.split(':');
     const horas = Number.parseInt(horasRaw, 10);
@@ -146,19 +165,27 @@ export function CalendarioTurnos({
     return horario.getTime() <= Date.now();
   };
 
-  const navegarFecha = (direccion: 'anterior' | 'siguiente') => {
-    const nuevaFecha = new Date(fechaActual);
-    
-    if (vista === 'mes') {
-      nuevaFecha.setMonth(nuevaFecha.getMonth() + (direccion === 'siguiente' ? 1 : -1));
-    } else if (vista === 'semana') {
-      nuevaFecha.setDate(nuevaFecha.getDate() + (direccion === 'siguiente' ? 7 : -7));
-    } else if (vista === 'dia') {
-      nuevaFecha.setDate(nuevaFecha.getDate() + (direccion === 'siguiente' ? 1 : -1));
-    }
-    
-    setFechaActual(nuevaFecha);
-  };
+  const navegarFecha = useCallback((direccion: 'anterior' | 'siguiente') => {
+    setFechaActual((prev) => {
+      const nuevaFecha = new Date(prev);
+      if (vista === 'mes') {
+        nuevaFecha.setMonth(nuevaFecha.getMonth() + (direccion === 'siguiente' ? 1 : -1));
+      } else if (vista === 'semana') {
+        nuevaFecha.setDate(nuevaFecha.getDate() + (direccion === 'siguiente' ? 7 : -7));
+      } else if (vista === 'dia') {
+        nuevaFecha.setDate(nuevaFecha.getDate() + (direccion === 'siguiente' ? 1 : -1));
+      }
+      return nuevaFecha;
+    });
+  }, [vista]);
+
+  // Swipe horizontal en <lg para navegar fechas (todas las vistas)
+  const isBelowLg = useMediaQuery('(max-width: 1023px)');
+  const swipeRef = useHorizontalSwipe<HTMLDivElement>({
+    enabled: isBelowLg,
+    onSwipeLeft: () => navegarFecha('siguiente'),
+    onSwipeRight: () => navegarFecha('anterior'),
+  });
 
   // Función para ir al día actual
   const irAHoy = () => {
@@ -172,6 +199,26 @@ export function CalendarioTurnos({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goToTodaySignal]);
+
+  // Auto-switch entre 'dia' (< md) y 'semana' (md+) cuando el viewport cruza el breakpoint.
+  // Mantiene 'mes' intacto.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(min-width: 768px)');
+    const sync = (matches: boolean) => {
+      if (matches && vista === 'dia') {
+        if (onVistaChange) onVistaChange('semana');
+        else setVistaInternal('semana');
+      } else if (!matches && vista === 'semana') {
+        if (onVistaChange) onVistaChange('dia');
+        else setVistaInternal('dia');
+      }
+    };
+    sync(mql.matches);
+    const handler = (e: MediaQueryListEvent) => sync(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [vista, onVistaChange]);
 
   const setVista = (v: VistaCalendario) => {
     if (onVistaChange) onVistaChange(v);
@@ -216,22 +263,60 @@ export function CalendarioTurnos({
       dias.push(new Date(fechaActual.getFullYear(), fechaActual.getMonth(), dia));
     }
 
+    // Calcular cuántas filas tiene el mes para distribuir el alto disponible
+    const totalCeldas = diaSemanaInicio + diasEnMes;
+    const filas = Math.ceil(totalCeldas / 7);
+
+    // Cota MÁXIMA por fila: garantiza que 6 filas entren en pantalla.
+    // - Si mesScrollHeight = 0 (primer render) → no aplicamos cap todavía.
+    // - El piso real lo impone minmax(108px, ...): si maxRowPx < 108, igualmente
+    //   las filas valen 108 y el calendario scrollea internamente.
+    const MIN_ROW = 108;
+    const ROWS_TARGET = 6;
+    const maxRowPx = mesScrollHeight > 0
+      ? Math.max(MIN_ROW, Math.floor(mesScrollHeight / ROWS_TARGET))
+      : null;
+    // maxHeight del grid: filas × maxRowPx + (filas-1) px de gap.
+    // Sin esto, con `1fr` las filas crecerían a todo el alto disponible.
+    const gridMaxHeight = maxRowPx ? filas * maxRowPx + (filas - 1) : null;
+
     return (
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+      <Card variant="elevated" padding="none" className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* Header días de la semana */}
-        <div className="grid grid-cols-7 bg-gray-50 border-b">
+        <div className="shrink-0 grid grid-cols-7 bg-muted/40 border-b border-border">
           {DIAS_SEMANA.map((dia) => (
-            <div key={dia} className="p-3 text-center text-sm font-medium text-gray-600">
+            <div key={dia} className="p-3 text-center text-sm font-medium text-muted-foreground">
               {dia}
             </div>
           ))}
         </div>
-        
-        {/* Grid de días */}
-        <div className="grid grid-cols-7 gap-px bg-gray-200">
+
+        {/*
+          Contenedor scrollable: si las filas no entran en pantalla, el SCROLL
+          ocurre acá adentro (calendario), no en la página. El header de días
+          queda fijo arriba porque está fuera de este contenedor.
+        */}
+        <div ref={mesScrollRef} className="flex-1 min-h-0 overflow-y-auto">
+          {/*
+            Grid de días.
+            - minmax(108px, 1fr): pisos de 108px garantizan espacio para el número
+              del día + 3 turnos + línea "+X más". Si hay espacio extra, 1fr
+              hace crecer las filas — pero el `maxHeight` de abajo las acota.
+            - min-h-full: cuando el viewport es alto, el grid intenta llenar el
+              contenedor; max-h le pone techo (filas × maxRowPx) → "6 filas en pantalla".
+            - gap-px sobre bg-border: las líneas divisorias son el fondo del grid
+              mostrándose a través de los 1px de gap.
+          */}
+          <div
+            className="grid grid-cols-7 gap-px bg-border min-h-full"
+            style={{
+              gridTemplateRows: `repeat(${filas}, minmax(108px, 1fr))`,
+              ...(gridMaxHeight ? { maxHeight: `${gridMaxHeight}px` } : {}),
+            }}
+          >
           {dias.map((fecha, index) => {
             if (!fecha) {
-              return <div key={index} className="bg-white h-24 md:h-32" />;
+              return <div key={index} className="bg-white min-h-0" />;
             }
             
             const turnosDelDia = getTurnosParaDia(fecha);
@@ -239,9 +324,11 @@ export function CalendarioTurnos({
             const puedeAgregarEnFecha = !isFechaPasada(fecha);
             
             return (
-              <div 
-                key={index} 
-                className="bg-white h-28 md:h-36 p-1 relative group transition-all"
+              <div
+                key={index}
+                // Coherente con el minmax(108px, 1fr) del grid: garantiza
+                // ~24px del número + 3 turnos (≈ 18px c/u) + línea "+X más".
+                className="bg-white min-h-[108px] p-1 relative group transition-all overflow-hidden"
               >
                 <div
                   className="w-full h-full rounded cursor-pointer transition-colors relative hover:bg-gray-50"
@@ -249,59 +336,31 @@ export function CalendarioTurnos({
                 >
                   <div className="h-full flex flex-col">
                     {/* Número del día */}
-                    <div className="flex justify-between items-start px-1 pt-0.5 pb-1">
-                      <span className={`text-sm font-medium ${
-                        esHoy 
-                          ? 'bg-[#9C1838] text-white w-5 h-5 rounded-2xl flex items-center justify-center text-xs' 
-                          : 'text-gray-900'
-                      }`}>
+                    <div className="flex justify-between items-start px-1 pt-0.5 pb-1 shrink-0">
+                      <span className={cn(
+                        'text-sm font-medium',
+                        esHoy
+                          ? 'bg-brand text-brand-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs'
+                          : 'text-foreground',
+                      )}>
                         {fecha.getDate()}
                       </span>
                     </div>
-                    
-                    {/* Lista de turnos */}
-                    <div className="flex-1 overflow-hidden">
-                      {turnosDelDia.length > 0 ? (
-                        <div className="space-y-0.5">
-                          {turnosDelDia.slice(0, 4).map((turno) => (
-                            <div
-                              key={turno.id_turno}
-                              // onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 text-xs px-1 py-0.5 rounded transition-all"
-                            >
-                              {/* Indicador de color del especialista */}
-                              <div 
-                                className="w-2 h-2 rounded-full flex-shrink-0"
-                                style={{ 
-                                  backgroundColor: turno.especialista?.color || '#9C1838' 
-                                }}
-                              />
-                              {/* Horario y nombre del paciente en una línea */}
-                              <div className="flex items-center gap-1 min-w-0 flex-1">
-                                <span className="text-gray-900 font-medium truncate">
-                                  {turno.paciente?.nombre || 'Paciente'} {turno.paciente?.apellido || ''}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                          {turnosDelDia.length > 4 && (
-                            <div className="text-xs text-gray-500 px-1">
-                              +{turnosDelDia.length - 4} más
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-                    </div>
+
+                    {/* Lista de turnos — calcula dinámicamente cuántos entran */}
+                    <DiaTurnosLista turnos={turnosDelDia} />
                   </div>
-                  
+
                   {/* Botón crear turno (visible en hover) */}
                   {puedeAgregarEnFecha && (
                     <button
+                      type="button"
+                      aria-label="Crear turno este día"
                       onClick={(e) => {
                         e.stopPropagation();
                         onCreateTurno(fecha);
                       }}
-                      className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#9C1838] text-white p-1 rounded text-xs"
+                      className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-brand text-brand-foreground p-1 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -310,8 +369,9 @@ export function CalendarioTurnos({
               </div>
             );
           })}
+          </div>
         </div>
-      </div>
+      </Card>
     );
   };
 
@@ -338,26 +398,27 @@ export function CalendarioTurnos({
     };
 
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="max-h-[calc(100vh-100px)] overflow-auto">
+      <Card variant="default" padding="none" className="overflow-hidden flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 overflow-auto">
           <div className="min-w-[820px]">
-            <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-gray-200 sticky top-0 z-20 bg-gradient-to-b from-gray-50 to-white">
-              <div className="p-3 border-r border-gray-200 bg-gray-50/50" />
+            <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-border sticky top-0 z-20 bg-gradient-to-b from-muted/40 to-card">
+              <div className="p-3 border-r border-border bg-muted/30" />
               {diasSemana.map((fecha, index) => {
                 const esHoy = esDiaActual(fecha);
                 return (
                   <div
                     key={index}
-                    className={`p-3 text-center border-r border-gray-200 last:border-r-0 transition-colors ${
-                      esHoy 
-                        ? 'bg-[#9C1838] text-white shadow-inner' 
-                        : 'bg-gradient-to-b from-gray-50 to-white hover:bg-gray-50'
-                    }`}
+                    className={cn(
+                      'p-3 text-center border-r border-border last:border-r-0 transition-colors',
+                      esHoy
+                        ? 'bg-brand text-brand-foreground shadow-inner'
+                        : 'bg-gradient-to-b from-muted/40 to-card hover:bg-muted/40',
+                    )}
                   >
                     <div className="text-sm font-semibold">
                       {DIAS_SEMANA_COMPLETOS[fecha.getDay()]}
                     </div>
-                    <div className={`text-xs mt-1 ${esHoy ? 'opacity-90' : 'text-gray-500'}`}>
+                    <div className={cn('text-xs mt-1', esHoy ? 'opacity-90' : 'text-muted-foreground')}>
                       {fecha.getDate()} {MESES[fecha.getMonth()]}
                     </div>
                   </div>
@@ -367,13 +428,14 @@ export function CalendarioTurnos({
 
             <div>
               {horas.map((hora, idx) => (
-                <div 
-                  key={hora} 
-                  className={`grid grid-cols-[80px_repeat(7,1fr)] border-b border-gray-100 hover:bg-gray-50/30 transition-colors ${
-                    idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
-                  }`}
+                <div
+                  key={hora}
+                  className={cn(
+                    'grid grid-cols-[80px_repeat(7,1fr)] border-b border-border/50 hover:bg-muted/20 transition-colors',
+                    idx % 2 === 0 ? 'bg-card' : 'bg-muted/20',
+                  )}
                 >
-                  <div className="w-20 p-3 text-sm text-gray-600 border-r border-gray-200 bg-gray-50/50 font-mono flex items-center justify-center">
+                  <div className="w-20 p-3 text-sm text-muted-foreground border-r border-border bg-muted/30 font-mono flex items-center justify-center">
                     <span className="text-xs font-medium">{`${hora.toString().padStart(2, '0')}:00`}</span>
                   </div>
 
@@ -384,24 +446,27 @@ export function CalendarioTurnos({
                     const puedeAgregarEnSlot = !isHorarioPasado(fecha, horaString);
 
                     return (
-                      <div 
-                        key={di} 
-                        className="p-2 relative group min-h-[70px] transition-all duration-200 border-r border-gray-100 last:border-r-0 hover:bg-gray-50/50"
+                      <div
+                        key={di}
+                        className="p-2 relative group min-h-[70px] transition-all duration-200 border-r border-border/50 last:border-r-0 hover:bg-muted/30"
                       >
                         {turnosEnHora.length > 0 && (
                           <div
-                            className={`grid gap-1 ${
-                              turnosEnHora.length === 1 ? 'grid-cols-1' :
-                              turnosEnHora.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
-                            }`}
+                            className={cn(
+                              'grid gap-1',
+                              turnosEnHora.length === 1 && 'grid-cols-1',
+                              turnosEnHora.length === 2 && 'grid-cols-2',
+                              turnosEnHora.length >= 3 && 'grid-cols-3',
+                            )}
                           >
                             {turnosEnHora.slice(0, 3).map((turno) => (
-                              <div
+                              <button
                                 key={turno.id_turno}
-                                className="text-xs rounded-lg shadow-sm border-l-2 overflow-hidden transition-all duration-200 hover:shadow-md hover:scale-[1.02] cursor-pointer"
+                                type="button"
+                                className="text-xs rounded-md shadow-sm border-l-2 overflow-hidden transition-all duration-200 hover:shadow-md hover:scale-[1.02] cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 style={{
-                                  backgroundColor: (turno.especialista?.color || '#9C1838') + '15',
-                                  borderLeftColor: turno.especialista?.color || '#9C1838',
+                                  backgroundColor: (turno.especialista?.color || 'var(--brand)') + '15',
+                                  borderLeftColor: turno.especialista?.color || 'var(--brand)',
                                 }}
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -409,37 +474,40 @@ export function CalendarioTurnos({
                                 }}
                               >
                                 <div className="p-1.5 h-full flex flex-col justify-center">
-                                  <div className="font-semibold truncate text-xs text-gray-900 leading-tight">
+                                  <div className="font-semibold truncate text-xs text-foreground leading-tight">
                                     {turno.paciente?.nombre}
                                   </div>
-                                  <div className="text-[10px] text-gray-600 truncate mt-0.5 leading-tight font-medium">
+                                  <div className="text-[10px] text-muted-foreground truncate mt-0.5 leading-tight font-medium">
                                     {turno.hora.substring(0, 5)}
                                   </div>
                                 </div>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         )}
 
                         {turnosEnHora.length > 3 && (
-                          <div
-                            className="text-center text-xs text-gray-500 mt-1.5 cursor-pointer hover:text-[#9C1838] transition-all hover:font-semibold bg-gray-100/50 rounded px-2 py-0.5"
+                          <button
+                            type="button"
+                            className="block w-full text-center text-xs text-muted-foreground mt-1.5 cursor-pointer hover:text-brand transition-all hover:font-semibold bg-muted/50 rounded-sm px-2 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             onClick={(e) => {
                               e.stopPropagation();
                               onDayClick(fecha, turnosDelDiaCompleto);
                             }}
                           >
                             +{turnosEnHora.length - 3} más
-                          </div>
+                          </button>
                         )}
 
                         {puedeAgregarEnSlot && (
                           <button
+                            type="button"
+                            aria-label={`Crear turno ${horaString}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               onCreateTurno(fecha, horaString);
                             }}
-                            className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-[#9C1838] hover:bg-[#7D1329] text-white p-1 rounded-full shadow-md hover:shadow-lg hover:scale-110"
+                            className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-brand hover:bg-brand-hover text-brand-foreground p-1 rounded-full shadow-md hover:shadow-lg hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -452,7 +520,7 @@ export function CalendarioTurnos({
             </div>
           </div>
         </div>
-      </div>
+      </Card>
     );
   };
 
@@ -469,66 +537,11 @@ export function CalendarioTurnos({
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        <Card variant="elevated" padding="none" className="overflow-hidden flex-1 min-h-0 flex flex-col">
             {/* MOBILE LAYOUT */}
-            <div className="block sm:hidden">
-                {/* Botón Hoy y Toggle en la misma línea */}
-                <div className="flex items-center justify-center gap-4 py-3 bg-gray-50 border-b">
-                    <button
-                    onClick={irAHoy}
-                    className="px-4 py-1 text-sm bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand)]/80 transition-colors font-medium"
-                    >
-                    Hoy
-                    </button>
-                    
-                    <div className="flex bg-gray-100 rounded-lg p-1">
-                        <button
-                            onClick={() => setVista('mes')}
-                            className={`px-3 py-1 rounded text-sm transition-colors ${
-                                vista === 'mes' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                            }`}
-                        >
-                            Mes
-                        </button>
-                        <button
-                            onClick={() => setVista('dia')}
-                            className={`px-3 py-1 rounded text-sm transition-colors ${
-                                vista === 'dia' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                            }`}
-                        >
-                            Día
-                        </button>
-                    </div>
-                </div>
-
-                {/* Fecha detallada con navegación adicional */}
-                <div className="flex items-center justify-between p-4 bg-white border-b">
-                    <button
-                        onClick={() => navegarFecha('anterior')}
-                        className="p-1 hover:bg-gray-100 rounded transition-colors"
-                    >
-                        <ChevronLeft className="w-4 h-4 text-gray-800" />
-                    </button>
-                    
-            <h3 className="text-xl font-bold text-gray-900 text-center flex-1 capitalize">
-                        {fechaActual.toLocaleDateString('es-AR', {
-                            weekday: 'long',
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric'
-                        })}
-                    </h3>
-                    
-                    <button
-                        onClick={() => navegarFecha('siguiente')}
-                        className="p-1 hover:bg-gray-100 rounded transition-colors"
-                    >
-                        <ChevronRight className="w-4 h-4 text-gray-800" />
-                    </button>
-                </div>
-
+            <div className="flex md:hidden flex-col flex-1 min-h-0">
                 {/* Celdas de horas */}
-                <div className="max-h-[60vh] overflow-y-auto">
+                <div className="flex-1 min-h-0 overflow-y-auto">
                     {horas.map((hora) => {
                         const turnosHora = getTurnosEnHora(hora);
                         const horaStr = `${hora.toString().padStart(2, '0')}:00`;
@@ -543,26 +556,41 @@ export function CalendarioTurnos({
                                     </div>
                                     
                                     {/* Contenido de turnos */}
-                                    <div className="flex-1 p-3">
+                                    <div
+                                        className={cn(
+                                            "flex-1 p-3",
+                                            puedeAgregarEnSlot && "cursor-pointer hover:bg-muted/30 transition-colors"
+                                        )}
+                                        onClick={(e) => {
+                                            if (e.target !== e.currentTarget) return;
+                                            if (puedeAgregarEnSlot) onCreateTurno(fechaActual, horaStr);
+                                        }}
+                                    >
                                         {turnosHora.length > 0 ? (
-                                            <div className="space-y-2">
+                                            <div className="space-y-2 max-w-[75%]">
                                                 {turnosHora.map((turno) => (
                                                     <div
                                                         key={turno.id_turno}
                                                         className="border rounded-lg p-3 active:scale-95 transition-all cursor-pointer"
-                                                        style={{ 
+                                                        style={{
                                                             borderColor: turno.especialista?.color || '#9C1838',
                                                             backgroundColor: (turno.especialista?.color || '#9C1838') + '15'
                                                         }}
-                                                        onClick={() => onDayClick(fechaActual, [turno])}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onDayClick(fechaActual, [turno]);
+                                                        }}
                                                     >
                                                         <div className="flex items-center justify-between mb-2">
-                                                            <div className="flex items-center gap-2">                                                  
+                                                            <div className="flex items-center gap-2">
                                                                 <span className="font-semibold text-black">
                                                                     {turno.paciente?.nombre} {turno.paciente?.apellido}
                                                                 </span>
                                                             </div>
-                                                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                            <span className={cn(
+                                                                "text-xs px-2 py-1 rounded border",
+                                                                getEstadoColor(turno.estado || 'programado')
+                                                            )}>
                                                                 {turno.estado || 'programado'}
                                                             </span>
                                                         </div>
@@ -608,11 +636,11 @@ export function CalendarioTurnos({
                 </div>
             </div>
 
-            {/* DESKTOP: Layout original sin cambios */}
-            <div className="hidden sm:block">
-                <div className="p-4 border-b bg-gray-50">
-                    <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-semibold text-gray-900">
+            {/* DESKTOP */}
+            <div className="hidden md:flex flex-col flex-1 min-h-0">
+                <div className="shrink-0 p-4 border-b border-border bg-muted/40">
+                    <div className="flex justify-between items-center gap-3">
+                        <h3 className="text-lg font-semibold text-foreground capitalize">
                             {fechaActual.toLocaleDateString('es-AR', {
                                 weekday: 'long',
                                 year: 'numeric',
@@ -620,36 +648,59 @@ export function CalendarioTurnos({
                                 day: 'numeric'
                             })}
                         </h3>
-                        <button
-                            onClick={() => onCreateTurno(fechaActual)} // Vista día header - sin hora específica
-                            className="bg-[#9C1838] text-white px-3 py-1 rounded-lg text-sm flex items-center gap-1"
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            leftIcon={<Plus className="w-4 h-4" />}
+                            onClick={() => onCreateTurno(fechaActual)}
                         >
-                            <Plus className="w-4 h-4" /> Nuevo Turno
-                        </button>
+                            Nuevo turno
+                        </Button>
                     </div>
                 </div>
-                
-                <div className="max-h-96 overflow-y-auto">
+
+                <div className="flex-1 min-h-0 overflow-y-auto">
                     {Array.from({ length: 12 }, (_, i) => i + 8).map((hora) => {
                         const horaStr = `${hora.toString().padStart(2, '0')}:00`;
                         const turnosHora = turnosDelDia.filter(t => t.hora.startsWith(hora.toString().padStart(2, '0')));
-                        
+                        const puedeAgregarEnSlot = !isHorarioPasado(fechaActual, horaStr);
+
                         return (
-                            <div key={hora} className="border-b flex">
-                                <div className="w-16 p-3 text-sm text-gray-500 border-r">
+                            <div key={hora} className="border-b border-border flex">
+                                <div className="w-16 p-3 text-sm text-muted-foreground border-r border-border font-mono">
                                     {horaStr}
                                 </div>
-                                <div className="flex-1 p-3 min-h-16">
+                                <div
+                                    className={cn(
+                                        "flex-1 p-3 min-h-16",
+                                        puedeAgregarEnSlot && "cursor-pointer hover:bg-muted/30 transition-colors"
+                                    )}
+                                    onClick={(e) => {
+                                        if (e.target !== e.currentTarget) return;
+                                        if (puedeAgregarEnSlot) onCreateTurno(fechaActual, horaStr);
+                                    }}
+                                >
                                     {turnosHora.map((turno) => (
-                                        <div
+                                        <button
                                             key={turno.id_turno}
-                                            className="bg-blue-100 text-blue-800 p-2 rounded mb-1 transition-all cursor-pointer"
-                                            style={{ backgroundColor: turno.especialista?.color + '20', color: turno.especialista?.color || '#9C1838' }}
-                                            onClick={() => onDayClick(fechaActual, [turno])}
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDayClick(fechaActual, [turno]);
+                                            }}
+                                            className="max-w-[75%] text-left p-2 rounded-md mb-1 transition-all cursor-pointer hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring block"
+                                            style={{
+                                                backgroundColor: (turno.especialista?.color || 'var(--brand)') + '20',
+                                                borderLeft: `3px solid ${turno.especialista?.color || 'var(--brand)'}`,
+                                            }}
                                         >
-                                            <div className="font-medium text-black">{turno.paciente?.nombre} {turno.paciente?.apellido}</div>
-                                            <div className="text-xs text-black opacity-75">Dr. {turno.especialista?.nombre}</div>
-                                        </div>
+                                            <div className="font-medium text-foreground">
+                                                {turno.paciente?.nombre} {turno.paciente?.apellido}
+                                            </div>
+                                            <div className="text-xs text-foreground/70">
+                                                Dr. {turno.especialista?.nombre}
+                                            </div>
+                                        </button>
                                     ))}
                                 </div>
                             </div>
@@ -657,93 +708,128 @@ export function CalendarioTurnos({
                     })}
                 </div>
             </div>
-        </div>
+        </Card>
     );
   };
 
   return (
     <>
-      <div className="space-y-4">
-        {/* Header con controles - Solo mostrar si NO es vista día en mobile Y no está oculto */}
-        {!(vista === 'dia' && typeof window !== 'undefined' && window.innerWidth < 768) && !hideHeaderControls && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
+      <div className="h-full flex flex-col gap-1.5 sm:gap-4 min-h-0">
+        {!hideHeaderControls && (
+          <>
+            {/* Header mobile — una sola fila ultra compacta */}
+            <div className="lg:hidden shrink-0 flex items-center gap-0.5 bg-card border border-border rounded-md px-1">
               <button
+                type="button"
+                aria-label="Anterior"
                 onClick={() => navegarFecha('anterior')}
-                className="hover:bg-gray-100 rounded-lg transition-colors"
+                className="h-7 w-7 inline-flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              
-              <h2 className="text-xl font-bold text-gray-900 min-w-0 whitespace-nowrap">
+              <h3 className="text-sm font-semibold text-foreground text-center flex-1 capitalize min-w-0 truncate leading-none">
                 {obtenerTituloVista()}
-              </h2>
-              
+              </h3>
               <button
+                type="button"
+                aria-label="Siguiente"
                 onClick={() => navegarFecha('siguiente')}
-                className="hover:bg-gray-100 rounded-lg transition-colors"
+                className="h-7 w-7 inline-flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ChevronRight className="w-5 h-5 text-gray-600" />
+                <ChevronRight className="w-4 h-4" />
               </button>
-            </div>
-
-            {/* Selector de vista, botón Hoy, filtro especialista y botón nuevo turno */}
-            <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={irAHoy}
-                className="px-4 py-1 text-sm bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand)]/80 transition-colors font-medium"
+                className="h-7 px-2 rounded-sm text-xs font-medium bg-brand text-brand-foreground hover:bg-brand/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Hoy
               </button>
+              <div
+                role="tablist"
+                aria-label="Vista del calendario"
+                className="flex bg-muted rounded-sm p-0.5"
+              >
+                {([
+                  { v: 'mes' as const, label: 'Mes', visibility: '' },
+                  { v: 'dia' as const, label: 'Día', visibility: 'md:hidden' },
+                  { v: 'semana' as const, label: 'Semana', visibility: 'hidden md:inline-flex' },
+                ]).map(({ v, label, visibility }) => (
+                  <button
+                    key={v}
+                    role="tab"
+                    aria-selected={vista === v}
+                    onClick={() => setVista(v)}
+                    className={cn(
+                      'px-2 h-6 inline-flex items-center rounded-sm text-xs font-medium transition-colors',
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      visibility,
+                      vista === v
+                        ? 'bg-background text-brand shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                {isMobile ? (
-                  <>
-                    <button
-                      onClick={() => setVista('mes')}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        vista === 'mes' ? 'bg-white text-[var(--brand)] shadow-sm' : 'text-gray-600'
-                      }`}
-                    >
-                      Mes
-                    </button>
-                    <button
-                      onClick={() => setVista('dia')}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        vista === 'dia' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                      }`}
-                    >
-                      Día
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setVista('mes')}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        vista === 'mes' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                      }`}
-                    >
-                      Mes
-                    </button>
-                    <button
-                      onClick={() => setVista('semana')}
-                      className={`px-3 py-1 rounded text-sm transition-colors ${
-                        vista === 'semana' ? 'bg-white text-[#9C1838] shadow-sm' : 'text-gray-600'
-                      }`}
-                    >
-                      Semana
-                    </button>
-                  </>
-                )}
+            {/* Header desktop — una sola fila */}
+            <div className="hidden lg:flex shrink-0 lg:items-center lg:justify-between gap-3">
+              <div className="flex items-center gap-1 min-w-0">
+                <IconButton
+                  aria-label="Anterior"
+                  variant="ghost"
+                  size="sm"
+                  icon={<ChevronLeft className="w-5 h-5" />}
+                  onClick={() => navegarFecha('anterior')}
+                />
+                <h2 className="text-lg sm:text-xl font-bold text-foreground min-w-0 whitespace-nowrap capitalize">
+                  {obtenerTituloVista()}
+                </h2>
+                <IconButton
+                  aria-label="Siguiente"
+                  variant="ghost"
+                  size="sm"
+                  icon={<ChevronRight className="w-5 h-5" />}
+                  onClick={() => navegarFecha('siguiente')}
+                />
               </div>
 
-              {/* Filtro por especialista (solo desktop) */}
-              {!isMobile && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="primary" size="sm" onClick={irAHoy}>
+                  Hoy
+                </Button>
+
+                <div
+                  role="tablist"
+                  aria-label="Vista del calendario"
+                  className="flex bg-muted rounded-md p-1"
+                >
+                  {(['mes', 'semana'] as const).map((v) => (
+                    <button
+                      key={v}
+                      role="tab"
+                      aria-selected={vista === v}
+                      onClick={() => setVista(v)}
+                      className={cn(
+                        'px-3 py-1 rounded-sm text-sm font-medium transition-colors',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                        vista === v
+                          ? 'bg-background text-brand shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {v === 'mes' ? 'Mes' : 'Semana'}
+                    </button>
+                  ))}
+                </div>
+
                 <select
                   value={especialistaSeleccionado}
                   onChange={(e) => onEspecialistaChange(e.target.value)}
-                  className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent ml-2"
+                  className="h-10 px-3 py-2 border border-input bg-background text-foreground rounded-md text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand transition-colors"
                 >
                   <option value="">Todos los especialistas</option>
                   {especialistas.map((especialista) => (
@@ -752,29 +838,103 @@ export function CalendarioTurnos({
                     </option>
                   ))}
                 </select>
-              )}
 
-              {/* Botón nuevo turno (solo desktop) */}
-              {!isMobile && (
                 <Button
                   onClick={handleCreateTurno}
                   variant="primary"
-                  className="ml-2"
+                  leftIcon={<Plus className="w-4 h-4" />}
                 >
-                  Nuevo Turno
+                  Nuevo turno
                 </Button>
-              )}
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* Renderizar vista actual */}
-        {vista === 'mes' && renderVistaMes()}
-        {vista === 'semana' && renderVistaSemana()}
-        {vista === 'dia' && renderVistaDia()}
+        <div ref={swipeRef} className="flex-1 min-h-0 flex flex-col">
+          {vista === 'mes' && renderVistaMes()}
+          {vista === 'semana' && renderVistaSemana()}
+          {vista === 'dia' && renderVistaDia()}
+        </div>
       </div>
     </>
   );
 }
 
 export default CalendarioTurnos;
+
+/**
+ * Lista de turnos dentro de un cell de día.
+ * Mide su altura real con ResizeObserver y calcula cuántos items entran.
+ * Si hay overflow, el último slot se sustituye por "+x más".
+ *
+ * Altura por ítem: ~18px (text-xs + py-0.5 + gap del space-y-0.5).
+ */
+function DiaTurnosLista({ turnos }: { turnos: TurnoConDetalles[] }) {
+  const ITEM_HEIGHT = 18; // alto aproximado por ítem (incluye gap vertical)
+  // Piso garantizado: la cell siempre tiene altura para 3 registros + "+X más".
+  // Si la medición devuelve algo más chico (primer render, layout transitorio),
+  // forzamos al menos 4 slots para nunca caer por debajo de 3 turnos visibles.
+  const MIN_FIT = 4;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [maxFit, setMaxFit] = useState<number>(Math.max(MIN_FIT, turnos.length));
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const recompute = () => {
+      const h = el.clientHeight;
+      const fit = Math.floor(h / ITEM_HEIGHT);
+      setMaxFit(Math.max(MIN_FIT, fit));
+    };
+
+    recompute();
+
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  if (turnos.length === 0) {
+    return <div ref={containerRef} className="flex-1 overflow-hidden" />;
+  }
+
+  // Si entran todos, los mostramos completos.
+  // Si no, reservamos el último slot para "+x más".
+  const todosEntran = turnos.length <= maxFit;
+  const itemsAMostrar = todosEntran ? turnos.length : Math.max(0, maxFit - 1);
+  const restantes = turnos.length - itemsAMostrar;
+
+  return (
+    <div ref={containerRef} className="flex-1 overflow-hidden">
+      <div className="space-y-0.5">
+        {turnos.slice(0, itemsAMostrar).map((turno) => (
+          <div
+            key={turno.id_turno}
+            className="flex items-center gap-1 text-xs px-1 py-0.5 rounded transition-all"
+          >
+            <span
+              aria-hidden="true"
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{
+                backgroundColor: turno.especialista?.color || 'var(--brand)',
+              }}
+            />
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <span className="text-foreground font-medium truncate">
+                {turno.paciente?.nombre || 'Paciente'} {turno.paciente?.apellido || ''}
+              </span>
+            </div>
+          </div>
+        ))}
+        {restantes > 0 && (
+          <div className="text-xs text-muted-foreground px-1 leading-tight">
+            +{restantes} más
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

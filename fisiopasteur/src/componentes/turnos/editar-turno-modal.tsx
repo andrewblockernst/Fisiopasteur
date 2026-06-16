@@ -3,6 +3,8 @@
 import { useState, useTransition, useEffect, useCallback, useMemo, useRef } from "react";
 import { actualizarTurno, obtenerEspecialistasParaTurnos, obtenerBoxes, obtenerSlotsOcupados, obtenerTurnosParaValidarBoxes, obtenerPrecioEspecialidad } from "@/lib/actions/turno.action";
 import BaseDialog from "@/componentes/dialog/base-dialog";
+import { DiscardChangesDialog } from "@/componentes/dialog/discard-changes-dialog";
+import { scrollToFirstError } from "@/lib/utils/scroll-to-error";
 import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 import { Database } from "@/types/database.types";
 import Image from "next/image";
@@ -11,7 +13,14 @@ import { useToastStore } from '@/stores/toast-store';
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 import { useAuth } from "@/hooks/usePerfil";
 import type { TurnoWithRelations } from "@/types";
-import { dayjs, isPastDateTime, minutesToTime, timeToMinutes, todayYmd } from "@/lib/dayjs";
+import { dayjs, minutesToTime, timeToMinutes } from "@/lib/dayjs";
+import {
+  fechaTurnoMaxInput,
+  fechaTurnoEditarMinInput,
+  LIMITES,
+  validarFechaTurnoInline,
+} from "@/lib/validators/common";
+import { DateInput } from "@/componentes/ui/date-input";
 
 // Tipos basados en tu estructura de BD
 type Turno = Database['public']['Tables']['turno']['Row'];
@@ -132,6 +141,18 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
 
   // Dialog de confirmación de notificación WhatsApp
   const [confirmDialog, setConfirmDialog] = useState<{ show: boolean; datos: any }>({ show: false, datos: null });
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'fecha' | 'hora' | 'id_especialista' | 'id_especialidad' | 'id_paciente', string>>>({});
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  // Validación inline en vivo: cota máxima de fecha (12 meses). Permite pasado
+  // porque editar puede ser una corrección retroactiva.
+  useEffect(() => {
+    const errFecha = validarFechaTurnoInline(formData.fecha, "editar");
+    setFieldErrors((prev) => ({
+      ...prev,
+      fecha: errFecha ?? (prev.fecha === "Requerido" ? prev.fecha : undefined),
+    }));
+  }, [formData.fecha]);
 
   // Cargar datos cuando se abre el modal
   useEffect(() => {
@@ -397,14 +418,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
       for (let m = 0; m < 60; m += 15) {
         const hora = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
         const disponible = esHoraDisponible(hora);
-        
-        // Si es hora pasada (solo para fecha de hoy), no mostrar
-        if (formData.fecha === todayYmd()) {
-          if (isPastDateTime(formData.fecha, hora) || dayjs(`${formData.fecha} ${hora}`, 'YYYY-MM-DD HH:mm').isSame(dayjs(), 'minute')) {
-            continue; // Saltar horas pasadas
-          }
-        }
-        
+
         opciones.push({
           value: hora,
           label: hora,
@@ -491,6 +505,15 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     );
   }, [formData, turno, pacienteSeleccionado]);
 
+  const requestClose = useCallback(() => {
+    if (isPending) return;
+    if (hayCambios) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onClose();
+  }, [isPending, hayCambios, onClose]);
+
   const ejecutarActualizacion = (datos: any, notificar: boolean) => {
     startTransition(async () => {
       try {
@@ -522,12 +545,15 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
   };
 
 const handleSubmit = async () => {
-  if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
-    addToast({
-      variant: 'error',
-      message: 'Campos requeridos',
-      description: 'Por favor completa fecha, hora, especialista, especialidad y paciente',
-    });
+  const errs: typeof fieldErrors = {};
+  if (!formData.fecha) errs.fecha = "Requerido";
+  if (!formData.hora) errs.hora = "Requerido";
+  if (!formData.id_especialista) errs.id_especialista = "Requerido";
+  if (!formData.id_especialidad) errs.id_especialidad = "Requerido";
+  if (!formData.id_paciente) errs.id_paciente = "Seleccioná un paciente";
+  setFieldErrors(errs);
+  if (Object.keys(errs).length > 0) {
+    scrollToFirstError(Object.keys(errs));
     return;
   }
 
@@ -570,7 +596,7 @@ const handleSubmit = async () => {
         }
         isOpen={open}
         onClose={onClose}
-        customColor="#9C1838"
+        customColor="var(--brand)"
         message={<Loading size={48} text="Cargando datos..." />}
       />
     );
@@ -592,9 +618,10 @@ const handleSubmit = async () => {
           />
         }
         isOpen={open}
-        onClose={onClose}
+        onClose={requestClose}
         showCloseButton
-        customColor="#9C1838"
+        closeButtonAlert={hayCambios ? "Cambios sin guardar" : undefined}
+        customColor="var(--brand)"
         message={
           <form
             onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
@@ -609,15 +636,16 @@ const handleSubmit = async () => {
               {user?.puedeGestionarTurnos ? (
                 //Usuario con permisos: habilitado
                 <select
+                  id="id_especialista"
                   value={formData.id_especialista}
-                  onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  onChange={(e) => { setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' })); if (fieldErrors.id_especialista) setFieldErrors(p => ({ ...p, id_especialista: undefined })); }}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.id_especialista ? 'border-destructive' : 'border-gray-300'}`}
                   required
                 >
                   <option value="">Seleccionar especialista</option>
                   {especialistas.map((especialista) => (
                     <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                      {especialista.apellido}, {especialista.nombre} 
+                      {especialista.apellido}, {especialista.nombre}
                     </option>
                   ))}
                 </select>
@@ -646,6 +674,7 @@ const handleSubmit = async () => {
                   })()}
                 </select>
               )}
+              {fieldErrors.id_especialista && <p className="text-destructive text-xs mt-1">{fieldErrors.id_especialista}</p>}
             </div>
 
             {/* Especialidad */}
@@ -654,9 +683,10 @@ const handleSubmit = async () => {
                 Especialidad*
               </label>
               <select
+                id="id_especialidad"
                 value={formData.id_especialidad}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialidad: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                onChange={(e) => { setFormData(prev => ({ ...prev, id_especialidad: e.target.value })); if (fieldErrors.id_especialidad) setFieldErrors(p => ({ ...p, id_especialidad: undefined })); }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.id_especialidad ? 'border-destructive' : 'border-gray-300'}`}
                 required
                 disabled={!formData.id_especialista}
               >
@@ -667,6 +697,7 @@ const handleSubmit = async () => {
                   </option>
                 ))}
               </select>
+              {fieldErrors.id_especialidad && <p className="text-destructive text-xs mt-1">{fieldErrors.id_especialidad}</p>}
               {formData.id_especialista && especialidadesDisponibles.length === 0 && (
                 <p className="text-red-500 text-xs mt-1">
                   Este especialista no tiene especialidades asignadas
@@ -675,21 +706,22 @@ const handleSubmit = async () => {
             </div>
 
             {/* Paciente con Autocomplete */}
-            <div className="relative">
+            <div className="relative" data-field="id_paciente">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Paciente*
               </label>
               <PacienteAutocomplete
                 value={busquedaPaciente}
-                onChange={handleBusquedaPacienteChange}
-                onSelect={seleccionarPaciente}
+                onChange={(v) => { handleBusquedaPacienteChange(v); if (fieldErrors.id_paciente) setFieldErrors(p => ({ ...p, id_paciente: undefined })); }}
+                onSelect={(p) => { seleccionarPaciente(p); setFieldErrors(prev => ({ ...prev, id_paciente: undefined })); }}
                 selectedDisplayValue={pacienteSeleccionado ? `${pacienteSeleccionado.nombre} ${pacienteSeleccionado.apellido}` : ""}
                 required
                 placeholder="Buscar paciente por nombre, apellido o DNI..."
                 containerClassName="relative"
-                inputClassName="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                inputClassName={`w-full pl-8 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.id_paciente ? 'border-destructive' : 'border-gray-300'}`}
                 dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
               />
+              {fieldErrors.id_paciente && <p className="text-destructive text-xs mt-1">{fieldErrors.id_paciente}</p>}
             </div>
 
             {/* Fecha */}
@@ -697,14 +729,16 @@ const handleSubmit = async () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Fecha*
               </label>
-              <input
-                type="date"
+              <DateInput
+                id="fecha"
                 value={formData.fecha}
-                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '', id_box: '' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                onChange={(v) => { setFormData(prev => ({ ...prev, fecha: v, hora: '', id_box: '' })); if (fieldErrors.fecha) setFieldErrors(p => ({ ...p, fecha: undefined })); }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.fecha ? 'border-destructive' : 'border-gray-300'}`}
                 required
-                min={todayYmd()}
+                min={fechaTurnoEditarMinInput()}
+                max={fechaTurnoMaxInput()}
               />
+              {fieldErrors.fecha && <p className="text-destructive text-xs mt-1">{fieldErrors.fecha}</p>}
             </div>
 
             {/* Hora */}
@@ -713,9 +747,10 @@ const handleSubmit = async () => {
                 Hora* {verificandoDisponibilidad && <span className="text-xs text-gray-500">(Verificando disponibilidad...)</span>}
               </label>
               <select
+                id="hora"
                 value={formData.hora}
-                onChange={(e) => setFormData(prev => ({ ...prev, hora: e.target.value, id_box: '' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                onChange={(e) => { setFormData(prev => ({ ...prev, hora: e.target.value, id_box: '' })); if (fieldErrors.hora) setFieldErrors(p => ({ ...p, hora: undefined })); }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.hora ? 'border-destructive' : 'border-gray-300'}`}
                 required
                 disabled={!formData.id_especialista || !formData.fecha || verificandoDisponibilidad}
               >
@@ -738,6 +773,7 @@ const handleSubmit = async () => {
                   </option>
                 ))}
               </select>
+              {fieldErrors.hora && <p className="text-destructive text-xs mt-1">{fieldErrors.hora}</p>}
               {/* {formData.id_especialista && formData.fecha && horasOcupadas.length > 0 && (
                 <p className="text-xs text-gray-500 mt-1">
                   {generarOpcionesHora().filter(h => h.disponible || h.value === formData.hora).length} horarios disponibles
@@ -753,7 +789,7 @@ const handleSubmit = async () => {
               <select
                 value={formData.id_box}
                 onChange={(e) => setFormData(prev => ({ ...prev, id_box: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
                 disabled={!formData.fecha || !formData.hora || verificandoBoxes}
               >
                 <option value="">
@@ -784,7 +820,7 @@ const handleSubmit = async () => {
               <select
                 value={formData.tipo_plan}
                 onChange={(e) => setFormData(prev => ({ ...prev, tipo_plan: e.target.value as 'particular' | 'obra_social' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
               >
                 <option value="particular">Particular</option>
                 <option value="obra_social">Obra Social</option>
@@ -806,14 +842,15 @@ const handleSubmit = async () => {
                       : ''
                   }
                   onChange={(e) => {
-                    // Remover todo excepto números
-                    const raw = e.target.value.replace(/[^\d]/g, '');
+                    // Remover todo excepto números y limitar a 6 dígitos
+                    const raw = e.target.value.replace(/[^\d]/g, '').slice(0, 6);
                     setFormData(prev => ({ ...prev, precio: raw }));
                   }}
-                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
                   placeholder="..."
                   inputMode="numeric"
                   pattern="[0-9]*"
+                  maxLength={6}
                 />
               </div>
             </div>
@@ -825,23 +862,38 @@ const handleSubmit = async () => {
               </label>
               <textarea
                 value={formData.observaciones}
-                onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value.slice(0, LIMITES.observacionesMax) }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
                 rows={3}
+                maxLength={LIMITES.observacionesMax}
                 placeholder="Información adicional sobre el turno..."
               />
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {formData.observaciones.length}/{LIMITES.observacionesMax}
+              </p>
             </div>
           </form>
         }
         primaryButton={{
           text: isPending ? "Guardando..." : "Guardar Cambios",
           onClick: handleSubmit,
-          disabled: isPending || !hayCambios || (!esHoraDisponible(formData.hora) && formData.hora !== turno.hora.slice(0, 5)),
+          disabled:
+            isPending ||
+            !hayCambios ||
+            (!esHoraDisponible(formData.hora) && formData.hora !== turno.hora.slice(0, 5)) ||
+            Boolean(fieldErrors.fecha) ||
+            Boolean(fieldErrors.hora),
         }}
         secondaryButton={{
           text: "Cancelar",
-          onClick: onClose,
+          onClick: requestClose,
         }}
+      />
+
+      <DiscardChangesDialog
+        isOpen={showDiscardConfirm}
+        onCancel={() => setShowDiscardConfirm(false)}
+        onConfirm={() => { setShowDiscardConfirm(false); onClose(); }}
       />
 
       {/* Modal para mostrar mensajes */}

@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import FiltrosTurnos from './filtros-turnos';
 import TablaTurnos from './listado-turnos';
 import TurnosMobileList from './turnos-mobile-list';
 import PaginacionBar from '@/componentes/paginacion/paginacion-bar';
+import { PageHeader } from '@/componentes/ui';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import type { Tables, EspecialistaWithSpecialties } from "@/types";
-import { actualizarTurnosPendientes } from '@/lib/actions/turno.action';
 import { useInvalidateTurnos, useTurnosPaginated } from '@/hooks/useTurnosQuery';
+import { ESTADO_COLORES } from '@/lib/utils/turno-acciones';
 
 interface TurnosPageContainerProps {
   // initialTurnos: TurnoConDetalles[]; // ✅ Ahora son datos iniciales del servidor
@@ -39,10 +40,9 @@ export default function TurnosPageContainer({
 }: TurnosPageContainerProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isMobile = useMediaQuery('(max-width: 768px)');
-  const [selectedDate, setSelectedDate] = useState(initialFilters.fecha_desde);
+  // < lg → vista compacta (drawer filter + cards o tabla según md); ≥ lg → filter-bar desktop.
+  const isCompact = useMediaQuery('(max-width: 1023.98px)');
   const allowedPageSizes = [10, 20, 30, 50];
-  // const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const filters = useMemo(() => {
     // Helper para obtener todos los valores de un parámetro
@@ -71,6 +71,7 @@ export default function TurnosPageContainer({
         const pacienteId = searchParams.get('paciente_id');
         return pacienteId ? parseInt(pacienteId) : initialFilters.paciente_id;
       })(),
+      search: searchParams.get('search') ?? undefined,
     };
   }, [searchParams, initialFilters]);
 
@@ -85,46 +86,9 @@ export default function TurnosPageContainer({
   const pagination = paginatedTurnos?.pagination;
   const invalidateTurnos = useInvalidateTurnos();
 
-  useEffect(() => {
-    if (filters.fecha_desde) {
-      setSelectedDate(filters.fecha_desde);
-    }
-  }, [filters.fecha_desde]);
-
-  // ⏰ Efecto para verificar y actualizar turnos pendientes automáticamente
-  useEffect(() => {
-    const verificarTurnosPendientes = async () => {
-      try {
-        const resultado = await actualizarTurnosPendientes();
-        
-        if (resultado.success && resultado.data && resultado.data.length > 0) {
-          console.log(`✅ ${resultado.data.length} turnos actualizados a pendiente`);
-          // ✅ Invalidar caché de React Query en lugar de router.refresh()
-          invalidateTurnos();
-        }
-      } catch (error) {
-        console.error('❌ Error verificando turnos pendientes:', error);
-      }
-    };
-
-    // Verificar al cargar el componente
-    verificarTurnosPendientes();
-    // Verificar cada 5 minutos (300000 ms)
-    const intervalo = setInterval(verificarTurnosPendientes, 300000);
-
-    // Limpiar intervalo al desmontar
-    return () => clearInterval(intervalo);
-  }, [invalidateTurnos]);
-
-  const handleDateChange = (newDate: string) => {
-    setSelectedDate(newDate);
-    // Actualizar fecha preservando el resto de filtros activos.
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('desde', newDate);
-    params.set('hasta', newDate);
-    params.set('page', '1');
-    router.push(`/turnos?${params.toString()}`);
-  };
+  // ⏰ La actualización automática de turnos a "pendiente" ahora se ejecuta
+  // server-side mediante el cron en /api/cron/turnos-pendientes (vercel.json).
+  // Se elimina el polling del cliente para que no dependa de tener la página abierta.
 
   const handlePageChange = (newPage: number) => {
     if (!pagination) return;
@@ -149,8 +113,6 @@ export default function TurnosPageContainer({
 
   const mobileListProps = {
     turnos,
-    fecha: selectedDate,
-    onDateChange: handleDateChange,
     onTurnoCreated: handleTurnoCreated,
     invalidateTurnos,
     especialistas,
@@ -164,19 +126,36 @@ export default function TurnosPageContainer({
     onPageSizeChange: handlePageSizeChange,
   };
 
-  if (isMobile) {
+  if (isCompact) {
     return <TurnosMobileList {...(mobileListProps as any)} />;
+  }
+
+  // ✅ Skeleton de página completa (header + filtros + tabla) en la carga inicial
+  if (paginatedLoading && !paginatedTurnos) {
+    return <UnifiedSkeletonLoader type="table" />;
   }
 
   // Vista desktop
   return (
-    <div className="min-h-screen text-black">
+    <div className="h-[calc(100dvh-5rem)] lg:h-[100dvh] flex flex-col text-foreground overflow-hidden">
       {/* Contenido Principal */}
-      <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8 flex flex-col h-[calc(100vh-2rem)] sm:h-[calc(100vh-3rem)]">
-        {/* Desktop Header
-        <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-4">
-          <h2 className="text-2xl sm:text-3xl font-bold">Turnos</h2>
-        </div> */}
+      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background sm:p-6 lg:px-8 sm:flex sm:flex-col sm:h-[calc(100vh-3rem)]">
+        {/* Header de página + leyenda en la misma fila (solo desktop) */}
+        <div className="hidden sm:flex items-center justify-between gap-4">
+          <PageHeader title="Turnos" />
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Referencias:</span>
+            {ESTADO_COLORES.map(({ estado, label, swatchClass }) => (
+              <span key={estado} className="inline-flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={`inline-block h-4 w-6 rounded-sm ${swatchClass}`}
+                />
+                <span className="capitalize">{label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
 
         {/* Filtros y Búsqueda - Solo Desktop */}
         <div className="hidden sm:block rounded-lg mb-4">
@@ -190,11 +169,11 @@ export default function TurnosPageContainer({
         </div>
 
         <div className="flex-1 min-h-0">
-          <TablaTurnos 
+          <TablaTurnos
             turnos={turnos}
             invalidateTurnos={invalidateTurnos}
             turnosLoading={turnosLoading}
-            isMobile={isMobile}
+            isMobile={false}
           />
         </div>
 

@@ -5,14 +5,15 @@ import { CalendarioTurnos, type VistaCalendario } from "@/componentes/calendario
 import { DayViewModal } from "@/componentes/calendario/dia-vista-dialog";
 import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import type { TurnoConDetalles } from "@/stores/turno-store";
-import { useAuth } from "@/hooks/usePerfil";
 import { ArrowLeft, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
+import { PageHeader } from "@/componentes/ui";
 import { useTurnos, useInvalidateTurnos, usePrefetchTurnos } from "@/hooks/useTurnosQuery";
 
 interface CalendarioClientQueryProps {
   especialistas: any[];
+  initialEspecialistaFiltro?: string;
   // pacientes: any[];
 }
 
@@ -43,18 +44,18 @@ const getCacheWindowRange = (fechaVisible: Date, blockOffset = 0) => {
   };
 };
 
-export function CalendarioClientQuery({ 
-  especialistas, 
-  // pacientes 
+export function CalendarioClientQuery({
+  especialistas,
+  initialEspecialistaFiltro = "",
+  // pacientes
 }: CalendarioClientQueryProps) {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
 
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedDayTurnos, setSelectedDayTurnos] = useState<TurnoConDetalles[]>([]);
-  const [especialistaFiltro, setEspecialistaFiltro] = useState<string>("");
+  const [especialistaFiltro, setEspecialistaFiltro] = useState<string>(initialEspecialistaFiltro);
   const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [vistaCalendario, setVistaCalendario] = useState<VistaCalendario>('mes');
@@ -75,7 +76,9 @@ export function CalendarioClientQuery({
   }, [fechaVisible, especialistaFiltro]);
   
   // ✅ React Query - obtener turnos con caché
-  const { data: turnos = [], isLoading: turnosLoading } = useTurnos({ filters });
+  // refetchOnMount: true para que, al volver a /calendario después de crear un turno
+  // en otra ruta (ej. /turnos), la query invalidada se refetchee al montarse.
+  const { data: turnos = [], isLoading: turnosLoading } = useTurnos({ filters, refetchOnMount: true });
   const invalidateTurnos = useInvalidateTurnos();
   const prefetchTurnos = usePrefetchTurnos();
 
@@ -87,19 +90,6 @@ export function CalendarioClientQuery({
     
     return () => clearTimeout(timer);
   }, []);
-
-  // Aplicar filtro automático por especialista al cargar
-  useEffect(() => {
-    if (!authLoading && user && !especialistaFiltro) {
-      const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
-      // ✅ LÓGICA CORREGIDA: Admin y Programadores SIEMPRE pueden ver "Todos"
-      const debeAplicarFiltro = !user.puedeGestionarTurnos && esEspecialistaActivo;
-      
-      if (debeAplicarFiltro && user.id_usuario) {
-        setEspecialistaFiltro(user.id_usuario);
-      }
-    }
-  }, [user, authLoading, especialistas, especialistaFiltro]);
 
   // Prefetch ventanas adyacentes para navegación rápida (mes/día/semana)
   useEffect(() => {
@@ -122,11 +112,10 @@ export function CalendarioClientQuery({
   };
 
   const handleSuccessfulTurnoCreation = () => {
-    // ✅ Invalidar caché para refrescar los datos
-    if (selectedDate) {
-      invalidateTurnos({ scope: 'dates', date: formatDateISO(selectedDate) });
-      return;
-    }
+    // Invalidar TODAS las listas: un paquete de sesiones puede crear turnos
+    // en semanas/meses futuros y `scope: 'dates'` solo refrescaría la ventana
+    // que contiene la fecha base, dejando las demás stale hasta un refetch
+    // manual / recarga.
     invalidateTurnos({ scope: 'lists' });
   };
 
@@ -142,9 +131,9 @@ export function CalendarioClientQuery({
   }
 
   return (
-    <div className="min-h-screen text-black">
+    <div className="h-[calc(100dvh-5rem)] lg:h-[100dvh] flex flex-col text-foreground overflow-hidden">
       {/* Mobile Header */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 sm:hidden">
+      <header className="shrink-0 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 py-3 lg:hidden">
         <div className="flex items-center justify-between">
           <button
             onClick={handleBack}
@@ -158,36 +147,30 @@ export function CalendarioClientQuery({
         </div>
       </header>
 
-      {/* Desktop Header */}
-      <div className="hidden sm:block">
-        <div className="max-w-[1800px] mx-auto p-4 sm:p-6 lg:px-8 lg:pt-8">
-          <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
-            <h2 className="text-2xl sm:text-3xl font-bold">Calendario</h2>
-          </div>
-        </div>
-      </div>
-
       {/* Mobile Filter */}
-      <div className="sm:hidden px-4 py-3 bg-gray-50 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <select
-            value={especialistaFiltro}
-            onChange={(e) => setEspecialistaFiltro(e.target.value)}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent bg-white"
-          >
-            <option value="">Todos los especialistas</option>
-            {especialistas.map((especialista) => (
-              <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                {especialista.apellido}, {especialista.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="shrink-0 lg:hidden px-3 py-1.5 bg-gray-50 border-b border-gray-200">
+        <select
+          value={especialistaFiltro}
+          onChange={(e) => setEspecialistaFiltro(e.target.value)}
+          className="w-full h-8 border border-gray-300 rounded-md px-2 text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent bg-white"
+        >
+          <option value="">Todos los especialistas</option>
+          {especialistas.map((especialista) => (
+            <option key={especialista.id_usuario} value={especialista.id_usuario}>
+              {especialista.apellido}, {especialista.nombre}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Calendario principal */}
-      <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-0">
-        <div className="rounded-lg">
+      {/* Contenido Principal */}
+      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background p-2 lg:p-6 lg:px-8 lg:pt-6">
+        {/* Desktop Header */}
+        <div className="hidden lg:block shrink-0">
+          <PageHeader title="Calendario" />
+        </div>
+
+        <div className="flex-1 min-h-0 rounded-lg flex flex-col">
           <CalendarioTurnos
             turnos={turnos}
             onDayClick={(date: Date, turnos: TurnoConDetalles[]) => {
@@ -237,7 +220,7 @@ export function CalendarioClientQuery({
       {/* Botón flotante para agregar turno - Solo móvil */}
       <button
         onClick={handleCreateTurno}
-        className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center sm:hidden"
+        className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center lg:hidden"
         aria-label="Agregar nuevo turno"
       >
         <Plus size={30} />

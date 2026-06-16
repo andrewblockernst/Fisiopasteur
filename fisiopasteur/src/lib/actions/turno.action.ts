@@ -9,6 +9,11 @@ import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 import { obtenerIdPilates } from "@/lib/utils/especialidad-utils";
 import { snapshotDesdeTurnoRelacionado } from "@/lib/utils/whatsapp.utils";
 import { dayjs, nowIso, todayYmd } from "@/lib/dayjs";
+import {
+  turnoCreateSchema,
+  turnoUpdateSchema,
+  paqueteSesionesSchema,
+} from "@/lib/schemas/turno.schema";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
@@ -206,6 +211,7 @@ export async function obtenerTurnosConFiltros(filtros?: {
   hora_hasta?: string;
   estados?: string[];
   paciente_id?: number;
+  search?: string;
   es_pilates?: boolean;
   page?: number;
   page_size?: number;
@@ -219,15 +225,26 @@ export async function obtenerTurnosConFiltros(filtros?: {
     const page = Math.max(1, Number(filtros?.page ?? 1) || 1);
     const shouldPaginate = filtros?.page !== undefined || filtros?.page_size !== undefined;
 
+    // Sanitizar texto de búsqueda: si está activo, forzamos inner join con paciente
+    // y filtramos por nombre/apellido vía PostgREST embedded filter.
+    const rawSearch = filtros?.search?.trim() ?? "";
+    // Quitar caracteres que rompen la sintaxis de filtros de PostgREST.
+    const search = rawSearch.replace(/[,()*]/g, "");
+    const hasSearch = search.length > 0;
+
+    const pacienteSelect = hasSearch
+      ? `paciente:id_paciente!inner(id_paciente, nombre, apellido, dni, telefono, email)`
+      : `paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email)`;
+
     let query = supabase
       .from("turno")
       .select(`
         *,
-        paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email),
+        ${pacienteSelect},
         especialista:id_especialista!inner(
-          id_usuario, 
-          nombre, 
-          apellido, 
+          id_usuario,
+          nombre,
+          apellido,
           color,
           especialidad:id_especialidad(id_especialidad, nombre)
         ),
@@ -281,6 +298,14 @@ export async function obtenerTurnosConFiltros(filtros?: {
       query = query.eq("id_paciente", filtros.paciente_id);
     }
 
+    // Búsqueda libre por nombre/apellido del paciente (joined via !inner arriba).
+    if (hasSearch) {
+      query = query.or(
+        `nombre.ilike.%${search}%,apellido.ilike.%${search}%`,
+        { referencedTable: "paciente" }
+      );
+    }
+
     if (shouldPaginate) {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
@@ -332,13 +357,38 @@ export async function crearTurno(
 
   // console.log('Iniciando creación de turno con datos:', datos, 'y recordatorios:', recordatorios);
 
+  // Si es Pilates, resolver id_especialidad dinámicamente cuando el frontend no
+  // lo manda — el schema lo exige como number positivo, así que lo necesitamos
+  // ANTES de validar.
+  let idPilates: number | null | undefined;
+  if (datos.es_pilates) {
+    idPilates = await obtenerIdPilates();
+  }
+  const idEspecialidadParaValidar =
+    (datos.es_pilates && idPilates ? idPilates : datos.id_especialidad) ?? undefined;
+
+  // Validación contra schema compartido (fecha futura, observaciones max length,
+  // precio nonneg, etc.). Soft-warn si falla — no rompe el flujo si solo es
+  // por campos opcionales mal tipados, pero rechaza si la fecha es del pasado.
+  const parsed = turnoCreateSchema.safeParse({
+    fecha: datos.fecha,
+    hora: typeof datos.hora === 'string' ? datos.hora.slice(0, 5) : datos.hora,
+    id_especialista: datos.id_especialista,
+    id_paciente: datos.id_paciente,
+    id_especialidad: idEspecialidadParaValidar,
+    id_box: datos.id_box ?? undefined,
+    observaciones: datos.observaciones ?? undefined,
+    tipo_plan: datos.tipo_plan ?? undefined,
+    precio: datos.precio ?? undefined,
+    titulo_tratamiento: datos.titulo_tratamiento ?? undefined,
+  });
+  if (!parsed.success) {
+    const mensaje = parsed.error.issues.map((i) => i.message).join(", ");
+    return { success: false, error: `Datos del turno inválidos: ${mensaje}` };
+  }
+
   try {
     const supabase = await createClient();
-    let idPilates; // : string | null = null
-
-    if (datos.es_pilates) {
-      idPilates = await obtenerIdPilates();
-    }
 
     // ============= CREAR GRUPO DE TRATAMIENTO SI HAY TÍTULO =============
     if (datos.titulo_tratamiento && !id_grupo_tratamiento && datos.id_paciente && datos.id_especialista) {
@@ -528,7 +578,19 @@ export async function crearTurno(
 export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?: { notificar?: boolean }) {
   const supabase = await createClient();
 
-  
+  // Validación: solo aplican los campos efectivamente provistos.
+  if (datos.fecha != null || datos.hora != null || datos.observaciones != null || datos.precio != null) {
+    const parsed = turnoUpdateSchema.partial().safeParse({
+      ...datos,
+      hora: typeof datos.hora === 'string' ? datos.hora.slice(0, 5) : datos.hora ?? undefined,
+      observaciones: datos.observaciones ?? undefined,
+      precio: datos.precio ?? undefined,
+    });
+    if (!parsed.success) {
+      const mensaje = parsed.error.issues.map((i) => i.message).join(", ");
+      return { success: false, error: `Datos del turno inválidos: ${mensaje}` };
+    }
+  }
 
       const normalizeHora = (h: string | null | undefined) =>
     h != null && h !== "" ? String(h).substring(0, 5) : "";
@@ -875,8 +937,9 @@ export async function marcarComoAtendido(id_turno: number) {
       };
     }
 
-    // ✅ Permitir marcar como atendido desde programado o pendiente
-    const estadosPermitidos = ['programado', 'pendiente'];
+    // Permitir marcar como atendido desde programado, pendiente o cancelado
+    // (cancelado → atendido cubre el caso de corregir una cancelación errónea).
+    const estadosPermitidos = ['programado', 'pendiente', 'cancelado'];
     if (!turnoActual.estado || !estadosPermitidos.includes(turnoActual.estado)) {
       return {
         success: false,
@@ -914,8 +977,55 @@ export async function marcarComoAtendido(id_turno: number) {
 }
 
 /**
- * ✅ Cancelar turno
- * Permite cambiar desde: programado o pendiente
+ * Actualización masiva de estado vía RPC (una sola transacción).
+ * Reemplaza el patrón Promise.all sobre N updates individuales.
+ *
+ * @param ids        IDs de turnos a actualizar.
+ * @param nuevoEstado 'cancelado' | 'atendido'. Las transiciones permitidas
+ *                    se aplican server-side (idénticas a las acciones individuales).
+ * @returns Listado de IDs efectivamente actualizados + cuenta de fallidos.
+ */
+export async function actualizarEstadoTurnosMasivo(
+  ids: number[],
+  nuevoEstado: 'cancelado' | 'atendido' | 'eliminado'
+): Promise<{ success: true; updatedIds: number[]; failedCount: number } | { success: false; error: string }> {
+  if (!ids || ids.length === 0) {
+    return { success: true, updatedIds: [], failedCount: 0 };
+  }
+
+  const supabase = await createClient();
+
+  try {
+    const { data, error } = await supabase.rpc('bulk_actualizar_estado_turnos', {
+      p_ids: ids,
+      p_nuevo_estado: nuevoEstado,
+    });
+
+    if (error) {
+      console.error('❌ Error en bulk_actualizar_estado_turnos:', error);
+      return { success: false, error: error.message };
+    }
+
+    const updatedIds: number[] = (data ?? []).map((row: any) => row.id_turno);
+    const failedCount = ids.length - updatedIds.length;
+
+    console.log(
+      `✅ Bulk ${nuevoEstado}: ${updatedIds.length}/${ids.length} turnos actualizados`
+    );
+
+    return { success: true, updatedIds, failedCount };
+  } catch (error) {
+    console.error('❌ Error inesperado en actualizarEstadoTurnosMasivo:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+/**
+ * Cancelar turno
+ * Permite cambiar desde: programado, pendiente o atendido (corrección).
  */
 export async function cancelarTurno(id: number, motivo?: string) {
   const supabase = await createClient();
@@ -935,8 +1045,9 @@ export async function cancelarTurno(id: number, motivo?: string) {
       };
     }
 
-    // ✅ Permitir cancelar desde programado o pendiente
-    const estadosPermitidos = ['programado', 'pendiente'];
+    // Permitir cancelar desde programado, pendiente o atendido
+    // (atendido → cancelado cubre el caso de corregir una marca errónea).
+    const estadosPermitidos = ['programado', 'pendiente', 'atendido'];
     if (!turnoActual.estado || !estadosPermitidos.includes(turnoActual.estado)) {
       return {
         success: false,
@@ -1127,6 +1238,12 @@ export async function obtenerSlotsOcupados(
  * En Pilates hay una sola sala, así que si cualquier especialista tiene clase a esa hora,
  * el horario está ocupado (sin importar el especialista)
  */
+/**
+ * Verifica disponibilidad para Pilates: una clase ocupa 1 hora completa, los
+ * slots arrancan en :00 o :30, y un slot `H` colisiona con cualquier otro
+ * turno de Pilates en `H`, `H-30` o `H+30` — sin importar especialista,
+ * paciente ni cantidad de participantes.
+ */
 export async function verificarDisponibilidadPilates(
   fecha: string,
   hora: string
@@ -1144,33 +1261,50 @@ export async function verificarDisponibilidadPilates(
       };
     }
 
+    const horaSinSeg = String(hora).slice(0, 5);
+    const horasSolapadas = horasOverlapPilates(horaSinSeg);
+
     const { data, error } = await supabase
       .from("turno")
       .select("id_turno, id_especialista, estado, hora")
       .eq("fecha", fecha)
-      .eq("hora", hora)
+      .in("hora", horasSolapadas.map((h) => `${h}:00`))
       .eq("id_especialidad", idPilates)
       .neq("estado", "cancelado")
-      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
+      .neq("estado", "eliminado");
 
     if (error) {
       console.error("Error verificando disponibilidad Pilates:", error);
       return { success: false, error: error.message };
     }
 
-    // Si hay algún turno, el horario está ocupado
-    const ocupado = data.length > 0;
+    const ocupado = (data?.length ?? 0) > 0;
 
     return {
       success: true,
       disponible: !ocupado,
-      conflictos: data.length,
-      turnosExistentes: data
+      conflictos: data?.length ?? 0,
+      turnosExistentes: data ?? []
     };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };
   }
+}
+
+/**
+ * Dada una hora "HH:mm" devuelve las 3 horas (HH-30, HH, HH+30) en formato
+ * "HH:mm" sin segundos. Usado para detectar solapamiento de clases de Pilates.
+ */
+function horasOverlapPilates(horaHm: string): string[] {
+  const [hStr, mStr] = horaHm.slice(0, 5).split(":");
+  const total = Number(hStr) * 60 + Number(mStr);
+  const candidatos = [total - 30, total, total + 30].filter((m) => m >= 0 && m < 24 * 60);
+  return candidatos.map((m) => {
+    const h = Math.floor(m / 60).toString().padStart(2, "0");
+    const min = (m % 60).toString().padStart(2, "0");
+    return `${h}:${min}`;
+  });
 }
 
 export async function verificarDisponibilidad(
@@ -1184,6 +1318,38 @@ export async function verificarDisponibilidad(
   const supabase = await createClient();
 
   try {
+    const idPilates = await obtenerIdPilates();
+
+    // ============= LÓGICA ESPECIAL PARA PILATES =============
+    // Cada clase ocupa 1 hora. Conflicto si hay cualquier otra clase de Pilates
+    // en H, H-30 o H+30 — sin importar especialista ni cantidad de pacientes.
+    if (es_pilates && idPilates && especialidad_id === idPilates) {
+      const horaSinSeg = String(hora).slice(0, 5);
+      const horasSolapadas = horasOverlapPilates(horaSinSeg);
+
+      const { data: pilatesTurnos, error: errorPilates } = await supabase
+        .from("turno")
+        .select("id_turno, hora, id_especialista")
+        .eq("fecha", fecha)
+        .eq("id_especialidad", idPilates)
+        .in("hora", horasSolapadas.map((h) => `${h}:00`))
+        .neq("estado", "cancelado")
+        .neq("estado", "eliminado");
+
+      if (errorPilates) {
+        console.error("Error verificando disponibilidad Pilates:", errorPilates);
+        return { success: false, error: errorPilates.message };
+      }
+
+      const cant = pilatesTurnos?.length ?? 0;
+      return {
+        success: true,
+        disponible: cant === 0,
+        conflictos: cant,
+      };
+    }
+
+    // ============= LÓGICA NORMAL PARA OTRAS ESPECIALIDADES =============
     let query = supabase
       .from("turno")
       .select("id_turno, estado, hora, id_especialidad")
@@ -1191,7 +1357,7 @@ export async function verificarDisponibilidad(
       .eq("id_especialista", especialista_id!)
       .eq("hora", hora)
       .neq("estado", "cancelado")
-      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
+      .neq("estado", "eliminado");
 
     const { data, error } = await query;
     if (error) {
@@ -1199,21 +1365,6 @@ export async function verificarDisponibilidad(
       return { success: false, error: error.message };
     }
 
-    const idPilates = await obtenerIdPilates();
-    // ============= LÓGICA ESPECIAL PARA PILATES =============
-    if (es_pilates && especialidad_id === idPilates) {
-      const pilatesTurnos = data.filter(t => t.id_especialidad === idPilates);
-      const disponible = pilatesTurnos.length < 4;
-
-      return {
-        success: true,
-        disponible,
-        conflictos: disponible ? 0 : pilatesTurnos.length,
-        participantes_actuales: pilatesTurnos.length
-      };
-    }
-
-    // ============= LÓGICA NORMAL PARA OTRAS ESPECIALIDADES =============
     return {
       success: true,
       disponible: data.length === 0,
@@ -1451,6 +1602,145 @@ export async function verificarDisponibilidadPaquete(params: {
   }
 }
 
+/**
+ * Verifica disponibilidad inline para un paquete de Pilates.
+ *
+ * Aplica la regla específica de Pilates: una clase ocupa 1 hora y dos clases
+ * en H y H+30 (o H-30) se superponen 30 min. Ignora especialista, paciente y
+ * cantidad de participantes — basta con que exista CUALQUIER turno activo de
+ * Pilates en el rango de overlap para marcar el slot como ocupado.
+ *
+ * Genera los slots a verificar a partir de la grilla del paquete y hace una
+ * sola query a la tabla `turno` filtrada por rango de fechas y especialidad
+ * Pilates. El overlap se calcula en cliente sobre el resultado.
+ *
+ * Pasar `id_turno_excluir` cuando se valida desde "Repetir clase" para no
+ * autocontar la clase original como conflicto.
+ */
+export async function verificarDisponibilidadPaquetePilates(params: {
+  fechaBase: string;
+  horaBase: string | null;
+  diasSeleccionados: number[];
+  numeroSesiones: number;
+  mantenerHorario: boolean;
+  horariosPorDia: Record<number, string>;
+  id_turno_excluir?: number;
+}) {
+  const supabase = await createClient();
+
+  try {
+    const { fechaBase, horaBase, diasSeleccionados, numeroSesiones, mantenerHorario, horariosPorDia, id_turno_excluir } = params;
+
+    if (!fechaBase || diasSeleccionados.length === 0 || numeroSesiones <= 0) {
+      return { success: true as const, data: { ocupados: [] as string[], hayConflictos: false, totalEvaluados: 0 } };
+    }
+
+    const idPilates = await obtenerIdPilates();
+    if (!idPilates) {
+      return { success: true as const, data: { ocupados: [] as string[], hayConflictos: false, totalEvaluados: 0 } };
+    }
+
+    // Generar grilla de slots (fecha+hora) según parámetros del paquete.
+    const [year, month, day] = fechaBase.split("-").map(Number);
+    const fechaBaseParsed = new Date(year, month - 1, day);
+    const diaBaseNumeroJS = fechaBaseParsed.getDay();
+    const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
+
+    // Generar TODOS los candidatos en un horizonte amplio y luego ordenar
+    // cronológicamente. Si contáramos por orden de inserción semana×día,
+    // cuando fechaBase cae en el último día seleccionado, el último día se
+    // ubicaría calendariamente antes y la cuenta se cerraría sin visitar
+    // el último día de la semana final.
+    const candidatos: Array<{ fecha: string; hora: string; diaId: number }> = [];
+    const horizonteSemanas =
+      Math.ceil((numeroSesiones + diasSeleccionados.length) / diasSeleccionados.length) + 2;
+    for (let semana = 0; semana < horizonteSemanas; semana++) {
+      for (const diaId of diasSeleccionados) {
+        let diff = diaId - diaBaseNumero;
+        if (diff < 0) diff += 7;
+        const fechaTurno = new Date(fechaBaseParsed);
+        fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diff);
+        const fechaFmt = `${fechaTurno.getFullYear()}-${String(fechaTurno.getMonth() + 1).padStart(2, "0")}-${String(fechaTurno.getDate()).padStart(2, "0")}`;
+        const hora = mantenerHorario ? (horaBase ?? "") : (horariosPorDia[diaId] ?? "");
+        if (!hora) continue;
+        candidatos.push({ fecha: fechaFmt, hora: hora.slice(0, 5), diaId });
+      }
+    }
+
+    candidatos.sort((a, b) =>
+      `${a.fecha}T${a.hora}`.localeCompare(`${b.fecha}T${b.hora}`)
+    );
+    const slots = candidatos.slice(0, numeroSesiones);
+
+    if (slots.length === 0) {
+      return { success: true as const, data: { ocupados: [] as string[], hayConflictos: false, totalEvaluados: 0 } };
+    }
+
+    const fechasUnicas = Array.from(new Set(slots.map((s) => s.fecha))).sort();
+
+    // Query: todos los turnos de Pilates en el rango, sin filtrar por especialista.
+    let query = supabase
+      .from("turno")
+      .select("id_turno, fecha, hora")
+      .eq("id_especialidad", idPilates)
+      .gte("fecha", fechasUnicas[0])
+      .lte("fecha", fechasUnicas[fechasUnicas.length - 1])
+      .neq("estado", "cancelado")
+      .neq("estado", "eliminado");
+
+    if (id_turno_excluir != null) {
+      query = query.neq("id_turno", id_turno_excluir);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("Error verificarDisponibilidadPaquetePilates:", error);
+      return { success: false as const, error: error.message };
+    }
+
+    const toMinutes = (hm: string): number => {
+      const [h, m] = hm.slice(0, 5).split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const turnosPorFecha = new Map<string, number[]>();
+    for (const t of (data ?? [])) {
+      const fecha = String((t as any).fecha);
+      const min = toMinutes(String((t as any).hora));
+      const lista = turnosPorFecha.get(fecha) ?? [];
+      lista.push(min);
+      turnosPorFecha.set(fecha, lista);
+    }
+
+    const diasCorto = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+    const ocupados: string[] = [];
+    for (const slot of slots) {
+      const existentes = turnosPorFecha.get(slot.fecha);
+      if (!existentes || existentes.length === 0) continue;
+      const slotMin = toMinutes(slot.hora);
+      const colisiona = existentes.some((m) => Math.abs(m - slotMin) < 60); // < 1 hora = overlap
+      if (colisiona) {
+        const [y, mo, d] = slot.fecha.split("-").map(Number);
+        const dt = new Date(y, mo - 1, d);
+        const idx = (dt.getDay() + 6) % 7; // Lun=0
+        ocupados.push(`${diasCorto[idx]} ${String(d).padStart(2, "0")}/${String(mo).padStart(2, "0")} ${slot.hora}`);
+      }
+    }
+
+    return {
+      success: true as const,
+      data: {
+        ocupados,
+        hayConflictos: ocupados.length > 0,
+        totalEvaluados: slots.length,
+      },
+    };
+  } catch (error) {
+    console.error("Error inesperado en verificarDisponibilidadPaquetePilates:", error);
+    return { success: false as const, error: "Error inesperado" };
+  }
+}
+
 export async function verificarDisponibilidadParaActualizacion(
   fecha: string,
   hora: string,
@@ -1464,13 +1754,43 @@ export async function verificarDisponibilidadParaActualizacion(
   try {
     const idPilates = await obtenerIdPilates();
 
+    // ============= LÓGICA ESPECIAL PARA PILATES =============
+    // Igual que crear: bloquear si hay cualquier otra clase de Pilates en H,
+    // H-30 o H+30 — sin importar especialista. Excluye el turno que se mueve.
+    if (idPilates && especialidad_id === idPilates) {
+      const horaSinSeg = String(hora).slice(0, 5);
+      const horasSolapadas = horasOverlapPilates(horaSinSeg);
+
+      const { data: pilatesTurnos, error: errorPilates } = await supabase
+        .from("turno")
+        .select("id_turno, hora")
+        .eq("fecha", fecha)
+        .eq("id_especialidad", idPilates)
+        .in("hora", horasSolapadas.map((h) => `${h}:00`))
+        .neq("estado", "cancelado")
+        .neq("estado", "eliminado")
+        .neq("id_turno", turno_excluir);
+
+      if (errorPilates) {
+        console.error("Error verificando disponibilidad Pilates (update):", errorPilates);
+        return { success: false, error: errorPilates.message };
+      }
+
+      const cant = pilatesTurnos?.length ?? 0;
+      return {
+        success: true,
+        disponible: cant === 0,
+        conflictos: cant,
+      };
+    }
+
     let query = supabase
       .from("turno")
       .select("id_turno, id_especialidad")
       .eq("fecha", fecha)
       .eq("id_especialista", especialista_id)
       .neq("estado", "cancelado")
-      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
+      .neq("estado", "eliminado")
       .neq("id_turno", turno_excluir)
       .eq("hora", hora);
 
@@ -1483,19 +1803,6 @@ export async function verificarDisponibilidadParaActualizacion(
     if (error) {
       console.error("Error al verificar disponibilidad para actualización:", error);
       return { success: false, error: error.message };
-    }
-
-    // ============= LÓGICA ESPECIAL PARA PILATES =============
-    if (idPilates && especialidad_id === idPilates) {
-      const pilatesTurnos = data.filter(t => t.id_especialidad === idPilates);
-      const disponible = pilatesTurnos.length < 4;
-
-      return {
-        success: true,
-        disponible,
-        conflictos: disponible ? 0 : pilatesTurnos.length,
-        participantes_actuales: pilatesTurnos.length
-      };
     }
 
     // ============= LÓGICA NORMAL =============
@@ -2495,35 +2802,17 @@ export async function crearPaqueteSesiones(params: {
 }) {
   try {
     // ============= VALIDACIONES TEMPRANAS =============
-    if (!params.fechaBase || !params.horaBase || !params.id_especialista || !params.id_paciente || !params.id_especialidad) {
-      return {
-        success: false,
-        error: 'Faltan datos requeridos para crear el paquete de sesiones'
-      };
+    const parsed = paqueteSesionesSchema.safeParse({
+      ...params,
+      observaciones: params.observaciones ?? undefined,
+      titulo_tratamiento: params.titulo_tratamiento ?? undefined,
+    });
+    if (!parsed.success) {
+      const mensaje = parsed.error.issues.map((i) => i.message).join(", ");
+      return { success: false, error: `Datos del paquete inválidos: ${mensaje}` };
     }
 
-    if (!Number.isInteger(params.numeroSesiones) || params.numeroSesiones <= 0) {
-      return {
-        success: false,
-        error: 'La cantidad de sesiones debe ser un numero mayor a 0'
-      };
-    }
-
-    const horaValida = /^([01]\d|2[0-3]):([0-5]\d)$/.test(params.horaBase);
-    if (!horaValida) {
-      return {
-        success: false,
-        error: 'La hora base no tiene un formato valido (HH:mm)'
-      };
-    }
-
-    const diasUnicos = Array.from(new Set((params.diasSeleccionados || []).filter((d) => Number.isInteger(d) && d >= 1 && d <= 7)));
-    if (diasUnicos.length === 0) {
-      return {
-        success: false,
-        error: 'Debes seleccionar al menos un dia valido (1-7)'
-      };
-    }
+    const diasUnicos = Array.from(new Set(parsed.data.diasSeleccionados));
 
     const supabase = await createClient();
     // ============= PASO 1: GENERAR LISTA DE TURNOS =============
@@ -2545,13 +2834,24 @@ export async function crearPaqueteSesiones(params: {
       }
     };
 
-    // PRIMERO: Agregar el turno inicial si no está en el pasado
-    const esPasadoPrimerTurno = esFechaHoraPasada(params.fechaBase, params.horaBase);
+    // PRIMERO: Agregar el turno inicial si:
+    //  - mantenerHorario=true → usa horaBase.
+    //  - mantenerHorario=false → solo si el día de fechaBase está seleccionado
+    //    Y tiene horario asignado en horariosPorDia. Caso contrario se omite
+    //    (no hay forma de saber el horario del primer turno).
+    //  - en cualquier caso, no debe estar en el pasado.
+    const horaPrimerTurno = params.mantenerHorario
+      ? params.horaBase
+      : (params.horariosPorDia?.[diaBaseNumero] ?? '');
 
-    if (!esPasadoPrimerTurno) {
+    const incluyePrimerTurno =
+      Boolean(horaPrimerTurno) &&
+      !esFechaHoraPasada(params.fechaBase, horaPrimerTurno);
+
+    if (incluyePrimerTurno) {
       turnosParaCrear.push({
         fecha: params.fechaBase,
-        hora: params.horaBase + ':00',
+        hora: horaPrimerTurno + ':00',
         id_especialista: params.id_especialista,
         id_paciente: params.id_paciente,
         id_especialidad: params.id_especialidad,
@@ -2562,46 +2862,58 @@ export async function crearPaqueteSesiones(params: {
       });
     }
 
-    // SEGUNDO: Generar turnos de repetición
-    let sesionesCreadas = esPasadoPrimerTurno ? 0 : 1;
-    let semanaActual = 0;
+    // SEGUNDO: Generar TODOS los candidatos (varias semanas hacia adelante) y
+    // ordenarlos cronológicamente antes de elegir los N primeros. Si en cambio
+    // contamos en orden de inserción (semana × día), cuando `fechaBase` cae
+    // sobre el último día seleccionado, el último día de "semana N" puede caer
+    // calendariamente ANTES que los primeros días — y la cuenta termina antes
+    // de visitar el último día de la semana final.
+    const restantesNecesarios = params.numeroSesiones - (incluyePrimerTurno ? 1 : 0);
+    const candidatos: Array<{ fecha: string; hora: string }> = [];
 
-    while (sesionesCreadas < params.numeroSesiones && semanaActual < 52) {
-      for (const diaSeleccionado of diasUnicos) {
-        if (sesionesCreadas >= params.numeroSesiones) break;
+    if (restantesNecesarios > 0) {
+      const horizonteSemanas = Math.ceil((params.numeroSesiones + diasUnicos.length) / diasUnicos.length) + 2;
+      for (let semana = 0; semana < horizonteSemanas; semana++) {
+        for (const diaSeleccionado of diasUnicos) {
+          let diferenciaDias = diaSeleccionado - diaBaseNumero;
+          if (diferenciaDias < 0) diferenciaDias += 7;
 
-        let diferenciaDias = diaSeleccionado - diaBaseNumero;
-        if (diferenciaDias < 0) diferenciaDias += 7;
+          // El primer turno ya está agregado: evitar duplicarlo.
+          if (semana === 0 && diferenciaDias === 0 && incluyePrimerTurno) continue;
 
-        const fechaTurno = new Date(fechaBaseParsed);
-        const esPrimeraSemanaYDiaBase = semanaActual === 0 && diferenciaDias === 0;
+          const fechaTurno = new Date(fechaBaseParsed);
+          fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
+          const fechaFormateada = `${fechaTurno.getFullYear()}-${String(fechaTurno.getMonth() + 1).padStart(2, '0')}-${String(fechaTurno.getDate()).padStart(2, '0')}`;
 
-        if (esPrimeraSemanaYDiaBase) continue; // Ya lo agregamos arriba
+          const horarioTurno = params.mantenerHorario
+            ? params.horaBase
+            : (params.horariosPorDia?.[diaSeleccionado] ?? '');
 
-        fechaTurno.setDate(fechaTurno.getDate() + (semanaActual * 7) + diferenciaDias);
+          if (!horarioTurno) continue;
+          if (esFechaHoraPasada(fechaFormateada, horarioTurno)) continue;
 
-        const fechaFormateada = `${fechaTurno.getFullYear()}-${String(fechaTurno.getMonth() + 1).padStart(2, '0')}-${String(fechaTurno.getDate()).padStart(2, '0')}`;
-
-        const horarioTurno = params.mantenerHorario
-          ? params.horaBase
-          : (params.horariosPorDia[diaSeleccionado] || '09:00');
-
-        if (!esFechaHoraPasada(fechaFormateada, horarioTurno)) {
-          turnosParaCrear.push({
-            fecha: fechaFormateada,
-            hora: horarioTurno + ':00',
-            id_especialista: params.id_especialista,
-            id_paciente: params.id_paciente,
-            id_especialidad: params.id_especialidad,
-            id_box: params.id_box || null,
-            observaciones: params.observaciones || null,
-            estado: "programado" as const,
-            tipo_plan: params.tipo_plan,
-          });
-          sesionesCreadas++;
+          candidatos.push({ fecha: fechaFormateada, hora: horarioTurno });
         }
       }
-      semanaActual++;
+
+      // Orden cronológico estricto.
+      candidatos.sort((a, b) =>
+        `${a.fecha}T${a.hora}`.localeCompare(`${b.fecha}T${b.hora}`)
+      );
+
+      for (const slot of candidatos.slice(0, restantesNecesarios)) {
+        turnosParaCrear.push({
+          fecha: slot.fecha,
+          hora: slot.hora + ':00',
+          id_especialista: params.id_especialista,
+          id_paciente: params.id_paciente,
+          id_especialidad: params.id_especialidad,
+          id_box: params.id_box || null,
+          observaciones: params.observaciones || null,
+          estado: "programado" as const,
+          tipo_plan: params.tipo_plan,
+        });
+      }
     }
 
     if (turnosParaCrear.length === 0) {
@@ -2627,13 +2939,21 @@ export async function crearPaqueteSesiones(params: {
       tipo_plan: turno.tipo_plan,
     }));
 
+    // Si el usuario no proveyó título, generamos uno por defecto: el grupo
+    // siempre debe crearse para que cada turno tenga su número de sesión.
+    const tituloLimpio = params.titulo_tratamiento?.trim();
+    const tituloFinal =
+      tituloLimpio && tituloLimpio.length > 0
+        ? tituloLimpio
+        : `Paquete de ${turnosPayload.length} sesiones - ${dayjs(params.fechaBase).format('DD/MM/YYYY')}`;
+
     const { data: turnosRpc, error: errorRpc } = await supabase.rpc('crear_paquete_sesiones_rpc', {
       p_id_paciente: params.id_paciente,
       p_id_especialista: params.id_especialista,
       p_id_especialidad: params.id_especialidad,
       p_fecha_inicio: params.fechaBase,
       p_tipo_plan: params.tipo_plan,
-      p_titulo_tratamiento: params.titulo_tratamiento || null,
+      p_titulo_tratamiento: tituloFinal,
       p_turnos: turnosPayload,
     });
 
@@ -2774,6 +3094,293 @@ export async function crearPaqueteSesiones(params: {
     return {
       success: false,
       error: error.message || 'Error inesperado al crear el paquete de sesiones'
+    };
+  }
+}
+
+// =====================================
+// 🧘 PAQUETE DE PILATES (RPC ATÓMICO)
+// =====================================
+/**
+ * Crea un paquete de clases de Pilates en una sola llamada RPC atómica.
+ * Reemplaza el flujo previo que hacía N inserts separados desde el cliente.
+ *
+ * Internamente llama a `crear_paquete_pilates_rpc`, que valida capacidad por
+ * slot (≤4 pacientes), evita duplicados intra-payload y choques contra turnos
+ * existentes, y crea todos los turnos en una sola transacción.
+ *
+ * Notificaciones de confirmación y recordatorios se difieren con `after()`
+ * para no bloquear la respuesta.
+ */
+export async function crearPaquetePilates(params: {
+  id_pacientes: number[];
+  id_especialista: string;
+  dificultad: 'principiante' | 'intermedio' | 'avanzado';
+  turnos: Array<{ fecha: string; hora: string }>; // hora 'HH:mm' o 'HH:mm:ss'
+  enviarNotificacion?: boolean;
+  tiposRecordatorio?: ('1h' | '2h' | '3h' | '1d' | '2d')[];
+}) {
+  try {
+    if (!params.id_pacientes || params.id_pacientes.length === 0) {
+      return { success: false, error: 'Seleccioná al menos un participante' };
+    }
+    if (!params.id_especialista) {
+      return { success: false, error: 'Especialista requerido' };
+    }
+    if (!params.turnos || params.turnos.length === 0) {
+      return { success: false, error: 'No hay turnos para crear' };
+    }
+
+    const idPilates = await obtenerIdPilates();
+    if (!idPilates) {
+      return { success: false, error: 'No se encontró la especialidad de Pilates' };
+    }
+
+    const supabase = await createClient();
+
+    // Normalizar hora a HH:mm:ss para postgres time
+    const turnosPayload = params.turnos.map((t) => ({
+      fecha: t.fecha,
+      hora: t.hora.length === 5 ? `${t.hora}:00` : t.hora,
+    }));
+
+    const { data: turnosRpc, error } = await supabase.rpc('crear_paquete_pilates_rpc', {
+      p_id_pacientes: params.id_pacientes,
+      p_id_especialista: params.id_especialista,
+      p_id_especialidad: idPilates,
+      p_dificultad: params.dificultad,
+      p_turnos: turnosPayload,
+    });
+
+    if (error) {
+      console.error('Error creando paquete pilates por RPC:', error);
+      const mensajeRpc: string = error.message || 'No se pudieron crear los turnos';
+      const mensajeUsuario = mensajeRpc.startsWith('CONFLICTOS_PAQUETE:')
+        ? mensajeRpc.replace('CONFLICTOS_PAQUETE:', '').trim()
+        : mensajeRpc;
+      return { success: false, error: mensajeUsuario };
+    }
+
+    const turnosCreados = ((turnosRpc as any[]) || []).map((r: any) => ({
+      id_turno: r.id_turno,
+      fecha: r.fecha,
+      hora: r.hora,
+      id_paciente: r.id_paciente,
+      id_especialista: r.id_especialista,
+      id_especialidad: r.id_especialidad,
+      estado: r.estado,
+      dificultad: r.dificultad,
+      tipo_plan: r.tipo_plan,
+      paciente: {
+        nombre: r.paciente_nombre,
+        apellido: r.paciente_apellido,
+        telefono: r.paciente_telefono,
+      },
+      especialista: {
+        nombre: r.especialista_nombre,
+        apellido: r.especialista_apellido,
+      },
+    }));
+
+    if (turnosCreados.length === 0) {
+      return { success: false, error: 'No se creó ningún turno' };
+    }
+
+    // Confirmación agrupada por paciente + recordatorios, en background.
+    if (params.enviarNotificacion !== false) {
+      after(async () => {
+        try {
+          await procesarNotificacionesRepeticion(turnosCreados);
+        } catch (e) {
+          console.error('Error procesando notificaciones de paquete pilates:', e);
+        }
+
+        try {
+          const tipos = (params.tiposRecordatorio && params.tiposRecordatorio.length > 0)
+            ? params.tiposRecordatorio
+            : (['1d', '2h', '1h'] as const);
+
+          if (tipos.length === 0) return;
+
+          const { calcularTiemposRecordatorio } = await import('@/lib/utils/whatsapp.utils');
+          const { registrarNotificacionesRecordatorioFlexible } = await import('@/lib/services/notificacion.service');
+
+          for (const t of turnosCreados) {
+            const telefono = String(t.paciente?.telefono || '').trim();
+            if (!telefono) continue;
+
+            const tiemposRecordatorio = calcularTiemposRecordatorio(t.fecha, t.hora, tipos as any);
+            const validos: Record<string, Date> = {};
+            Object.entries(tiemposRecordatorio).forEach(([tipo, fecha]) => {
+              if (fecha) validos[tipo] = fecha as Date;
+            });
+            if (Object.keys(validos).length === 0) continue;
+
+            const mensaje = `Recordatorio: tenés un turno de Pilates programado`;
+            await registrarNotificacionesRecordatorioFlexible(t.id_turno, telefono, mensaje, validos);
+          }
+        } catch (e) {
+          console.error('Error programando recordatorios de paquete pilates:', e);
+        }
+      });
+    }
+
+    revalidatePath('/pilates');
+    revalidatePath('/turnos');
+    revalidatePath('/calendario');
+
+    return {
+      success: true,
+      data: {
+        turnosCreados: turnosCreados.length,
+        slots: params.turnos.length,
+        participantes: params.id_pacientes.length,
+        turnos: turnosCreados,
+      },
+      message: `${turnosCreados.length} turnos creados exitosamente`,
+    };
+
+  } catch (err: any) {
+    console.error('Error inesperado en crearPaquetePilates:', err);
+    return {
+      success: false,
+      error: err?.message || 'Error inesperado al crear el paquete de Pilates',
+    };
+  }
+}
+
+/**
+ * Edita atómicamente una clase de Pilates (un slot fecha+hora) en una sola
+ * transacción: mueve, agrega, quita y/o modifica participantes.
+ * Internamente llama a la RPC `actualizar_clase_pilates_rpc`.
+ *
+ * Devuelve listas separadas (`creados`, `actualizados`, `eliminados`) con
+ * los datos necesarios para que el caller dispare notificaciones agrupadas.
+ */
+export type AccionClasePilates = 'creado' | 'actualizado' | 'eliminado';
+
+export interface TurnoClasePilatesAfectado {
+  accion: AccionClasePilates;
+  id_turno: number;
+  fecha: string;
+  hora: string;
+  id_paciente: number;
+  id_especialista: string;
+  paciente: { nombre: string; apellido: string; telefono: string | null };
+  especialista: { nombre: string; apellido: string };
+  anterior: {
+    fecha: string | null;
+    hora: string | null;
+    id_especialista: string | null;
+    especialista: { nombre: string; apellido: string } | null;
+  };
+}
+
+export async function actualizarClasePilates(params: {
+  turno_ids: number[];
+  pacientes_finales: number[];
+  fecha_destino: string;            // YYYY-MM-DD
+  hora_destino: string;             // HH:mm o HH:mm:ss
+  id_especialista: string;
+  dificultad: 'principiante' | 'intermedio' | 'avanzado';
+}): Promise<
+  | {
+      success: true;
+      data: {
+        creados: TurnoClasePilatesAfectado[];
+        actualizados: TurnoClasePilatesAfectado[];
+        eliminados: TurnoClasePilatesAfectado[];
+      };
+    }
+  | { success: false; error: string }
+> {
+  try {
+    if (!params.turno_ids || params.turno_ids.length === 0) {
+      return { success: false, error: 'No hay turnos para editar' };
+    }
+    if (!params.pacientes_finales || params.pacientes_finales.length === 0) {
+      return { success: false, error: 'La clase tiene que tener al menos un participante' };
+    }
+    if (!params.id_especialista) {
+      return { success: false, error: 'Especialista requerido' };
+    }
+
+    const idPilates = await obtenerIdPilates();
+    if (!idPilates) {
+      return { success: false, error: 'No se encontró la especialidad de Pilates' };
+    }
+
+    const horaDestino =
+      params.hora_destino.length === 5 ? `${params.hora_destino}:00` : params.hora_destino;
+
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc('actualizar_clase_pilates_rpc', {
+      p_turno_ids: params.turno_ids,
+      p_pacientes_finales: params.pacientes_finales,
+      p_fecha_destino: params.fecha_destino,
+      p_hora_destino: horaDestino,
+      p_id_especialista: params.id_especialista,
+      p_id_especialidad: idPilates,
+      p_dificultad: params.dificultad,
+    });
+
+    if (error) {
+      console.error('Error actualizando clase Pilates por RPC:', error);
+      const mensajeRpc: string = error.message || 'No se pudo actualizar la clase';
+      const mensajeUsuario = mensajeRpc.startsWith('CONFLICTOS_CLASE:')
+        ? mensajeRpc.replace('CONFLICTOS_CLASE:', '').trim()
+        : mensajeRpc;
+      return { success: false, error: mensajeUsuario };
+    }
+
+    const filas = (data as any[]) || [];
+    const afectados: TurnoClasePilatesAfectado[] = filas.map((r: any) => ({
+      accion: r.accion,
+      id_turno: r.id_turno,
+      fecha: r.fecha,
+      hora: r.hora,
+      id_paciente: r.id_paciente,
+      id_especialista: r.id_especialista,
+      paciente: {
+        nombre: r.paciente_nombre,
+        apellido: r.paciente_apellido,
+        telefono: r.paciente_telefono,
+      },
+      especialista: {
+        nombre: r.especialista_nombre,
+        apellido: r.especialista_apellido,
+      },
+      anterior: {
+        fecha: r.fecha_anterior,
+        hora: r.hora_anterior,
+        id_especialista: r.id_especialista_anterior,
+        especialista:
+          r.especialista_anterior_nombre || r.especialista_anterior_apellido
+            ? {
+                nombre: r.especialista_anterior_nombre,
+                apellido: r.especialista_anterior_apellido,
+              }
+            : null,
+      },
+    }));
+
+    revalidatePath('/pilates');
+    revalidatePath('/turnos');
+    revalidatePath('/calendario');
+
+    return {
+      success: true,
+      data: {
+        creados: afectados.filter((a) => a.accion === 'creado'),
+        actualizados: afectados.filter((a) => a.accion === 'actualizado'),
+        eliminados: afectados.filter((a) => a.accion === 'eliminado'),
+      },
+    };
+  } catch (err: any) {
+    console.error('Error inesperado en actualizarClasePilates:', err);
+    return {
+      success: false,
+      error: err?.message || 'Error inesperado al actualizar la clase de Pilates',
     };
   }
 }

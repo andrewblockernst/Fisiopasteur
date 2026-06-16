@@ -2,19 +2,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DetalleTurnoDialog } from "@/componentes/turnos/detalle-turno-dialog";
-import { marcarComoAtendido, cancelarTurno, eliminarTurno } from "@/lib/actions/turno.action";
+import { marcarComoAtendido, cancelarTurno, eliminarTurno, actualizarEstadoTurnosMasivo } from "@/lib/actions/turno.action";
 import { useToastStore } from "@/stores/toast-store";
 import { useAuth } from "@/hooks/usePerfil";
 import { turnoKeys, type InvalidateTurnosOptions } from "@/hooks/useTurnosQuery";
 import EditarTurnoModal from "./editar-turno-modal";
 import type { TurnoWithRelations } from "@/types";
-import { MoreVertical, CheckCircle, XCircle, Edit, Trash } from "lucide-react";
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { CheckCircle, XCircle, Edit, Trash, X } from "lucide-react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import UnifiedSkeletonLoader from "../unified-skeleton-loader";
 import { nowIso } from "@/lib/dayjs";
-import { isPastDateTime } from "@/lib/dayjs";
 import CompactListTable from "@/componentes/tablas/compact-list-table";
+import { RowActionsMenu, RowActionsItem, RowActionsSeparator } from "@/componentes/tablas/row-actions-menu";
+import {
+  puedeConfirmar,
+  puedeCancelar,
+  puedeEditar,
+  puedeEliminar,
+  ESTADOS_PARA_CONFIRMAR,
+  ESTADOS_PARA_CANCELAR,
+} from "@/lib/utils/turno-acciones";
 
 type TurnosTableProps = {
   turnos: TurnoWithRelations[];
@@ -112,6 +119,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
   const [selectedTurnoIds, setSelectedTurnoIds] = useState<number[]>([]);
   const [selectionAnchorTurnoId, setSelectionAnchorTurnoId] = useState<number | null>(null);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkEliminarDialogAbierto, setBulkEliminarDialogAbierto] = useState(false);
 
   // ============= FUNCIONES DE ACCIONES =============
   const handleMarcarAtendido = async (turno: TurnoWithRelations) => {
@@ -252,7 +260,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
 
   // Función para determinar el color de fondo de la fila
   const getRowClassName = (turno: any) => {
-    let baseClass = "border-t hover:bg-gray-50 transition-colors";
+    let baseClass = "border-t hover:bg-gray-50 border-l-4 border-l-gray-200 transition-colors";
     if (turno.estado === 'atendido') {
       baseClass += " bg-green-100 border-l-4 border-l-green-500";
     }
@@ -376,53 +384,108 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
     setSelectionAnchorTurnoId(null);
   };
 
+  const visibleTurnoIds = useMemo(
+    () => turnosOrdenados.map((t) => t.id_turno),
+    [turnosOrdenados]
+  );
+  const selectedVisibleCount = useMemo(
+    () => visibleTurnoIds.filter((id) => selectedTurnoIds.includes(id)).length,
+    [visibleTurnoIds, selectedTurnoIds]
+  );
+  const allVisibleSelected = visibleTurnoIds.length > 0 && selectedVisibleCount === visibleTurnoIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedTurnoIds((prev) => prev.filter((id) => !visibleTurnoIds.includes(id)));
+    } else {
+      setSelectedTurnoIds((prev) => Array.from(new Set([...prev, ...visibleTurnoIds])));
+    }
+    setSelectionAnchorTurnoId(null);
+  };
+
+  const headerCheckboxRef = (el: HTMLInputElement | null) => {
+    if (el) el.indeterminate = someVisibleSelected;
+  };
+
   useEffect(() => {
     // Ante cualquier cambio del listado visible, resetea selección masiva.
     setSelectedTurnoIds((prev) => (prev.length > 0 ? [] : prev));
     setSelectionAnchorTurnoId(null);
   }, [turnos]);
 
-  const handleBulkAction = async (action: "atendido" | "cancelado") => {
+  const handleBulkAction = async (action: "atendido" | "cancelado" | "eliminado") => {
     if (bulkSubmitting || selectedTurnoIds.length === 0) return;
 
     const seleccionados = turnosOrdenados.filter((t) => selectedTurnoIds.includes(t.id_turno));
-    const elegibles = seleccionados.filter((t) => t.estado === "programado" || t.estado === "pendiente");
+    const elegibles = seleccionados.filter((t) => {
+      if (action === "atendido") return puedeConfirmar(t.estado);
+      if (action === "cancelado") return puedeCancelar(t.estado);
+      return puedeEliminar(t.estado);
+    });
     const accionables = elegibles.filter((t) => puedeAccionarTurno(t));
 
     if (accionables.length === 0) {
+      const estadosTxt = action === "atendido"
+        ? ESTADOS_PARA_CONFIRMAR.join(", ")
+        : action === "cancelado"
+          ? ESTADOS_PARA_CANCELAR.join(", ")
+          : "programado, pendiente, atendido, cancelado";
       toast.addToast({
         variant: "error",
         message: "No hay turnos accionables",
-        description: "Selecciona turnos en estado programado o pendiente y con permisos para gestionarlos.",
+        description: `Selecciona turnos en estado ${estadosTxt} y con permisos para gestionarlos.`,
       });
       return;
     }
 
+    if (action === "eliminado") {
+      // Confirmación vía BaseDialog — la ejecución continúa en confirmarBulkEliminar.
+      setBulkEliminarDialogAbierto(true);
+      return;
+    }
+
+    await ejecutarBulkAction(action, accionables.map((t) => t.id_turno));
+  };
+
+  const ejecutarBulkAction = async (
+    action: "atendido" | "cancelado" | "eliminado",
+    ids: number[],
+  ) => {
+    if (ids.length === 0) return;
     setBulkSubmitting(true);
 
-    const results = await Promise.all(
-      accionables.map((turno) =>
-        action === "atendido"
-          ? marcarComoAtendido(turno.id_turno)
-          : cancelarTurno(turno.id_turno)
-      )
-    );
+    const result = await actualizarEstadoTurnosMasivo(ids, action);
 
-    const successCount = results.filter((r) => r.success).length;
-    const failCount = results.length - successCount;
+    if (!result.success) {
+      toast.addToast({
+        variant: "error",
+        message: "No se pudieron actualizar los turnos",
+        description: result.error,
+      });
+      setBulkSubmitting(false);
+      return;
+    }
+
+    const successCount = result.updatedIds.length;
+    const failCount = result.failedCount;
 
     if (successCount > 0) {
       invalidateTurnos({
         scope: "statuses",
         statuses: action === "atendido"
           ? ["programado", "pendiente", "atendido"]
-          : ["programado", "pendiente", "cancelado"],
+          : action === "cancelado"
+            ? ["programado", "pendiente", "cancelado"]
+            : ["programado", "pendiente", "atendido", "cancelado", "eliminado"],
       });
       toast.addToast({
         variant: "success",
         message: action === "atendido"
           ? `${successCount} turno(s) marcados como atendidos`
-          : `${successCount} turno(s) cancelados`,
+          : action === "cancelado"
+            ? `${successCount} turno(s) cancelados`
+            : `${successCount} turno(s) eliminados`,
       });
     }
 
@@ -436,6 +499,17 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
     clearSelection();
     setBulkSubmitting(false);
   };
+
+  const confirmarBulkEliminar = async () => {
+    const seleccionados = turnosOrdenados.filter((t) => selectedTurnoIds.includes(t.id_turno));
+    const accionables = seleccionados
+      .filter((t) => puedeEliminar(t.estado))
+      .filter((t) => puedeAccionarTurno(t));
+    setBulkEliminarDialogAbierto(false);
+    await ejecutarBulkAction("eliminado", accionables.map((t) => t.id_turno));
+  };
+
+  const cantidadBulkEliminar = selectedTurnoIds.length;
 
   if (turnosLoading) {
     return (
@@ -460,7 +534,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="h-8 rounded border border-green-300 bg-green-50 px-3 text-xs text-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="h-8 rounded-md border-2 border-success bg-transparent px-3 text-xs font-semibold text-success transition-colors hover:bg-success hover:text-success-foreground disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => handleBulkAction("atendido")}
               disabled={bulkSubmitting}
             >
@@ -468,7 +542,7 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
             </button>
             <button
               type="button"
-              className="h-8 rounded border border-red-300 bg-red-50 px-3 text-xs text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="h-8 rounded-md border-2 border-destructive bg-transparent px-3 text-xs font-semibold text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-40"
               onClick={() => handleBulkAction("cancelado")}
               disabled={bulkSubmitting}
             >
@@ -476,11 +550,21 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
             </button>
             <button
               type="button"
-              className="h-8 rounded border border-gray-300 px-3 text-xs text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={clearSelection}
+              className="h-8 rounded-md border-2 border-destructive bg-transparent px-3 text-xs font-semibold text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => handleBulkAction("eliminado")}
               disabled={bulkSubmitting}
             >
-              Limpiar
+              Eliminar
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-input bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={clearSelection}
+              disabled={bulkSubmitting}
+              aria-label="Limpiar selección"
+              title="Limpiar selección"
+            >
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -489,12 +573,23 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
         <CompactListTable className="flex-1 min-h-0">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th className="w-10 px-2 py-2" />
+              <th className="w-10 px-2 py-2">
+                <input
+                  ref={headerCheckboxRef}
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer rounded border-input text-brand focus:ring-brand"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAllVisible}
+                  disabled={visibleTurnoIds.length === 0}
+                  aria-label="Seleccionar todos los turnos visibles"
+                />
+              </th>
               <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
               <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Hora</th>
               <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Paciente</th>
               <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialista</th>
               <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialidad</th>
+              <th className="px-4 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">Box</th>
               <th className="px-4 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">N°</th>
               <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider w-14">Acciones</th>
             </tr>
@@ -504,18 +599,17 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
             {turnosOrdenados.map((t) => {
               const numeroTalonario = calcularNumeroTalonario(t);
               const turnoEsPropio = puedeAccionarTurno(t);
-              const turnoEditable = !isPastDateTime(t.fecha, t.hora || "00:00");
-              
+
               return (
               <tr 
                 key={t.id_turno} 
                 className={`${getRowClassName(t)} cursor-pointer hover:bg-gray-100 transition-colors`}
                 onClick={() => abrirDetalleTurno(t)}
               >
-                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                <td className="px-3 py-0" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
-                    className="h-4 w-4 cursor-pointer rounded border-gray-300 text-[#9C1838] focus:ring-[#9C1838]"
+                    className="h-4 w-4 cursor-pointer rounded border-input text-brand focus:ring-brand"
                     checked={selectedTurnoIds.includes(t.id_turno)}
                     readOnly
                     onClick={(e) =>
@@ -528,16 +622,16 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                     aria-label={`Seleccionar turno ${t.id_turno}`}
                   />
                 </td>
-                <td className={`px-4 py-2 text-sm ${getTextStyle(t)}`}>
+                <td className={`px-4 py-0 text-sm ${getTextStyle(t)}`}>
                   {formatearFecha(t.fecha)}
                 </td>
-                <td className={`px-4 py-2 text-sm font-mono ${getTextStyle(t)}`}>
+                <td className={`px-4 py-0 text-sm font-mono ${getTextStyle(t)}`}>
                   {formatearHora(t.hora)}
                 </td>
-                <td className={`px-4 py-2 text-sm ${getTextStyle(t)}`}>
+                <td className={`px-4 py-0 text-sm ${getTextStyle(t)}`}>
                   {t.paciente ? `${t.paciente.apellido}, ${t.paciente.nombre}` : "Sin asignar"}
                 </td>
-                <td className={`px-4 py-2 text-sm ${getTextStyle(t)}`}>
+                <td className={`px-4 py-0 text-sm ${getTextStyle(t)}`}>
                   {t.especialista ? (
                     <span className="inline-flex items-center gap-2">
                       <span 
@@ -548,11 +642,15 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                     </span>
                   ) : "Sin asignar"}
                 </td>
-                <td className={`px-4 py-2 text-sm ${getTextStyle(t)}`}>
+                <td className={`px-4 py-0 text-sm ${getTextStyle(t)}`}>
                   {t.especialidad ? t.especialidad.nombre : "Sin asignar"}
                 </td>
+                {/* ✅ COLUMNA: Box asignado */}
+                <td className={`px-4 py-0 text-sm text-center ${getTextStyle(t)}`}>
+                  {t.box ? `${t.box.numero}` : <span className="text-gray-400">—</span>}
+                </td>
                 {/* ✅ COLUMNA: Número de talonario */}
-                <td className="px-4 py-2 text-center text-black text-sm">
+                <td className="px-4 py-0 text-center text-black text-sm">
                   {numeroTalonario ? (
                     <span className="text-xs font-semibold">{numeroTalonario}</span>
                   ) : (
@@ -560,78 +658,120 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
                   )}
                 </td>
                 {/* ✅ COLUMNA DE ACCIONES - Evitar propagación del click */}
-                <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                <td className="px-2 py-0" onClick={(e) => e.stopPropagation()}>
                   {t.id_paciente && (
-                    <DropdownMenu.Root>
-                      <DropdownMenu.Trigger asChild>
+                    <>
+                    {/* Iconos visibles en pantallas anchas (xl+) */}
+                    <div className="hidden xl:flex items-center gap-1">
+                      {puedeConfirmar(t.estado) && (
                         <button
-                          className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreVertical className="w-5 h-5 text-gray-600" />
-                        </button>
-                      </DropdownMenu.Trigger>
-
-                      <DropdownMenu.Content align="end" className="bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
-                        {/* Marcar como Atendido */}
-                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
-                          <DropdownMenu.Item
-                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-green-50 text-green-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
-                            onSelect={() => handleMarcarAtendido(t)}
-                            disabled={!turnoEsPropio}
-                          >
-                            <CheckCircle size={16} />
-                            Marcar como Atendido
-                          </DropdownMenu.Item>
-                        )}
-
-                        {/* Cancelar Turno */}
-                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
-                          <DropdownMenu.Item
-                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-red-50 text-red-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
-                            onSelect={() => handleCancelar(t)}
-                            disabled={!turnoEsPropio}
-                          >
-                            <XCircle size={16} />
-                            Cancelar Turno
-                          </DropdownMenu.Item>
-                        )}
-
-                        {/* Separador */}
-                        {(t.estado === 'programado' || t.estado === 'pendiente') && (
-                          <div className="h-px bg-gray-200 my-1" />
-                        )}
-
-                        {/* Editar */}
-                        {t.estado !== 'atendido' && (
-                          <DropdownMenu.Item
-                            className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio && turnoEditable ? 'hover:bg-gray-50 text-gray-700 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
-                            onSelect={() => handleEditar(t)}
-                            disabled={!turnoEsPropio || !turnoEditable}
-                          >
-                            <Edit size={16} />
-                            Editar
-                          </DropdownMenu.Item>
-                        )}
-
-                        {/* Eliminar */}
-                        <DropdownMenu.Item
-                          className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 outline-none ${turnoEsPropio ? 'hover:bg-red-50 text-red-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
-                          onSelect={() => handleEliminar(t)}
+                          type="button"
+                          aria-label="Marcar como atendido"
+                          title="Marcar como atendido"
+                          className={`h-8 w-8 inline-flex items-center justify-center rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${turnoEsPropio ? 'text-green-600 hover:bg-green-50 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                          onClick={() => turnoEsPropio ? handleMarcarAtendido(t) : mostrarSinPermisos()}
                           disabled={!turnoEsPropio}
                         >
-                          <Trash size={16} />
-                          Eliminar
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Root>
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      {puedeCancelar(t.estado) && (
+                        <button
+                          type="button"
+                          aria-label="Cancelar turno"
+                          title="Cancelar turno"
+                          className={`h-8 w-8 inline-flex items-center justify-center rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${turnoEsPropio ? 'text-red-600 hover:bg-red-50 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                          onClick={() => turnoEsPropio ? handleCancelar(t) : mostrarSinPermisos()}
+                          disabled={!turnoEsPropio}
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      {puedeEditar(t.estado) && (
+                        <button
+                          type="button"
+                          aria-label="Editar turno"
+                          title="Editar"
+                          className={`h-8 w-8 inline-flex items-center justify-center rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${turnoEsPropio ? 'text-gray-700 hover:bg-muted cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                          onClick={() => turnoEsPropio ? handleEditar(t) : mostrarSinPermisos()}
+                          disabled={!turnoEsPropio}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                      )}
+                      {puedeEliminar(t.estado) && (
+                        <button
+                          type="button"
+                          aria-label="Eliminar turno"
+                          title="Eliminar"
+                          className={`h-8 w-8 inline-flex items-center justify-center rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${turnoEsPropio ? 'text-red-600 hover:bg-red-50 cursor-pointer' : 'text-gray-300 cursor-not-allowed'}`}
+                          onClick={() => turnoEsPropio ? handleEliminar(t) : mostrarSinPermisos()}
+                          disabled={!turnoEsPropio}
+                        >
+                          <Trash className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Dropdown 3-puntos en pantallas más chicas */}
+                    <div className="xl:hidden">
+                      <RowActionsMenu ariaLabel="Acciones del turno">
+                        {puedeConfirmar(t.estado) && (
+                          <RowActionsItem
+                            variant="success"
+                            icon={<CheckCircle size={16} />}
+                            onSelect={() => (turnoEsPropio ? handleMarcarAtendido(t) : mostrarSinPermisos())}
+                            disabled={!turnoEsPropio}
+                          >
+                            Marcar como Atendido
+                          </RowActionsItem>
+                        )}
+
+                        {puedeCancelar(t.estado) && (
+                          <RowActionsItem
+                            variant="destructive"
+                            icon={<XCircle size={16} />}
+                            onSelect={() => (turnoEsPropio ? handleCancelar(t) : mostrarSinPermisos())}
+                            disabled={!turnoEsPropio}
+                          >
+                            Cancelar Turno
+                          </RowActionsItem>
+                        )}
+
+                        {(puedeConfirmar(t.estado) || puedeCancelar(t.estado)) && (puedeEditar(t.estado) || puedeEliminar(t.estado)) && (
+                          <RowActionsSeparator />
+                        )}
+
+                        {puedeEditar(t.estado) && (
+                          <RowActionsItem
+                            icon={<Edit size={16} />}
+                            onSelect={() => (turnoEsPropio ? handleEditar(t) : mostrarSinPermisos())}
+                            disabled={!turnoEsPropio}
+                          >
+                            Editar
+                          </RowActionsItem>
+                        )}
+
+                        {puedeEliminar(t.estado) && (
+                          <RowActionsItem
+                            variant="destructive"
+                            icon={<Trash size={16} />}
+                            onSelect={() => (turnoEsPropio ? handleEliminar(t) : mostrarSinPermisos())}
+                            disabled={!turnoEsPropio}
+                          >
+                            Eliminar
+                          </RowActionsItem>
+                        )}
+                      </RowActionsMenu>
+                    </div>
+                    </>
                   )}
                 </td>
               </tr>
             )})}
             {(!turnosOrdenados || turnosOrdenados.length === 0) && (
               <tr>
-                <td className="p-6 text-center text-gray-500" colSpan={8}>
+                <td className="p-6 text-center text-gray-500" colSpan={9}>
                   <div className="flex flex-col items-center gap-2">
                     <span>No hay turnos para mostrar</span>
                   </div>
@@ -685,6 +825,32 @@ export default function TurnosTable({ turnos, invalidateTurnos, turnosLoading, i
           setConfirmDialogAbierto(false);
           setTurnoParaEliminar(null);
         },
+      }}
+    />
+
+    {/* Modal de Confirmación de Eliminación Masiva */}
+    <BaseDialog
+      type="warning"
+      title="Confirmar eliminación masiva"
+      message={
+        <>
+          ¿Estás seguro de que deseas eliminar <b>{cantidadBulkEliminar}</b> turno(s)?
+          <br />
+          <span className="mt-3 block text-xs font-semibold text-muted-foreground">
+            Esta acción no se puede deshacer desde la app.
+          </span>
+        </>
+      }
+      isOpen={bulkEliminarDialogAbierto}
+      onClose={() => setBulkEliminarDialogAbierto(false)}
+      showCloseButton
+      primaryButton={{
+        text: bulkSubmitting ? "Eliminando..." : "Eliminar",
+        onClick: confirmarBulkEliminar,
+      }}
+      secondaryButton={{
+        text: "Cancelar",
+        onClick: () => setBulkEliminarDialogAbierto(false),
       }}
     />
   </div>

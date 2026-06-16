@@ -5,6 +5,8 @@ import BaseDialog from "@/componentes/dialog/base-dialog";
 import { obtenerEspecialistasParaTurnos, obtenerEspecialidades, obtenerBoxes, crearTurno, obtenerSlotsOcupados, obtenerTurnosParaValidarBoxes, verificarDisponibilidadPaquete, crearPaqueteSesiones } from "@/lib/actions/turno.action";
 import { obtenerPrefsNotificacionPaciente, actualizarPreferenciasNotificacion } from "@/lib/actions/paciente.action";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
+import { DiscardChangesDialog } from "@/componentes/dialog/discard-changes-dialog";
+import { scrollToFirstError } from "@/lib/utils/scroll-to-error";
 import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 import SelectorRecordatorios from "@/componentes/turnos/selector-recordatorios";
 import Image from "next/image";
@@ -15,6 +17,13 @@ import { useAuth } from '@/hooks/usePerfil';
 import { UserPlus2, CalendarDays, Info } from "lucide-react";
 import type { TipoRecordatorio } from "@/lib/utils/whatsapp.utils";
 import { dayjs, isPastDateTime, minutesToTime, timeToMinutes, todayYmd, toYmd } from "@/lib/dayjs";
+import {
+  fechaTurnoMaxInput,
+  LIMITES,
+  validarFechaTurnoInline,
+  validarHoraPasadaInline,
+} from "@/lib/validators/common";
+import { DateInput } from "@/componentes/ui/date-input";
 
 // ✅ Cache simple para evitar llamadas repetidas
 const dataCache = {
@@ -122,6 +131,9 @@ export function NuevoTurnoModal({
     message: ''
   });
 
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'fecha' | 'hora' | 'id_especialista' | 'id_especialidad' | 'id_paciente' | 'dias', string>>>({});
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
   // Preferencias de notificación del paciente seleccionado
   const [notifPrefs, setNotifPrefs] = useState({ confirmacion: true, recordatorios: true });
 
@@ -167,10 +179,47 @@ export function NuevoTurnoModal({
 
   // ✅ VALIDAR SI LA FECHA Y HORA SELECCIONADAS ESTÁN EN EL PASADO
   const esHoraPasada = React.useMemo(() => {
-    return formData.fecha && formData.hora 
+    return formData.fecha && formData.hora
       ? esFechaHoraPasada(formData.fecha, formData.hora)
       : false;
   }, [formData.fecha, formData.hora]);
+
+  // ✅ VALIDACIÓN INLINE EN VIVO — surface errors as inline messages, NOT as silent
+  // button disable. Whenever fecha/hora change, derive field errors so the user
+  // always sees *why* the form is invalid.
+  useEffect(() => {
+    const errFecha = validarFechaTurnoInline(formData.fecha, "crear");
+    const errHora =
+      !errFecha && formData.hora
+        ? validarHoraPasadaInline(formData.fecha, formData.hora)
+        : null;
+    setFieldErrors((prev) => ({
+      ...prev,
+      fecha: errFecha ?? (prev.fecha === "Requerido" ? prev.fecha : undefined),
+      hora: errHora ?? (prev.hora === "Requerido" ? prev.hora : undefined),
+    }));
+  }, [formData.fecha, formData.hora]);
+
+  // En paquete de sesiones, la hora base es opcional. Si el usuario no eligió
+  // hora, deshabilitamos "Mantener horario" y forzamos modalidad "horario por
+  // día". En la TRANSICIÓN de "sin hora" a "con hora" el checkbox se prende
+  // solo (default true). Después, el usuario puede desmarcarlo si quiere.
+  const horaPrevRef = React.useRef<string>("");
+  useEffect(() => {
+    if (!mostrarRepeticion) {
+      horaPrevRef.current = formData.hora;
+      return;
+    }
+    const tieneHora = !!formData.hora;
+    const teniaHora = !!horaPrevRef.current;
+    if (!tieneHora && mantenerHorario) {
+      setMantenerHorario(false);
+    } else if (tieneHora && !teniaHora) {
+      // Transición empty → set: prender por defecto.
+      setMantenerHorario(true);
+    }
+    horaPrevRef.current = formData.hora;
+  }, [formData.hora, mostrarRepeticion]);
 
   // Cargar datos si no vienen por props
   useEffect(() => {
@@ -182,11 +231,21 @@ export function NuevoTurnoModal({
       
       // ✅ Solo cargar si NO tenemos los datos básicos todavía
       // ⚡ OPTIMIZACIÓN: Ya NO cargamos pacientes aquí (se cargan bajo demanda al buscar)
-      const necesitaCargar = 
-        (!cacheValido && especialidades.length === 0) || 
-        (!cacheValido && boxes.length === 0) ||
-        (especialistasProp.length === 0 && especialistas.length === 0);
-    
+      // Si el cache está caliente pero el state local está vacío (segundo open),
+      // copiamos del cache antes de decidir si cortamos.
+      if (cacheValido && especialidades.length === 0 && dataCache.especialidades) {
+        setEspecialidades(dataCache.especialidades);
+      }
+      if (cacheValido && boxes.length === 0 && dataCache.boxes) {
+        setBoxes(dataCache.boxes);
+      }
+
+      const especialidadesListas = especialidades.length > 0 || (cacheValido && !!dataCache.especialidades);
+      const boxesListos = boxes.length > 0 || (cacheValido && !!dataCache.boxes);
+      const especialistasListos = especialistasProp.length > 0 || especialistas.length > 0;
+
+      const necesitaCargar = !especialidadesListas || !boxesListos || !especialistasListos;
+
       if (!necesitaCargar) {
         console.log('✅ Datos ya disponibles o cache válido');
         return;
@@ -393,12 +452,18 @@ useEffect(() => {
         const res = await obtenerSlotsOcupados(formData.id_especialista, formData.fecha, undefined, pacienteSeleccionadoId);
         if (res.success && res.data) {
           setHorasOcupadas(res.data);
+          // Limpiar la hora preseleccionada SOLO si choca con un turno del nuevo
+          // especialista. Si está libre, se mantiene (caso típico: el usuario
+          // abrió el modal desde el calendario con fecha+hora ya elegida y
+          // recién después selecciona el especialista).
+          if (formData.hora && res.data.includes(formData.hora)) {
+            setFormData(prev => ({ ...prev, hora: '', id_box: '' }));
+          }
         }
       } catch (error) {
         console.error('Error verificando horarios:', error);
       } finally {
         setVerificandoDisponibilidad(false);
-        
       }
     }, 300); // Esperar 300ms antes de ejecutar
 
@@ -592,11 +657,12 @@ useEffect(() => {
 
   // ============= FUNCIONES PARA REPETICIÓN =============
   const toggleDia = (diaId: number) => {
-    setDiasSeleccionados(prev => 
-      prev.includes(diaId) 
+    setDiasSeleccionados(prev =>
+      prev.includes(diaId)
         ? prev.filter(d => d !== diaId)
         : [...prev, diaId]
     );
+    if (fieldErrors.dias) setFieldErrors(p => ({ ...p, dias: undefined }));
   };
 
   // Verificar si una hora específica está disponible
@@ -691,21 +757,35 @@ useEffect(() => {
   }, [seleccionarPaciente]);
 
   const handleSubmit = async () => {
-  if (esHoraPasada) {
-    addToast({
-      variant: 'error',
-      message: 'Horario no disponible',
-      description: 'No se pueden crear turnos en horarios que ya pasaron',
-    });
-    return;
+  // Construir errores de "requerido" + preservar los inline ya calculados
+  // (fecha pasada, fecha > 12 meses, hora pasada).
+  const errs: typeof fieldErrors = {
+    fecha: fieldErrors.fecha,
+    hora: fieldErrors.hora,
+  };
+  const esPaquete = mostrarRepeticion && diasSeleccionados.length > 0;
+  if (!formData.fecha) errs.fecha = "Requerido";
+  // En paquete con horarios por día, la hora base es opcional. En cualquier
+  // otro caso (turno simple, o paquete con "mantener horario"), es requerida.
+  if (!formData.hora && (!esPaquete || mantenerHorario)) errs.hora = "Requerido";
+  if (!formData.id_especialista) errs.id_especialista = "Requerido";
+  if (!formData.id_especialidad) errs.id_especialidad = "Requerido";
+  if (!formData.id_paciente) errs.id_paciente = "Seleccioná un paciente";
+  if (mostrarRepeticion && diasSeleccionados.length === 0) errs.dias = "Seleccioná al menos un día";
+  // Si es paquete con horarios por día, exigir que TODOS los días tengan horario.
+  if (esPaquete && !mantenerHorario) {
+    const diasSinHorario = diasSeleccionados.filter((d) => !horariosPorDia[d]);
+    if (diasSinHorario.length > 0) errs.dias = "Asigná un horario a cada día seleccionado.";
   }
 
-  if (!formData.fecha || !formData.hora || !formData.id_especialista || !formData.id_especialidad || !formData.id_paciente) {
-    addToast({
-      variant: 'error',
-      message: 'Campos requeridos',
-      description: 'Por favor completa fecha, hora, especialista, especialidad y paciente',
-    });
+  // Limpiar undefined antes de setear
+  const errsLimpios: typeof fieldErrors = {};
+  for (const [k, v] of Object.entries(errs)) {
+    if (v) errsLimpios[k as keyof typeof fieldErrors] = v;
+  }
+  setFieldErrors(errsLimpios);
+  if (Object.keys(errsLimpios).length > 0) {
+    scrollToFirstError(Object.keys(errsLimpios));
     return;
   }
 
@@ -812,6 +892,23 @@ useEffect(() => {
   }
 };
 
+  const formTieneCambios = useMemo(() => {
+    return Boolean(
+      formData.fecha || formData.hora || formData.id_especialidad ||
+      formData.id_paciente || formData.id_box || formData.observaciones ||
+      formData.titulo_tratamiento || mostrarRepeticion || diasSeleccionados.length > 0,
+    );
+  }, [formData, mostrarRepeticion, diasSeleccionados]);
+
+  const requestClose = useCallback(() => {
+    if (isSubmitting) return;
+    if (formTieneCambios) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onClose();
+  }, [isSubmitting, formTieneCambios, onClose]);
+
   // ✅ CERRAR FORZADO - Resetea todo el estado inmediatamente
   const handleForceClose = useCallback(() => {
     // Cancelar todos los estados de carga
@@ -866,9 +963,10 @@ useEffect(() => {
           />
         }
         isOpen={isOpen}
-        onClose={handleForceClose}
+        onClose={requestClose}
         showCloseButton
-        customColor="#9C1838"
+        closeButtonAlert={formTieneCambios ? "Cambios sin guardar" : undefined}
+        customColor="var(--brand)"
         message={<Loading size={48} text="Cargando datos..." />}
       />
     );
@@ -890,13 +988,14 @@ useEffect(() => {
           />
         }
         isOpen={isOpen}
-        onClose={handleForceClose}
+        onClose={requestClose}
         showCloseButton
-        customColor="#9C1838"
+        closeButtonAlert={formTieneCambios ? "Cambios sin guardar" : undefined}
+        customColor="var(--brand)"
         message={
           <form
             onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
-            className="space-y-3 md:space-y-4 text-left max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1"
+            className="space-y-3 md:space-y-4 text-left px-1"
           >
             {/* Especialista - SIEMPRE VISIBLE */}
             <div>
@@ -907,9 +1006,10 @@ useEffect(() => {
               {user?.puedeGestionarTurnos ? (
                 // ✅ Usuario con permisos: selector habilitado
                 <select
+                  id="id_especialista"
                   value={formData.id_especialista}
-                  onChange={(e) => setFormData(prev => ({ ...prev, id_especialista: e.target.value, hora: '', id_box: '' }))}
-                  className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  onChange={(e) => { setFormData(prev => ({ ...prev, id_especialista: e.target.value, id_box: '' })); if (fieldErrors.id_especialista) setFieldErrors(p => ({ ...p, id_especialista: undefined })); }}
+                  className={`w-full px-2 md:px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.id_especialista ? 'border-destructive' : 'border-gray-300'}`}
                   required
                 >
                   <option value="">Seleccionar especialista</option>
@@ -952,9 +1052,10 @@ useEffect(() => {
                 Especialidad*
               </label>
               <select
+                id="id_especialidad"
                 value={formData.id_especialidad}
-                onChange={(e) => setFormData(prev => ({ ...prev, id_especialidad: e.target.value }))}
-                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                onChange={(e) => { setFormData(prev => ({ ...prev, id_especialidad: e.target.value })); if (fieldErrors.id_especialidad) setFieldErrors(p => ({ ...p, id_especialidad: undefined })); }}
+                className={`w-full px-2 md:px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.id_especialidad ? 'border-destructive' : 'border-gray-300'}`}
                 required
                 disabled={!formData.id_especialista}
               >
@@ -965,6 +1066,7 @@ useEffect(() => {
                   </option>
                 ))}
               </select>
+              {fieldErrors.id_especialidad && <p className="text-destructive text-xs mt-1">{fieldErrors.id_especialidad}</p>}
               {formData.id_especialista && especialidadesDisponibles.length === 0 && (
                 <p className="text-red-500 text-xs mt-1">
                   Este especialista no tiene especialidades asignadas
@@ -983,7 +1085,7 @@ useEffect(() => {
                   value={formData.titulo_tratamiento}
                   onChange={(e) => setFormData(prev => ({ ...prev, titulo_tratamiento: e.target.value }))}
                   placeholder="Ej: Lesión hombro, Rehabilitación rodilla..."
-                  className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Este título se mostrará en el historial clínico del paciente
@@ -992,30 +1094,31 @@ useEffect(() => {
             )}
 
             {/* Paciente */}
-            <div className="relative">
+            <div className="relative" data-field="id_paciente">
               <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
                 Paciente*
               </label>
               <div className="flex gap-2">
                 <PacienteAutocomplete
                   value={busquedaPaciente}
-                  onChange={handleBusquedaPacienteChange}
-                  onSelect={seleccionarPaciente}
+                  onChange={(v) => { handleBusquedaPacienteChange(v); if (fieldErrors.id_paciente) setFieldErrors(p => ({ ...p, id_paciente: undefined })); }}
+                  onSelect={(p: any) => { seleccionarPaciente(p); setFieldErrors(prev => ({ ...prev, id_paciente: undefined })); }}
                   required
                   placeholder="Buscar por nombre, DNI o teléfono..."
                   containerClassName="relative flex-1"
-                  inputClassName="w-full pl-8 pr-2 md:pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                  inputClassName={`w-full pl-8 pr-2 md:pr-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.id_paciente ? 'border-destructive' : 'border-gray-300'}`}
                   dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNuevoPacienteDialog(true)}
-                  className="px-3 py-2 bg-[#9C1838] text-white rounded-full hover:bg-[#7D1329] transition-colors flex items-center gap-1"
+                  className="px-3 py-2 bg-brand text-white rounded-full hover:bg-brand-active transition-colors flex items-center gap-1"
                   title="Agregar nuevo paciente"
                 >
                   <UserPlus2 className="w-3 h-3 md:w-4 md:h-4" />
                 </button>
               </div>
+              {fieldErrors.id_paciente && <p className="text-destructive text-xs mt-1">{fieldErrors.id_paciente}</p>}
             </div>
 
             {/* Fecha */}
@@ -1023,14 +1126,16 @@ useEffect(() => {
               <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
                 Fecha*
               </label>
-              <input
-                type="date"
+              <DateInput
+                id="fecha"
                 value={formData.fecha}
-                onChange={(e) => setFormData(prev => ({ ...prev, fecha: e.target.value, hora: '', id_box: '' }))}
-                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                onChange={(v) => { setFormData(prev => ({ ...prev, fecha: v, hora: '', id_box: '' })); if (fieldErrors.fecha) setFieldErrors(p => ({ ...p, fecha: undefined })); }}
+                className={`w-full px-2 md:px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.fecha ? 'border-destructive' : 'border-gray-300'}`}
                 required
                 min={todayYmd()}
+                max={fechaTurnoMaxInput()}
               />
+              {fieldErrors.fecha && <p className="text-destructive text-xs mt-1">{fieldErrors.fecha}</p>}
             </div>
 
             {/* Hora */}
@@ -1039,9 +1144,10 @@ useEffect(() => {
                 Hora* {verificandoDisponibilidad && <span className="text-xs text-gray-500">(Verificando...)</span>}
               </label>
               <select
+                id="hora"
                 value={formData.hora}
-                onChange={(e) => setFormData(prev => ({ ...prev, hora: e.target.value, id_box: '' }))}
-                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                onChange={(e) => { setFormData(prev => ({ ...prev, hora: e.target.value, id_box: '' })); if (fieldErrors.hora) setFieldErrors(p => ({ ...p, hora: undefined })); }}
+                className={`w-full px-2 md:px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${fieldErrors.hora ? 'border-destructive' : 'border-gray-300'}`}
                 required
                 disabled={!formData.id_especialista || !formData.fecha || verificandoDisponibilidad}
               >
@@ -1064,6 +1170,7 @@ useEffect(() => {
                   </option>
                 ))}
               </select>
+              {fieldErrors.hora && <p className="text-destructive text-xs mt-1">{fieldErrors.hora}</p>}
             </div>
 
             {/* Box */}
@@ -1074,7 +1181,7 @@ useEffect(() => {
               <select
                 value={formData.id_box}
                 onChange={(e) => setFormData(prev => ({ ...prev, id_box: e.target.value }))}
-                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
                 disabled={!formData.fecha || !formData.hora || verificandoBoxes}
               >
                 <option value="">
@@ -1101,7 +1208,7 @@ useEffect(() => {
               <select
                 value={formData.tipo_plan}
                 onChange={(e) => setFormData(prev => ({ ...prev, tipo_plan: e.target.value as 'particular' | 'obra_social' }))}
-                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
               >
                 <option value="particular">Particular</option>
                 <option value="obra_social">Obra Social</option>
@@ -1117,7 +1224,7 @@ useEffect(() => {
                     id="repetir"
                     checked={mostrarRepeticion}
                     onChange={(e) => setMostrarRepeticion(e.target.checked)}
-                    className="w-4 h-4 text-[#9C1838] border-gray-300 rounded focus:ring-[#9C1838]"
+                    className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
                   />
                   <label htmlFor="repetir" className="text-sm font-medium text-gray-700 cursor-pointer flex items-center gap-2">
                     <CalendarDays className="w-4 h-4" />
@@ -1126,13 +1233,13 @@ useEffect(() => {
                 </div>
 
                 {mostrarRepeticion && (
-                  <div className="space-y-3 pl-6 border-l-2 border-[#9C1838]/20">
+                  <div className="space-y-3 pl-6 border-l-2 border-brand/20">
                     {/* Días */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Días
+                        Días*
                       </label>
-                      <div className="flex gap-2 flex-wrap">
+                      <div className={`flex gap-2 flex-wrap ${fieldErrors.dias ? 'p-1 rounded-lg border border-destructive' : ''}`}>
                         {DIAS_SEMANA.map((dia) => (
                           <button
                             key={dia.id}
@@ -1140,7 +1247,7 @@ useEffect(() => {
                             onClick={() => toggleDia(dia.id)}
                             className={`flex-1 min-w-[50px] h-10 rounded-lg text-sm font-medium transition-colors ${
                               diasSeleccionados.includes(dia.id)
-                                ? 'bg-[#9C1838] text-white'
+                                ? 'bg-brand text-white'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           >
@@ -1148,6 +1255,7 @@ useEffect(() => {
                           </button>
                         ))}
                       </div>
+                      {fieldErrors.dias && <p className="text-destructive text-xs mt-1">{fieldErrors.dias}</p>}
                     </div>
 
                     {/* Cantidad */}
@@ -1159,7 +1267,7 @@ useEffect(() => {
                         id="sesiones"
                         value={numeroSesiones}
                         onChange={(e) => setNumeroSesiones(parseInt(e.target.value))}
-                        className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                        className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
                       >
                         {[5, 8, 10, 12, 15, 20].map(num => (
                           <option key={num} value={num}>{num} sesiones</option>
@@ -1179,18 +1287,27 @@ useEffect(() => {
                           id="mantenerHorario"
                           checked={mantenerHorario}
                           onChange={(e) => setMantenerHorario(e.target.checked)}
-                          className="w-4 h-4 text-[#9C1838] border-gray-300 rounded"
+                          disabled={!formData.hora}
+                          className="w-4 h-4 text-brand border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                         />
-                        <label htmlFor="mantenerHorario" className="text-sm text-gray-600">
+                        <label
+                          htmlFor="mantenerHorario"
+                          className={`text-sm ${formData.hora ? 'text-gray-600' : 'text-gray-400 cursor-not-allowed'}`}
+                        >
                           Mantener horario {formData.hora && `(${formData.hora})`}
                         </label>
                       </div>
+                      {!formData.hora && (
+                        <p className="text-xs text-gray-500 mb-3 -mt-2 ml-6">
+                          Seleccioná una hora arriba para mantener el mismo horario, o configurá uno por día abajo.
+                        </p>
+                      )}
 
                       {!mantenerHorario && diasSeleccionados.length > 0 && (
                         <div className="space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
                           {cargandoHorarios && (
                             <div className="text-xs text-gray-500 flex items-center gap-2 mb-2">
-                              <div className="animate-spin h-3 w-3 border-2 border-[#9C1838] border-t-transparent rounded-full"></div>
+                              <div className="animate-spin h-3 w-3 border-2 border-brand border-t-transparent rounded-full"></div>
                               Cargando horarios disponibles...
                             </div>
                           )}
@@ -1219,7 +1336,7 @@ useEffect(() => {
                                         ...prev,
                                         [diaId]: e.target.value
                                       }))}
-                                      className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                                      className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
                                       disabled={horariosDisponibles.length === 0}
                                     >
                                       {horariosDisponibles.length === 0 ? (
@@ -1358,7 +1475,7 @@ useEffect(() => {
                         }
                       }}
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                        notifPrefs.confirmacion ? 'bg-[#9C1838]' : 'bg-gray-300'
+                        notifPrefs.confirmacion ? 'bg-brand' : 'bg-gray-300'
                       }`}
                       role="switch"
                       aria-checked={notifPrefs.confirmacion}
@@ -1390,7 +1507,7 @@ useEffect(() => {
                         }
                       }}
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-                        notifPrefs.recordatorios ? 'bg-[#9C1838]' : 'bg-gray-300'
+                        notifPrefs.recordatorios ? 'bg-brand' : 'bg-gray-300'
                       }`}
                       role="switch"
                       aria-checked={notifPrefs.recordatorios}
@@ -1423,11 +1540,15 @@ useEffect(() => {
               </label>
               <textarea
                 value={formData.observaciones}
-                onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value }))}
-                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+                onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value.slice(0, LIMITES.observacionesMax) }))}
+                className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
                 rows={3}
+                maxLength={LIMITES.observacionesMax}
                 placeholder="Información adicional sobre el turno o paquete de sesiones..."
               />
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {formData.observaciones.length}/{LIMITES.observacionesMax}
+              </p>
             </div>
           </form>
         }
@@ -1442,12 +1563,25 @@ useEffect(() => {
                   ? `Crear ${numeroSesiones} Sesiones`
                   : "Crear Turno",
           onClick: handleSubmit,
-          disabled: isSubmitting || !esHoraDisponible(formData.hora) || esHoraPasada || validandoDisponibilidad || hayConflictos,
+          disabled:
+            isSubmitting ||
+            !esHoraDisponible(formData.hora) ||
+            validandoDisponibilidad ||
+            hayConflictos ||
+            // Bloquear solo si hay un error visible bajo algún campo (no silencioso).
+            Boolean(fieldErrors.fecha) ||
+            Boolean(fieldErrors.hora),
         }}
         secondaryButton={{
           text: "Cancelar",
-          onClick: onClose,
+          onClick: requestClose,
         }}
+      />
+
+      <DiscardChangesDialog
+        isOpen={showDiscardConfirm}
+        onCancel={() => setShowDiscardConfirm(false)}
+        onConfirm={() => { setShowDiscardConfirm(false); handleForceClose(); }}
       />
 
       <BaseDialog
