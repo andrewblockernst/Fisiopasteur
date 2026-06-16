@@ -117,6 +117,24 @@ export async function middleware(request: NextRequest) {
     return redirectWithCookies(loginUrl);
   }
 
+  // Verificar que el usuario esté activo. Si fue desactivado mientras tenía
+  // sesión abierta, lo deslogueamos y redirigimos a /login con un flag.
+  if (user) {
+    const { data: usuarioRow } = await supabase
+      .from('usuario')
+      .select('activo')
+      .eq('id_usuario', user.id)
+      .maybeSingle();
+
+    if (usuarioRow && usuarioRow.activo === false) {
+      await supabase.auth.signOut();
+      if (isPublicPath) return response;
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('desactivado', '1');
+      return redirectWithCookies(loginUrl);
+    }
+  }
+
   // Usuario autenticado intentando acceder a login → redirigir al dashboard
   if (['/login', '/recuperarContra'].includes(request.nextUrl.pathname)) {
     return redirectWithCookies(new URL('/inicio', request.url));

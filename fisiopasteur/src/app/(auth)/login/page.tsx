@@ -7,7 +7,7 @@ import Head from "next/head";
 import Link from "next/link";
 import Boton from "@/componentes/boton";
 import { useAuth } from "@/hooks/usePerfil"; 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
@@ -23,6 +23,13 @@ export default function LoginPage() {
 
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams?.get('desactivado') === '1') {
+      setError('El usuario está desactivado. Contactá al administrador.');
+    }
+  }, [searchParams]);
 
    // ✅ Verificación inicial de autenticación MÁS RÁPIDA
   useEffect(() => {
@@ -102,8 +109,8 @@ export default function LoginPage() {
         setLoading(false);
         // Traducir mensajes de error comunes de Supabase al español
         let mensajeError = error.message;
-        
-        if (error.message.toLowerCase().includes('invalid login credentials') || 
+
+        if (error.message.toLowerCase().includes('invalid login credentials') ||
             error.message.toLowerCase().includes('invalid credentials')) {
           mensajeError = "Credenciales de inicio de sesión no validas";
         } else if (error.message.toLowerCase().includes('email not confirmed')) {
@@ -113,9 +120,32 @@ export default function LoginPage() {
         } else if (error.message.toLowerCase().includes('too many requests')) {
           mensajeError = "Demasiados intentos. Por favor, intenta más tarde";
         }
-        
+
         setError(mensajeError);
         return;
+      }
+
+      // Verificar que el especialista esté activo
+      if (data.user) {
+        const { data: usuario, error: usuarioError } = await supabase
+          .from('usuario')
+          .select('activo')
+          .eq('id_usuario', data.user.id)
+          .single();
+
+        if (usuarioError || !usuario) {
+          await supabase.auth.signOut();
+          setLoading(false);
+          setError('No se encontró el perfil del usuario.');
+          return;
+        }
+
+        if (usuario.activo === false) {
+          await supabase.auth.signOut();
+          setLoading(false);
+          setError('El usuario está desactivado. Contactá al administrador.');
+          return;
+        }
       }
 
       // ✅ Login exitoso - hard redirect para cargar todo el estado limpio
@@ -185,9 +215,7 @@ export default function LoginPage() {
                       setPasswordError(null);
                     }}
                     placeholder="Ej. 12345678"
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-black ${
-                      password.length > 0 ? 'pr-24' : ''
-                    } ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-black text-base pr-12 ${
                       passwordError
                         ? 'border-red-500 focus:ring-red-500'
                         : 'border-gray-300 focus:ring-red-500'
@@ -197,14 +225,10 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute inset-y-0 right-3 text-sm text-gray-700 hover:text-black"
+                      className="absolute inset-y-0 right-3 flex items-center text-gray-700 hover:text-black"
                       aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                     >
-                      
-                      {showPassword ?
-                        <EyeOff size={18} /> : 
-                        <Eye size={18} />
-                      }
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   )}
                 </div>
