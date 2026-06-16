@@ -240,9 +240,9 @@ export default function UnifiedSkeletonLoader({
   };
 
   return (
-  <div className={`max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8 ${className}`}>
+    <div className={`min-h-screen text-foreground ${className}`}>
       {/* Mobile Header Skeleton */}
-      <div className="sm:hidden bg-white border-b border-gray-200 mb-4">
+      <div className="sm:hidden bg-background border-b border-border">
         <div className="flex items-center px-4 py-3">
           <SkeletonItem className="h-6 w-6 mr-3" />
           <SkeletonItem className="h-6 w-32 flex-1 mr-9" />
@@ -254,37 +254,39 @@ export default function UnifiedSkeletonLoader({
         )}
       </div>
 
-      {/* Desktop Header */}
-      {showHeader && (
-        <div className="hidden sm:flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0 mb-6">
-          <SkeletonItem className="h-8 w-64" />
-          <SkeletonItem className="h-10 w-40" />
-        </div>
-      )}
-
-      {/* Filters Skeleton */}
-      {showFilters && (
-        <div className="hidden sm:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="animate-pulse">
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-              <div className="flex flex-col sm:flex-row gap-3 flex-1">
-                {showSearch && <SkeletonItem className="h-10 w-80" />}
-                <div className="flex items-center gap-2">
-                  <SkeletonItem className="h-4 w-16" />
-                  <SkeletonItem className="h-10 w-32 rounded-lg" />
-                </div>
-              </div>
-              <SkeletonItem className="h-10 w-40 rounded-lg" />
-            </div>
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <SkeletonItem className="h-4 w-48" />
+      {/* Wrapper de página — coincide con el wrapper real (full-width, mismo padding) */}
+      <div className="mx-auto w-full bg-background p-4 sm:p-6 lg:px-8 lg:pt-6">
+        {/* Desktop Header — imita el padding interno de <PageHeader /> para alinear el título */}
+        {showHeader && (
+          <div className="hidden sm:block px-4 sm:px-6 lg:px-8 pt-4 sm:pt-8 pb-4 sm:pb-6 mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+              <SkeletonItem className="h-8 sm:h-9 w-48 sm:w-64" />
+              <SkeletonItem className="h-10 w-40 hidden sm:block" />
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Main Content Skeleton */}
-      {renderContent()}
+        {/* Filters Skeleton */}
+        {showFilters && (
+          <div className="hidden sm:block bg-card p-4 rounded-lg shadow-sm border border-border mb-4">
+            <div className="animate-pulse">
+              <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                  {showSearch && <SkeletonItem className="h-10 w-80" />}
+                  <div className="flex items-center gap-2">
+                    <SkeletonItem className="h-4 w-16" />
+                    <SkeletonItem className="h-10 w-32 rounded-lg" />
+                  </div>
+                </div>
+                <SkeletonItem className="h-10 w-40 rounded-lg" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content Skeleton */}
+        {renderContent()}
+      </div>
     </div>
   );
 }

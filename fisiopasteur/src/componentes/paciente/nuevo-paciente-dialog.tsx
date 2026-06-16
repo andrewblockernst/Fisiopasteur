@@ -1,8 +1,27 @@
 'use client'
 
-import BaseDialog from "../dialog/base-dialog";
 import Image from "next/image";
+import BaseDialog from "../dialog/base-dialog";
+import { DiscardChangesDialog } from "../dialog/discard-changes-dialog";
 import { ToastItem } from "@/stores/toast-store";
+import {
+    Button,
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+    Input,
+    Switch,
+} from "@/componentes/ui";
+import { createPaciente } from "@/lib/actions/paciente.action";
+import { pacienteCreateSchema, type PacienteCreateInput } from "@/lib/schemas/paciente.schema";
+import { useModalForm } from "@/hooks/use-modal-form";
+import { getPhoneInputHint } from "@/lib/utils/phone.utils";
+import { fechaNacimientoMinInput, fechaNacimientoMaxInput, LIMITES } from "@/lib/validators/common";
+
+const FORM_ID = "nuevo-paciente-form";
 
 interface NuevoPacienteDialogProps {
     isOpen: boolean;
@@ -12,297 +31,190 @@ interface NuevoPacienteDialogProps {
 }
 
 export function NuevoPacienteDialog({ isOpen, onClose, handleToast, onPatientCreated }: NuevoPacienteDialogProps) {
-    const onSuccess = (paciente?: any) => {
-        handleToast({message: "Paciente creado exitosamente", variant: "success"});
-        if (onPatientCreated) {
-            onPatientCreated(paciente);
-        }
-        onClose();
-    }
+    const form = useModalForm({
+        schema: pacienteCreateSchema,
+        mode: "create",
+        resetKey: isOpen,
+        onClose,
+        defaultValues: {
+            nombre: "",
+            apellido: "",
+            telefono: "",
+            email: "",
+            dni: "",
+            fecha_nacimiento: "",
+            direccion: "",
+            notif_confirmacion: true,
+            notif_recordatorios: true,
+        },
+    });
 
-    const onError = (error: unknown) => {
-        handleToast({
-            message: error instanceof Error ? error.message : "Error al crear el paciente.",
-            variant: "error"
-        });
-    }
+    const onSubmit = (values: PacienteCreateInput) =>
+        form.submit(
+            () => {
+                const fd = new FormData();
+                fd.set("nombre", values.nombre);
+                fd.set("apellido", values.apellido);
+                fd.set("telefono", values.telefono);
+                if (values.email) fd.set("email", values.email);
+                if (values.dni) fd.set("dni", values.dni);
+                if (values.fecha_nacimiento) fd.set("fecha_nacimiento", values.fecha_nacimiento);
+                if (values.direccion) fd.set("direccion", values.direccion);
+                fd.set("notif_confirmacion", values.notif_confirmacion ? "true" : "false");
+                fd.set("notif_recordatorios", values.notif_recordatorios ? "true" : "false");
+                return createPaciente(fd);
+            },
+            {
+                onSuccess: (paciente) => {
+                    handleToast({ message: "Paciente creado exitosamente", variant: "success" });
+                    onPatientCreated?.(paciente);
+                    onClose();
+                },
+                onError: (error) => handleToast({ message: error, variant: "error" }),
+            },
+        );
+
+    const phoneValue = form.watch("telefono");
 
     return (
-        
-
-        <BaseDialog
-            type="custom"
-            size="lg"
-            title="Nuevo Paciente"
-            customIcon={
-                <Image
-                    src="/favicon.svg"
-                    alt="Logo Fisiopasteur"
-                    width={120}
-                    height={40}
-                    className="object-contain"
-                />
-            }
-            message={
-                <div className="text-left">
-                    <div className="text-gray-600 mb-6 text-center">Completa la información para crear un nuevo paciente.</div>
-                    <PacienteFormWrapper
-                        onSuccess={onSuccess}
-                        onError={onError}
-                        onCancel={onClose}
+        <>
+            <BaseDialog
+                type="custom"
+                size="lg"
+                title="Nuevo Paciente"
+                customIcon={
+                    <Image
+                        src="/favicon.svg"
+                        alt="Logo Fisiopasteur"
+                        width={120}
+                        height={40}
+                        className="object-contain"
                     />
-                </div>
-            }
-            isOpen={isOpen}
-            onClose={onClose}
-            showCloseButton={true}
-        />
-    )
-}
+                }
+                message={
+                    <div className="text-left">
+                        <div className="text-muted-foreground mb-6 text-center">
+                            Completá la información para crear un nuevo paciente.
+                        </div>
+                        <Form {...form}>
+                            <form id={FORM_ID} onSubmit={form.handleSubmit(onSubmit)} noValidate>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FormField control={form.control} name="nombre" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel required>Nombre</FormLabel>
+                                            <FormControl><Input placeholder="Ingresa el nombre" maxLength={LIMITES.nombrePersonaMax} {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="apellido" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel required>Apellido</FormLabel>
+                                            <FormControl><Input placeholder="Ingresa el apellido" maxLength={LIMITES.nombrePersonaMax} {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="telefono" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel required>Teléfono</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Ej: 1166782051 o +5491166782051" inputMode="tel" {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                            {!form.formState.errors.telefono && phoneValue && (
+                                                <p className={`text-xs mt-1 ${getPhoneInputHint(phoneValue).startsWith("✓") ? "text-success" : "text-muted-foreground"}`}>
+                                                    {getPhoneInputHint(phoneValue)}
+                                                </p>
+                                            )}
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="email" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Email</FormLabel>
+                                            <FormControl><Input type="email" placeholder="correo@ejemplo.com" maxLength={LIMITES.emailMax} {...field} value={field.value ?? ""} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="dni" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>DNI</FormLabel>
+                                            <FormControl><Input inputMode="numeric" maxLength={8} placeholder="Ej: 12345678" {...field} value={field.value ?? ""} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="fecha_nacimiento" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Fecha de nacimiento</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    type="date"
+                                                    min={fechaNacimientoMinInput()}
+                                                    max={fechaNacimientoMaxInput()}
+                                                    {...field}
+                                                    value={field.value ?? ""}
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="direccion" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Dirección</FormLabel>
+                                            <FormControl><Input placeholder="Ingresa la dirección" maxLength={LIMITES.textoCortoMax} {...field} value={field.value ?? ""} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+                                </div>
 
-interface PacienteFormWrapperProps {
-    onSuccess: (paciente?: any) => void;
-    onError: (error: unknown) => void;
-    onCancel: () => void;
-}
-
-function PacienteFormWrapper({ onSuccess, onError, onCancel }: PacienteFormWrapperProps) {
-    return (
-        <div className="max-w-4xl">
-            <PacienteFormForDialog
-                mode="create"
-                onSuccess={onSuccess}
-                onError={onError}
-                onCancel={onCancel}
+                                <div className="col-span-2 mt-4">
+                                    <p className="text-sm font-medium text-foreground mb-2">Notificaciones WhatsApp</p>
+                                    <div className="space-y-3 rounded-lg border border-border p-3 bg-muted/40">
+                                        <FormField control={form.control} name="notif_confirmacion" render={({ field }) => (
+                                            <FormItem className="flex items-center justify-between gap-3 space-y-0">
+                                                <div className="min-w-0 flex-1">
+                                                    <FormLabel>Confirmación al crear turno</FormLabel>
+                                                    <p className="text-xs text-muted-foreground">Mensaje inmediato cuando se agenda un turno</p>
+                                                </div>
+                                                <FormControl>
+                                                    <Switch checked={!!field.value} onCheckedChange={field.onChange} aria-label="Confirmación al crear turno" />
+                                                </FormControl>
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="notif_recordatorios" render={({ field }) => (
+                                            <FormItem className="flex items-center justify-between gap-3 space-y-0">
+                                                <div className="min-w-0 flex-1">
+                                                    <FormLabel>Recordatorios automáticos</FormLabel>
+                                                    <p className="text-xs text-muted-foreground">Avisos previos al turno (1 día antes, 2 horas antes, etc.)</p>
+                                                </div>
+                                                <FormControl>
+                                                    <Switch checked={!!field.value} onCheckedChange={field.onChange} aria-label="Recordatorios automáticos" />
+                                                </FormControl>
+                                            </FormItem>
+                                        )} />
+                                    </div>
+                                </div>
+                            </form>
+                        </Form>
+                    </div>
+                }
+                footer={
+                    <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={form.requestClose} disabled={form.isSubmitting}>
+                            Cancelar
+                        </Button>
+                        <Button form={FORM_ID} variant="primary" {...form.submitButtonProps}>
+                            Crear paciente
+                        </Button>
+                    </div>
+                }
+                isOpen={isOpen}
+                onClose={form.requestClose}
+                showCloseButton={true}
             />
-        </div>
-    );
-}
-
-import { createPaciente } from "@/lib/actions/paciente.action";
-import Button from "../boton";
-import { useState } from "react";
-import { useToastStore } from "@/stores/toast-store";
-import { error } from "console";
-import { getPhoneInputHint, isValidPhoneNumber } from "@/lib/utils/phone.utils";
-
-interface PacienteFormForDialogProps {
-    mode: "create" | "edit";
-    onSuccess: (paciente?: any) => void;
-    onError: (error: unknown) => void;
-    onCancel: () => void;
-}
-
-function PacienteFormForDialog({ mode, onSuccess, onError, onCancel }: PacienteFormForDialogProps) {
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [errors, setErrors] = useState<Record<string, string>>({});
-    const [phoneInput, setPhoneInput] = useState('');
-
-    const validateForm = (formData: FormData): boolean => {
-        const newErrors: Record<string, string> = {};
-
-        // Validar campos del formulario y agregar errores a newErrors
-        if (!formData.get("nombre")) newErrors.nombre = "El nombre es obligatorio.";
-        if(!formData.get("apellido")) newErrors.apellido = "El apellido es obligatorio.";
-        
-        const telefono = formData.get("telefono") as string;
-        if(!telefono) {
-            newErrors.telefono = "El teléfono es obligatorio.";
-        } else if (!isValidPhoneNumber(telefono)) {
-            newErrors.telefono = "El formato del teléfono no es válido. Ej: 1166782051";
-        }
-
-        const email = formData.get("email") as string;
-        if (email && !/\S+@\S+\.\S+/.test(email)) {
-            newErrors.email = "Email inválido";
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    }
-
-    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const formData = new FormData(event.currentTarget);
-
-        if (!validateForm(formData)) return;
-
-        try {
-            setIsSubmitting(true);
-            const result = await createPaciente(formData);
-
-            if (!result.success) {
-                onError(new Error(result.error));
-                setIsSubmitting(false);
-                return;
-            }
-
-            onSuccess(result.data);
-        } catch (error: any) {
-            if (error?.digest?.includes('NEXT_REDIRECT')) {
-                onSuccess();
-                return;
-            }
-
-            console.error("Error:", error);
-            onError(error);
-            setIsSubmitting(false);
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Nombre */}
-                <div>
-                    <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
-                        Nombre *
-                    </label>
-                    <input
-                        type="text"
-                        id="nombre"
-                        name="nombre"
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.nombre ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="Ingresa el nombre"
-                    />
-                    {errors.nombre && <p className="text-red-500 text-xs mt-1">{errors.nombre}</p>}
-                </div>
-
-                {/* Apellido */}
-                <div>
-                    <label htmlFor="apellido" className="block text-sm font-medium text-gray-700 mb-1">
-                        Apellido *
-                    </label>
-                    <input
-                        type="text"
-                        id="apellido"
-                        name="apellido"
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.apellido ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="Ingresa el apellido"
-                    />
-                    {errors.apellido && <p className="text-red-500 text-xs mt-1">{errors.apellido}</p>}
-                </div>
-
-                {/* Telefono */}
-                <div>
-                    <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
-                        Teléfono *
-                    </label>
-                    <input
-                        type="text"
-                        id="telefono"
-                        name="telefono"
-                        value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.telefono ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="Ej: 1166782051 o +5491166782051"
-                    />
-                    {errors.telefono && <p className="text-red-500 text-xs mt-1">{errors.telefono}</p>}
-                    {!errors.telefono && phoneInput && (
-                        <p className={`text-xs mt-1 ${
-                            getPhoneInputHint(phoneInput).startsWith('✓') 
-                                ? 'text-green-600' 
-                                : 'text-gray-500'
-                        }`}>
-                            {getPhoneInputHint(phoneInput)}
-                        </p>
-                    )}
-                </div>
-
-                {/* Email */}
-                <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                    </label>
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.email ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="correo@ejemplo.com"
-                    />
-                    {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-                </div>
-
-                {/* DNI */}
-                <div>
-                    <label htmlFor="dni" className="block text-sm font-medium text-gray-700 mb-1">
-                        DNI
-                    </label>
-                    <input
-                        type="text"
-                        id="dni"
-                        name="dni"
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.dni ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="Ingresa el DNI"
-                    />
-                    {errors.dni && <p className="text-red-500 text-xs mt-1">{errors.dni}</p>}
-                </div>
-
-                {/* Fecha de Nacimiento */}
-                <div>
-                    <label htmlFor="fecha_nacimiento" className="block text-sm font-medium text-gray-700 mb-1">
-                        Fecha de Nacimiento
-                    </label>
-                    <input
-                        type="date"
-                        id="fecha_nacimiento"
-                        name="fecha_nacimiento"
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.fecha_nacimiento ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="Ingresa la fecha de nacimiento"
-                    />
-                    {errors.fecha_nacimiento && <p className="text-red-500 text-xs mt-1">{errors.fecha_nacimiento}</p>}
-                </div>
-
-                {/* Direccion */}
-                <div>
-                    <label htmlFor="direccion" className="block text-sm font-medium text-gray-700 mb-1">
-                        Direccion 
-                    </label>
-                    <input
-                        type="text"
-                        id="direccion"
-                        name="direccion"
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-                        errors.direccion ? "border-red-500" : "border-gray-300"
-                        }`}
-                        placeholder="Ingresa la direccion"
-                    />
-                    {errors.direccion && <p className="text-red-500 text-xs mt-1">{errors.direccion}</p>}
-                </div>
-            </div>
-
-            {/* Botones */}
-            <div className="flex justify-end space-x-3 mt-6">
-                <Button
-                type="button"
-                variant="secondary"
-                disabled={isSubmitting}
-                onClick={onCancel}
-                >
-                Cancelar
-                </Button>
-                <Button
-                type="submit"
-                variant="primary"
-                disabled={isSubmitting}
-                >
-                {isSubmitting ? "Creando..." : "Crear Paciente"}
-                </Button>
-            </div>
-        </form>
+            <DiscardChangesDialog
+                isOpen={form.discardConfirm.isOpen}
+                onCancel={form.discardConfirm.onCancel}
+                onConfirm={form.discardConfirm.onConfirm}
+            />
+        </>
     );
 }

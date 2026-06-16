@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 import { normalizePhoneNumber } from "@/lib/utils/phone.utils";
 import type { ActionResult } from "@/lib/actions/action-result";
+import { pacienteCreateSchema, pacienteUpdateSchema } from "@/lib/schemas/paciente.schema";
 
 type Paciente = Tables<"paciente">;
 type PacienteInsert = TablesInsert<"paciente">;
@@ -14,34 +15,16 @@ export type CreatePacienteResult =
   | { success: true; data: Paciente }
   | { success: false; error: string };
 
-// Validacioens del servidor
-function validatePacienteData(data: Partial<PacienteInsert | PacienteUpdate>): string[] {
-    const errors: string[] = [];
-
-    // Validaciones de campos requeridos
-    if (!data.nombre?.trim()) errors.push("El nombre es requerido");
-    if (!data.apellido?.trim()) errors.push("El apellido es requerido");
-    // if (!data.email?.trim()) errors.push("El email es requerido");
-    // if (!data.dni?.trim()) errors.push("El DNI es requerido");
-    if (!data.telefono?.trim()) errors.push("El teléfono es requerido");
-
-    // Validaciones de campos con formato
-    if (data.email && !/\S+@\S+\.\S+/.test(data.email)) {
-        errors.push("El email no tiene un formato válido");
-    }
-
-
-    // Validar fecha de nacimiento (no puede ser futura)
-    if (data.fecha_nacimiento) {
-        const fechaNac = new Date(data.fecha_nacimiento);
-        const hoy = new Date();
-        if (fechaNac > hoy) {
-          errors.push("La fecha de nacimiento no puede ser futura");
-        } else {
-        }
-    }
-
-    return errors;
+// Validación server-side reutilizando el schema Zod compartido con el cliente.
+// `mode: 'update'` permite que `notif_*` no sean obligatorios al crear.
+function validatePacienteData(
+  data: Partial<PacienteInsert | PacienteUpdate>,
+  mode: "create" | "update",
+): string[] {
+  const schema = mode === "create" ? pacienteCreateSchema : pacienteUpdateSchema;
+  const result = schema.safeParse(data);
+  if (result.success) return [];
+  return result.error.issues.map((i) => i.message);
 }
 
 // Verificar si el email ya existe
@@ -308,6 +291,8 @@ export async function createPaciente(formData: FormData): Promise<CreatePaciente
   const telefonoRaw = formData.get("telefono") as string;
   const telefonoNormalizado = normalizePhoneNumber(telefonoRaw);
 
+  const notifConfirmacionRaw = formData.get("notif_confirmacion");
+  const notifRecordatoriosRaw = formData.get("notif_recordatorios");
   const pacienteData: Omit<PacienteInsert, 'id_paciente'> = {
     nombre: formData.get("nombre") as string,
     apellido: formData.get("apellido") as string,
@@ -316,10 +301,12 @@ export async function createPaciente(formData: FormData): Promise<CreatePaciente
     telefono: telefonoNormalizado,
     fecha_nacimiento: formData.get("fecha_nacimiento") as string || null,
     direccion: formData.get("direccion") as string || null,
+    notif_confirmacion: notifConfirmacionRaw === null ? true : notifConfirmacionRaw === "true",
+    notif_recordatorios: notifRecordatoriosRaw === null ? true : notifRecordatoriosRaw === "true",
   };
 
   // Validaciones
-  const validationErrors = validatePacienteData(pacienteData);
+  const validationErrors = validatePacienteData(pacienteData, "create");
   if (validationErrors.length > 0) {
     return { success: false, error: `Errores de validación: ${validationErrors.join(", ")}` };
   }
@@ -404,7 +391,7 @@ export async function updatePaciente(id: number, formData: FormData): Promise<Ac
   };
 
   // Validaciones
-  const validationErrors = validatePacienteData(updateData);
+  const validationErrors = validatePacienteData(updateData, "update");
   if (validationErrors.length > 0) {
     return { success: false, error: `Errores de validación: ${validationErrors.join(", ")}` };
   }
@@ -471,16 +458,17 @@ export async function deletePaciente(id: number): Promise<ActionResult> {
   const supabase = await createClient();
 
   try {
-    // Verificar si el paciente tiene turnos asociados
+    // Verificar si el paciente tiene turnos programados (futuros) asociados.
+    // Los `pendiente` corresponden a turnos pasados sin atender y no bloquean la desactivación.
     const { data: turnos } = await supabase
       .from("turno")
       .select("id_turno")
       .eq("id_paciente", id)
-      .eq("estado", "pendiente")
+      .eq("estado", "programado")
       .limit(1);
 
     if (turnos && turnos.length > 0) {
-      return { success: false, error: "No se puede eliminar el paciente porque tiene turnos asociados" };
+      return { success: false, error: "No se puede desactivar el paciente porque tiene turnos programados asociados" };
     }
 
     const { error } = await supabase

@@ -24,6 +24,11 @@ interface BaseDialogProps {
     onClick: () => void;
     disabled?: boolean;
   };
+  /**
+   * Slot para footer fijo. Si se provee, reemplaza a primaryButton/secondaryButton
+   * y se renderiza en la zona inferior siempre visible (no scrollea con el body).
+   */
+  footer?: React.ReactNode;
   onClose?: () => void;
   showCloseButton?: boolean;
   closeButtonAlert?: string; // ✅ Texto de alerta junto al botón X
@@ -40,6 +45,7 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
   children,
   primaryButton,
   secondaryButton,
+  footer,
   onClose,
   showCloseButton = false,
   closeButtonAlert,
@@ -64,12 +70,10 @@ const BaseDialog: React.FC<BaseDialogProps> = ({
   }, [isOpen]);
 
   const handleClose = () => {
-    if (onClose) {
-      setIsAnimating(true);
-      setTimeout(() => {
-        onClose();
-      }, 300);
-    }
+    // Delegamos al padre: él decide si efectivamente cierra (puede mostrar un
+    // confirm de descarte). La animación de salida la dispara el useEffect
+    // cuando isOpen pase a false.
+    onClose?.();
   };
 
   if (!isVisible) return null;
@@ -157,36 +161,39 @@ return (
             )}
 
             <h3 className="dialog-title">{title}</h3>
-            <div className="dialog-message">{message}</div>
+            <div className="dialog-body">
+              <div className="dialog-message">{message}</div>
 
-            {/* Contenido personalizado (children) */}
-            {children && <div className="dialog-children">{children}</div>}
-
-            <div className="dialog-buttons">
-              {secondaryButton && (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setIsAnimating(true);
-                    setTimeout(() => {
-                      secondaryButton.onClick();
-                    }, 300);
-                  }}
-                  disabled={secondaryButton.disabled}
-                >
-                  {secondaryButton.text}
-                </Button>
-              )}
-              {primaryButton && (
-                <Button
-                  variant="primary"
-                  onClick={primaryButton.onClick}
-                  disabled={primaryButton.disabled} 
-                >
-                  {primaryButton.text}
-                </Button>
-              )}
+              {/* Contenido personalizado (children) */}
+              {children && <div className="dialog-children">{children}</div>}
             </div>
+
+            {footer ? (
+              <div className="dialog-footer">{footer}</div>
+            ) : (
+              (primaryButton || secondaryButton) && (
+                <div className="dialog-buttons">
+                  {secondaryButton && (
+                    <Button
+                      variant="secondary"
+                      onClick={secondaryButton.onClick}
+                      disabled={secondaryButton.disabled}
+                    >
+                      {secondaryButton.text}
+                    </Button>
+                  )}
+                  {primaryButton && (
+                    <Button
+                      variant="primary"
+                      onClick={primaryButton.onClick}
+                      disabled={primaryButton.disabled}
+                    >
+                      {primaryButton.text}
+                    </Button>
+                  )}
+                </div>
+              )
+            )}
           </div>
         </div>
       </div>
@@ -218,7 +225,25 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
     position: relative;
     text-align: center;
     animation: ${props => props.$isAnimating ? 'scaleOut 0.3s ease-out forwards' : 'scaleIn 0.3s ease-out'};
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dialog-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .dialog-body {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    /* Pequeño respiro lateral para que el scrollbar no pegue al borde */
+    margin: 0 -0.25rem;
+    padding: 0 0.25rem;
   }
 
   @media (min-width: 640px) {
@@ -288,6 +313,7 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
     margin-bottom: 0.5rem;
     word-break: break-word;
     white-space: pre-wrap;
+    flex-shrink: 0;
   }
 
   .dialog-message {
@@ -309,6 +335,16 @@ const StyledWrapper = styled.div<{ $colors: any; size: DialogSize; $isAnimating:
     justify-content: center;
     gap: 0.75rem;
     flex-wrap: wrap;
+    flex-shrink: 0;
+    margin-top: 1rem;
+    padding-top: 0.5rem;
+  }
+
+  .dialog-footer {
+    flex-shrink: 0;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid ${props => props.$colors.medium}25;
   }
 
   @keyframes fadeIn {

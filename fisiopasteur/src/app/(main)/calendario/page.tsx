@@ -1,23 +1,40 @@
 import React from "react";
 import CalendarioClientQuery from "../../../componentes/calendario/calendario-client-query";
 import { obtenerEspecialistas } from "@/lib/actions/turno.action";
-import { getPacientes } from "@/lib/actions/paciente.action";
+import { createClient } from "@/lib/supabase/server";
+import { puedeGestionarTurnos } from "@/lib/constants/roles";
 
 export default async function CalendarioPage() {
-  // Solo cargar especialistas y pacientes en el servidor
-  // Los turnos se cargan con React Query en el cliente
-  const [resEspecialistas] = await Promise.all([ //, resPacientes
+  const supabase = await createClient();
+
+  const [resEspecialistas, { data: { user } }] = await Promise.all([
     obtenerEspecialistas(),
-    // getPacientes({})
+    supabase.auth.getUser(),
   ]);
 
-  const especialistas = resEspecialistas.success ? resEspecialistas.data || [] : [];
-  // const pacientes = resPacientes.data || [];
+  let especialistas = resEspecialistas.success ? resEspecialistas.data || [] : [];
+  let initialEspecialistaFiltro = "";
+
+  if (user) {
+    const { data: usuario } = await supabase
+      .from('usuario')
+      .select('id_usuario, id_rol')
+      .eq('id_usuario', user.id)
+      .maybeSingle();
+
+    if (usuario && !puedeGestionarTurnos(usuario.id_rol ?? undefined)) {
+      const esEspecialista = especialistas.some((esp: any) => esp.id_usuario === usuario.id_usuario);
+      if (esEspecialista) {
+        especialistas = especialistas.filter((esp: any) => esp.id_usuario === usuario.id_usuario);
+        initialEspecialistaFiltro = usuario.id_usuario;
+      }
+    }
+  }
 
   return (
-    <CalendarioClientQuery 
+    <CalendarioClientQuery
       especialistas={especialistas}
-      // pacientes={pacientes}
+      initialEspecialistaFiltro={initialEspecialistaFiltro}
     />
   );
 }

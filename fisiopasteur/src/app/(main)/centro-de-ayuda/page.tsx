@@ -23,6 +23,7 @@ import {
   ClipboardList
 } from "lucide-react";
 import React from "react";
+import { PageHeader } from "@/componentes/ui";
 
 type TabType = 'manual' | 'contact';
 type AccordionItem =
@@ -95,11 +96,9 @@ export default function HelpPage() {
   };
 
   return (
-  <div className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:px-6 lg:pt-8 text-black">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold">Centro de Ayuda</h1>
-      </div>
+    <div className="min-h-screen text-foreground">
+      <div className="mx-auto w-full bg-background p-4 sm:p-6 lg:px-8 lg:pt-6">
+        <PageHeader title="Centro de Ayuda"/>
 
       {/* Manual de Usuario */}
       {activeTab === 'manual' && (
@@ -763,7 +762,7 @@ export default function HelpPage() {
                       <div className="space-y-2 text-gray-600">
                         <p><strong>En el listado de especialistas:</strong></p>
                         <ul className="list-disc list-inside ml-2 space-y-1">
-                          <li><strong>Administrador:</strong> Ve columna "Acciones" con botones Editar e Inactivar</li>
+                          <li><strong>Administrador:</strong> Ve columna "Acciones" con botones Editar y Desactivar</li>
                           <li><strong>Especialista:</strong> Solo ve el listado sin opciones de edición</li>
                         </ul>
                         <p className="mt-3"><strong>En el perfil de un especialista:</strong></p>
@@ -870,6 +869,7 @@ export default function HelpPage() {
         </div>
       )}
 
+      </div>
     </div>
   );
 }

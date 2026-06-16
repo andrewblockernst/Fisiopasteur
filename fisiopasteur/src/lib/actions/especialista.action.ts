@@ -7,6 +7,11 @@ import type { ActionResult } from "@/lib/actions/action-result";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
 
+import {
+  especialistaCreateSchema,
+  especialistaUpdateSchema,
+} from "@/lib/schemas/especialista.schema";
+
 type Especialista = Tables<"usuario">;
 type EspecialistaInsert = TablesInsert<"usuario">;
 type EspecialistaUpdate = TablesUpdate<"usuario">;
@@ -352,13 +357,29 @@ export async function createEspecialista(formData: FormData): Promise<ActionResu
     const apellido = formData.get("apellido") as string;
     const contraseña = formData.get("contraseña") as string;
     const color = formData.get("color") as string || null;
+    const telefono = (formData.get("telefono") as string) || undefined;
+    // El formulario manda especialidades como `especialidades[0]`, `especialidades[1]`, etc.
+    const especialidades: number[] = [];
+    for (const [key, value] of formData.entries()) {
+      if (/^especialidades\[\d+\]$/.test(key)) {
+        const n = Number(value);
+        if (Number.isFinite(n)) especialidades.push(n);
+      }
+    }
 
-    // Validaciones básicas
-    if (!email || !nombre || !apellido || !contraseña) {
-      return {
-        success: false,
-        error: 'Por favor completa todos los campos obligatorios'
-      };
+    // Validación contra schema compartido
+    const parsed = especialistaCreateSchema.safeParse({
+      nombre,
+      apellido,
+      email,
+      contraseña,
+      color: color ?? undefined,
+      telefono,
+      especialidades,
+    });
+    if (!parsed.success) {
+      const mensaje = parsed.error.issues.map((i) => i.message).join(", ");
+      return { success: false, error: `Datos del especialista inválidos: ${mensaje}` };
     }
 
     // 1. Crear usuario en Supabase Auth
@@ -482,14 +503,8 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
     const apellido = formData.get("apellido") as string;
     const email = formData.get("email") as string;
     const color = formData.get("color") as string || null;
-
-    // Validaciones básicas
-    if (!nombre || !apellido || !email) {
-      return {
-        success: false,
-        error: 'Por favor completa todos los campos obligatorios'
-      };
-    }
+    const telefono = (formData.get("telefono") as string) || undefined;
+    const contraseñaInput = (formData.get("contraseña") as string) || undefined;
 
     // Obtener especialidades seleccionadas y precios del FormData
     const especialidadesSeleccionadas: number[] = [];
@@ -511,6 +526,21 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
       }
     }
 
+    // Validación contra schema compartido
+    const parsed = especialistaUpdateSchema.safeParse({
+      nombre,
+      apellido,
+      email,
+      color: color ?? undefined,
+      telefono,
+      contraseña: contraseñaInput,
+      especialidades: especialidadesSeleccionadas,
+    });
+    if (!parsed.success) {
+      const mensaje = parsed.error.issues.map((i) => i.message).join(", ");
+      return { success: false, error: `Datos del especialista inválidos: ${mensaje}` };
+    }
+
     console.log("Especialidades seleccionadas:", especialidadesSeleccionadas);
     console.log("Precios por especialidad:", preciosPorEspecialidad);
 
@@ -523,11 +553,10 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
     };
 
     // Si se proporciona una nueva contraseña, actualizarla en Supabase Auth primero
-    const contraseña = formData.get("contraseña") as string;
-    if (contraseña && contraseña.trim() !== "") {
+    if (contraseñaInput && contraseñaInput.trim() !== "") {
       const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
         id,
-        { password: contraseña }
+        { password: contraseñaInput }
       );
 
       if (authError) {
@@ -761,7 +790,7 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<
       .eq('id_usuario', id_especialista)
       .eq('activo', true);
 
-    const especialidadesAdicionales = especialidadesError
+    const especialidades = especialidadesError
       ? []
       : (especialidadesData || [])
           .map((item: any) => ({
@@ -771,8 +800,6 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<
             precio_obra_social: item.precio_obra_social
           }))
           .filter(esp => esp.id_especialidad);
-
-    const especialidadPrincipalConPrecios = especialidadesAdicionales[0] || null;
 
     const rol = (usuario as any).rol;
 
@@ -788,8 +815,7 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<
         nombre: rol?.nombre || 'usuario',
         jerarquia: rol?.jerarquia || 1
       },
-      especialidad_principal: especialidadPrincipalConPrecios,
-      especialidades_adicionales: especialidadesAdicionales
+      especialidades,
     };
 
     return { success: true, data: perfil };
@@ -797,5 +823,88 @@ export async function getPerfilEspecialista(id_especialista: string): Promise<
   } catch (error) {
     console.error('Error en getPerfilEspecialista:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
+  }
+}
+
+import { now, todayYmd } from "@/lib/dayjs";
+
+export interface EstadisticasEspecialista {
+  turnos_atendidos_total: number;
+  turnos_atendidos_mes: number;
+  turnos_proximos: number;
+  pacientes_unicos: number;
+  cantidad_especialidades: number;
+}
+
+export async function getEstadisticasEspecialista(
+  id_especialista: string
+): Promise<ActionResult<EstadisticasEspecialista>> {
+  try {
+    const supabase = await createClient();
+
+    const hoy = todayYmd();
+    const inicioMes = now().startOf('month').format('YYYY-MM-DD');
+
+    const baseAtendidos = supabase
+      .from('turno')
+      .select('id_turno', { count: 'exact', head: true })
+      .eq('id_especialista', id_especialista)
+      .eq('estado', 'atendido');
+
+    const [
+      atendidosTotalRes,
+      atendidosMesRes,
+      proximosRes,
+      pacientesRes,
+      especialidadesRes,
+    ] = await Promise.all([
+      baseAtendidos,
+      supabase
+        .from('turno')
+        .select('id_turno', { count: 'exact', head: true })
+        .eq('id_especialista', id_especialista)
+        .eq('estado', 'atendido')
+        .gte('fecha', inicioMes),
+      supabase
+        .from('turno')
+        .select('id_turno', { count: 'exact', head: true })
+        .eq('id_especialista', id_especialista)
+        .in('estado', ['programado', 'pendiente'])
+        .gte('fecha', hoy),
+      supabase
+        .from('turno')
+        .select('id_paciente')
+        .eq('id_especialista', id_especialista)
+        .eq('estado', 'atendido')
+        .not('id_paciente', 'is', null),
+      supabase
+        .from('usuario_especialidad')
+        .select('id_especialidad', { count: 'exact', head: true })
+        .eq('id_usuario', id_especialista)
+        .eq('activo', true),
+    ]);
+
+    const pacientesUnicos = new Set(
+      (pacientesRes.data ?? [])
+        .map((r: any) => r.id_paciente)
+        .filter((id: any) => id != null)
+    ).size;
+
+    return {
+      success: true,
+      data: {
+        turnos_atendidos_total: atendidosTotalRes.count ?? 0,
+        turnos_atendidos_mes: atendidosMesRes.count ?? 0,
+        turnos_proximos: proximosRes.count ?? 0,
+        pacientes_unicos: pacientesUnicos,
+        cantidad_especialidades: especialidadesRes.count ?? 0,
+      },
+    };
+  } catch (error) {
+    console.error('Error en getEstadisticasEspecialista:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
   }
 }

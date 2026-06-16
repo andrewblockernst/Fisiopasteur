@@ -1,14 +1,34 @@
- "use client";
+"use client";
 
-import { useState, useEffect, useMemo } from "react";
-import BaseDialog from "@/componentes/dialog/base-dialog";
 import Image from "next/image";
+import BaseDialog from "@/componentes/dialog/base-dialog";
+import { DiscardChangesDialog } from "@/componentes/dialog/discard-changes-dialog";
 import type { Tables } from "@/types/database.types";
-import { useToastStore } from '@/stores/toast-store';
+import { updateEspecialista } from "@/lib/actions/especialista.action";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+} from "@/componentes/ui";
+import ColorPicker from "@/componentes/color-selector";
+import { useToastStore } from "@/stores/toast-store";
+import { useModalForm } from "@/hooks/use-modal-form";
+import {
+  especialistaUpdateSchema,
+  type EspecialistaUpdateInput,
+} from "@/lib/schemas/especialista.schema";
+import { getPhoneInputHint } from "@/lib/utils/phone.utils";
+import { LIMITES } from "@/lib/validators/common";
 
 type Especialidad = Tables<"especialidad">;
 
-//Tipo que coincide con getEspecialistas()
 type EspecialistaConDatos = {
   id_usuario: string;
   nombre: string;
@@ -18,10 +38,7 @@ type EspecialistaConDatos = {
   color: string | null;
   activo: boolean;
   id_rol: number;
-  rol: {
-    id: number;
-    nombre: string;
-  };
+  rol: { id: number; nombre: string };
   especialidades: Array<{
     id_especialidad: number;
     nombre: string;
@@ -32,12 +49,11 @@ type EspecialistaConDatos = {
     precio_particular: number | null;
     precio_obra_social: number | null;
     activo: boolean | null;
-    especialidad: {
-      id_especialidad: number;
-      nombre: string;
-    };
+    especialidad: { id_especialidad: number; nombre: string };
   }>;
 };
+
+const FORM_ID = "editar-especialista-form";
 
 interface EditarEspecialistaDialogProps {
   isOpen: boolean;
@@ -46,408 +62,246 @@ interface EditarEspecialistaDialogProps {
   especialista: EspecialistaConDatos;
 }
 
-export function EditarEspecialistaDialog({ 
-  isOpen, 
-  onClose, 
+export function EditarEspecialistaDialog({
+  isOpen,
+  onClose,
   especialidades,
-  especialista
-}: EditarEspecialistaDialogProps) {
-  return (
-    <BaseDialog
-      type="custom"
-      size="lg"
-      title="Editar Especialista"
-      customIcon={
-        <Image
-          src="/favicon.svg"
-          alt="Logo Fisiopasteur"
-          width={120}
-          height={40}
-          className="object-contain"
-        />
-      }
-      message={
-        <div className="text-left">
-          <div className="text-gray-600 mb-6 text-center">Modifica la información del especialista.</div>
-          <EspecialistaEditFormWrapper 
-            especialidades={especialidades}
-            especialista={especialista}
-            onSuccess={onClose}
-          />
-        </div>
-      }
-      isOpen={isOpen}
-      onClose={onClose}
-      showCloseButton={true}
-    />
-  );
-}
-
-interface EspecialistaEditFormWrapperProps {
-  especialidades: Especialidad[];
-  especialista: EspecialistaConDatos;
-  onSuccess: () => void;
-}
-
-function EspecialistaEditFormWrapper({ especialidades, especialista, onSuccess }: EspecialistaEditFormWrapperProps) {
-  return (
-    <div className="max-w-4xl">
-      <EspecialistaEditFormForDialog 
-        especialidades={especialidades}
-        especialista={especialista}
-        onSuccess={onSuccess}
-      />
-    </div>
-  );
-}
-
-// Versión modificada del formulario para editar en el dialog
-import { updateEspecialista } from "@/lib/actions/especialista.action";
-import Button from "@/componentes/boton";
-import ColorPicker from "@/componentes/color-selector";
-
-interface EspecialistaEditFormForDialogProps {
-  especialidades: Especialidad[];
-  especialista: EspecialistaConDatos;
-  onSuccess: () => void;
-}
-
-function EspecialistaEditFormForDialog({ 
-  especialidades, 
   especialista,
-  onSuccess
-}: EspecialistaEditFormForDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [selectedEspecialidades, setSelectedEspecialidades] = useState<number[]>(
-    //Eliminar duplicados usando Set
-    [...new Set(especialista.especialidades?.map((e: { id_especialidad: number }) => e.id_especialidad) || [])]
-  );
-  const [selectedColor, setSelectedColor] = useState(especialista.color || "#3B82F6");
-  const [hasChanges, setHasChanges] = useState(false);
-  const [formValues, setFormValues] = useState({
-    nombre: especialista.nombre,
-    apellido: especialista.apellido,
-    email: especialista.email,
-    telefono: especialista.telefono || "",
-    contraseña: ""
+}: EditarEspecialistaDialogProps) {
+  const { showServerActionResponse, addToast } = useToastStore();
+
+  const form = useModalForm({
+    schema: especialistaUpdateSchema,
+    mode: "edit",
+    resetKey: `${especialista.id_usuario}:${isOpen}`,
+    onClose,
+    defaultValues: {
+      nombre: especialista.nombre,
+      apellido: especialista.apellido,
+      email: especialista.email,
+      contraseña: "",
+      telefono: especialista.telefono ?? "",
+      color: especialista.color ?? "#3B82F6",
+      especialidades: [
+        ...new Set(
+          especialista.especialidades?.map((e) => e.id_especialidad) ?? [],
+        ),
+      ],
+    },
   });
-  const { showServerActionResponse } = useToastStore();
 
-  // Datos originales normalizados
-  const datosOriginales = useMemo(() => ({
-    nombre: especialista.nombre.trim().toLowerCase(),
-    apellido: especialista.apellido.trim().toLowerCase(),
-    email: especialista.email.trim().toLowerCase(),
-    telefono: (especialista.telefono || "").trim(),
-    color: especialista.color || "#3B82F6",
-    especialidades: [...new Set(especialista.especialidades?.map((e: { id_especialidad: number }) => e.id_especialidad) || [])].sort()
-  }), [especialista]);
+  const onSubmit = (values: EspecialistaUpdateInput) =>
+    form.submit(
+      () => {
+        const fd = new FormData();
+        fd.set("nombre", values.nombre);
+        fd.set("apellido", values.apellido);
+        fd.set("email", values.email);
+        if (values.contraseña) fd.set("contraseña", values.contraseña);
+        fd.set("telefono", values.telefono);
+        fd.set("color", values.color);
+        values.especialidades.forEach((id, i) =>
+          fd.append(`especialidades[${i}]`, id.toString()),
+        );
+        return updateEspecialista(especialista.id_usuario, fd);
+      },
+      {
+        onSuccess: () => {
+          showServerActionResponse({
+            success: true,
+            message: "Especialista actualizado",
+            description: "La información se actualizó correctamente",
+            toastType: "success",
+          });
+          onClose();
+        },
+        onError: (error) => addToast({ message: error, variant: "error" }),
+      },
+    );
 
-  // Detectar cambios
-  useEffect(() => {
-    // Normalizar valores actuales
-    const valoresActualesNormalizados = {
-      nombre: formValues.nombre.trim().toLowerCase(),
-      apellido: formValues.apellido.trim().toLowerCase(),
-      email: formValues.email.trim().toLowerCase(),
-      telefono: formValues.telefono.trim(),
-      color: selectedColor,
-      especialidades: [...selectedEspecialidades].sort()
-    };
-
-    // Comparar cada campo
-    const cambioEnNombre = valoresActualesNormalizados.nombre !== datosOriginales.nombre;
-    const cambioEnApellido = valoresActualesNormalizados.apellido !== datosOriginales.apellido;
-    const cambioEnEmail = valoresActualesNormalizados.email !== datosOriginales.email;
-    const cambioEnTelefono = valoresActualesNormalizados.telefono !== datosOriginales.telefono;
-    const cambioEnColor = valoresActualesNormalizados.color !== datosOriginales.color;
-    const cambioEnContraseña = formValues.contraseña.trim() !== "";
-    
-    // Comparar arrays de especialidades (sin importar orden)
-    const cambioEnEspecialidades = JSON.stringify(valoresActualesNormalizados.especialidades) !== JSON.stringify(datosOriginales.especialidades);
-
-    const hayCambios = cambioEnNombre || cambioEnApellido || cambioEnEmail || 
-                       cambioEnTelefono || cambioEnColor || cambioEnContraseña || 
-                       cambioEnEspecialidades;
-
-    setHasChanges(hayCambios);
-  }, [formValues, selectedColor, selectedEspecialidades, datosOriginales.nombre, datosOriginales.apellido, datosOriginales.email, datosOriginales.telefono, datosOriginales.color, datosOriginales.especialidades]);
-
-  const validateForm = (formData: FormData): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.get("nombre")) newErrors.nombre = "El nombre es requerido";
-    if (!formData.get("apellido")) newErrors.apellido = "El apellido es requerido";
-    if (!formData.get("email")) newErrors.email = "El email es requerido";
-
-    const email = formData.get("email") as string;
-    if (email && !/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = "Email inválido";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (formData: FormData) => {
-    if (!validateForm(formData)) return;
-
-    setIsSubmitting(true);
-
-    // Agregar especialidades seleccionadas al FormData
-    selectedEspecialidades.forEach((especialidadId, index) => {
-      formData.append(`especialidades[${index}]`, especialidadId.toString());
+  const phoneValue = form.watch("telefono");
+  const selected = form.watch("especialidades") ?? [];
+  const setSelected = (next: number[]) =>
+    form.setValue("especialidades", next, {
+      shouldDirty: true,
+      shouldValidate: true,
     });
-
-
-    // Agregar color seleccionado
-    formData.set("color", selectedColor);
-
-    console.log('Enviando datos:', {
-      nombre: formData.get('nombre'),
-      apellido: formData.get('apellido'),
-      email: formData.get('email'),
-      telefono: formData.get('telefono'),
-      color: formData.get('color'),
-      especialidades: selectedEspecialidades
-    });
-
-    try {
-      console.log("Actualizando especialista con data: ", formData);
-
-      const result = await updateEspecialista(especialista.id_usuario, formData);
-      
-      console.log('Resultado de actualización:', result);
-      
-      showServerActionResponse({
-        ...result,
-        message: result.success ? "Especialista actualizado" : "Error al actualizar",
-        description: result.success ? "La información del especialista se ha actualizado exitosamente" : (result.error || "Ocurrió un error inesperado"),
-        toastType: result.success ? "success" : "error"
-      });
-      
-      if (result.success) {
-        // Esperar un momento antes de cerrar para que el usuario vea el mensaje
-        setTimeout(() => {
-          onSuccess(); // Cerrar el dialog y refrescar la lista
-        }, 500);
-      } else {
-        setIsSubmitting(false);
-      }
-    } catch (error: any) {
-      console.error("Error al actualizar:", error);
-      
-      if (error?.digest?.includes('NEXT_REDIRECT')) {
-        onSuccess(); // También cerrar en caso de redirect exitoso
-        return;
-      }
-      
-      showServerActionResponse({
-        success: false,
-        message: "Error al actualizar especialista",
-        toastType: "error",
-        description: error?.message || "Ocurrió un error inesperado"
-      });
-      setIsSubmitting(false);
-    }
-  };
-
-  const toggleEspecialidad = (especialidadId: number) => {
-    setSelectedEspecialidades(prev => {
-      if (prev.includes(especialidadId)) {
-        // Remover la especialidad
-        return prev.filter(id => id !== especialidadId);
-      } else {
-        // Agregar solo si no existe (prevenir duplicados)
-        return [...new Set([...prev, especialidadId])];
-      }
-    });
-  };
-
-  const removeEspecialidad = (especialidadId: number) => {
-    setSelectedEspecialidades(prev => prev.filter(id => id !== especialidadId));
-  };
 
   return (
-    <form action={handleSubmit}>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Nombre */}
-        <div>
-          <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre *
-          </label>
-          <input
-            type="text"
-            id="nombre"
-            name="nombre"
-            value={formValues.nombre}
-            onChange={(e) => setFormValues(prev => ({ ...prev, nombre: e.target.value }))}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.nombre ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="Ingresa el nombre"
+    <>
+      <BaseDialog
+        type="custom"
+        size="lg"
+        title="Editar Especialista"
+        customIcon={
+          <Image
+            src="/favicon.svg"
+            alt="Logo Fisiopasteur"
+            width={120}
+            height={40}
+            className="object-contain"
           />
-          {errors.nombre && <p className="text-red-500 text-xs mt-1">{errors.nombre}</p>}
-        </div>
-
-        {/* Apellido */}
-        <div>
-          <label htmlFor="apellido" className="block text-sm font-medium text-gray-700 mb-1">
-            Apellido *
-          </label>
-          <input
-            type="text"
-            id="apellido"
-            name="apellido"
-            value={formValues.apellido}
-            onChange={(e) => setFormValues(prev => ({ ...prev, apellido: e.target.value }))}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.apellido ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="Ingresa el apellido"
-          />
-          {errors.apellido && <p className="text-red-500 text-xs mt-1">{errors.apellido}</p>}
-        </div>
-
-        {/* Email */}
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-            Email *
-          </label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formValues.email}
-            onChange={(e) => setFormValues(prev => ({ ...prev, email: e.target.value }))}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100 ${
-              errors.email ? "border-red-500" : "border-gray-300"
-            }`}
-            placeholder="correo@ejemplo.com"
-          />
-          {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-        </div>
-
-        {/* Contraseña */}
-        <div>
-          <label htmlFor="contraseña" className="block text-sm font-medium text-gray-700 mb-1">
-            Contraseña (dejar vacío para no cambiar)
-          </label>
-          <input
-            type="password"
-            id="contraseña"
-            name="contraseña"
-            value={formValues.contraseña}
-            onChange={(e) => setFormValues(prev => ({ ...prev, contraseña: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
-            placeholder="Nueva contraseña (opcional)"
-          />
-        </div>
-
-        {/* Teléfono */}
-        <div>
-          <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
-            Teléfono
-          </label>
-          <input
-            type="tel"
-            id="telefono"
-            name="telefono"
-            value={formValues.telefono}
-            onChange={(e) => setFormValues(prev => ({ ...prev, telefono: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-100"
-            placeholder="+54 9 11 1234-5678"
-          />
-        </div>
-      </div>
-
-      {/* Color de identificación */}
-      <div className="mt-4">
-        <label htmlFor="color" className="block text-sm font-medium text-gray-700 mb-1">
-          Color de identificación
-        </label>
-        <ColorPicker
-          value={selectedColor}
-          onChange={setSelectedColor}
-          disabled={isSubmitting}
-        />
-      </div>
-
-      {/* Especialidades */}
-      <div className="mt-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Especialidades *
-        </label>
-        
-        {selectedEspecialidades.length > 0 && (
-          <div className="mb-3 p-2 bg-gray-50 rounded-md">
-            <div className="flex flex-wrap gap-1">
-              {selectedEspecialidades.map((especialidadId) => {
-                const especialidad = especialidades.find(e => e.id_especialidad === especialidadId);
-                return (
-                  <span
-                    key={especialidadId}
-                    className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-[#9C1838]"
-                  >
-                    {especialidad?.nombre}
-                    <button
-                      type="button"
-                      onClick={() => removeEspecialidad(especialidadId)}
-                      className="ml-1 text-[#9C1838] hover:text-red-800 text-sm"
-                    >
-                      ×
-                    </button>
-                  </span>
-                );
-              })}
+        }
+        message={
+          <div className="text-left">
+            <div className="text-muted-foreground mb-6 text-center">
+              Modificá la información del especialista.
             </div>
-          </div>
-        )}
+            <Form {...form}>
+              <form id={FORM_ID} onSubmit={form.handleSubmit(onSubmit)} noValidate>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField control={form.control} name="nombre" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Nombre</FormLabel>
+                      <FormControl><Input placeholder="Ingresa el nombre" maxLength={LIMITES.nombrePersonaMax} {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="apellido" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Apellido</FormLabel>
+                      <FormControl><Input placeholder="Ingresa el apellido" maxLength={LIMITES.nombrePersonaMax} {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="email" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Email</FormLabel>
+                      <FormControl><Input type="email" placeholder="correo@ejemplo.com" maxLength={LIMITES.emailMax} {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="contraseña" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contraseña</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="Dejar vacío para no cambiar"
+                          maxLength={72}
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="telefono" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>Teléfono</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Ej: 1166782051 o +5491166782051"
+                          inputMode="tel"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                      {!form.formState.errors.telefono && phoneValue && (
+                        <p className={`text-xs mt-1 ${getPhoneInputHint(phoneValue).startsWith("✓") ? "text-success" : "text-muted-foreground"}`}>
+                          {getPhoneInputHint(phoneValue)}
+                        </p>
+                      )}
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="color" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Color de identificación</FormLabel>
+                      <FormControl>
+                        <ColorPicker
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={form.isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
 
-        <div className="border border-gray-300 rounded-md max-h-32 overflow-y-auto">
-          {especialidades.map((especialidad) => {
-            const isSelected = selectedEspecialidades.includes(especialidad.id_especialidad);
-            return (
-              <label
-                key={especialidad.id_especialidad}
-                className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
-                  isSelected ? 'bg-red-50 border-l-2' : ''
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => toggleEspecialidad(especialidad.id_especialidad)}
-                  className="mr-2 h-3 w-3 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                <FormField
+                  control={form.control}
+                  name="especialidades"
+                  render={() => (
+                    <FormItem className="mt-4">
+                      <FormLabel required>Especialidades</FormLabel>
+                      {selected.length > 0 && (
+                        <div className="mb-3 p-2 bg-muted/40 rounded-md">
+                          <div className="flex flex-wrap gap-1.5">
+                            {selected.map((id) => {
+                              const esp = especialidades.find((e) => e.id_especialidad === id);
+                              if (!esp) return null;
+                              return (
+                                <Badge key={id} variant="brand" size="sm" className="gap-1 pr-1">
+                                  {esp.nombre}
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelected(selected.filter((x) => x !== id))}
+                                    aria-label={`Quitar ${esp.nombre}`}
+                                    className="rounded-full p-0.5 hover:bg-white/20 transition-colors"
+                                  >
+                                    ×
+                                  </button>
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      <div className="border border-input rounded-md max-h-40 overflow-y-auto bg-background">
+                        {especialidades.map((esp) => {
+                          const isSelected = selected.includes(esp.id_especialidad);
+                          return (
+                            <label
+                              key={esp.id_especialidad}
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/40 border-b border-border last:border-b-0 ${isSelected ? "bg-brand-soft/40 border-l-2 border-l-brand" : ""}`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() =>
+                                  setSelected(
+                                    isSelected
+                                      ? selected.filter((x) => x !== esp.id_especialidad)
+                                      : [...selected, esp.id_especialidad],
+                                  )
+                                }
+                              />
+                              <span className={`text-sm ${isSelected ? "font-medium text-brand" : "text-foreground"}`}>
+                                {esp.nombre}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                <span className={`text-xs ${isSelected ? 'font-medium text-red-900' : 'text-gray-700'}`}>
-                  {especialidad.nombre}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Botones */}
-      <div className="flex justify-end space-x-3 mt-6">
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={isSubmitting}
-          onClick={onSuccess}
-        >
-          Cancelar
-        </Button>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={isSubmitting || !hasChanges}
-        >
-          {isSubmitting ? "Actualizando..." : "Actualizar Especialista"}
-        </Button>
-      </div>
-    </form>
+              </form>
+            </Form>
+          </div>
+        }
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+            <Button type="button" variant="outline" onClick={form.requestClose} disabled={form.isSubmitting}>
+              Cancelar
+            </Button>
+            <Button form={FORM_ID} variant="primary" {...form.submitButtonProps}>
+              Actualizar especialista
+            </Button>
+          </div>
+        }
+        isOpen={isOpen}
+        onClose={form.requestClose}
+        showCloseButton={true}
+        closeButtonAlert={form.hasUnsavedChanges ? "Cambios sin guardar" : undefined}
+      />
+      <DiscardChangesDialog
+        isOpen={form.discardConfirm.isOpen}
+        onCancel={form.discardConfirm.onCancel}
+        onConfirm={form.discardConfirm.onConfirm}
+      />
+    </>
   );
 }

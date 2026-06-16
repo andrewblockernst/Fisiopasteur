@@ -36,14 +36,7 @@ export interface PerfilCompleto {
     nombre: string;
     jerarquia: number;
   };
-  especialidad_principal: {
-    id_especialidad: number;
-    nombre: string;
-    precio_particular?: number | null;
-    precio_obra_social?: number | null;
-
-  } | null;
-  especialidades_adicionales: Array<{
+  especialidades: Array<{
     id_especialidad: number;
     nombre: string;
     precio_particular?: number | null;
@@ -205,9 +198,8 @@ export async function obtenerPerfilUsuario(): Promise<
       .eq('id_usuario', userData.id_usuario)
       .eq('activo', true);
 
-    // 4. Construir lista de especialidades
-    const especialidadesArray = especialidadesError 
-      ? [] 
+    const especialidades = especialidadesError
+      ? []
       : (especialidadesData || [])
           .map(item => item.especialidad)
           .filter(Boolean)
@@ -215,10 +207,6 @@ export async function obtenerPerfilUsuario(): Promise<
             id_especialidad: esp.id_especialidad,
             nombre: esp.nombre
           }));
-
-    // La primera especialidad activa es la principal
-    const especialidadPrincipal = especialidadesArray.length > 0 ? especialidadesArray[0] : null;
-    const especialidadesAdicionales = especialidadesArray.slice(1); // Resto de especialidades
 
     const perfil: PerfilCompleto = {
       id_usuario: userData.id_usuario,
@@ -232,8 +220,7 @@ export async function obtenerPerfilUsuario(): Promise<
         nombre: userData.rol?.nombre || 'Usuario',
         jerarquia: userData.rol?.jerarquia || 1
       },
-      especialidad_principal: especialidadPrincipal,
-      especialidades_adicionales: especialidadesAdicionales
+      especialidades,
     };
 
     return { success: true, data: perfil };

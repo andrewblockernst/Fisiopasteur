@@ -6,13 +6,17 @@ import {
   User,
   Bed,
   Accessibility,
+  Loader2,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState, useTransition } from 'react';
 import AgregarBoton from './agregar-boton';
 import { usePerfilNav } from '@/hooks/PerfilNavContext';
+import { cn } from '@/lib/utils';
 
 const BarraCelular = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const { tienePilates, tieneEspecialidadNoPilates, puedeGestionar } = usePerfilNav();
   const verPilates    = puedeGestionar || tienePilates;
   const verCalendario = puedeGestionar || tieneEspecialidadNoPilates;
@@ -20,28 +24,44 @@ const BarraCelular = () => {
   // Especialista exclusivo de Pilates: navbar simplificada sin AgregarBoton
   const esSoloPilates = tienePilates && !tieneEspecialidadNoPilates && !puedeGestionar;
 
+  const [isPending, startTransition] = useTransition();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPending) setPendingHref(null);
+  }, [isPending, pathname]);
+
+  const navigate = (href: string) => {
+    if (pathname === href) return;
+    setPendingHref(href);
+    startTransition(() => router.push(href));
+  };
+
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
+
   if (esSoloPilates) {
     return (
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#9C1838] px-4 py-3 flex justify-around items-center shadow-lg z-50">
-        <NavItem icon={<Home size={24} />} onClick={() => router.push('/inicio')} label="Inicio" />
-        <NavItem icon={<Bed size={24} />} onClick={() => router.push('/pilates')} label="Pilates" />
-        <NavItem icon={<Accessibility size={24} />} onClick={() => router.push('/pacientes')} label="Pacientes" />
-        <NavItem icon={<User size={24} />} onClick={() => router.push('/perfil')} label="Perfil" />
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-brand px-4 py-3 flex justify-around items-center shadow-lg z-30">
+        <NavItem icon={<Home size={24} />} onClick={() => navigate('/inicio')} label="Inicio" active={isActive('/inicio')} loading={pendingHref === '/inicio'} />
+        <NavItem icon={<Bed size={24} />} onClick={() => navigate('/pilates')} label="Pilates" active={isActive('/pilates')} loading={pendingHref === '/pilates'} />
+        <NavItem icon={<Accessibility size={24} />} onClick={() => navigate('/pacientes')} label="Pacientes" active={isActive('/pacientes')} loading={pendingHref === '/pacientes'} />
+        <NavItem icon={<User size={24} />} onClick={() => navigate('/perfil')} label="Perfil" active={isActive('/perfil')} loading={pendingHref === '/perfil'} />
       </nav>
     );
   }
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#9C1838] px-4 py-3 flex justify-around items-center shadow-lg z-50">
-      <NavItem icon={<Home size={24} />} onClick={() => router.push('/inicio')} label="Inicio" />
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-brand px-4 py-3 flex justify-around items-center shadow-lg z-30">
+      <NavItem icon={<Home size={24} />} onClick={() => navigate('/inicio')} label="Inicio" active={isActive('/inicio')} loading={pendingHref === '/inicio'} />
       {verPilates && (
-        <NavItem icon={<Bed size={24} />} onClick={() => router.push('/pilates')} label="Pilates" />
+        <NavItem icon={<Bed size={24} />} onClick={() => navigate('/pilates')} label="Pilates" active={isActive('/pilates')} loading={pendingHref === '/pilates'} />
       )}
       <AgregarBoton />
       {verCalendario && (
-        <NavItem icon={<CalendarDays size={24} />} onClick={() => router.push('/calendario')} label="Calendario" />
+        <NavItem icon={<CalendarDays size={24} />} onClick={() => navigate('/calendario')} label="Calendario" active={isActive('/calendario')} loading={pendingHref === '/calendario'} />
       )}
-      <NavItem icon={<User size={24} />} onClick={() => router.push('/perfil')} label="Perfil" />
+      <NavItem icon={<User size={24} />} onClick={() => navigate('/perfil')} label="Perfil" active={isActive('/perfil')} loading={pendingHref === '/perfil'} />
     </nav>
   );
 };
@@ -49,17 +69,27 @@ const BarraCelular = () => {
 const NavItem = ({
   icon,
   label,
-  onClick
+  onClick,
+  active = false,
+  loading = false,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick?: () => void;
+  active?: boolean;
+  loading?: boolean;
 }) => (
   <button
-    className="text-white hover:scale-105 transition-transform duration-200 flex flex-col items-center gap-1 min-w-0"
+    className={cn(
+      "flex flex-col items-center gap-1 min-w-0 rounded-md px-2 py-1 transition-colors duration-150",
+      active
+        ? "bg-white text-brand"
+        : "text-white hover:bg-white/10",
+    )}
     onClick={onClick}
+    aria-current={active ? "page" : undefined}
   >
-    {icon}
+    {loading ? <Loader2 size={24} className="animate-spin" /> : icon}
     <span className="text-xs font-medium truncate">{label}</span>
   </button>
 );

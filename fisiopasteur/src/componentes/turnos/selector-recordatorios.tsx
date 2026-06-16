@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from 'react';
-import { OPCIONES_RECORDATORIO, type TipoRecordatorio } from '@/lib/utils/whatsapp.utils';
-import { Clock, Bell, X } from 'lucide-react';
+import { useState } from "react";
+import {
+  OPCIONES_RECORDATORIO,
+  type TipoRecordatorio,
+} from "@/lib/utils/whatsapp.utils";
+import { Clock, Bell, X, ChevronDown } from "lucide-react";
+import { Badge } from "@/componentes/ui";
+import { cn } from "@/lib/utils";
 
 interface SelectorRecordatoriosProps {
   recordatoriosSeleccionados: TipoRecordatorio[];
@@ -10,114 +15,120 @@ interface SelectorRecordatoriosProps {
   className?: string;
 }
 
+/**
+ * Selector multi-select para recordatorios automáticos.
+ * Mantiene UI propia (dropdown custom) porque shadcn Select es single-select.
+ * Migrado a tokens + Badge para chips (Fase 3.2).
+ */
 export function SelectorRecordatorios({
   recordatoriosSeleccionados,
   onRecordatoriosChange,
-  className = ""
+  className = "",
 }: SelectorRecordatoriosProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const toggleRecordatorio = (tipo: TipoRecordatorio) => {
-    if (recordatoriosSeleccionados.includes(tipo)) {
-      // Remover
-      const nuevos = recordatoriosSeleccionados.filter(r => r !== tipo);
-      onRecordatoriosChange(nuevos);
-    } else {
-      // Agregar
-      const nuevos = [...recordatoriosSeleccionados, tipo];
-      onRecordatoriosChange(nuevos);
-    }
+    onRecordatoriosChange(
+      recordatoriosSeleccionados.includes(tipo)
+        ? recordatoriosSeleccionados.filter((r) => r !== tipo)
+        : [...recordatoriosSeleccionados, tipo],
+    );
   };
 
   const obtenerTextoSeleccion = () => {
-    if (recordatoriosSeleccionados.length === 0) {
-      return 'Sin recordatorios';
-    }
-    if (recordatoriosSeleccionados.length === 1) {
+    if (recordatoriosSeleccionados.length === 0) return "Sin recordatorios";
+    if (recordatoriosSeleccionados.length === 1)
       return OPCIONES_RECORDATORIO[recordatoriosSeleccionados[0]].label;
-    }
     return `${recordatoriosSeleccionados.length} recordatorios`;
   };
 
   return (
-    <div className={`relative ${className}`}>
-      {/* Botón principal */}
+    <div className={cn("relative", className)}>
+      {/* Trigger */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent bg-white text-left flex items-center justify-between"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className={cn(
+          "w-full h-10 px-3 py-2 rounded-md border border-input bg-background text-sm text-foreground text-left",
+          "flex items-center justify-between gap-2 transition-colors",
+          "hover:border-muted-foreground/50",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand",
+        )}
       >
-        <div className="flex items-center gap-2">
-          <Bell className="w-4 h-4 text-gray-500" />
-          <span className="text-sm">
-            {obtenerTextoSeleccion()}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
+        <span className="flex items-center gap-2 min-w-0">
+          <Bell className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="truncate">{obtenerTextoSeleccion()}</span>
+        </span>
+        <span className="flex items-center gap-2 shrink-0">
           {recordatoriosSeleccionados.length > 0 && (
-            <span className="bg-[#9C1838] text-white text-xs px-2 py-1 rounded-full">
+            <Badge variant="brand" size="sm" pill>
               {recordatoriosSeleccionados.length}
-            </span>
+            </Badge>
           )}
-          <svg 
-            className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
+          <ChevronDown
+            className={cn(
+              "w-4 h-4 text-muted-foreground transition-transform",
+              isOpen && "rotate-180",
+            )}
+          />
+        </span>
       </button>
 
       {/* Dropdown */}
       {isOpen && (
         <>
-          {/* Overlay */}
-          <div 
-            className="fixed inset-0 z-10" 
+          {/* Overlay para cerrar al click afuera */}
+          <div
+            className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
+            aria-hidden="true"
           />
-          
-          {/* Opciones */}
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
-            <div className="p-2">
-              <div className="text-xs font-medium text-gray-700 mb-2 px-2 py-1">
-                Seleccionar recordatorios automáticos:
+
+          <div
+            role="listbox"
+            aria-multiselectable="true"
+            className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg z-20 max-h-60 overflow-y-auto"
+          >
+            <div className="p-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-2 pt-2 pb-1">
+                Recordatorios automáticos
               </div>
-              
+
               {Object.entries(OPCIONES_RECORDATORIO).map(([tipo, config]) => {
-                const isSelected = recordatoriosSeleccionados.includes(tipo as TipoRecordatorio);
-                
+                const isSelected = recordatoriosSeleccionados.includes(
+                  tipo as TipoRecordatorio,
+                );
                 return (
                   <button
                     key={tipo}
                     type="button"
+                    role="option"
+                    aria-selected={isSelected}
                     onClick={() => toggleRecordatorio(tipo as TipoRecordatorio)}
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center justify-between ${
-                      isSelected 
-                        ? 'bg-[#9C1838] text-white' 
-                        : 'hover:bg-gray-100 text-gray-700'
-                    }`}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-sm text-sm transition-colors flex items-center justify-between gap-2",
+                      isSelected
+                        ? "bg-brand text-brand-foreground"
+                        : "text-foreground hover:bg-muted",
+                    )}
                   >
-                    <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-2">
                       <Clock className="w-4 h-4" />
                       {config.label}
-                    </div>
-                    {isSelected && (
-                      <X className="w-4 h-4" />
-                    )}
+                    </span>
+                    {isSelected && <X className="w-4 h-4" />}
                   </button>
                 );
               })}
-              
-              {/* Opción para quitar todos */}
+
               {recordatoriosSeleccionados.length > 0 && (
-                <div className="border-t border-gray-200 mt-2 pt-2">
+                <div className="border-t border-border mt-1 pt-1">
                   <button
                     type="button"
                     onClick={() => onRecordatoriosChange([])}
-                    className="w-full text-left px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    className="w-full text-left px-3 py-2 rounded-sm text-sm text-destructive hover:bg-destructive/10 transition-colors"
                   >
                     Quitar todos los recordatorios
                   </button>
@@ -127,24 +138,28 @@ export function SelectorRecordatorios({
           </div>
         </>
       )}
-      
-      {/* Chips de recordatorios seleccionados */}
+
+      {/* Chips */}
       {recordatoriosSeleccionados.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {recordatoriosSeleccionados.map((tipo) => (
-            <span
+            <Badge
               key={tipo}
-              className="inline-flex items-center gap-1 bg-[#9C1838] text-white text-xs px-2 py-1 rounded-full"
+              variant="brand"
+              size="md"
+              pill
+              className="gap-1 pr-1"
             >
               {OPCIONES_RECORDATORIO[tipo].label}
               <button
                 type="button"
                 onClick={() => toggleRecordatorio(tipo)}
-                className="hover:bg-white hover:bg-opacity-20 rounded-full p-0.5"
+                aria-label={`Quitar ${OPCIONES_RECORDATORIO[tipo].label}`}
+                className="rounded-full p-0.5 hover:bg-white/20 transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
-            </span>
+            </Badge>
           ))}
         </div>
       )}

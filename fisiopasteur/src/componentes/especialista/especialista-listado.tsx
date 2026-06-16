@@ -1,15 +1,16 @@
-import Button from "@/componentes/boton";
-//import { DeleteEspecialistaButton } from "./eliminar-boton";
 import { useState, useTransition } from "react";
 import { EditarEspecialistaDialog } from "./editar-especialista-dialog";
+import { DeleteEspecialistaDialog } from "./eliminar-especialista-dialog";
 import type { Tables } from "@/lib/database.types";
 import { formatoNumeroTelefono } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toggleEspecialistaActivo } from "@/lib/actions/especialista.action";
 import { useToastStore } from "@/stores/toast-store";
 import { useAuth } from "@/hooks/usePerfil";
-import { Plus } from "lucide-react";
+import { Loader2, Plus, Pencil, UserX, UserCheck } from "lucide-react";
 import CompactListTable from "@/componentes/tablas/compact-list-table";
+import { EntityListCard } from "@/componentes/tablas/entity-list-card";
+import { Badge, IconButton } from "@/componentes/ui";
 
 type Especialidad = Tables<"especialidad">;
 
@@ -60,10 +61,24 @@ export function EspecialistasTable({
   setShowDialog
 }: EspecialistasTableProps) {
   const [editingEspecialista, setEditingEspecialista] = useState<EspecialistaConDatos | null>(null);
+  const [deletingEspecialista, setDeletingEspecialista] = useState<EspecialistaConDatos | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  const [isNavigating, startNavigationTransition] = useTransition();
   const { addToast } = useToastStore();
   const { user } = useAuth();
   const router = useRouter();
+
+  // Navega al perfil del especialista. Usamos useTransition para que isPending
+  // se mantenga en true hasta que Next termine la transición de ruta, así
+  // mostramos un spinner en la fila clickeada mientras carga.
+  const handleNavigateToEspecialista = (id: string) => {
+    if (navigatingId) return; // evita dobles clics
+    setNavigatingId(id);
+    startNavigationTransition(() => {
+      router.push(`/especialistas/${id}`);
+    });
+  };
 
   const handleEditClose = () => {
     setEditingEspecialista(null);
@@ -98,192 +113,240 @@ export function EspecialistasTable({
 
   return (
     <>
-      {/* Tabla desktop */}
-      <div className="hidden md:block h-full">
-        <CompactListTable lockToViewport>
-          <thead className="bg-gray-50">
+      {/* Tabla desktop (≥lg) */}
+      <div className="hidden lg:block h-full">
+        <CompactListTable className="flex-1 min-h-0">
+          <thead className="bg-muted/40">
             <tr>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Email</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Especialidades</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Color</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
-              <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-              {/* Solo mostrar columna de acciones si puede gestionar turnos */}
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Nombre</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Email</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Especialidades</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Color</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Teléfono</th>
+              <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Estado</th>
               {user?.puedeGestionarTurnos && (
-                <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Acciones</th>
               )}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {especialistas.map((especialista) => (
-              <tr key={especialista.id_usuario} className={`${!especialista.activo ? "opacity-60" : ""} hover:bg-gray-50 transition-colors`}>
-                <td className="px-4 py-1 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">
-                    {especialista.nombre} {especialista.apellido}
-                  </div>
-                </td>
-                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
-                  {especialista.email}
-                </td>
-                <td className="px-4 py-1 whitespace-nowrap">
-                  <div className="flex flex-wrap gap-1">
-                    {especialista.especialidades && especialista.especialidades.length > 0 ? (
-                      especialista.especialidades.map((especialidad) => (
-                        <span
-                          key={especialidad.id_especialidad}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-                        >
-                          {especialidad.nombre}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-sm text-gray-500">Sin especialidades</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-1 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div
-                      className="w-5 h-5 rounded border border-gray-300 mr-2"
-                      style={{ backgroundColor: especialista.color || "#6B7280" }}
-                    />         
-                  </div>
-                </td>
-                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
-                  {formatoNumeroTelefono(especialista.telefono || "No disponible")}
-                </td>
-                <td className="px-4 py-1 whitespace-nowrap">
-                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${especialista.activo ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-600"}`}>
-                    {especialista.activo ? "Activo" : "Inactivo"}
-                  </span>
-                </td>
-                {/* Solo mostrar acciones si puede gestionar turnos */}
-                {user?.puedeGestionarTurnos && (
-                  <td className="px-4 py-1 whitespace-nowrap text-sm font-medium space-x-2">
-                    <Button 
-                      variant="secondary" 
-                      className="text-xs h-7 px-2.5"
-                      onClick={() => setEditingEspecialista(especialista)}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      variant={especialista.activo ? "danger" : "success"}
-                      className="text-xs h-7 px-2.5"
-                      disabled={isPending}
-                      onClick={() => handleToggleActivo(especialista)}
-                    >
-                      {especialista.activo ? "Desactivar" : "Activar"}
-                    </Button>
+          <tbody className="bg-card divide-y divide-border">
+            {especialistas.map((especialista) => {
+              const isRowNavigating = navigatingId === especialista.id_usuario;
+              const rowDisabled = Boolean(navigatingId);
+              return (
+                <tr
+                  key={especialista.id_usuario}
+                  onClick={() => handleNavigateToEspecialista(especialista.id_usuario)}
+                  className={`${!especialista.activo ? "opacity-60" : ""} ${isRowNavigating ? "bg-muted/40" : ""} ${rowDisabled && !isRowNavigating ? "pointer-events-none opacity-70" : ""} hover:bg-muted/30 transition-colors cursor-pointer`}
+                >
+                  <td className="px-4 py-1 whitespace-nowrap">
+                    <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                      {isRowNavigating && (
+                        <Loader2 className="w-4 h-4 animate-spin text-brand shrink-0" aria-label="Cargando perfil" />
+                      )}
+                      <span>{especialista.nombre} {especialista.apellido}</span>
+                    </div>
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td className="px-4 py-1 whitespace-nowrap text-sm text-foreground">
+                    {especialista.email}
+                  </td>
+                  <td className="px-4 py-1 whitespace-nowrap">
+                    <div className="flex flex-wrap gap-1">
+                      {especialista.especialidades && especialista.especialidades.length > 0 ? (
+                        especialista.especialidades.map((especialidad) => (
+                          <Badge
+                            key={especialidad.id_especialidad}
+                            variant="default"
+                            size="sm"
+                            pill
+                          >
+                            {especialidad.nombre}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Sin especialidades</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-1 whitespace-nowrap">
+                    <div
+                      className="w-5 h-5 rounded border border-border"
+                      style={{ backgroundColor: especialista.color || "var(--muted-foreground)" }}
+                      aria-label={`Color del especialista: ${especialista.color || 'sin definir'}`}
+                    />
+                  </td>
+                  <td className="px-4 py-1 whitespace-nowrap text-sm text-foreground">
+                    {formatoNumeroTelefono(especialista.telefono || "No disponible")}
+                  </td>
+                  <td className="px-4 py-1 whitespace-nowrap">
+                    <Badge
+                      variant={especialista.activo ? "success" : "default"}
+                      size="sm"
+                      pill
+                    >
+                      {especialista.activo ? "Activo" : "Inactivo"}
+                    </Badge>
+                  </td>
+                  {user?.puedeGestionarTurnos && (
+                    <td
+                      className="px-4 py-1 whitespace-nowrap text-sm font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex gap-1">
+                        <IconButton
+                          variant="ghost"
+                          size="sm"
+                          aria-label="Editar especialista"
+                          title="Editar"
+                          icon={<Pencil className="w-4 h-4" />}
+                          onClick={() => setEditingEspecialista(especialista)}
+                        />
+                        <IconButton
+                          variant="ghost"
+                          size="sm"
+                          disabled={isPending}
+                          aria-label={especialista.activo ? "Desactivar especialista" : "Activar especialista"}
+                          title={especialista.activo ? "Desactivar" : "Activar"}
+                          className={especialista.activo ? "text-destructive hover:bg-destructive/10" : "text-success hover:bg-success/10"}
+                          icon={especialista.activo ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                          onClick={() =>
+                            especialista.activo
+                              ? setDeletingEspecialista(especialista)
+                              : handleToggleActivo(especialista)
+                          }
+                        />
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </CompactListTable>
       </div>
 
-      {/* Vista de cards para mobile */}
-      {/* <div className="md:hidden space-y-4">
-        {especialistas.map((especialista) => (
-          <div key={especialista.id_usuario} className={`bg-white shadow-md rounded-lg p-4 border border-gray-200 ${!especialista.activo ? "opacity-60" : ""}`}>
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {especialista.nombre} {especialista.apellido}
-                </h3>
-              </div>
-              <div
-                className="w-8 h-8 rounded-full border-2 border-gray-300 flex-shrink-0"
-                style={{ backgroundColor: especialista.color || "#6B7280" }}
+      {/* NIVEL 2: Vista tablet (md..<lg) — cards unificadas */}
+      <div className="hidden md:block lg:hidden p-4">
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+          {especialistas.map((especialista) => {
+            const isRowNavigating = navigatingId === especialista.id_usuario;
+            const rowDisabled = Boolean(navigatingId);
+            const especialidadesNode =
+              especialista.especialidades && especialista.especialidades.length > 0 ? (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {especialista.especialidades.map((esp) => (
+                    <Badge key={esp.id_especialidad} variant="default" size="sm" pill>
+                      {esp.nombre}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-muted-foreground">Sin especialidades</span>
+              );
+
+            return (
+              <EntityListCard
+                key={especialista.id_usuario}
+                title={`${especialista.nombre} ${especialista.apellido}`}
+                colorDot={especialista.color}
+                inactive={!especialista.activo}
+                onClick={rowDisabled ? undefined : () => handleNavigateToEspecialista(especialista.id_usuario)}
+                className={rowDisabled && !isRowNavigating ? "pointer-events-none" : undefined}
+                leadingIndicator={
+                  isRowNavigating ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-brand" aria-label="Cargando perfil" />
+                  ) : null
+                }
+                badge={
+                  <Badge variant={especialista.activo ? 'success' : 'default'} size="sm" pill>
+                    {especialista.activo ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                }
+                fields={[
+                  { label: 'Email', value: especialista.email || '...' },
+                  { label: 'Teléfono', value: formatoNumeroTelefono(especialista.telefono || 'No disponible') },
+                  { label: 'Especialidades', value: especialidadesNode, fullWidth: true },
+                ]}
+                actions={
+                  user?.puedeGestionarTurnos ? (
+                    <>
+                      <IconButton
+                        variant="secondary"
+                        size="sm"
+                        aria-label="Editar especialista"
+                        title="Editar"
+                        icon={<Pencil className="w-4 h-4" />}
+                        onClick={() => setEditingEspecialista(especialista)}
+                      />
+                      <IconButton
+                        variant={especialista.activo ? 'destructive' : 'success'}
+                        size="sm"
+                        disabled={isPending}
+                        aria-label={especialista.activo ? 'Desactivar especialista' : 'Activar especialista'}
+                        title={especialista.activo ? 'Desactivar' : 'Activar'}
+                        icon={especialista.activo ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                        onClick={() =>
+                          especialista.activo
+                            ? setDeletingEspecialista(especialista)
+                            : handleToggleActivo(especialista)
+                        }
+                      />
+                    </>
+                  ) : null
+                }
               />
-            </div>
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center text-sm">
-                <span className="font-medium text-gray-700 w-20">Email:</span>
-                <span className="text-gray-900 break-all">{especialista.email}</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <span className="font-medium text-gray-700 w-20">Teléfono:</span>
-                <span className="text-gray-900">{formatoNumeroTelefono(especialista.telefono || "No disponible")}</span>
-              </div>
-              <div className="text-sm">
-                <span className="font-medium text-gray-700">Especialidades:</span>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {especialista.especialidades && especialista.especialidades.length > 0 ? (
-                    especialista.especialidades.map((especialidad) => (
-                      <span
-                        key={especialidad.id_especialidad}
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-                      >
-                        {especialidad.nombre}
-                      </span>
-                    ))
+            );
+          })}
+        </div>
+      </div>
+
+      {/* NIVEL 1: Vista mobile (<md) — 1 fila por especialista */}
+      <div className="block md:hidden bg-background relative min-h-full flex flex-col">
+        <div className="divide-y divide-border">
+          {especialistas.map((especialista) => {
+            const isRowNavigating = navigatingId === especialista.id_usuario;
+            const rowDisabled = Boolean(navigatingId);
+            return (
+              <div
+                key={especialista.id_usuario}
+                className={`px-4 py-3 hover:bg-muted/40 cursor-pointer transition-colors ${isRowNavigating ? "bg-muted/40" : ""} ${rowDisabled && !isRowNavigating ? "pointer-events-none opacity-70" : ""}`}
+                onClick={() => handleNavigateToEspecialista(especialista.id_usuario)}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-foreground font-medium truncate">
+                    {especialista.nombre} {especialista.apellido}
+                  </p>
+                  {isRowNavigating ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-brand shrink-0" aria-label="Cargando perfil" />
                   ) : (
-                    <span className="text-sm text-gray-500">Sin especialidades</span>
+                    <span
+                      aria-hidden="true"
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: especialista.color || "var(--muted-foreground)" }}
+                    />
                   )}
                 </div>
               </div>
-              <div>
-                <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${especialista.activo ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-600"}`}>
-                  {especialista.activo ? "Activo" : "Inactivo"}
-                </span>
-              </div>
-            </div>
-            <div className="flex space-x-2">
-              <Button 
-                variant="secondary" 
-                className="flex-1 text-sm"
-                onClick={() => setEditingEspecialista(especialista)}
-              >
-                Editar
-              </Button>
-              <Button
-                variant={especialista.activo ? "danger" : "success"}
-                className="flex-1 text-sm"
-                disabled={isPending}
-                onClick={() => handleToggleActivo(especialista)}
-              >
-                {especialista.activo ? "Inactivar" : "Activar"}
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div> */}
-      {/* Vista mobile (xs - sm) */}
-      <div className="block sm:hidden bg-white relative">
-
-        <div className="divide-y divide-gray-200">
-          {especialistas.map((especialista) => (
-            <div
-              key={especialista.id_usuario}
-              className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
-              onClick={() => {
-                router.push(`/especialistas/${especialista.id_usuario}`);
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-gray-900 font-medium">
-                  {especialista.nombre} {especialista.apellido}
-                </p>
-                <div className={`w-3 h-3 rounded-full`} style={{ backgroundColor: especialista.color || "#6B7280" }}></div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Boton flotante para agregar especialista - Solo Admin y Programadores */}
+        {/* Espacio en blanco al final + FAB sticky dentro del scroll — solo admin/programadores */}
         {user?.puedeGestionarTurnos && (
-          <button
-            onClick={() => setShowDialog(true)}
-            className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"
-            aria-label="Agregar nuevo especialista"
-          >
-            <Plus size={30} />
-          </button>
+          <>
+            <div className="mt-auto h-20 shrink-0" aria-hidden />
+            <div className="sticky bottom-4 z-20 -mt-16 flex justify-end pr-4 pointer-events-none">
+              <button
+                type="button"
+                aria-label="Agregar nuevo especialista"
+                onClick={() => setShowDialog(true)}
+                className="pointer-events-auto h-14 w-14 rounded-full bg-brand text-brand-foreground shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <Plus className="h-6 w-6" />
+              </button>
+            </div>
+          </>
         )}
-
       </div>
 
       {editingEspecialista && (
@@ -292,6 +355,31 @@ export function EspecialistasTable({
           onClose={handleEditClose}
           especialidades={especialidades}
           especialista={editingEspecialista}
+        />
+      )}
+
+      {deletingEspecialista && (
+        <DeleteEspecialistaDialog
+          isOpen={true}
+          onClose={() => {
+            setDeletingEspecialista(null);
+            if (onEspecialistaUpdated) onEspecialistaUpdated();
+          }}
+          especialista={{
+            id_usuario: deletingEspecialista.id_usuario,
+            nombre: deletingEspecialista.nombre,
+            apellido: deletingEspecialista.apellido,
+            email: deletingEspecialista.email,
+            telefono: deletingEspecialista.telefono,
+            color: deletingEspecialista.color,
+            activo: deletingEspecialista.activo,
+            contraseña: '',
+            created_at: null,
+            id_especialidad: null,
+            updated_at: null,
+            id_rol: deletingEspecialista.id_rol,
+          }}
+          handleToast={addToast}
         />
       )}
     </>

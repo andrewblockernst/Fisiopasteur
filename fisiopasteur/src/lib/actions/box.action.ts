@@ -5,6 +5,7 @@ import { nowIso } from "@/lib/dayjs";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/actions/action-result";
 import type { Database, TablesInsert } from "@/lib/database.types";
+import { boxSchema } from "@/lib/schemas/box.schema";
 
 type BoxInsert = Database["public"]["Tables"]["box"]["Insert"];
 
@@ -30,19 +31,14 @@ export async function obtenerBoxes() {
 export async function crearBox(formData: FormData): Promise<ActionResult<any>> {
   const supabase = await createClient();
 
-  const numero = parseInt(formData.get("numero") as string);
-  const nombre = (formData.get("nombre") as string).trim();
-
-  // Validaciones
-  if (!numero || numero < 1) {
-    return { success: false, error: "El número del box debe ser mayor a 0" };
-  } else if (numero >= 100) {
-    return { success: false, error: "El número del box debe ser menor a 100" };
+  const parsed = boxSchema.safeParse({
+    numero: parseInt(formData.get("numero") as string),
+    nombre: ((formData.get("nombre") as string) || "").trim(),
+  });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
   }
-
-  if (!nombre) {
-    return { success: false, error: "El nombre del box es requerido" };
-  }
+  const { numero, nombre } = parsed.data;
 
   const payload: BoxInsert = {
     numero,
@@ -80,20 +76,14 @@ export async function crearBox(formData: FormData): Promise<ActionResult<any>> {
 export async function actualizarBox(id: number, formData: FormData): Promise<ActionResult<any>> {
   const supabase = await createClient();
 
-  const numero = parseInt(formData.get("numero") as string);
-  const nombre = (formData.get("nombre") as string).trim();
-
-  // Validaciones
-  if (!numero || numero < 1) {
-    return { success: false, error: "El número del box debe ser mayor a 0" };
-  } else if (numero >= 100) {
-    return { success: false, error: "El número del box debe ser menor a 100" };
+  const parsed = boxSchema.safeParse({
+    numero: parseInt(formData.get("numero") as string),
+    nombre: ((formData.get("nombre") as string) || "").trim(),
+  });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
   }
-
-  if (!nombre) {
-    return { success: false, error: "El nombre del box es requerido" };
-  }
-
+  const { numero, nombre } = parsed.data;
 
   // Actualizar el box
   const { data, error } = await supabase

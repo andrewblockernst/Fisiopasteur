@@ -1,17 +1,17 @@
 import { Tables } from "@/types/database.types";
-import Button from "../boton";
-import { useState, useEffect, use } from "react";
+import { useState, useTransition } from "react";
 import { DeletePacienteDialog } from "./eliminar-dialog";
 import { EditarPacienteDialog } from "./editar-paciente-dialog";
 import { useRouter } from "next/navigation";
 import { NuevoPacienteDialog } from "./nuevo-paciente-dialog";
-import { activarPaciente, getPacientes } from "@/lib/actions/paciente.action";
-import { ChevronUp, EllipsisVertical, Plus } from "lucide-react";
+import { getPacientes } from "@/lib/actions/paciente.action";
+import { Loader2, Plus, Pencil, UserX, UserCheck, ClipboardList, HistoryIcon } from "lucide-react";
 import { formatoDNI, formatoNumeroTelefono } from "@/lib/utils";
 import { ToastItem, useToastStore } from "@/stores/toast-store";
 import CompactListTable from "@/componentes/tablas/compact-list-table";
-
-
+import { EntityListCard } from "@/componentes/tablas/entity-list-card";
+import { RowActionsMenu, RowActionsItem } from "@/componentes/tablas/row-actions-menu";
+import { Badge, Checkbox, IconButton } from "@/componentes/ui";
 
 type Paciente = Tables<'paciente'>;
 
@@ -29,18 +29,20 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
     const[deletingPaciente, setDeletingPaciente] = useState<Paciente | null>(null);
     const[viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
     const[showDialog, setShowDialog] = useState(false);
-    const[dropdownOpen, setDropdownOpen] = useState<number | null>(null);
+    const [navigatingId, setNavigatingId] = useState<number | null>(null);
+    const [, startNavigationTransition] = useTransition();
     const router = useRouter();
     const toast = useToastStore();
 
-    // Cerrar dropdown al hacer click fuera
-    useEffect(() => {
-        const handleClickOutside = () => setDropdownOpen(null);
-        if (dropdownOpen !== null) {
-            document.addEventListener('click', handleClickOutside);
-            return () => document.removeEventListener('click', handleClickOutside);
-        }
-    }, [dropdownOpen]);
+    // Navega al perfil del paciente y mantiene un spinner en la fila/card mientras Next
+    // resuelve la transición de ruta.
+    const handleNavigateToPaciente = (id: number) => {
+        if (navigatingId) return;
+        setNavigatingId(id);
+        startNavigationTransition(() => {
+            router.push(`/pacientes/${id}`);
+        });
+    };
 
     const handleEditClose = () => {
         setEditingPaciente(null);
@@ -58,7 +60,6 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
 
     const handleDialogClose = async () => {
             setShowDialog(false);
-            // Recargar la lista de pacientes después de crear uno nuevo
             try {
                 const updatedPacientes = await getPacientes();
                 pacientes = updatedPacientes.data;
@@ -67,26 +68,19 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
             }
         };
 
-    const handleEditFromView = () => {
-        if (viewingPaciente) {
-            setEditingPaciente(viewingPaciente);
-            setViewingPaciente(null);
-        }
-    }
-
     const calculateAge = (birthDate: string | null): number | null => {
         if (!birthDate) return null;
-        
+
         try {
             const birth = new Date(birthDate);
             const today = new Date();
             let age = today.getFullYear() - birth.getFullYear();
             const monthDiff = today.getMonth() - birth.getMonth();
-            
+
             if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
                 age--;
             }
-            
+
             return age;
         } catch (error) {
             return null;
@@ -96,40 +90,49 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
     return (
         <>
 
-        {/* NIVEL 1: Vista Mobile (xs - sm) - Solo nombres */}
-        <div className="block sm:hidden bg-white relative">
-
-            <div className="divide-y divide-gray-200">
-                {pacientes.map((paciente) => (
-                    <div 
-                        key={paciente.id_paciente} 
-                        className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => {
-                            router.push(`/pacientes/${paciente.id_paciente}`);
-                        }}
-                    >
-                        <div className="flex items-center justify-between">
-                            <p className="text-gray-900 font-medium">
-                                {paciente.nombre} {paciente.apellido}
-                            </p>
-                            <input
-                              type="checkbox"
-                              checked={pacientesSeleccionados?.includes(paciente.id_paciente) || false}
-                              readOnly
-                            />
+        {/* NIVEL 1: Vista mobile (<md) — 1 fila por paciente */}
+        <div className="block md:hidden bg-background relative min-h-full flex flex-col">
+            <div className="divide-y divide-border">
+                {pacientes.map((paciente) => {
+                    const isRowNavigating = navigatingId === paciente.id_paciente;
+                    const rowDisabled = Boolean(navigatingId);
+                    return (
+                        <div
+                            key={paciente.id_paciente}
+                            className={`px-4 py-3 hover:bg-muted/40 cursor-pointer transition-colors ${isRowNavigating ? "bg-muted/40" : ""} ${rowDisabled && !isRowNavigating ? "pointer-events-none opacity-70" : ""}`}
+                            onClick={() => handleNavigateToPaciente(paciente.id_paciente)}
+                        >
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-foreground font-medium truncate">
+                                    {paciente.nombre} {paciente.apellido}
+                                </p>
+                                {isRowNavigating ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-brand shrink-0" aria-label="Cargando perfil" />
+                                ) : (
+                                    <Checkbox
+                                        checked={pacientesSeleccionados?.includes(paciente.id_paciente) || false}
+                                        disabled
+                                        aria-label={`Paciente ${paciente.nombre} seleccionado`}
+                                    />
+                                )}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
-            {/* Botón flotante para agregar paciente */}
-            <button
-                onClick={() => setShowDialog(true)}
-                className="fixed bottom-25 right-6 w-14 h-14 bg-[#9C1838] hover:bg-[#7D1329] text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 z-50 flex items-center justify-center"
-                aria-label="Agregar nuevo paciente"
-            >
-                <Plus size={30} />
-            </button>
+            {/* Espacio en blanco al final + FAB sticky dentro del scroll */}
+            <div className="mt-auto h-20 shrink-0" aria-hidden />
+            <div className="sticky bottom-4 z-20 -mt-16 flex justify-end pr-4 pointer-events-none">
+                <button
+                    type="button"
+                    aria-label="Agregar nuevo paciente"
+                    onClick={() => setShowDialog(true)}
+                    className="pointer-events-auto h-14 w-14 rounded-full bg-brand text-brand-foreground shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                    <Plus className="h-6 w-6" />
+                </button>
+            </div>
         </div>
 
         <NuevoPacienteDialog
@@ -138,285 +141,229 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
             handleToast={handleToast}
         />
 
-        {/* NIVEL 2: Vista Tablet (sm - lg) - Tarjetas compactas */}
-        <div className="hidden sm:block lg:hidden">
-            <div className="grid gap-4">
-                {pacientes.map((paciente) => (
-                    <div key={paciente.id_paciente} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start mb-3">
-                            <div className="flex-1">
-                                <h3 className="font-semibold text-gray-900 text-lg">
-                                    {paciente.nombre} {paciente.apellido}
-                                </h3>
-                                <p className="text-sm text-gray-600">DNI: {paciente.dni || '...'}</p>
-                            </div>
-                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                                paciente.activo 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-gray-100 text-gray-600'
-                            }`}>
-                                {paciente.activo ? "Activo" : "Inactivo"}
-                            </span>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                            <div>
-                                <span className="text-gray-500 font-medium">Email:</span>
-                                <p className="text-gray-900 truncate" title={paciente.email || '...'}>
-                                    {paciente.email || '...'}
-                                </p>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 font-medium">Teléfono:</span>
-                                <p className="text-gray-900">{formatoNumeroTelefono(paciente.telefono || '...')}</p>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 font-medium">F. Nacimiento:</span>
-                                <p className="text-gray-900">
-                                    {paciente.fecha_nacimiento ? 
-                                        paciente.fecha_nacimiento.split('-').reverse().join('/') : '...'
-                                    }
-                                </p>
-                            </div>
-                            <div>
-                                <span className="text-gray-500 font-medium">Edad:</span>
-                                <p className="text-gray-900">
-                                    {calculateAge(paciente.fecha_nacimiento) ? 
-                                        `${calculateAge(paciente.fecha_nacimiento)} años` : '...'
-                                    }
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                            <Button 
-                                variant="secondary" 
-                                className="text-xs px-3 py-2 h-8 flex items-center justify-center"
-                                onClick={() => setEditingPaciente(paciente)}
-                            >
-                                Editar
-                            </Button>
-                            {paciente.activo && (
-                                <Button
-                                variant="danger"
-                                className="text-xs px-3 py-2 h-8 flex items-center justify-center"
-                                onClick={() => setDeletingPaciente(paciente)}
-                                >
-                                    Desactivar
-                                </Button>
-                            )}
-                            {!(paciente.activo) && (
-                                <Button
-                                    variant="success"
-                                    className="text-xs px-3 py-2 h-8 flex items-center justify-center"
-                                    onClick={() => onActivatePaciente(paciente)}
-                                >
-                                    Activar
-                                </Button>
-                            )}
-                            
-                            <Button
-                                variant="secondary"
-                                className="text-xs px-3 py-2 h-8 flex items-center justify-center"
-                                onClick={() => router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`)}
-                            >
-                                Historial
-                            </Button>
-                        </div>
-                    </div>
-                ))}
+        {/* NIVEL 2: Vista tablet (md..<lg) — cards unificadas */}
+        <div className="hidden md:block lg:hidden p-4">
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                {pacientes.map((paciente) => {
+                    const edad = calculateAge(paciente.fecha_nacimiento);
+                    const isRowNavigating = navigatingId === paciente.id_paciente;
+                    const rowDisabled = Boolean(navigatingId);
+                    return (
+                        <EntityListCard
+                            key={paciente.id_paciente}
+                            title={`${paciente.nombre} ${paciente.apellido}`}
+                            subtitle={`DNI: ${formatoDNI(paciente.dni || '...')}`}
+                            inactive={!paciente.activo}
+                            onClick={rowDisabled ? undefined : () => handleNavigateToPaciente(paciente.id_paciente)}
+                            className={rowDisabled && !isRowNavigating ? "pointer-events-none opacity-70" : undefined}
+                            leadingIndicator={
+                                isRowNavigating ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-brand" aria-label="Cargando perfil" />
+                                ) : null
+                            }
+                            badge={
+                                <Badge variant={paciente.activo ? 'success' : 'default'} size="sm" pill>
+                                    {paciente.activo ? 'Activo' : 'Inactivo'}
+                                </Badge>
+                            }
+                            fields={[
+                                { label: 'Email', value: paciente.email || '...' },
+                                { label: 'Teléfono', value: formatoNumeroTelefono(paciente.telefono || '...') },
+                                {
+                                    label: 'F. Nacimiento',
+                                    value: paciente.fecha_nacimiento
+                                        ? paciente.fecha_nacimiento.split('-').reverse().join('/')
+                                        : '...',
+                                },
+                                { label: 'Edad', value: edad ? `${edad} años` : '...' },
+                            ]}
+                            actions={
+                                <>
+                                    <IconButton
+                                        variant="secondary"
+                                        size="sm"
+                                        aria-label="Editar paciente"
+                                        title="Editar"
+                                        icon={<Pencil className="w-4 h-4" />}
+                                        onClick={() => setEditingPaciente(paciente)}
+                                    />
+                                    {paciente.activo ? (
+                                        <IconButton
+                                            variant="destructive"
+                                            size="sm"
+                                            aria-label="Desactivar paciente"
+                                            title="Desactivar"
+                                            icon={<UserX className="w-4 h-4" />}
+                                            onClick={() => setDeletingPaciente(paciente)}
+                                        />
+                                    ) : (
+                                        <IconButton
+                                            variant="success"
+                                            size="sm"
+                                            aria-label="Activar paciente"
+                                            title="Activar"
+                                            icon={<UserCheck className="w-4 h-4" />}
+                                            onClick={() => onActivatePaciente(paciente)}
+                                        />
+                                    )}
+                                    <IconButton
+                                        variant="secondary"
+                                        size="sm"
+                                        aria-label="Ver historial clínico"
+                                        title="Historial"
+                                        icon={<ClipboardList className="w-4 h-4" />}
+                                        onClick={() => router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`)}
+                                    />
+                                </>
+                            }
+                        />
+                    );
+                })}
             </div>
         </div>
 
-        {/* NIVEL 3: Vista Desktop (lg+) - Tabla optimizada */}
+        {/* NIVEL 3: Vista desktop (≥lg) — tabla optimizada */}
         <div className="hidden lg:block h-full">
             <CompactListTable className="flex-1 min-h-0" >
-                <thead className="bg-gray-50 justify-between">
-                        <tr className="justify-between">
-                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+                <thead className="bg-muted/40">
+                        <tr>
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                                 Paciente
                             </th>
-                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                                 DNI
                             </th>
-                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                                 Contacto
                             </th>
-                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                                 F. Nacimiento
                             </th>
-                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                                 Edad
                             </th>
-                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                                 Estado
                             </th>
-                            <th className="px-4 py-1 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-1 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                                 Acciones
                             </th>
                         </tr>
                     </thead>
-                    
-                        <tbody className="bg-white divide-y divide-gray-200">
+
+                        <tbody className="bg-card divide-y divide-border">
                         {pacientes.map((paciente) => (
-                            <tr key={paciente.id_paciente} className="hover:bg-gray-50 transition-colors">
+                            <tr key={paciente.id_paciente} className="hover:bg-muted/30 transition-colors">
                                 <td className="px-4 py-1 whitespace-nowrap">
                                     <div className="flex flex-col">
-                                        <div className="text-sm font-medium text-gray-900">
+                                        <div className="text-sm font-medium text-foreground">
                                             {paciente.nombre} {paciente.apellido}
                                         </div>
-                                        <div className="text-xs text-gray-500 truncate max-w-48" title={paciente.email || '...'}>
+                                        <div className="text-xs text-muted-foreground truncate max-w-48" title={paciente.email || '...'}>
                                             {paciente.email || ''}
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-4 py-1 whitespace-nowrap text-sm text-foreground">
                                     {formatoDNI(paciente.dni || '...')}
                                 </td>
-                                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
+                                <td className="px-4 py-1 whitespace-nowrap text-sm text-foreground">
                                     {formatoNumeroTelefono(paciente.telefono || '...')}
                                 </td>
-                                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
-                                    {paciente.fecha_nacimiento ? 
+                                <td className="px-4 py-1 whitespace-nowrap text-sm text-foreground">
+                                    {paciente.fecha_nacimiento ?
                                         paciente.fecha_nacimiento.split('-').reverse().join('/') : '...'
                                     }
                                 </td>
-                                <td className="px-4 py-1 whitespace-nowrap text-sm text-gray-900">
-                                    {calculateAge(paciente.fecha_nacimiento) ? 
+                                <td className="px-4 py-1 whitespace-nowrap text-sm text-foreground">
+                                    {calculateAge(paciente.fecha_nacimiento) ?
                                         `${calculateAge(paciente.fecha_nacimiento)} años` : '...'
                                     }
                                 </td>
                                 <td className="px-4 py-1 whitespace-nowrap">
-                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                        paciente.activo 
-                                            ? 'bg-green-100 text-green-800' 
-                                            : 'bg-gray-100 text-gray-600'
-                                    }`}>
-                                        {paciente.activo ? "Activo" : "Inactivo"}
-                                    </span>
+                                    <Badge
+                                        variant={paciente.activo ? 'success' : 'default'}
+                                        size="sm"
+                                        pill
+                                    >
+                                        {paciente.activo ? 'Activo' : 'Inactivo'}
+                                    </Badge>
                                 </td>
                                 <td className="px-4 py-1 whitespace-nowrap text-sm font-medium">
-                                    {/* Botones individuales para pantallas grandes (xl+) */}
-                                    <div className="hidden xl:flex gap-2">
-
-                                        <Button 
-                                            variant="secondary" 
-                                            className="text-xs px-2.5 py-1 h-7 min-w-14 flex items-center justify-center"
+                                    {/* Botones de icono para pantallas grandes (xl+) */}
+                                    <div className="hidden xl:flex gap-1">
+                                        <IconButton
+                                            variant="ghost"
+                                            size="sm"
+                                            aria-label="Editar paciente"
+                                            title="Editar"
+                                            icon={<Pencil className="w-4 h-4" />}
                                             onClick={() => setEditingPaciente(paciente)}
-                                        >
-                                            Editar
-                                        </Button>
-
-                                        {paciente.activo && (
-                                            <Button
-                                                variant="danger"
-                                                className="text-xs px-2.5 py-1 h-7 min-w-14 flex items-center justify-center"
+                                        />
+                                        {paciente.activo ? (
+                                            <IconButton
+                                                variant="ghost"
+                                                size="sm"
+                                                aria-label="Desactivar paciente"
+                                                title="Desactivar"
+                                                className="text-destructive hover:bg-destructive/10"
+                                                icon={<UserX className="w-4 h-4" />}
                                                 onClick={() => setDeletingPaciente(paciente)}
-                                            >
-                                                Inactivar
-                                            </Button>
-                                        )}
-
-                                        {!(paciente.activo) && (
-                                            <Button
-                                                variant="success"
-                                                className="text-xs px-2.5 py-1 h-7 min-w-14 flex items-center justify-center"
+                                            />
+                                        ) : (
+                                            <IconButton
+                                                variant="ghost"
+                                                size="sm"
+                                                aria-label="Activar paciente"
+                                                title="Activar"
+                                                className="text-success hover:bg-success/10"
+                                                icon={<UserCheck className="w-4 h-4" />}
                                                 onClick={() => onActivatePaciente(paciente)}
-                                            >
-                                                Activar
-                                            </Button>
+                                            />
                                         )}
-                                        <Button
-                                            variant="secondary"
-                                            className="text-xs px-2.5 py-1 h-7 min-w-14 flex items-center justify-center"
+                                        <IconButton
+                                            variant="ghost"
+                                            size="sm"
+                                            aria-label="Ver historial clínico"
+                                            title="Historial"
+                                            icon={<HistoryIcon className="w-4 h-4" />}
                                             onClick={() => router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`)}
-                                        >
-                                            Historial
-                                        </Button>
-
+                                        />
                                     </div>
 
                                     {/* Dropdown para pantallas medianas (lg - xl) */}
-                                    <div className="hidden lg:block xl:hidden relative">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDropdownOpen(dropdownOpen === paciente.id_paciente ? null : paciente.id_paciente);
-                                            }}
-                                            className="text-xs px-2 py-1 h-7 min-w-14 flex items-center justify-center hover:bg-slate-50 transition-colors"
-                                        >   
-                                            <div className="relative w-5 h-5">
-                                                <ChevronUp 
-                                                    className={`absolute w-5 h-5 transition-all duration-300 ease-in-out ${
-                                                        dropdownOpen === paciente.id_paciente 
-                                                            ? 'opacity-100 rotate-0' 
-                                                            : 'opacity-0 rotate-180'
-                                                    }`}
-                                                />
-                                                <EllipsisVertical 
-                                                    className={`absolute w-5 h-5 transition-all duration-300 ease-in-out ${
-                                                        dropdownOpen === paciente.id_paciente 
-                                                            ? 'opacity-0 rotate-180' 
-                                                            : 'opacity-100 rotate-0'
-                                                    }`}
-                                                />
-                                            </div>
-                                        </button>
-
-                                        {dropdownOpen === paciente.id_paciente && (
-                                            <div 
-                                                className={`absolute right-0 w-40 bg-white rounded-md shadow-xl border border-gray-200 z-[1000] ${
-                                                    pacientes.indexOf(paciente) >= pacientes.length - 2 
-                                                        ? 'bottom-full mb-1' 
-                                                        : 'top-full mt-1'
-                                                }`}
-                                                onClick={(e) => e.stopPropagation()}
+                                    <div className="hidden lg:block xl:hidden">
+                                        <RowActionsMenu ariaLabel="Acciones del paciente">
+                                            <RowActionsItem
+                                                icon={<Pencil className="w-4 h-4" />}
+                                                onSelect={() => setEditingPaciente(paciente)}
                                             >
-                                                <div className="py-1">
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingPaciente(paciente);
-                                                            setDropdownOpen(null);
-                                                        }}
-                                                        className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                                                    >
-                                                        Editar
-                                                    </button>
-                                                    {paciente.activo && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setDeletingPaciente(paciente);
-                                                            setDropdownOpen(null);
-                                                        }}
-                                                        className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                                    >
-                                                        Desactivar
-                                                    </button>
-                                                    )}
-                                                    {!(paciente.activo) && (
-                                                        <button
-                                                            onClick={() => {
-                                                                onActivatePaciente(paciente);
-                                                                setDropdownOpen(null);
-                                                            }}
-                                                            className="block w-full text-left px-4 py-2 border-b border-gray-300 text-sm text-green-600 hover:bg-green-50 transition-colors"
-                                                        >
-                                                            Activar
-                                                        </button>
-                                                    )}
-
-                                                    <button
-                                                        onClick={() => {
-                                                            router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`);
-                                                            setDropdownOpen(null);
-                                                        }}
-                                                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors "
-                                                    >
-                                                        Historial
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
+                                                Editar
+                                            </RowActionsItem>
+                                            {paciente.activo ? (
+                                                <RowActionsItem
+                                                    variant="destructive"
+                                                    icon={<UserX className="w-4 h-4" />}
+                                                    onSelect={() => setDeletingPaciente(paciente)}
+                                                >
+                                                    Desactivar
+                                                </RowActionsItem>
+                                            ) : (
+                                                <RowActionsItem
+                                                    variant="success"
+                                                    icon={<UserCheck className="w-4 h-4" />}
+                                                    onSelect={() => onActivatePaciente(paciente)}
+                                                >
+                                                    Activar
+                                                </RowActionsItem>
+                                            )}
+                                            <RowActionsItem
+                                                icon={<HistoryIcon className="w-4 h-4" />}
+                                                onSelect={() => router.push(`/pacientes/HistorialClinico?id=${paciente.id_paciente}`)}
+                                            >
+                                                Historial
+                                            </RowActionsItem>
+                                        </RowActionsMenu>
                                     </div>
                                 </td>
                             </tr>
@@ -424,7 +371,7 @@ export function PacientesTable({pacientes, onPacienteUpdated, onPacienteDeleted,
                         </tbody>
             </CompactListTable>
         </div>
-            
+
 
 
         {/* Modal de edición - Todas las vistas */}

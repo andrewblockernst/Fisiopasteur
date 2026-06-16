@@ -46,7 +46,7 @@ export default function PacienteAutocomplete({
   noResultsText = "No se encontraron pacientes",
   minCharsText,
   containerClassName = "relative",
-  inputClassName = "w-full pl-8 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent",
+  inputClassName = "w-full pl-8 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent",
   dropdownClassName = "absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto",
   helperTextClassName = "text-xs text-gray-500 mt-1",
   optionClassName = "px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0",
@@ -212,7 +212,7 @@ export default function PacienteAutocomplete({
   return (
     <div ref={containerRef} className={containerClassName}>
       <div className="relative flex items-center">
-        <Search size={13} className="absolute left-2 text-gray-400 pointer-events-none" />
+        <Search size={13} className="absolute left-2 text-muted-foreground pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -251,7 +251,7 @@ export default function PacienteAutocomplete({
               setIndiceActivo(-1);
               setSelectedLabelInterno("");
             }}
-            className="absolute right-1.5 text-gray-400 hover:text-gray-600"
+            className="absolute right-1.5 text-muted-foreground hover:text-foreground"
           >
             <X size={13} />
           </button>

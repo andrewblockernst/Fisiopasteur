@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import Button from "@/componentes/boton";
+import { Button, Input, EmptyState } from "@/componentes/ui";
 import { createEspecialidad, updateEspecialidad, deleteEspecialidad } from "@/lib/actions/especialidad.action";
 import { useToastStore } from "@/stores/toast-store";
 import type { Tables } from "@/types/database.types";
@@ -24,6 +24,8 @@ export function GestionEspecialidadesDialog({
   onEspecialidadesUpdated
 }: GestionEspecialidadesDialogProps) {
   const [nombreNueva, setNombreNueva] = useState("");
+  const [createError, setCreateError] = useState<string | undefined>(undefined);
+  const [editError, setEditError] = useState<string | undefined>(undefined);
   const [editando, setEditando] = useState<{ id: number; nombre: string } | null>(null);
   const [especialidadAEliminar, setEspecialidadAEliminar] = useState<Especialidad | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -31,13 +33,10 @@ export function GestionEspecialidadesDialog({
 
   const handleCrear = () => {
     if (!nombreNueva.trim()) {
-      addToast({
-        variant: "error",
-        message: "Campo requerido",
-        description: "El nombre de la especialidad no puede estar vacío"
-      });
+      setCreateError("El nombre es obligatorio.");
       return;
     }
+    setCreateError(undefined);
 
     startTransition(async () => {
       const result = await createEspecialidad(nombreNueva);
@@ -72,14 +71,12 @@ export function GestionEspecialidadesDialog({
   };
 
   const handleGuardarEdicion = () => {
-    if (!editando || !editando.nombre.trim()) {
-      addToast({
-        variant: "error",
-        message: "Campo requerido",
-        description: "El nombre de la especialidad no puede estar vacío"
-      });
+    if (!editando) return;
+    if (!editando.nombre.trim()) {
+      setEditError("El nombre es obligatorio.");
       return;
     }
+    setEditError(undefined);
 
     startTransition(async () => {
       const result = await updateEspecialidad(editando.id, editando.nombre);
@@ -163,29 +160,36 @@ export function GestionEspecialidadesDialog({
       >
       <div className="space-y-6">
         {/* Formulario para crear nueva especialidad */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={nombreNueva}
-              onChange={(e) => setNombreNueva(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isPending) {
-                  handleCrear();
-                }
-              }}
-              placeholder="Ej: Kinesiología, Fisioterapia..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:red-blue-200"
-              disabled={isPending}
-            />
-            <Button
-              variant="primary"
-              onClick={handleCrear}
-              disabled={isPending || !nombreNueva.trim()}
-              className="whitespace-nowrap"
-            >
-              Agregar
-            </Button>
-        </div>
+          <div>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                value={nombreNueva}
+                onChange={(e) => {
+                  setNombreNueva(e.target.value);
+                  if (createError) setCreateError(undefined);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isPending) {
+                    handleCrear();
+                  }
+                }}
+                placeholder="Ej: Kinesiología, Fisioterapia..."
+                disabled={isPending}
+                className="flex-1"
+                error={!!createError}
+              />
+              <Button
+                variant="primary"
+                onClick={handleCrear}
+                disabled={isPending}
+                className="whitespace-nowrap"
+              >
+                Agregar
+              </Button>
+            </div>
+            {createError && <p className="text-destructive text-xs mt-1">{createError}</p>}
+          </div>
 
         {/* Lista de especialidades */}
         <div>
@@ -194,10 +198,11 @@ export function GestionEspecialidadesDialog({
           </h3>
           
           {especialidades.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p className="text-sm">No hay especialidades registradas</p>
-              <p className="text-xs mt-1">Agrega tu primera especialidad arriba</p>
-            </div>
+            <EmptyState
+              title="No hay especialidades registradas"
+              description="Agregá tu primera especialidad usando el formulario de arriba."
+              className="py-6"
+            />
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {especialidades.map((especialidad) => {
@@ -210,32 +215,41 @@ export function GestionEspecialidadesDialog({
                   >
                     {isEditando ? (
                       <>
-                        <input
-                          type="text"
-                          value={editando.nombre}
-                          onChange={(e) => setEditando({ ...editando, nombre: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !isPending) {
-                              handleGuardarEdicion();
-                            } else if (e.key === 'Escape') {
-                              setEditando(null);
-                            }
-                          }}
-                          className="flex-1 px-3 py-1.5 border border-red-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-200"
-                          disabled={isPending}
-                          autoFocus
-                        />
+                        <div className="flex-1">
+                          <Input
+                            type="text"
+                            value={editando.nombre}
+                            onChange={(e) => {
+                              setEditando({ ...editando, nombre: e.target.value });
+                              if (editError) setEditError(undefined);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !isPending) {
+                                handleGuardarEdicion();
+                              } else if (e.key === 'Escape') {
+                                setEditando(null);
+                                setEditError(undefined);
+                              }
+                            }}
+                            disabled={isPending}
+                            autoFocus
+                            size="sm"
+                            error={!!editError}
+                          />
+                          {editError && <p className="text-destructive text-xs mt-1">{editError}</p>}
+                        </div>
                         <Button
                           variant="primary"
                           onClick={handleGuardarEdicion}
-                          disabled={isPending || !editando.nombre.trim()}
+                          disabled={isPending || editando.nombre.trim() === especialidad.nombre.trim()}
+                          title={editando.nombre.trim() === especialidad.nombre.trim() ? "No hay cambios para guardar" : undefined}
                           className="px-3 text-xs"
                         >
                           Actualizar
                         </Button>
                         <Button
                           variant="secondary"
-                          onClick={() => setEditando(null)}
+                          onClick={() => { setEditando(null); setEditError(undefined); }}
                           disabled={isPending}
                           className="px-3"
                         >

@@ -25,7 +25,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <BarraCelular />
 
       {/* Contenido */}
-      <main className="min-h-screen bg-white lg:pl-12 lg:pt pb-20 lg:pb-0">
+      <main className="min-h-screen bg-background lg:pl-12 pb-20 lg:pb-0">
         {children}
       </main>
     </PerfilNavProvider>

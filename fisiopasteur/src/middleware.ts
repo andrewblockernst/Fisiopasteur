@@ -20,17 +20,13 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // ✅ Rutas públicas (landing + auth)
+  // ✅ Rutas públicas (auth)
   const publicPaths = [
-    '/landing',
     '/login',
     '/not-found',
     '/centro-de-ayuda',
     '/recuperarContra',
     '/restablecerContra',
-    '/success',
-    '/failure',
-    '/pending',
   ];
 
   const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
@@ -121,8 +117,26 @@ export async function middleware(request: NextRequest) {
     return redirectWithCookies(loginUrl);
   }
 
-  // Usuario autenticado intentando acceder a login/landing → redirigir al dashboard
-  if (['/login', '/landing', '/recuperarContra'].includes(request.nextUrl.pathname)) {
+  // Verificar que el usuario esté activo. Si fue desactivado mientras tenía
+  // sesión abierta, lo deslogueamos y redirigimos a /login con un flag.
+  if (user) {
+    const { data: usuarioRow } = await supabase
+      .from('usuario')
+      .select('activo')
+      .eq('id_usuario', user.id)
+      .maybeSingle();
+
+    if (usuarioRow && usuarioRow.activo === false) {
+      await supabase.auth.signOut();
+      if (isPublicPath) return response;
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('desactivado', '1');
+      return redirectWithCookies(loginUrl);
+    }
+  }
+
+  // Usuario autenticado intentando acceder a login → redirigir al dashboard
+  if (['/login', '/recuperarContra'].includes(request.nextUrl.pathname)) {
     return redirectWithCookies(new URL('/inicio', request.url));
   }
 

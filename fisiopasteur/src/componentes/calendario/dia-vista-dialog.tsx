@@ -7,11 +7,11 @@ import { type TurnoConDetalles } from "@/stores/turno-store";
 import { useToastStore } from "@/stores/toast-store";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import EditarTurnoDialog from "@/componentes/turnos/editar-turno-modal";
-import { eliminarTurno as eliminarTurnoAction } from "@/lib/actions/turno.action";
+import { eliminarTurno as eliminarTurnoAction, marcarComoAtendido, cancelarTurno } from "@/lib/actions/turno.action";
 import { turnoKeys, useInvalidateTurnos } from "@/hooks/useTurnosQuery";
 import Image from "next/image";
 import TurnoCard from "./turno-card";
-import { dayjs, isPastDateTime } from "@/lib/dayjs";
+import { dayjs, nowIso } from "@/lib/dayjs";
 
 interface DayViewModalProps {
   isOpen: boolean;
@@ -120,14 +120,63 @@ export function DayViewModal({
   };
 
   const handleEdit = (turno: TurnoConDetalles) => {
-    if (isPastDateTime(turno.fecha, turno.hora || "00:00")) {
-      return;
-    }
     setTurnoEditando(turno);
   };
 
   const handleDelete = (turno: TurnoConDetalles) => {
     setConfirmDelete({ open: true, turno });
+  };
+
+  const handleCancelarTurno = async (turno: TurnoConDetalles) => {
+    const snapshots = getTurnosSnapshots();
+    const patch = { estado: "cancelado", updated_at: nowIso() } as Partial<TurnoConDetalles>;
+
+    updateTurnosLists((rows) =>
+      rows.map((t) => (t.id_turno === turno.id_turno ? ({ ...t, ...patch } as TurnoConDetalles) : t))
+    );
+    setTurnosLocal((prev) =>
+      prev.map((t) => (t.id_turno === turno.id_turno ? ({ ...t, ...patch } as TurnoConDetalles) : t))
+    );
+
+    const res = await cancelarTurno(turno.id_turno);
+
+    if (res.success) {
+      invalidateTurnos({ scope: "statuses", statuses: ["programado", "pendiente", "atendido", "cancelado"] });
+      invalidateTurnos({ scope: "dates", date: turno.fecha });
+      addToast({ variant: "success", message: "Turno cancelado" });
+    } else {
+      restoreTurnosSnapshots(snapshots);
+      setTurnosLocal((prev) =>
+        prev.map((t) => (t.id_turno === turno.id_turno ? turno : t))
+      );
+      addToast({ variant: "error", message: res.error || "Error al cancelar turno" });
+    }
+  };
+
+  const handleMarcarAtendido = async (turno: TurnoConDetalles) => {
+    const snapshots = getTurnosSnapshots();
+    const patch = { estado: "atendido", updated_at: nowIso() } as Partial<TurnoConDetalles>;
+
+    updateTurnosLists((rows) =>
+      rows.map((t) => (t.id_turno === turno.id_turno ? ({ ...t, ...patch } as TurnoConDetalles) : t))
+    );
+    setTurnosLocal((prev) =>
+      prev.map((t) => (t.id_turno === turno.id_turno ? ({ ...t, ...patch } as TurnoConDetalles) : t))
+    );
+
+    const res = await marcarComoAtendido(turno.id_turno);
+
+    if (res.success) {
+      invalidateTurnos({ scope: "statuses", statuses: ["programado", "pendiente", "atendido", "cancelado"] });
+      invalidateTurnos({ scope: "dates", date: turno.fecha });
+      addToast({ variant: "success", message: "Turno marcado como atendido" });
+    } else {
+      restoreTurnosSnapshots(snapshots);
+      setTurnosLocal((prev) =>
+        prev.map((t) => (t.id_turno === turno.id_turno ? turno : t))
+      );
+      addToast({ variant: "error", message: res.error || "Error al marcar turno" });
+    }
   };
 
   return (
@@ -180,6 +229,8 @@ export function DayViewModal({
                     turno={turno}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onMarcarAtendido={handleMarcarAtendido}
+                    onCancelar={handleCancelarTurno}
                     getEstadoColor={getEstadoColor}
                     formatearHora={formatearHora}
                   />

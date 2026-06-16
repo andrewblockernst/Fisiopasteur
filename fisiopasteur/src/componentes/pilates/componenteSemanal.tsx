@@ -3,6 +3,8 @@ import { dayjs, isPastDateTime } from "@/lib/dayjs";
 import { HORARIOS_PILATES_30MIN } from "@/lib/constants/especialidades";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import Button from "../boton";
+import { useHorizontalSwipe } from "@/hooks/useHorizontalSwipe";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 interface PilatesCalendarioSemanalProps {
   turnos: any[];
@@ -104,11 +106,29 @@ export default function PilatesCalendarioSemanal({
     return (h - startHour) * rHeight + (m === 30 ? rHalf : 0);
   };
 
+  const isBelowMd = useMediaQuery('(max-width: 767px)');
+  const isBelowLg = useMediaQuery('(max-width: 1023px)');
+
+  const swipePrev = () => {
+    if (isBelowMd) onSemanaChange(dayjs(semanaBase).subtract(1, 'day').toDate());
+    else irSemanaAnterior();
+  };
+  const swipeNext = () => {
+    if (isBelowMd) onSemanaChange(dayjs(semanaBase).add(1, 'day').toDate());
+    else irSemanaSiguiente();
+  };
+
+  const swipeRef = useHorizontalSwipe<HTMLDivElement>({
+    enabled: isBelowLg,
+    onSwipeLeft: swipeNext,
+    onSwipeRight: swipePrev,
+  });
+
   return (
-    <div>
+    <div ref={swipeRef} className="h-full flex flex-col min-h-0">
       {/* DESKTOP HEADER */}
-      <div className="hidden sm:flex items-center justify-between mb-4 relative">
-        <div className="flex items-center gap-1 z-10">
+      <div className="hidden md:flex shrink-0 items-center justify-between mb-4 gap-3 flex-wrap">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={irSemanaAnterior}
             className="hover:bg-gray-100 rounded-lg transition-colors"
@@ -126,23 +146,27 @@ export default function PilatesCalendarioSemanal({
           </button>
         </div>
 
-        <div className="absolute left-1/2 -translate-x-1/2 flex flex-wrap items-center gap-3 text-xs text-gray-700 w-max z-0">
-          <span className="font-medium">Niveles:</span>
-          <span className="flex items-center gap-2">
+        {/* Niveles — responsive:
+            sm-md: solo dots con tooltip nativo
+            lg:    dots + label "Niveles:"
+            xl+:   dots + label + nombre completo */}
+        <div className="flex flex-wrap items-center gap-2 xl:gap-3 text-xs text-gray-700 shrink-0">
+          <span className="hidden lg:inline font-medium">Niveles:</span>
+          <span className="flex items-center gap-1.5" title="Principiante">
             <span className="w-2.5 h-2.5 rounded-full bg-green-600" />
-            Principiante
+            <span className="hidden xl:inline">Principiante</span>
           </span>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5" title="Intermedio">
             <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-            Intermedio
+            <span className="hidden xl:inline">Intermedio</span>
           </span>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-1.5" title="Avanzado">
             <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
-            Avanzado
+            <span className="hidden xl:inline">Avanzado</span>
           </span>
         </div>
 
-        <div className="flex items-center gap-2 z-10">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={irSemanaActual}
             className="px-4 py-1 text-sm bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand)]/80 transition-colors font-medium"
@@ -150,76 +174,60 @@ export default function PilatesCalendarioSemanal({
             Hoy
           </button>
           <Button onClick={onNuevoTurno} variant="primary" className="ml-2">
-            Nuevo Turno
+            <span className="inline-flex items-center gap-1.5">
+              <Plus className="w-4 h-4" />
+              Nuevo Turno
+            </span>
           </Button>
         </div>
       </div>
 
-      {/* MOBILE HEADER */}
-      <div className="block sm:hidden ">
-        <div className="flex flex-col xs:flex-row items-center justify-center gap-3 py-3 rounded-t-lg px-2 pt-0">
-          <button
-            onClick={irSemanaActual}
-            className="px-4 py-1 text-sm bg-[var(--brand)] text-white rounded-lg hover:bg-[var(--brand)]/80 transition-colors font-medium shadow-sm shrink-0"
-          >
-            Hoy
-          </button>
-
-          <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] text-gray-700 bg-gray-100 rounded-lg p-1.5 px-3">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-600" />
-              Principiante
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-yellow-500" />
-              Intermedio
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-red-600" />
-              Avanzado
-            </span>
-          </div>
+      {/* MOBILE HEADER — una sola fila compacta */}
+      <div className="block md:hidden shrink-0 mb-1.5 flex items-center gap-0.5 bg-white border border-gray-200 rounded-md px-1">
+        <button
+          type="button"
+          aria-label="Día anterior"
+          onClick={() => onSemanaChange(dayjs(semanaBase).subtract(1, "day").toDate())}
+          className="h-7 w-7 inline-flex items-center justify-center rounded-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <h3 className="text-sm font-semibold text-gray-900 text-center flex-1 capitalize min-w-0 truncate leading-none">
+          {semanaBase.toLocaleDateString('es-AR', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          })}
+        </h3>
+        <button
+          type="button"
+          aria-label="Día siguiente"
+          onClick={() => onSemanaChange(dayjs(semanaBase).add(1, "day").toDate())}
+          className="h-7 w-7 inline-flex items-center justify-center rounded-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={irSemanaActual}
+          className="h-7 px-2 rounded-sm text-xs font-medium bg-[var(--brand)] text-white hover:bg-[var(--brand)]/80 transition-colors"
+        >
+          Hoy
+        </button>
+        <div
+          aria-label="Niveles"
+          className="flex items-center gap-1 pl-1 ml-0.5 border-l border-gray-200"
+        >
+          <span title="Principiante" className="w-2.5 h-2.5 rounded-full bg-green-600" />
+          <span title="Intermedio" className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+          <span title="Avanzado" className="w-2.5 h-2.5 rounded-full bg-red-600" />
         </div>
-        <div className="flex items-center border-y justify-between p-4 bg-white shadow-sm">
-          <button
-            onClick={() => onSemanaChange(dayjs(semanaBase).subtract(1, "day").toDate())}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4 text-gray-800" />
-          </button>
-          <h3 className="text-xl font-bold text-gray-900 text-center flex-1 capitalize">
-            {semanaBase.toLocaleDateString('es-AR', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric'
-            })}
-          </h3>
-          <button
-            onClick={() => onSemanaChange(dayjs(semanaBase).add(1, "day").toDate())}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <ChevronRight className="w-4 h-4 text-gray-800" />
-          </button>
-        </div>
-
-        {/* <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-gray-700 bg-white p-2 rounded-lg border">
-          <span className="font-medium">Niveles:</span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-green-600" /> Principiante
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-yellow-500" /> Intermedio
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-600" /> Avanzado
-          </span>
-        </div> */}
       </div>
 
       {/* DESKTOP WEEK GRID */}
-      <div className="hidden sm:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="max-h-[calc(100vh-100px)] overflow-auto">
+      <div className="hidden md:flex flex-1 min-h-0 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex-1 min-h-0 w-full overflow-auto">
           <div className="min-w-[760px]">
             <div className="grid grid-cols-[80px_repeat(5,1fr)] border-b border-gray-200 sticky top-0 z-30 bg-white">
               <div className="p-3 border-r border-gray-200 bg-gray-50" />
@@ -260,7 +268,11 @@ export default function PilatesCalendarioSemanal({
 
               {diasSemana.map((fecha, di) => {
                 const fechaStr = dayjs(fecha).format("YYYY-MM-DD");
-                const turnosDelDia = turnos.filter((turno) => turno.fecha === fechaStr);
+                const turnosDelDia = turnos.filter((turno) =>
+                  turno.fecha === fechaStr &&
+                  (turno as any).estado !== 'cancelado' &&
+                  (turno as any).estado !== 'eliminado'
+                );
                 const turnosPorInicio = turnosDelDia.reduce((acc: Record<string, any[]>, turno) => {
                   const horaInicio = turno.hora?.substring(0, 5);
                   if (!horaInicio) return acc;
@@ -396,8 +408,8 @@ export default function PilatesCalendarioSemanal({
       </div>
 
       {/* MOBILE DAY VIEW */}
-      <div className="block sm:hidden bg-white shadow-sm border border-gray-200 overflow-hidden">
-        <div className="max-h-[65vh] overflow-y-auto relative">
+      <div className="flex md:hidden flex-1 min-h-0 bg-white shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex-1 min-h-0 w-full overflow-y-auto relative">
           <div className="grid grid-cols-[64px_1fr]">
             {/* Hours column */}
             <div>

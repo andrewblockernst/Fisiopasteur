@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -221,6 +221,7 @@ export type Database = {
       }
       grupo_tratamiento: {
         Row: {
+          cantidad_turnos_planificados: number | null
           created_at: string | null
           fecha_inicio: string
           id_especialidad: number | null
@@ -232,6 +233,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          cantidad_turnos_planificados?: number | null
           created_at?: string | null
           fecha_inicio: string
           id_especialidad?: number | null
@@ -243,6 +245,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          cantidad_turnos_planificados?: number | null
           created_at?: string | null
           fecha_inicio?: string
           id_especialidad?: number | null
@@ -317,39 +320,6 @@ export type Database = {
             referencedColumns: ["id_turno"]
           },
         ]
-      }
-      organizacion_backup: {
-        Row: {
-          activo: boolean | null
-          created_at: string | null
-          cuit_cuil: string | null
-          direccion: string | null
-          email_contacto: string | null
-          id_organizacion: string | null
-          nombre: string | null
-          telefono_contacto: string | null
-        }
-        Insert: {
-          activo?: boolean | null
-          created_at?: string | null
-          cuit_cuil?: string | null
-          direccion?: string | null
-          email_contacto?: string | null
-          id_organizacion?: string | null
-          nombre?: string | null
-          telefono_contacto?: string | null
-        }
-        Update: {
-          activo?: boolean | null
-          created_at?: string | null
-          cuit_cuil?: string | null
-          direccion?: string | null
-          email_contacto?: string | null
-          id_organizacion?: string | null
-          nombre?: string | null
-          telefono_contacto?: string | null
-        }
-        Relationships: []
       }
       paciente: {
         Row: {
@@ -439,6 +409,7 @@ export type Database = {
           id_paciente: number | null
           id_turno: number
           notas: string | null
+          numero_en_grupo: number | null
           observaciones: string | null
           precio: number | null
           tipo_plan: string | null
@@ -460,6 +431,7 @@ export type Database = {
           id_paciente?: number | null
           id_turno?: number
           notas?: string | null
+          numero_en_grupo?: number | null
           observaciones?: string | null
           precio?: number | null
           tipo_plan?: string | null
@@ -481,6 +453,7 @@ export type Database = {
           id_paciente?: number | null
           id_turno?: number
           notas?: string | null
+          numero_en_grupo?: number | null
           observaciones?: string | null
           precio?: number | null
           tipo_plan?: string | null
@@ -508,6 +481,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "usuario"
             referencedColumns: ["id_usuario"]
+          },
+          {
+            foreignKeyName: "turno_id_grupo_tratamiento_fkey"
+            columns: ["id_grupo_tratamiento"]
+            isOneToOne: false
+            referencedRelation: "grupo_tratamiento"
+            referencedColumns: ["id_grupo"]
           },
           {
             foreignKeyName: "turno_id_paciente_fkey"
@@ -626,41 +606,79 @@ export type Database = {
           },
         ]
       }
-      usuario_organizacion_backup: {
-        Row: {
-          activo: boolean | null
-          color_calendario: string | null
-          creado_en: string | null
-          id_organizacion: string | null
-          id_rol: number | null
-          id_usuario: string | null
-          id_usuario_organizacion: string | null
-        }
-        Insert: {
-          activo?: boolean | null
-          color_calendario?: string | null
-          creado_en?: string | null
-          id_organizacion?: string | null
-          id_rol?: number | null
-          id_usuario?: string | null
-          id_usuario_organizacion?: string | null
-        }
-        Update: {
-          activo?: boolean | null
-          color_calendario?: string | null
-          creado_en?: string | null
-          id_organizacion?: string | null
-          id_rol?: number | null
-          id_usuario?: string | null
-          id_usuario_organizacion?: string | null
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      actualizar_turnos_pendientes: { Args: never; Returns: number }
+      auth_bcrypt_hash: { Args: { pass: string }; Returns: string }
+      buscar_especialistas_general: {
+        Args: {
+          max_rows: number
+          p_offset?: number
+          p_order_by?: string
+          p_order_direction?: string
+          p_status?: string
+          search_term: string
+        }
+        Returns: {
+          data: Database["public"]["Tables"]["usuario"]["Row"]
+          total_count: number
+        }[]
+      }
+      buscar_especialistas_smart:
+        | {
+            Args: { max_rows: number; search_term: string }
+            Returns: {
+              activo: boolean | null
+              apellido: string
+              color: string | null
+              contraseña: string
+              created_at: string | null
+              email: string
+              id_especialidad: number | null
+              id_rol: number | null
+              id_usuario: string
+              nombre: string
+              telefono: string | null
+              updated_at: string | null
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "usuario"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: {
+              max_rows: number
+              p_offset?: number
+              p_order_by?: string
+              p_order_direction?: string
+              p_status?: string
+              search_term: string
+            }
+            Returns: {
+              data: Database["public"]["Tables"]["usuario"]["Row"]
+              total_count: number
+            }[]
+          }
+      buscar_pacientes_general: {
+        Args: {
+          max_rows: number
+          p_offset?: number
+          p_order_by?: string
+          p_order_direction?: string
+          p_status?: string
+          search_term: string
+        }
+        Returns: {
+          data: Database["public"]["Tables"]["paciente"]["Row"]
+          total_count: number
+        }[]
+      }
       buscar_pacientes_smart:
         | {
             Args: { max_rows: number; search_term: string }
@@ -676,6 +694,8 @@ export type Database = {
               historia_clinica: string | null
               id_paciente: number
               nombre: string
+              notif_confirmacion: boolean
+              notif_recordatorios: boolean
               telefono: string
               updated_at: string | null
             }[]
@@ -687,7 +707,14 @@ export type Database = {
             }
           }
         | {
-            Args: { max_rows: number; org_id: string; search_term: string }
+            Args: {
+              max_rows: number
+              p_offset?: number
+              p_order_by?: string
+              p_order_direction?: string
+              p_status?: string
+              search_term: string
+            }
             Returns: {
               activo: boolean
               apellido: string
@@ -700,6 +727,8 @@ export type Database = {
               historia_clinica: string | null
               id_paciente: number
               nombre: string
+              notif_confirmacion: boolean
+              notif_recordatorios: boolean
               telefono: string
               updated_at: string | null
             }[]
@@ -710,6 +739,88 @@ export type Database = {
               isSetofReturn: true
             }
           }
+      crear_paquete_pilates_rpc: {
+        Args: {
+          p_dificultad?: string
+          p_id_especialidad: number
+          p_id_especialista: string
+          p_id_pacientes: Json
+          p_turnos?: Json
+        }
+        Returns: {
+          dificultad: string
+          especialista_apellido: string
+          especialista_nombre: string
+          estado: string
+          fecha: string
+          hora: string
+          id_especialidad: number
+          id_especialista: string
+          id_paciente: number
+          id_turno: number
+          paciente_apellido: string
+          paciente_nombre: string
+          paciente_telefono: string
+          tipo_plan: string
+        }[]
+      }
+      crear_paquete_sesiones_rpc: {
+        Args: {
+          p_fecha_inicio: string
+          p_id_especialidad: number
+          p_id_especialista: string
+          p_id_paciente: number
+          p_tipo_plan: string
+          p_titulo_tratamiento?: string
+          p_turnos?: Json
+        }
+        Returns: {
+          especialista_apellido: string
+          especialista_nombre: string
+          estado: string
+          fecha: string
+          hora: string
+          id_box: number
+          id_especialidad: number
+          id_especialista: string
+          id_grupo_tratamiento: string
+          id_paciente: number
+          id_turno: number
+          observaciones: string
+          paciente_apellido: string
+          paciente_nombre: string
+          paciente_telefono: string
+          tipo_plan: string
+        }[]
+      }
+      dashboard_kpis_snapshot: {
+        Args: {
+          p_fin: string
+          p_fin_prev: string
+          p_id_especialista?: string
+          p_inicio: string
+          p_inicio_prev: string
+        }
+        Returns: {
+          atendidos: number
+          cancelaciones: number
+          ingresos: number
+          programados: number
+          scope: string
+        }[]
+      }
+      obtener_boxes_disponibles_rpc: {
+        Args: {
+          p_fecha: string
+          p_hora: string
+          p_id_especialidad_excluir?: number
+          p_minutos_rango?: number
+          p_turno_id_excluir?: number
+        }
+        Returns: {
+          id_box: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

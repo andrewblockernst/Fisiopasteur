@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
+import { DiscardChangesDialog } from "@/componentes/dialog/discard-changes-dialog";
 import { obtenerEvaluacionInicial, guardarEvaluacionInicial } from "@/lib/actions/evaluacionInicial.action";
 import { useToastStore } from "@/stores/toast-store";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/componentes/ui/tabs";
 import { Loader2 } from "lucide-react";
+import { Button, Input, Textarea } from '@/componentes/ui';
+import { LIMITES } from "@/lib/validators/common";
 
 interface EvaluacionInicialModalProps {
   isOpen: boolean;
@@ -70,6 +73,8 @@ export function EvaluacionInicialModal({
   const [tabActual, setTabActual] = useState("datos-basicos");
   
   const [formData, setFormData] = useState<EvaluacionData>({});
+  const initialDataRef = useRef<string>("{}");
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // Cargar datos existentes al abrir
   useEffect(() => {
@@ -78,14 +83,32 @@ export function EvaluacionInicialModal({
     }
   }, [isOpen, idGrupo]);
 
+  const hasUnsavedChanges = useMemo(
+    () => JSON.stringify(formData) !== initialDataRef.current,
+    [formData],
+  );
+
+  const requestClose = useCallback(() => {
+    if (guardando) return;
+    if (hasUnsavedChanges) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onClose();
+  }, [guardando, hasUnsavedChanges, onClose]);
+
   const cargarEvaluacion = async () => {
     setCargando(true);
     const resultado = await obtenerEvaluacionInicial(idGrupo);
     
     if (resultado.success && resultado.data) {
-      setFormData((resultado as any).data);
+      const data = (resultado as any).data;
+      setFormData(data);
+      initialDataRef.current = JSON.stringify(data);
+    } else {
+      initialDataRef.current = JSON.stringify({});
     }
-    
+
     setCargando(false);
   };
 
@@ -117,35 +140,47 @@ export function EvaluacionInicialModal({
   };
 
   return (
+    <>
     <BaseDialog
       type="custom"
       size="xl"
       title="Evaluación Inicial del Tratamiento"
       message=""
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       showCloseButton
+      closeButtonAlert={hasUnsavedChanges ? "Cambios sin guardar" : undefined}
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+          <Button type="button" variant="outline" onClick={requestClose} disabled={guardando}>
+            Cancelar
+          </Button>
+          <Button type="button" variant="primary" onClick={handleGuardar} loading={guardando} disabled={!hasUnsavedChanges || guardando} title={!hasUnsavedChanges ? "No hay cambios para guardar" : undefined}>
+            Guardar Evaluación
+          </Button>
+        </div>
+      }
     >
-      <div className="max-h-[70vh] overflow-y-auto text-gray-900 [&_input]:text-gray-900 [&_textarea]:text-gray-900 [&_label]:text-gray-900 [&_span]:text-gray-900">
+      <div className="text-gray-900 [&_input]:text-gray-900 [&_textarea]:text-gray-900 [&_label]:text-gray-900 [&_span]:text-gray-900">
         {cargando ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-[#9C1838]" />
+            <Loader2 className="w-8 h-8 animate-spin text-brand" />
           </div>
         ) : (
           <Tabs value={tabActual} onValueChange={setTabActual} className="text-gray-900">
-            <TabsList className="grid w-full grid-cols-4 mb-6">
-              <TabsTrigger value="datos-basicos">Datos Básicos</TabsTrigger>
-              <TabsTrigger value="historia-clinica">Historia Clínica</TabsTrigger>
-              <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
-              <TabsTrigger value="objetivos">Objetivos y Dolor</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-6 h-auto gap-1">
+              <TabsTrigger value="datos-basicos" className="text-xs sm:text-sm">Datos básicos</TabsTrigger>
+              <TabsTrigger value="historia-clinica" className="text-xs sm:text-sm">Historia clínica</TabsTrigger>
+              <TabsTrigger value="diagnostico" className="text-xs sm:text-sm">Diagnóstico</TabsTrigger>
+              <TabsTrigger value="objetivos" className="text-xs sm:text-sm">Objetivos y dolor</TabsTrigger>
             </TabsList>
 
             {/* TAB 1: Datos Básicos */}
             <TabsContent value="datos-basicos" className="space-y-4">
               {/* Datos del paciente (solo lectura) */}
-              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                <h4 className="font-semibold text-gray-700 mb-3">Datos del Paciente</h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="bg-muted/40 p-4 rounded-lg space-y-2">
+                <h4 className="font-semibold text-foreground mb-3">Datos del paciente</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   <div>
                     <span className="font-medium">Nombre:</span> {paciente.nombre} {paciente.apellido}
                   </div>
@@ -170,52 +205,52 @@ export function EvaluacionInicialModal({
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Obra Social
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.obra_social || ''}
                     onChange={(e) => handleChange('obra_social', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    
                     placeholder="Ej: OSDE, Swiss Medical, etc."
-                  />
+                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     N° de Afiliado
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.numero_afiliado || ''}
                     onChange={(e) => handleChange('numero_afiliado', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    
                     placeholder="Número de afiliado"
-                  />
+                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Médico Actual
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.medico_actual || ''}
                     onChange={(e) => handleChange('medico_actual', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    
                     placeholder="Nombre del médico tratante"
-                  />
+                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Trabajo Actual
                   </label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.trabajo_actual || ''}
                     onChange={(e) => handleChange('trabajo_actual', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    
                     placeholder="Ocupación actual"
-                  />
+                   />
                 </div>
               </div>
             </TabsContent>
@@ -225,7 +260,7 @@ export function EvaluacionInicialModal({
               {/* Trabajo Anterior */}
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2">
-                  <input
+                  <Input
                     type="checkbox"
                     checked={formData.trabajo_anterior || false}
                     onChange={(e) => handleChange('trabajo_anterior', e.target.checked)}
@@ -234,20 +269,20 @@ export function EvaluacionInicialModal({
                   <span className="text-sm font-medium">Trabajo anterior</span>
                 </label>
                 {formData.trabajo_anterior && (
-                  <input
+                  <Input
                     type="text"
                     value={formData.trabajo_anterior_cual || ''}
                     onChange={(e) => handleChange('trabajo_anterior_cual', e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="flex-1"
                     placeholder="¿Cuál?"
-                  />
+                   />
                 )}
               </div>
 
               {/* Deportes */}
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2">
-                  <input
+                  <Input
                     type="checkbox"
                     checked={formData.realiza_deportes || false}
                     onChange={(e) => handleChange('realiza_deportes', e.target.checked)}
@@ -256,13 +291,13 @@ export function EvaluacionInicialModal({
                   <span className="text-sm font-medium">Realiza deportes</span>
                 </label>
                 {formData.realiza_deportes && (
-                  <input
+                  <Input
                     type="text"
                     value={formData.deporte_cual || ''}
                     onChange={(e) => handleChange('deporte_cual', e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="flex-1"
                     placeholder="¿Cuál?"
-                  />
+                   />
                 )}
               </div>
 
@@ -271,13 +306,13 @@ export function EvaluacionInicialModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   ¿Cuánto tiempo lleva con dolor?
                 </label>
-                <input
+                <Input
                   type="text"
                   value={formData.tiempo_con_dolor || ''}
                   onChange={(e) => handleChange('tiempo_con_dolor', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  
                   placeholder="Ej: 3 meses, 1 año, etc."
-                />
+                 />
               </div>
 
               {/* Momento de más dolor */}
@@ -285,19 +320,19 @@ export function EvaluacionInicialModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   ¿En qué momento duele más?
                 </label>
-                <input
+                <Input
                   type="text"
                   value={formData.momento_mas_dolor || ''}
                   onChange={(e) => handleChange('momento_mas_dolor', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  
                   placeholder="Ej: Al levantarse, al caminar, etc."
-                />
+                 />
               </div>
 
               {/* Traumatismo */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2">
-                  <input
+                  <Input
                     type="checkbox"
                     checked={formData.traumatismo || false}
                     onChange={(e) => handleChange('traumatismo', e.target.checked)}
@@ -349,13 +384,13 @@ export function EvaluacionInicialModal({
                   <span className="text-sm font-medium">Antecedentes familiares del mismo tipo de dolor</span>
                 </label>
                 {formData.antecedentes_familiares && (
-                  <input
+                  <Input
                     type="text"
                     value={formData.antecedentes_familiares_quien || ''}
                     onChange={(e) => handleChange('antecedentes_familiares_quien', e.target.value)}
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    className="flex-1"
                     placeholder="¿Quién?"
-                  />
+                   />
                 )}
               </div>
 
@@ -364,13 +399,13 @@ export function EvaluacionInicialModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   ¿Toma medicamentos?
                 </label>
-                <input
+                <Input
                   type="text"
                   value={formData.toma_medicamentos || ''}
                   onChange={(e) => handleChange('toma_medicamentos', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  
                   placeholder="Listar medicamentos"
-                />
+                 />
               </div>
             </TabsContent>
 
@@ -382,7 +417,7 @@ export function EvaluacionInicialModal({
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex items-center gap-2">
-                    <input
+                    <Input
                       type="checkbox"
                       checked={formData.diagnostico_rx || false}
                       onChange={(e) => handleChange('diagnostico_rx', e.target.checked)}
@@ -424,56 +459,58 @@ export function EvaluacionInicialModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Se observa
                 </label>
-                <textarea
+                <Textarea
                   value={formData.diagnostico_observaciones || ''}
-                  onChange={(e) => handleChange('diagnostico_observaciones', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  onChange={(e) => handleChange('diagnostico_observaciones', e.target.value.slice(0, LIMITES.textoLargoMax))}
                   rows={3}
+                  maxLength={LIMITES.textoLargoMax}
                   placeholder="Observaciones del diagnóstico por imágenes"
-                />
+                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Cirugías
                 </label>
-                <textarea
+                <Textarea
                   value={formData.cirugias || ''}
-                  onChange={(e) => handleChange('cirugias', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  onChange={(e) => handleChange('cirugias', e.target.value.slice(0, LIMITES.textoLargoMax))}
                   rows={2}
+                  maxLength={LIMITES.textoLargoMax}
                   placeholder="Detallar cirugías previas"
-                />
+                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Antecedentes de otras afecciones
                 </label>
-                <textarea
+                <Textarea
                   value={formData.otras_afecciones || ''}
-                  onChange={(e) => handleChange('otras_afecciones', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  onChange={(e) => handleChange('otras_afecciones', e.target.value.slice(0, LIMITES.textoLargoMax))}
                   rows={2}
+                  maxLength={LIMITES.textoLargoMax}
                   placeholder="Ej: Hipertensión, diabetes, etc."
-                />
+                 />
               </div>
 
               {/* Condiciones específicas */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">T/A (Tensión Arterial)</label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.ta || ''}
                     onChange={(e) => handleChange('ta', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    pattern="\d{2,3}/\d{2,3}"
+                    maxLength={7}
                     placeholder="Ej: 120/80"
-                  />
+                    title="Formato: sistólica/diastólica (ej: 120/80)"
+                   />
                 </div>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2">
-                    <input
+                    <Input
                       type="checkbox"
                       checked={formData.artritis || false}
                       onChange={(e) => handleChange('artritis', e.target.checked)}
@@ -513,13 +550,13 @@ export function EvaluacionInicialModal({
                 </div>
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Fracturas</label>
-                  <input
+                  <Input
                     type="text"
                     value={formData.fracturas || ''}
                     onChange={(e) => handleChange('fracturas', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    
                     placeholder="Detallar fracturas"
-                  />
+                   />
                 </div>
               </div>
 
@@ -528,7 +565,7 @@ export function EvaluacionInicialModal({
                 <p className="text-sm font-medium text-gray-700 mb-2">Para mujeres</p>
                 <div className="grid grid-cols-3 gap-3">
                   <label className="flex items-center gap-2">
-                    <input
+                    <Input
                       type="checkbox"
                       checked={formData.embarazada || false}
                       onChange={(e) => handleChange('embarazada', e.target.checked)}
@@ -564,13 +601,13 @@ export function EvaluacionInicialModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Objetivos del Tratamiento
                 </label>
-                <textarea
+                <Textarea
                   value={formData.objetivos_tratamiento || ''}
-                  onChange={(e) => handleChange('objetivos_tratamiento', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  onChange={(e) => handleChange('objetivos_tratamiento', e.target.value.slice(0, LIMITES.textoLargoMax))}
                   rows={5}
+                  maxLength={LIMITES.textoLargoMax}
                   placeholder="Describir los objetivos que se esperan alcanzar con el tratamiento..."
-                />
+                 />
               </div>
 
               {/* TODO: Diagrama corporal interactivo */}
@@ -586,23 +623,12 @@ export function EvaluacionInicialModal({
         )}
       </div>
 
-      {/* Botones de acción */}
-      <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-        <button
-          onClick={onClose}
-          className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={handleGuardar}
-          disabled={guardando}
-          className="px-4 py-2 bg-[#9C1838] text-white rounded-lg hover:bg-[#7d1429] transition-colors disabled:opacity-50 flex items-center gap-2"
-        >
-          {guardando && <Loader2 className="w-4 h-4 animate-spin" />}
-          Guardar Evaluación
-        </button>
-      </div>
     </BaseDialog>
+    <DiscardChangesDialog
+      isOpen={showDiscardConfirm}
+      onCancel={() => setShowDiscardConfirm(false)}
+      onConfirm={() => { setShowDiscardConfirm(false); onClose(); }}
+    />
+    </>
   );
 }

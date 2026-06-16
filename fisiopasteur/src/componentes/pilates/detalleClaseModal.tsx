@@ -1,13 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
-import { eliminarTurno, crearTurno, actualizarTurno, crearTurnosEnLote, notificarCancelacionesPilates, notificarModificacionesPilates } from "@/lib/actions/turno.action";
-import { HORARIOS_PILATES_30MIN } from "@/lib/constants/especialidades";
+import { eliminarTurno, actualizarTurno, crearPaquetePilates, actualizarClasePilates, notificarCancelacionesPilates, notificarModificacionesPilates } from "@/lib/actions/turno.action";
 import { dayjs, isPastDateTime } from "@/lib/dayjs";
+import {
+  validarFechaTurnoInline,
+  validarHoraPasadaInline,
+  fechaTurnoEditarMinInput,
+  fechaTurnoMaxInput,
+} from "@/lib/validators/common";
+import { DateInput } from "@/componentes/ui/date-input";
+import { HORARIOS_PILATES_30MIN } from "@/lib/constants/especialidades";
 import { useToastStore } from '@/stores/toast-store';
-import { Users, Clock, Calendar, User, AlertTriangle, Trash2, UserPlus, Settings, Plus, Repeat } from "lucide-react";
+import { Users, Clock, Calendar, User, AlertTriangle, Trash2, Settings, CalendarDays, Info } from "lucide-react";
 import Image from "next/image";
+import PacienteAutocomplete from "@/componentes/paciente/paciente-autocomplete";
 
 interface DetalleClaseModalProps {
   isOpen: boolean;
@@ -53,31 +61,42 @@ export function DetalleClaseModal({
   const [dificultadSeleccionada, setDificultadSeleccionada] = useState<'principiante' | 'intermedio' | 'avanzado'>('principiante');
   const [cambiosPendientes, setCambiosPendientes] = useState(false);
 
-  // ================= MOVER UN ÚNICO TURNO (fecha + hora) =================
-  const [movingTurnoId, setMovingTurnoId] = useState<number | null>(null);
-  const [movingFecha, setMovingFecha] = useState<string | null>(null);
-  const [movingHora, setMovingHora] = useState<string | null>(null);
-  const [movingLoading, setMovingLoading] = useState(false);
-  // ======= MOVER TODA LA CLASE (header) =======
-  const [movingClaseFecha, setMovingClaseFecha] = useState<string | null>(null);
-  const [movingClaseHora, setMovingClaseHora] = useState<string | null>(null);
-  const [movingClaseLoading, setMovingClaseLoading] = useState(false);
-  const [movingClaseDisponible, setMovingClaseDisponible] = useState<boolean | null>(null);
+  // ============= FECHA Y HORA EDITABLES (inline, junto a los demás campos) =============
+  const [fechaEditable, setFechaEditable] = useState<string>('');
+  const [horaEditable, setHoraEditable] = useState<string>('');
 
-  // ============= NUEVOS ESTADOS PARA BÚSQUEDA DE PACIENTES =============
+  // Errores inline (mismo patrón que /turnos y nuevo-turno-pilates).
+  const [fieldErrors, setFieldErrors] = useState<{ fecha?: string; hora?: string }>({});
+
+  useEffect(() => {
+    let errFecha = validarFechaTurnoInline(fechaEditable, "editar") ?? undefined;
+    if (!errFecha && fechaEditable) {
+      const diaSemana = dayjs(fechaEditable, "YYYY-MM-DD", true).day();
+      if (diaSemana === 0 || diaSemana === 6) {
+        errFecha = "Los fines de semana no están disponibles para Pilates.";
+      }
+    }
+    const errHora = !errFecha
+      ? validarHoraPasadaInline(fechaEditable, horaEditable) ?? undefined
+      : undefined;
+    setFieldErrors({ fecha: errFecha, hora: errHora });
+  }, [fechaEditable, horaEditable]);
+
+  // ============= BÚSQUEDA SMART DE PACIENTES (RPC vía PacienteAutocomplete) =============
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
-  const [pacientesFiltrados, setPacientesFiltrados] = useState<any[]>([]);
-  const [mostrarListaPacientes, setMostrarListaPacientes] = useState(false);
-  const inputPacienteRef = useRef<HTMLInputElement>(null);
-  const listaPacientesRef = useRef<HTMLDivElement>(null);
 
-  // ============= NUEVOS ESTADOS PARA REPETIR CLASE (SIMPLIFICADO) =============
-  const [mostrarModalRepetir, setMostrarModalRepetir] = useState(false);
+  // ============= PAQUETE DE SESIONES (inline checkbox, copiado de nuevo-turno) =============
+  const [mostrarRepeticion, setMostrarRepeticion] = useState(false);
   const [diasSeleccionados, setDiasSeleccionados] = useState<number[]>([]);
-  const [semanas, setSemanas] = useState<number>(4);
+  const [numeroSesiones, setNumeroSesiones] = useState<number>(10);
+  // Horario del paquete: por defecto se mantiene la hora de la clase original.
+  // Si el usuario quiere variar por día, destilda y completa el mapa.
+  const [mantenerHorarioRepeticion, setMantenerHorarioRepeticion] = useState<boolean>(true);
+  const [horariosPorDiaRepeticion, setHorariosPorDiaRepeticion] = useState<Record<number, string>>({});
   const [validandoDisponibilidad, setValidandoDisponibilidad] = useState(false);
   const [horariosOcupados, setHorariosOcupados] = useState<string[]>([]);
   const [hayConflictos, setHayConflictos] = useState(false);
+  const [isRepitiendo, setIsRepitiendo] = useState(false);
 
   // ============= SINCRONIZAR CON PROPS CUANDO CAMBIAN =============
   useEffect(() => {
@@ -87,42 +106,6 @@ export function DetalleClaseModal({
   const especialistaClaseId = turnos[0]?.id_especialista ?? turnosIniciales[0]?.id_especialista;
   const puedeEditar = puedeGestionarTurnos || (currentUserId && String(especialistaClaseId) === String(currentUserId));
 
-  // ============= FILTRAR PACIENTES SEGÚN BÚSQUEDA =============
-  useEffect(() => {
-    if (!busquedaPaciente.trim()) {
-      setPacientesFiltrados([]);
-      return;
-    }
-
-    const filtrados = pacientes.filter(paciente => {
-      const nombreCompleto = `${paciente.nombre} ${paciente.apellido}`.toLowerCase();
-      const busqueda = busquedaPaciente.toLowerCase();
-      
-      return nombreCompleto.includes(busqueda) ||
-             paciente.nombre.toLowerCase().includes(busqueda) ||
-             paciente.apellido.toLowerCase().includes(busqueda) ||
-             paciente.dni?.toString().includes(busqueda);
-    }).slice(0, 10);
-
-    setPacientesFiltrados(filtrados);
-  }, [busquedaPaciente, pacientes]);
-
-  // ============= MANEJAR CLICKS FUERA DEL AUTOCOMPLETE =============
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        inputPacienteRef.current && 
-        !inputPacienteRef.current.contains(event.target as Node) &&
-        listaPacientesRef.current && 
-        !listaPacientesRef.current.contains(event.target as Node)
-      ) {
-        setMostrarListaPacientes(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Obtener información de la clase (usar estado interno)
   const primeraClase = turnos[0];
@@ -134,37 +117,11 @@ export function DetalleClaseModal({
     return dayjs(fechaClase, 'YYYY-MM-DD').toDate();
   })() : null;
 
-  // Sincronizar valores del header para mover la clase cuando cambian fecha/hora
+  // Sincronizar fecha/hora editable con la clase cuando cambian los turnos
   useEffect(() => {
-    setMovingClaseFecha(fechaClase ?? null);
-    setMovingClaseHora(horaClase ?? null);
+    setFechaEditable(fechaClase ?? '');
+    setHoraEditable(horaClase ?? '');
   }, [fechaClase, horaClase]);
-
-  // Verificar disponibilidad automáticamente cuando el usuario cambia la fecha/hora del header
-  useEffect(() => {
-    let mounted = true;
-    setMovingClaseDisponible(null); // resetear mientras el usuario edita
-
-    const isValid = movingClaseFecha && movingClaseHora && (movingClaseFecha !== fechaClase || movingClaseHora !== horaClase);
-    if (!isValid) return;
-
-    const timeout = setTimeout(async () => {
-      try {
-        const excludeIds = turnos.map(t => t.id_turno);
-        const disponibilidad = await checkDisponibilidadMultiple(movingClaseFecha as string, movingClaseHora as string, excludeIds);
-        if (!mounted) return;
-        setMovingClaseDisponible(Boolean(disponibilidad.ok));
-      } catch (error) {
-        console.error('Error verificando disponibilidad automática:', error);
-        if (mounted) setMovingClaseDisponible(false);
-      }
-    }, 350);
-
-    return () => {
-      mounted = false;
-      clearTimeout(timeout);
-    };
-  }, [movingClaseFecha, movingClaseHora, fechaClase, horaClase, turnos]);
 
   // Verificar si hay conflicto de especialistas
   const especialistasUnicos = [...new Set(turnos.map(t => t.id_especialista))];
@@ -305,7 +262,7 @@ export function DetalleClaseModal({
 
   const handleMovingClaseHoraChange = (value: string) => {
     if (!value) {
-      setMovingClaseHora(value);
+      setHoraEditable(value);
       return;
     }
 
@@ -313,7 +270,7 @@ export function DetalleClaseModal({
     if (normalized !== value) {
       addToast({ variant: 'info', message: 'Hora ajustada', description: `La hora se ajustó a ${normalized} según la cuadrilla disponible.` });
     }
-    setMovingClaseHora(normalized);
+    setHoraEditable(normalized);
   };
 
   // Generar lista de horarios permitidos (cada 15 minutos) dentro de las franjas
@@ -351,13 +308,15 @@ export function DetalleClaseModal({
       }
       setDificultadSeleccionada(primeraClase?.dificultad || 'principiante');
       setCambiosPendientes(false);
-      
+
       setBusquedaPaciente('');
-      setMostrarListaPacientes(false);
-      
+
       // Resetear estado de repetición
+      setMostrarRepeticion(false);
       setDiasSeleccionados([]);
-      setSemanas(4);
+      setNumeroSesiones(10);
+      setHorariosOcupados([]);
+      setHayConflictos(false);
     }
   }, [isOpen, turnos, hayConflicto]);
 
@@ -373,9 +332,10 @@ export function DetalleClaseModal({
     const hayCambiosParticipantes = JSON.stringify(pacientesOriginales) !== JSON.stringify(pacientesActuales);
     const hayCambioEspecialista = especialistaSeleccionado !== especialistaOriginal;
     const hayCambioDificultad = dificultadSeleccionada !== dificultadOriginal;
-    
-    setCambiosPendientes(hayCambiosParticipantes || hayCambioEspecialista || hayCambioDificultad);
-  }, [pacientesSeleccionados, especialistaSeleccionado, dificultadSeleccionada, turnos, isOpen, hayConflicto]);
+    const hayCambioFechaHora = (fechaEditable && fechaEditable !== fechaClase) || (horaEditable && horaEditable !== horaClase);
+
+    setCambiosPendientes(hayCambiosParticipantes || hayCambioEspecialista || hayCambioDificultad || Boolean(hayCambioFechaHora));
+  }, [pacientesSeleccionados, especialistaSeleccionado, dificultadSeleccionada, fechaEditable, horaEditable, fechaClase, horaClase, turnos, isOpen, hayConflicto]);
 
   // ============= FUNCIONES PARA MANEJAR PACIENTES =============
   const agregarPaciente = (paciente: any) => {
@@ -395,28 +355,15 @@ export function DetalleClaseModal({
         description: 'Este paciente ya está en la clase',
       });
       setBusquedaPaciente('');
-      setMostrarListaPacientes(false);
       return;
     }
 
     setPacientesSeleccionados(prev => [...prev, paciente.id_paciente]);
     setBusquedaPaciente('');
-    setMostrarListaPacientes(false);
   };
 
   const eliminarPaciente = (pacienteId: number) => {
     setPacientesSeleccionados(prev => prev.filter(id => id !== pacienteId));
-  };
-
-  const handleBusquedaPacienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const valor = e.target.value;
-    setBusquedaPaciente(valor);
-    
-    if (!valor.trim()) {
-      setMostrarListaPacientes(false);
-    } else {
-      setMostrarListaPacientes(true);
-    }
   };
 
   // ============= FUNCIÓN PARA MANEJAR DÍAS DE LA SEMANA =============
@@ -428,58 +375,55 @@ export function DetalleClaseModal({
     );
   };
 
-  // ============= VALIDACIÓN EN TIEMPO REAL DE DISPONIBILIDAD (REPETIR CLASE) =============
+  // ============= SEMANAS DERIVADAS DEL NÚMERO DE SESIONES =============
+  // Para reusar la lógica existente que itera por semanas/días, derivamos
+  // cuántas semanas necesitamos para cubrir `numeroSesiones` con los días seleccionados.
+  const semanasDerivadas = useMemo(() => {
+    if (diasSeleccionados.length === 0) return 0;
+    return Math.ceil(numeroSesiones / diasSeleccionados.length);
+  }, [numeroSesiones, diasSeleccionados.length]);
+
+  // ============= VALIDACIÓN EN TIEMPO REAL DE DISPONIBILIDAD (PAQUETE DE SESIONES) =============
+  // Comportamiento idéntico al nuevo modal de Pilates: marcamos `validando`
+  // sincrónicamente al detectar cambio de inputs para que el ✓ stale no
+  // confunda al usuario durante el debounce.
   useEffect(() => {
-    const validarDisponibilidad = async () => {
-      if (!mostrarModalRepetir || diasSeleccionados.length === 0 || !fechaClase || !horaClase) {
-        setHorariosOcupados([]);
-        setHayConflictos(false);
-        return;
-      }
+    const puedeValidar =
+      mostrarRepeticion &&
+      diasSeleccionados.length > 0 &&
+      !!fechaClase &&
+      !!horaClase &&
+      (mantenerHorarioRepeticion ||
+        diasSeleccionados.every((d) => horariosPorDiaRepeticion[d]));
 
-      setValidandoDisponibilidad(true);
+    if (!puedeValidar) {
+      setValidandoDisponibilidad(false);
+      setHorariosOcupados([]);
+      setHayConflictos(false);
+      return;
+    }
 
+    setValidandoDisponibilidad(true);
+
+    const timeoutId = setTimeout(async () => {
       try {
-        const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
-        const [year, month, day] = fechaClase.split('-').map(Number);
-        const fechaBase = new Date(year, month - 1, day);
-        const diaBaseNumeroJS = fechaBase.getDay();
-        const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
-        const ahora = new Date();
-        const ocupados: string[] = [];
+        const { verificarDisponibilidadPaquetePilates } = await import("@/lib/actions/turno.action");
+        const idClaseOriginal = turnos[0]?.id_turno;
+        const resultado = await verificarDisponibilidadPaquetePilates({
+          fechaBase: fechaClase!,
+          horaBase: horaClase,
+          diasSeleccionados,
+          numeroSesiones,
+          mantenerHorario: mantenerHorarioRepeticion,
+          horariosPorDia: horariosPorDiaRepeticion,
+          id_turno_excluir: idClaseOriginal,
+        });
 
-        for (let semana = 0; semana < semanas + 1; semana++) {
-          for (const diaSeleccionado of diasSeleccionados) {
-            let diferenciaDias = diaSeleccionado - diaBaseNumero;
-            if (diferenciaDias < 0) diferenciaDias += 7;
-
-            const fechaTurno = new Date(fechaBase);
-            fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
-            const fechaFormateada = dayjs(fechaTurno).format("YYYY-MM-DD");
-
-            const esMismaFecha = fechaFormateada === fechaClase;
-            const [hours, minutes] = horaClase.split(':').map(Number);
-            const fechaHoraTurno = new Date(fechaTurno);
-            fechaHoraTurno.setHours(hours, minutes, 0, 0);
-            const esPasado = isPastDateTime(fechaFormateada, horaClase);
-
-            const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
-            const weeksDiff = Math.floor(diasDiferencia / 7);
-
-            if (!esMismaFecha && !esPasado && weeksDiff < semanas) {
-              const disponibilidad = await verificarDisponibilidadPilates(
-                fechaFormateada,
-                horaClase + ':00'
-              );
-
-              if (!disponibilidad.success || !disponibilidad.disponible) {
-                const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
-                ocupados.push(`${diaSpanish} ${dayjs(fechaTurno).format("DD/MM")}`);
-              }
-            }
-          }
+        if (!resultado.success) {
+          throw new Error(resultado.error || "No se pudo validar disponibilidad");
         }
 
+        const ocupados = resultado.data?.ocupados ?? [];
         setHorariosOcupados(ocupados);
         setHayConflictos(ocupados.length > 0);
       } catch (error) {
@@ -487,14 +431,10 @@ export function DetalleClaseModal({
       } finally {
         setValidandoDisponibilidad(false);
       }
-    };
-
-    const timeoutId = setTimeout(() => {
-      validarDisponibilidad();
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [mostrarModalRepetir, diasSeleccionados, semanas, fechaClase, horaClase]);
+  }, [mostrarRepeticion, diasSeleccionados, numeroSesiones, semanasDerivadas, fechaClase, horaClase, mantenerHorarioRepeticion, horariosPorDiaRepeticion]);
 
   // ============= RESOLVER CONFLICTO =============
   const handleResolverConflicto = async () => {
@@ -562,127 +502,108 @@ export function DetalleClaseModal({
       return;
     }
     setIsSubmitting(true);
-    
+
     try {
-      const fecha = fechaClase;
-      const hora = horaClase + ':00';
-      
-      const pacientesActuales = turnos.map(t => t.id_paciente);
-      const pacientesAEliminar = pacientesActuales.filter(id => !pacientesSeleccionados.includes(id));
-      const pacientesNuevos = pacientesSeleccionados.filter(id => !pacientesActuales.includes(id));
-      
-      // 1. Eliminar turnos — acumular datos para notificaciones batch
-      const notifsCancel: Array<{ nombre: string; telefono: string; fecha: string; hora: string }> = [];
-      for (const pacienteId of pacientesAEliminar) {
-        const turnoAEliminar = turnos.find(t => t.id_paciente === pacienteId);
-        if (turnoAEliminar) {
-          if (turnoAEliminar.paciente?.telefono) {
-            notifsCancel.push({
-              nombre: turnoAEliminar.paciente.nombre,
-              telefono: String(turnoAEliminar.paciente.telefono),
-              fecha: dayjs(turnoAEliminar.fecha).format("DD/MM/YYYY"),
-              hora: String(turnoAEliminar.hora).substring(0, 5),
-            });
-          }
-          const resultado = await eliminarTurno(turnoAEliminar.id_turno, { notificar: false });
-          if (!resultado.success) {
-            throw new Error(`Error eliminando turno: ${resultado.error}`);
-          }
-        }
-      }
-      if (notifsCancel.length > 0) {
-        await notificarCancelacionesPilates(notifsCancel); // after() internamente → retorna inmediato
-      }
+      const fechaCambia = Boolean(fechaEditable && fechaEditable !== fechaClase);
+      const horaCambia = Boolean(horaEditable && horaEditable !== horaClase);
+      const fechaFinal = fechaCambia ? fechaEditable! : fechaClase;
+      const horaFinal = horaCambia ? horaEditable! : horaClase;
 
-      // 2. Actualizar especialista y dificultad — acumular datos para notificaciones batch
-      const pacientesExistentes = pacientesSeleccionados.filter(id => pacientesActuales.includes(id));
-      const nuevoEspecialista = especialistas.find(e => String(e.id_usuario) === especialistaSeleccionado);
-      const notifsModif: Array<{ telefono: string; nombrePaciente: string; anterior: any; actual: any }> = [];
+      // ✅ Una sola transacción atómica: mover + eliminar + actualizar + crear
+      const resultado = await actualizarClasePilates({
+        turno_ids: turnos.map((t) => t.id_turno),
+        pacientes_finales: pacientesSeleccionados,
+        fecha_destino: fechaFinal,
+        hora_destino: horaFinal,
+        id_especialista: especialistaSeleccionado,
+        dificultad: dificultadSeleccionada,
+      });
 
-      for (const pacienteId of pacientesExistentes) {
-        const turnoExistente = turnos.find(t => t.id_paciente === pacienteId);
-        if (turnoExistente) {
-          const actualizaciones: any = {};
-          const especialistaCambia = userRole === 1 && String(turnoExistente.id_especialista) !== especialistaSeleccionado;
-
-          if (especialistaCambia) {
-            actualizaciones.id_especialista = especialistaSeleccionado;
-          }
-          if (turnoExistente.dificultad !== dificultadSeleccionada) {
-            actualizaciones.dificultad = dificultadSeleccionada;
-          }
-
-          if (Object.keys(actualizaciones).length > 0) {
-            const resultado = await actualizarTurno(turnoExistente.id_turno, actualizaciones, { notificar: false });
-            if (!resultado.success) {
-              throw new Error(`Error actualizando turno: ${resultado.error}`);
-            }
-
-            if (especialistaCambia && turnoExistente.paciente?.telefono) {
-              const fechaFmt = dayjs(turnoExistente.fecha).format("DD/MM/YYYY");
-              const horaFmt = String(turnoExistente.hora).substring(0, 5);
-              const espAnterior = turnoExistente.especialista;
-              notifsModif.push({
-                telefono: String(turnoExistente.paciente.telefono),
-                nombrePaciente: `${turnoExistente.paciente.nombre ?? ''} ${turnoExistente.paciente.apellido ?? ''}`.trim(),
-                anterior: {
-                  fecha: fechaFmt, hora: horaFmt,
-                  profesional: espAnterior ? `${espAnterior.nombre} ${espAnterior.apellido}`.trim() : 'Profesional',
-                  especialidad: turnoExistente.especialidad?.nombre || 'Pilates',
-                  boxLabel: turnoExistente.box?.numero ? `Box ${turnoExistente.box.numero}` : null,
-                },
-                actual: {
-                  fecha: fechaFmt, hora: horaFmt,
-                  profesional: nuevoEspecialista ? `${nuevoEspecialista.nombre} ${nuevoEspecialista.apellido}`.trim() : 'Profesional',
-                  especialidad: turnoExistente.especialidad?.nombre || 'Pilates',
-                  boxLabel: turnoExistente.box?.numero ? `Box ${turnoExistente.box.numero}` : null,
-                },
-              });
-            }
-          }
-        }
-      }
-      if (notifsModif.length > 0) {
-        await notificarModificacionesPilates(notifsModif); // after() internamente → retorna inmediato
-      }
-
-      // 3. Crear nuevos turnos
-      for (const pacienteId of pacientesNuevos) {
-        const resultado = await crearTurno({
-          fecha,
-          hora,
-          id_especialista: especialistaSeleccionado,
-          // id_especialidad: 4,
-          id_paciente: pacienteId,
-          estado: "programado",
-          tipo_plan: "particular",
-          dificultad: dificultadSeleccionada,
-          es_pilates: true
+      if (!resultado.success) {
+        addToast({
+          variant: 'error',
+          message: 'No se pudo actualizar la clase',
+          description: resultado.error,
+          duration: 6000,
         });
-        
-        if (!resultado.success) {
-          throw new Error(`Error creando turno para paciente ${pacienteId}: ${resultado.error}`);
-        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      // ✅ Notificaciones agrupadas a partir de lo que reporta la RPC
+      const { eliminados, actualizados } = resultado.data;
+      const nuevoEspecialista = especialistas.find(
+        (e) => String(e.id_usuario) === especialistaSeleccionado,
+      );
+
+      const notifsCancel = eliminados
+        .filter((a) => a.paciente.telefono)
+        .map((a) => ({
+          nombre: a.paciente.nombre,
+          telefono: String(a.paciente.telefono),
+          fecha: dayjs(a.fecha).format('DD/MM/YYYY'),
+          hora: String(a.hora).substring(0, 5),
+        }));
+      if (notifsCancel.length > 0) {
+        await notificarCancelacionesPilates(notifsCancel);
+      }
+
+      const notifsModif = actualizados
+        .filter((a) => {
+          if (!a.paciente.telefono) return false;
+          const movioFechaHora = fechaCambia || horaCambia;
+          const cambioEspecialista = a.anterior.id_especialista !== a.id_especialista;
+          return movioFechaHora || cambioEspecialista;
+        })
+        .map((a) => {
+          const fechaActualFmt = dayjs(a.fecha).format('DD/MM/YYYY');
+          const horaActualFmt = String(a.hora).substring(0, 5);
+          const fechaAntFmt = a.anterior.fecha ? dayjs(a.anterior.fecha).format('DD/MM/YYYY') : fechaActualFmt;
+          const horaAntFmt = a.anterior.hora ? String(a.anterior.hora).substring(0, 5) : horaActualFmt;
+          return {
+            telefono: String(a.paciente.telefono),
+            nombrePaciente: `${a.paciente.nombre ?? ''} ${a.paciente.apellido ?? ''}`.trim(),
+            anterior: {
+              fecha: fechaAntFmt,
+              hora: horaAntFmt,
+              profesional: a.anterior.especialista
+                ? `${a.anterior.especialista.nombre} ${a.anterior.especialista.apellido}`.trim()
+                : 'Profesional',
+              especialidad: 'Pilates',
+              boxLabel: null,
+            },
+            actual: {
+              fecha: fechaActualFmt,
+              hora: horaActualFmt,
+              profesional: nuevoEspecialista
+                ? `${nuevoEspecialista.nombre} ${nuevoEspecialista.apellido}`.trim()
+                : `${a.especialista.nombre} ${a.especialista.apellido}`.trim(),
+              especialidad: 'Pilates',
+              boxLabel: null,
+            },
+          };
+        });
+      if (notifsModif.length > 0) {
+        await notificarModificacionesPilates(notifsModif);
       }
 
       addToast({
         variant: 'success',
         message: 'Clase actualizada',
-        description: `Se aplicaron todos los cambios correctamente`,
+        description: 'Se aplicaron todos los cambios correctamente',
       });
 
       setCambiosPendientes(false);
-      
-      await new Promise(resolve => setTimeout(resolve, 800));
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
       await recargarDatosModal();
-      
+
       if (onTurnosActualizados) {
         await Promise.resolve(onTurnosActualizados());
       }
-      
-      await new Promise(resolve => setTimeout(resolve, 1200));
+
+      await new Promise((resolve) => setTimeout(resolve, 1200));
       onClose();
-      
     } catch (error) {
       console.error('❌ Error actualizando clase:', error);
       addToast({
@@ -792,170 +713,83 @@ export function DetalleClaseModal({
       return;
     }
 
-    setIsSubmitting(true);
+    setIsRepitiendo(true);
 
     try {
       const [year, month, day] = fechaClase!.split('-').map(Number);
       const fechaBase = new Date(year, month - 1, day);
       const diaBaseNumeroJS = fechaBase.getDay();
       const diaBaseNumero = diaBaseNumeroJS === 0 ? 7 : diaBaseNumeroJS;
-      const ahora = new Date();
-      
 
-      // ============= 🚨 VALIDACIÓN PREVIA DE DISPONIBILIDAD =============
-      const { verificarDisponibilidadPilates } = await import("@/lib/actions/turno.action");
-      const horariosOcupados: string[] = [];
-
-      // Verificar cada combinación de día seleccionado
-      for (let semana = 0; semana < semanas + 1; semana++) {
+      // Generar TODOS los candidatos posibles en un horizonte amplio y luego
+      // ordenarlos cronológicamente para tomar los primeros N. Evita que la
+      // cuenta termine antes de visitar el último día seleccionado cuando la
+      // fecha base cae sobre ese mismo día (ver crearPaqueteSesiones).
+      const candidatos: Array<{ fecha: string; hora: string }> = [];
+      const horizonteSemanas =
+        Math.ceil((numeroSesiones + diasSeleccionados.length) / diasSeleccionados.length) + 2;
+      for (let semana = 0; semana < horizonteSemanas; semana++) {
         for (const diaSeleccionado of diasSeleccionados) {
           let diferenciaDias = diaSeleccionado - diaBaseNumero;
-          if (diferenciaDias < 0) {
-            diferenciaDias += 7;
-          }
+          if (diferenciaDias < 0) diferenciaDias += 7;
 
           const fechaTurno = new Date(fechaBase);
           fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
           const fechaFormateada = dayjs(fechaTurno).format("YYYY-MM-DD");
 
-          // Saltar fecha original y fechas pasadas
-          const esMismaFecha = fechaFormateada === fechaClase;
-          const [hours, minutes] = horaClase!.split(':').map(Number);
-          const fechaHoraTurno = new Date(fechaTurno);
-          fechaHoraTurno.setHours(hours, minutes, 0, 0);
-          const esPasado = isPastDateTime(fechaFormateada, horaClase!);
+          const horaSlot = mantenerHorarioRepeticion ? horaClase! : horariosPorDiaRepeticion[diaSeleccionado];
+          if (!horaSlot) continue;
 
-          const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
-          const weeksDiff = Math.floor(diasDiferencia / 7);
+          const esMismaFecha = fechaFormateada === fechaClase && horaSlot === horaClase;
+          if (esMismaFecha) continue; // la clase original no se replica
+          if (isPastDateTime(fechaFormateada, horaSlot)) continue;
 
-          if (!esMismaFecha && !esPasado && weeksDiff < semanas) {
-            // Verificar disponibilidad
-            const disponibilidad = await verificarDisponibilidadPilates(
-              fechaFormateada,
-              horaClase + ':00'
-            );
-
-            if (!disponibilidad.success || !disponibilidad.disponible) {
-              const diaSpanish = DIAS_SEMANA.find(d => d.id === diaSeleccionado)?.nombreCorto || '';
-              horariosOcupados.push(`${diaSpanish} ${dayjs(fechaTurno).format("DD/MM")} a las ${horaClase}hs`);
-            }
-          }
+          candidatos.push({ fecha: fechaFormateada, hora: horaSlot });
         }
       }
 
-      // 🚫 Si hay horarios ocupados, BLOQUEAR creación
-      if (horariosOcupados.length > 0) {
-        setIsSubmitting(false);
-        addToast({
-          variant: 'error',
-          message: '⚠️ Horarios no disponibles',
-          description: `Ya existen clases en: ${horariosOcupados.slice(0, 3).join(', ')}${horariosOcupados.length > 3 ? ` y ${horariosOcupados.length - 3} más` : ''}. Por favor selecciona otros días.`,
-          duration: 8000,
-        });
-        return;
-      }
+      candidatos.sort((a, b) =>
+        `${a.fecha}T${a.hora}`.localeCompare(`${b.fecha}T${b.hora}`)
+      );
+      const slots = candidatos.slice(0, numeroSesiones);
 
-
-      const turnosParaLote = [];
-
-      // ✅ Iterar sobre suficientes semanas para cubrir todos los días
-      for (let semana = 0; semana < semanas + 1; semana++) {
-        for (const diaSeleccionado of diasSeleccionados) {
-          // Calcular la diferencia de días desde la fecha base
-          let diferenciaDias = diaSeleccionado - diaBaseNumero;
-          
-          // Si el día es anterior en la semana, sumar 7 días (próxima semana)
-          if (diferenciaDias < 0) {
-            diferenciaDias += 7;
-          }
-
-          // ✅ IMPORTANTE: Crear nueva fecha para no mutar la original
-          const fechaTurno = new Date(fechaBase);
-          fechaTurno.setDate(fechaTurno.getDate() + (semana * 7) + diferenciaDias);
-
-          const fechaFormateada = dayjs(fechaTurno).format("YYYY-MM-DD");
-
-          // ✅ Validar que no sea la misma fecha de la clase original
-          const esMismaFecha = fechaFormateada === fechaClase;
-          
-          // ✅ Validar que no haya pasado
-          const [hours, minutes] = horaClase!.split(':').map(Number);
-          const fechaHoraTurno = new Date(fechaTurno);
-          fechaHoraTurno.setHours(hours, minutes, 0, 0);
-          const esPasado = isPastDateTime(fechaFormateada, horaClase!);
-
-          // ✅ Calcular cuántas semanas reales hay desde la fecha base
-          const diasDiferencia = Math.floor((fechaTurno.getTime() - fechaBase.getTime()) / (24 * 60 * 60 * 1000));
-          const weeksDiff = Math.floor(diasDiferencia / 7);
-          
-          if (!esMismaFecha && !esPasado && weeksDiff < semanas) {
-            
-            // Crear turnos para cada participante
-            for (const pacienteId of pacientesSeleccionados) {
-              turnosParaLote.push({
-                id_paciente: pacienteId.toString(),
-                id_especialista: especialistaSeleccionado,
-                fecha: fechaFormateada,
-                hora_inicio: horaClase!,
-                hora_fin: (parseInt(horaClase!.split(':')[0]) + 1).toString().padStart(2, '0') + ':00',
-                estado: 'programado',
-                dificultad: dificultadSeleccionada
-              });
-            }
-          } else {
-            if (esMismaFecha) {
-            } else if (esPasado) {
-            } else if (weeksDiff >= semanas) {
-            }
-          }
-        }
-      }
-
-
-      // ✅ Validar que haya turnos para crear
-      if (turnosParaLote.length === 0) {
+      if (slots.length === 0) {
         addToast({
           variant: 'warning',
           message: 'Sin turnos nuevos',
-          description: 'Todos los horarios seleccionados ya pasaron o están fuera del rango',
+          description: 'Todos los horarios seleccionados ya pasaron o coinciden con la clase original',
         });
-        setIsSubmitting(false);
+        setIsRepitiendo(false);
         return;
       }
 
-      const resultado = await crearTurnosEnLote(turnosParaLote);
+      // 🚀 Una sola llamada RPC atómica
+      const resultado = await crearPaquetePilates({
+        id_pacientes: pacientesSeleccionados,
+        id_especialista: especialistaSeleccionado,
+        dificultad: dificultadSeleccionada,
+        turnos: slots,
+      });
 
       if (resultado.success) {
-        const exitosos = resultado.data?.exitosos ?? 0;
-        const fallidos = resultado.data?.fallidos ?? 0;
-        
-        if (fallidos > 0) {
-          addToast({
-            variant: 'warning',
-            message: 'Turnos creados parcialmente',
-            description: `Se crearon ${exitosos} turnos. ${fallidos} fallaron.`,
-          });
-        } else {
-          addToast({
-            variant: 'success',
-            message: 'Clases repetidas exitosamente',
-            description: `✅ ${exitosos} turnos creados`,
-          });
-        }
-        
-        // Cerrar modal de repetición
-        setMostrarModalRepetir(false);
-        
-        // Recargar datos
+        const creados = resultado.data?.turnosCreados ?? 0;
+        addToast({
+          variant: 'success',
+          message: 'Paquete de sesiones creado',
+          description: `✅ ${creados} turnos creados`,
+        });
+
+        setMostrarRepeticion(false);
+        setDiasSeleccionados([]);
+
         if (onTurnosActualizados) {
           await Promise.resolve(onTurnosActualizados());
         }
-        
-        // Cerrar modal principal después de un delay
+
         setTimeout(() => {
           onClose();
-        }, 1500);
-        
+        }, 1200);
+
       } else {
         addToast({
           variant: 'error',
@@ -972,179 +806,11 @@ export function DetalleClaseModal({
         description: error instanceof Error ? error.message : 'Error desconocido',
       });
     } finally {
-      setIsSubmitting(false);
+      setIsRepitiendo(false);
     }
-  };
-
-  // ============= RENDERIZAR MODAL DE REPETIR CLASE (SIMPLIFICADO) =============
-  const renderModalRepetir = () => {
-    if (!mostrarModalRepetir) return null;
-
-    return (
-      <div className="space-y-4 md:space-y-6">
-        <div className="text-center">
-          <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-2">
-            🔄 Repetir Clase de Pilates
-          </h3>
-          <p className="text-gray-600 text-xs md:text-sm">
-            Esta clase se repetirá con la misma configuración actual
-          </p>
-        </div>
-
-        {/* Información de la clase que se repetirá */}
-        <div className="bg-blue-50 p-2 md:p-4 rounded-lg space-y-2">
-          <p className="text-xs md:text-sm text-blue-800">
-            <strong>📅 Clase base:</strong> {fechaClaseDate ? dayjs(fechaClaseDate).format("dddd DD/MM/YYYY") : ''} a las {horaClase}
-          </p>
-          <p className="text-xs md:text-sm text-blue-800">
-            <strong>👥 Participantes:</strong> {pacientesSeleccionados.length}
-            <span className="text-xs text-blue-600 ml-2 block md:inline">
-              ({pacientesSeleccionados.map(id => {
-                const p = pacientes.find(pac => pac.id_paciente === id);
-                return p ? `${p.nombre} ${p.apellido}` : '';
-              }).filter(Boolean).join(', ')})
-            </span>
-          </p>
-          <p className="text-xs md:text-sm text-blue-800">
-            <strong>👨‍⚕️ Especialista:</strong> {especialistas.find(e => e.id_usuario === especialistaSeleccionado)?.nombre} {especialistas.find(e => e.id_usuario === especialistaSeleccionado)?.apellido}
-          </p>
-          <p className="text-xs md:text-sm text-blue-800">
-            <strong>📊 Nivel:</strong> {dificultadSeleccionada === 'principiante' ? '🟢 Principiante' : dificultadSeleccionada === 'intermedio' ? '🟡 Intermedio' : '🔴 Avanzado'}
-          </p>
-        </div>
-
-        {/* Selección de días (Lunes a Viernes) */}
-        <div>
-          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
-            Seleccionar días (Lunes a Viernes)
-          </label>
-          <div className="flex gap-1 md:gap-2 flex-wrap">
-            {DIAS_SEMANA.map((dia) => (
-              <button
-                key={dia.id}
-                type="button"
-                onClick={() => toggleDia(dia.id)}
-                className={`w-8 h-8 md:w-10 md:h-10 rounded-lg text-xs md:text-sm font-medium transition-colors ${
-                  diasSeleccionados.includes(dia.id)
-                    ? 'bg-[#9C1838] text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {dia.nombreCorto}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Número de semanas */}
-        <div>
-          <label htmlFor="semanas" className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
-            Cantidad de semanas
-          </label>
-          <input
-            id="semanas"
-            type="number"
-            min="1"
-            max="12"
-            value={semanas}
-            onChange={(e) => setSemanas(parseInt(e.target.value) || 1)}
-            className="w-20 md:w-24 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-          />
-        </div>
-
-        {/* ⚠️ ALERTA DE CONFLICTOS EN TIEMPO REAL */}
-        {validandoDisponibilidad && diasSeleccionados.length > 0 && (
-          <div className="text-xs md:text-sm bg-gray-50 border border-gray-200 text-gray-600 p-2 md:p-3 rounded-lg animate-pulse">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              Verificando disponibilidad...
-            </div>
-          </div>
-        )}
-
-        {!validandoDisponibilidad && hayConflictos && horariosOcupados.length > 0 && (
-          <div className="text-xs md:text-sm bg-red-50 border-2 border-red-300 text-red-800 p-2 md:p-3 rounded-lg">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <div>
-                <strong className="block mb-1">⚠️ Horarios no disponibles</strong>
-                <p className="text-xs text-red-700 mb-2">
-                  Ya existen clases de Pilates en los siguientes horarios:
-                </p>
-                <div className="max-h-20 overflow-y-auto bg-red-100 p-2 rounded space-y-1">
-                  {horariosOcupados.slice(0, 10).map((horario, idx) => (
-                    <div key={idx} className="text-xs text-red-900">
-                      • {horario} a las {horaClase}hs
-                    </div>
-                  ))}
-                  {horariosOcupados.length > 10 && (
-                    <div className="text-xs text-red-700 font-medium pt-1 border-t border-red-200">
-                      ... y {horariosOcupados.length - 10} más
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-red-700 mt-2 font-medium">
-                  💡 Cambia los días seleccionados o reduce las semanas
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Preview (solo si NO hay conflictos) */}
-        {!validandoDisponibilidad && !hayConflictos && diasSeleccionados.length > 0 && pacientesSeleccionados.length > 0 && (
-          <div className="text-xs md:text-sm bg-green-50 border border-green-200 text-green-800 p-2 md:p-4 rounded-lg">
-            <div className="flex items-start gap-2">
-              <div className="text-lg">✅</div>
-              <div>
-                <strong className="block">Todos los horarios disponibles</strong>
-                <div className="text-xs mt-1 text-green-700">
-                  Se crearán {diasSeleccionados.length * semanas * pacientesSeleccionados.length} turnos
-                </div>
-                <div className="text-xs mt-0.5 text-green-600">
-                  {pacientesSeleccionados.length} participante(s) × {diasSeleccionados.length} día(s) × {semanas} semana(s)
-                </div>
-                <div className="text-xs mt-1 text-green-700">
-                  📌 Mismos participantes, especialista y nivel de dificultad
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Botones */}
-        <div className="flex gap-2 pt-4 border-t">
-          <button
-            onClick={() => setMostrarModalRepetir(false)}
-            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
-            disabled={isSubmitting}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleRepetirClase}
-            disabled={isSubmitting || diasSeleccionados.length === 0 || hayConflictos || validandoDisponibilidad}
-            className="flex-1 px-4 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors"
-          >
-            {isSubmitting 
-              ? 'Creando clases...' 
-              : hayConflictos 
-                ? '⚠️ Horarios ocupados'
-                : validandoDisponibilidad
-                  ? 'Validando...'
-                  : 'Repetir clase'}
-          </button>
-        </div>
-      </div>
-    );
   };
 
   const renderContenido = () => {
-    // Modal de repetir clase
-    if (mostrarModalRepetir) {
-      return renderModalRepetir();
-    }
-
     // Confirmación de eliminación
     if (mostrarConfirmacionEliminar) {
       return (
@@ -1308,147 +974,27 @@ export function DetalleClaseModal({
     const especialistaActual = especialistas.find(e => String(e.id_usuario) === String(primeraClase?.id_especialista));
 
     return (
-      <div className="space-y-4 md:space-y-6 max-h-[60vh] md:max-h-[70vh] overflow-y-auto px-1">
-        {/* Información de la clase */}
-        <div className="bg-blue-50 p-3 md:p-4 rounded-lg">
-          <div className="flex items-center gap-2 mb-2 md:mb-3">
-            <Calendar className="w-3 h-3 md:w-4 md:h-4 text-blue-600" />
-            <span className="text-xs md:text-sm font-medium text-blue-800">Información de la clase</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 text-xs md:text-sm">
-            <div className="flex items-center gap-2">
-              <Clock className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
-              <span>
-                {fechaClaseDate ? dayjs(fechaClaseDate).format("dddd DD/MM") : ''} - {horaClase}
-              </span>
-            </div>
-
-            {/* ===== Controles para mover toda la clase (solo esta ocurrencia) ===== */}
-            <div className="mt-3 flex flex-col items-start gap-3">
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={movingClaseFecha ?? ''}
-                  onChange={(e) => setMovingClaseFecha(e.target.value)}
-                  className="px-2 py-1 border border-gray-300 rounded text-sm"
-                  disabled={!puedeEditar}
-                />
-                <select
-                  value={movingClaseHora ?? ''}
-                  onChange={(e) => handleMovingClaseHoraChange(e.target.value)}
-                  className="px-2 py-1 border border-gray-300 rounded text-sm bg-white"
-                  disabled={!puedeEditar}
-                >
-                  <option value="">Seleccionar hora</option>
-                  {HORARIOS_PILATES_30MIN.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <button
-                  onClick={async () => {
-                    if (!puedeEditar) {
-                      addToast({ variant: 'error', message: 'Sin permisos', description: 'Solo puedes editar clases propias o si eres administrador.' });
-                      return;
-                    }
-                    if (!movingClaseFecha || !movingClaseHora) {
-                      addToast({ variant: 'error', message: 'Fecha/hora incompleta', description: 'Completá fecha y hora antes de mover la clase.' });
-                      return;
-                    }
-
-                    setMovingClaseLoading(true);
-                    try {
-                      const excludeIds = turnos.map(t => t.id_turno);
-                      const disponibilidad = await checkDisponibilidadMultiple(movingClaseFecha, movingClaseHora, excludeIds);
-                      if (!disponibilidad.ok) {
-                        addToast({ variant: 'error', message: 'Horario ocupado', description: disponibilidad.message });
-                        return;
-                      }
-
-                      let exitosos = 0;
-                      let fallidos = 0;
-
-                      for (const turno of turnos) {
-                        const res = await actualizarTurno(turno.id_turno, { fecha: movingClaseFecha, hora: `${movingClaseHora}:00` });
-                        if (res && res.success) exitosos++; else fallidos++;
-                      }
-
-                      if (fallidos === 0) {
-                        addToast({ variant: 'success', message: 'Clase movida', description: `Se movieron ${exitosos} turnos a ${movingClaseFecha} ${movingClaseHora}` });
-                        await recargarDatosModal();
-                        if (onTurnosActualizados) await Promise.resolve(onTurnosActualizados());
-                        onClose(); // Cerrar el modal automáticamente
-                      } else {
-                        addToast({ variant: 'warning', message: 'Movido parcialmente', description: `${exitosos} éxitos, ${fallidos} fallidos.` });
-                        await recargarDatosModal();
-                        if (onTurnosActualizados) await Promise.resolve(onTurnosActualizados());
-                      }
-
-                    } catch (error) {
-                      console.error('Error moviendo clase:', error);
-                      addToast({ variant: 'error', message: 'Error', description: 'No se pudo mover la clase' });
-                    } finally {
-                      setMovingClaseLoading(false);
-                    }
-                  }}
-                  disabled={
-                    !puedeEditar ||
-                    movingClaseLoading ||
-                    !(
-                      movingClaseFecha && movingClaseHora && (movingClaseFecha !== fechaClase || movingClaseHora !== horaClase)
-                    ) ||
-                    movingClaseDisponible !== true
-                  }
-                  className="px-3 py-2 bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 text-sm w-full md:w-auto"
-                  title={
-                    movingClaseLoading
-                      ? 'Moviendo...'
-                      : movingClaseDisponible === false
-                        ? 'Horario no disponible'
-                        : !(movingClaseFecha && movingClaseHora) || (movingClaseFecha === fechaClase && movingClaseHora === horaClase)
-                          ? 'Seleccioná una fecha y hora diferente'
-                          : 'Mover esta clase'
-                  }
-                >
-                  {movingClaseLoading ? 'Moviendo...' : 'MOVER'}
-                </button>
-                {movingClaseDisponible === false && (
-                  <div className="text-xs text-red-600 mt-1">Horario no disponible</div>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Users className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
-              <span>{pacientesSeleccionados.length}/4 participantes</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Especialista - EDITABLE PARA ADMIN */}
+      <div className="space-y-3 md:space-y-4 text-left px-1">
+        {/* Especialista */}
         <div>
-          <div className="flex items-center justify-between mb-2 md:mb-3">
-            <div className="flex items-center gap-2">
-              <User className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
-              <span className="text-xs md:text-sm font-medium text-gray-700">Especialista</span>
-            </div>
-            {userRole === 1 && (
-              <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">
-                Admin
-              </span>
-            )}
-          </div>
-
+          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+            <span className="inline-flex items-center gap-2">
+              <User className="w-3 h-3 md:w-4 md:h-4" />
+              Especialista
+              {userRole === 1 && (
+                <span className="text-[10px] bg-green-100 text-green-600 px-2 py-0.5 rounded">Admin</span>
+              )}
+            </span>
+          </label>
           {userRole === 1 ? (
             <select
               value={especialistaSeleccionado}
               onChange={(e) => setEspecialistaSeleccionado(e.target.value)}
-              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+              className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
             >
               {especialistas.map(esp => (
                 <option key={esp.id_usuario} value={esp.id_usuario}>
-                  {esp.nombre} {esp.apellido}
+                  {esp.apellido}, {esp.nombre}
                 </option>
               ))}
             </select>
@@ -1459,150 +1005,330 @@ export function DetalleClaseModal({
                 style={{ backgroundColor: especialistaActual?.color || '#e0e7ff' }}
               />
               <span className="text-xs md:text-sm font-medium">
-                {especialistaActual?.nombre} {especialistaActual?.apellido}
+                {especialistaActual?.apellido}, {especialistaActual?.nombre}
               </span>
             </div>
           )}
         </div>
 
-        {/* Nivel de Dificultad - SIEMPRE EDITABLE */}
+        {/* Nivel de Dificultad */}
         <div>
-          <div className="flex items-center gap-2 mb-2 md:mb-3">
-            <Settings className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
-            <span className="text-xs md:text-sm font-medium text-gray-700">Nivel de Dificultad</span>
-          </div>
-
+          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+            <span className="inline-flex items-center gap-2">
+              <Settings className="w-3 h-3 md:w-4 md:h-4" />
+              Nivel de Dificultad
+            </span>
+          </label>
           <select
             value={dificultadSeleccionada}
             onChange={(e) => setDificultadSeleccionada(e.target.value as any)}
-            className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            className="w-full px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
             disabled={!puedeEditar}
           >
             <option value="principiante">🟢 Principiante</option>
             <option value="intermedio">🟡 Intermedio</option>
             <option value="avanzado">🔴 Avanzado</option>
           </select>
-          
-          <p className="text-xs text-gray-500 mt-2">
-            {dificultadSeleccionada === 'principiante' && 'Ideal para personas que recién comienzan con Pilates'}
-            {dificultadSeleccionada === 'intermedio' && 'Para personas con experiencia básica en Pilates'}
-            {dificultadSeleccionada === 'avanzado' && 'Para personas con experiencia avanzada en Pilates'}
-          </p>
         </div>
 
-        {/* Participantes - CON BÚSQUEDA COMO EN NUEVO TURNO */}
+        {/* Participantes — búsqueda smart vía RPC */}
         <div>
-          <div className="flex items-center gap-2 mb-2 md:mb-3">
-            <Users className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
-            <span className="text-xs md:text-sm font-medium text-gray-700">
+          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+            <span className="inline-flex items-center gap-2">
+              <Users className="w-3 h-3 md:w-4 md:h-4" />
               Participantes ({pacientesSeleccionados.length}/4)
             </span>
-          </div>
+          </label>
 
-          {/* Lista de participantes actuales */}
           {pacientesSeleccionados.length > 0 && (
-            <div className="mb-3 space-y-2">
+            <div className="mb-2 space-y-2">
               {pacientesSeleccionados.map(pacienteId => {
-                    const paciente = pacientes.find(p => p.id_paciente === pacienteId);
-                    if (!paciente) return null;
-
-                    // Buscar el turno correspondiente en esta clase para mostrar fecha/hora
-                    const turnoPaciente = turnos.find(t => Number(t.id_paciente) === Number(pacienteId));
-                    const turnoFecha = turnoPaciente?.fecha ?? fechaClase;
-                    const turnoHoraFull = turnoPaciente?.hora ?? '';
-                    const turnoHora = turnoHoraFull ? turnoHoraFull.slice(0,5) : horaClase;
-
-                    return (
-                      <div key={pacienteId} className="flex items-center justify-between p-2 md:p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="flex flex-col">
-                          <span className="text-xs md:text-sm font-medium text-green-800">
-                            {paciente.nombre} {paciente.apellido}
-                          </span>
-                          <span className="text-xs text-gray-600">
-                            Fecha: {turnoFecha} {turnoPaciente?.hora ? `• ${turnoHora}` : ''}
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() => eliminarPaciente(pacienteId)}
-                          className={`text-red-500 hover:text-red-700 transition-colors ${!puedeEditar ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title="Eliminar participante"
-                          disabled={!puedeEditar}
-                        >
-                          <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
+                const paciente = pacientes.find(p => p.id_paciente === pacienteId);
+                if (!paciente) return null;
+                return (
+                  <div key={pacienteId} className="flex items-center justify-between p-2 md:p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <span className="text-xs md:text-sm font-medium text-green-800">
+                      {paciente.apellido}, {paciente.nombre}
+                    </span>
+                    <button
+                      onClick={() => eliminarPaciente(pacienteId)}
+                      className={`text-red-500 hover:text-red-700 transition-colors ${!puedeEditar ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title="Eliminar participante"
+                      disabled={!puedeEditar}
+                    >
+                      <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
           {puedeEditar && pacientesSeleccionados.length < 4 && (
-            <div className="relative">
-              <div className="flex items-center gap-2">
-                <Plus className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
-                <span className="text-xs md:text-sm font-medium text-gray-700">Agregar participante</span>
-              </div>
-              
-              <input
-                ref={inputPacienteRef}
-                type="text"
-                value={busquedaPaciente}
-                onChange={handleBusquedaPacienteChange}
-                onFocus={() => busquedaPaciente.trim() && setMostrarListaPacientes(true)}
-                className="w-full mt-2 px-2 md:px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
-                placeholder="Buscar por nombre, DNI..."
-                autoComplete="off"
-              />
-              
-              {/* Lista de resultados de búsqueda */}
-              {mostrarListaPacientes && pacientesFiltrados.length > 0 && (
-                <div 
-                  ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
-                >
-                  {pacientesFiltrados
-                    .filter(paciente => !pacientesSeleccionados.includes(paciente.id_paciente))
-                    .map((paciente) => (
-                    <div
-                      key={paciente.id_paciente}
-                      onClick={() => agregarPaciente(paciente)}
-                      className="px-2 md:px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="text-sm font-medium">
-                        {paciente.nombre} {paciente.apellido}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        DNI: {paciente.dni} • Tel: {paciente.telefono || 'No disponible'}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {/* Mostrar mensaje cuando todos los resultados ya están agregados */}
-                  {pacientesFiltrados.every(p => pacientesSeleccionados.includes(p.id_paciente)) && (
-                    <div className="px-2 md:px-3 py-2 text-center text-gray-500 text-xs md:text-sm">
-                      Todos los pacientes encontrados ya están en la clase
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {/* Mensaje cuando no hay resultados */}
-              {mostrarListaPacientes && busquedaPaciente.trim() && pacientesFiltrados.length === 0 && (
-                <div 
-                  ref={listaPacientesRef}
-                  className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 md:p-3 text-center text-gray-500 text-xs md:text-sm"
-                >
-                  No se encontraron pacientes
-                </div>
-              )}
-            </div>
+            <PacienteAutocomplete
+              value={busquedaPaciente}
+              onChange={setBusquedaPaciente}
+              onSelect={(p: any) => agregarPaciente(p)}
+              excludePatientIds={pacientesSeleccionados}
+              placeholder="Buscar por nombre, DNI o teléfono..."
+              containerClassName="relative"
+              inputClassName="w-full pl-8 pr-2 md:pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
+              dropdownClassName="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 md:max-h-60 overflow-y-auto"
+            />
           )}
           {pacientesSeleccionados.length === 4 && (
             <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
               <span>⚠️</span>
               Clase completa (máximo 4 participantes)
             </p>
+          )}
+        </div>
+
+        {/* Fecha */}
+        <div>
+          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+            <span className="inline-flex items-center gap-2">
+              <Calendar className="w-3 h-3 md:w-4 md:h-4" />
+              Fecha
+            </span>
+          </label>
+          <DateInput
+            value={fechaEditable}
+            onChange={(v) => setFechaEditable(v)}
+            min={fechaTurnoEditarMinInput()}
+            max={fechaTurnoMaxInput()}
+            className={`w-full px-2 md:px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent ${
+              fieldErrors.fecha ? 'border-destructive' : 'border-gray-300'
+            }`}
+            disabled={!puedeEditar}
+          />
+          {fieldErrors.fecha && (
+            <p className="text-destructive text-xs mt-1">{fieldErrors.fecha}</p>
+          )}
+        </div>
+
+        {/* Hora */}
+        <div>
+          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
+            <span className="inline-flex items-center gap-2">
+              <Clock className="w-3 h-3 md:w-4 md:h-4" />
+              Hora
+            </span>
+          </label>
+          <select
+            value={horaEditable}
+            onChange={(e) => handleMovingClaseHoraChange(e.target.value)}
+            className={`w-full px-2 md:px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent bg-white ${
+              fieldErrors.hora ? 'border-destructive' : 'border-gray-300'
+            }`}
+            disabled={!puedeEditar}
+          >
+            <option value="">Seleccionar hora</option>
+            {allowedTimes.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          {fieldErrors.hora && (
+            <p className="text-destructive text-xs mt-1">{fieldErrors.hora}</p>
+          )}
+        </div>
+
+        {/* ============= PAQUETE DE SESIONES (checkbox inline, mismo patrón que nuevo-turno) ============= */}
+        <div className="border-t pt-3 md:pt-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="repetirPilates"
+              checked={mostrarRepeticion}
+              onChange={(e) => setMostrarRepeticion(e.target.checked)}
+              className="w-4 h-4 text-brand border-gray-300 rounded focus:ring-brand"
+              disabled={!puedeEditar}
+            />
+            <label htmlFor="repetirPilates" className="text-sm font-medium text-gray-700 cursor-pointer flex items-center gap-2">
+              <CalendarDays className="w-4 h-4" />
+              Repetir clase
+            </label>
+          </div>
+
+          {mostrarRepeticion && (
+            <div className="space-y-3 pl-6 border-l-2 border-brand/20">
+              {/* Días */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Días</label>
+                <div className="flex gap-2 flex-wrap">
+                  {DIAS_SEMANA.map((dia) => (
+                    <button
+                      key={dia.id}
+                      type="button"
+                      onClick={() => toggleDia(dia.id)}
+                      className={`flex-1 min-w-[50px] h-10 rounded-lg text-sm font-medium transition-colors ${
+                        diasSeleccionados.includes(dia.id)
+                          ? 'bg-brand text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {dia.nombreCorto}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cantidad */}
+              <div>
+                <label htmlFor="sesionesPilates" className="block text-sm font-medium text-gray-700 mb-2">
+                  Cantidad
+                </label>
+                <select
+                  id="sesionesPilates"
+                  value={numeroSesiones}
+                  onChange={(e) => setNumeroSesiones(parseInt(e.target.value))}
+                  className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-transparent"
+                >
+                  {[5, 8, 10, 12, 15, 20].map(num => (
+                    <option key={num} value={num}>{num} sesiones</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Horario: mantener o por día */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Horario</label>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="mantenerHorarioRepPilates"
+                    checked={mantenerHorarioRepeticion}
+                    onChange={(e) => setMantenerHorarioRepeticion(e.target.checked)}
+                    disabled={!horaClase || !puedeEditar}
+                    className="w-4 h-4 text-brand border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <label
+                    htmlFor="mantenerHorarioRepPilates"
+                    className={`text-sm ${horaClase ? "text-gray-600" : "text-gray-400 cursor-not-allowed"}`}
+                  >
+                    Mantener horario {horaClase && `(${horaClase})`}
+                  </label>
+                </div>
+
+                {!mantenerHorarioRepeticion && diasSeleccionados.length > 0 && (
+                  <div className="space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-xs text-gray-600 mb-2 flex items-center gap-1">
+                      <Info className="w-3 h-3" />
+                      Configurá el horario para cada día
+                    </div>
+                    {diasSeleccionados.map((diaId) => {
+                      const dia = DIAS_SEMANA.find((d) => d.id === diaId);
+                      if (!dia) return null;
+                      return (
+                        <div key={diaId} className="flex items-center gap-2">
+                          <label className="text-sm text-gray-700 w-20 shrink-0">{dia.nombre}</label>
+                          <select
+                            value={horariosPorDiaRepeticion[diaId] || ""}
+                            onChange={(e) => setHorariosPorDiaRepeticion((prev) => ({ ...prev, [diaId]: e.target.value }))}
+                            disabled={!puedeEditar}
+                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-brand focus:border-transparent"
+                          >
+                            <option value="">Seleccionar hora</option>
+                            {HORARIOS_PILATES_30MIN.map((h) => (
+                              <option key={h} value={h}>{h}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Preview */}
+              {diasSeleccionados.length > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-start gap-2 text-green-800">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div className="text-sm flex-1">
+                      <strong>{numeroSesiones} sesiones</strong>
+                      <div className="text-xs text-green-600 mt-1 space-y-0.5">
+                        <div>{diasSeleccionados.length} día{diasSeleccionados.length > 1 ? 's' : ''}/semana</div>
+                        {mantenerHorarioRepeticion ? (
+                          <div>Todos los días a las {horaClase}</div>
+                        ) : (
+                          <div>Horario distinto por día</div>
+                        )}
+                        <div>📌 Mismos participantes, especialista y nivel de dificultad</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Validación en tiempo real */}
+              {validandoDisponibilidad && (
+                <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm md:text-base">
+                  <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-blue-700">Validando disponibilidad de horarios...</span>
+                </div>
+              )}
+
+              {!validandoDisponibilidad && hayConflictos && horariosOcupados.length > 0 && (
+                <div className="p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-medium text-red-800 text-sm md:text-base mb-2">
+                        Horarios ocupados ({horariosOcupados.length})
+                      </p>
+                      <div className="max-h-32 md:max-h-40 overflow-y-auto">
+                        <ul className="space-y-1 text-xs md:text-sm text-red-700">
+                          {horariosOcupados.map((horario, index) => (
+                            <li key={index} className="flex items-center gap-1">
+                              <span className="w-1 h-1 bg-red-500 rounded-full shrink-0"></span>
+                              {horario} a las {horaClase}hs
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <p className="text-xs md:text-sm text-red-600 mt-2">
+                        Cambia los días seleccionados o reduce la cantidad de sesiones
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!validandoDisponibilidad && !hayConflictos && diasSeleccionados.length > 0 && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm md:text-base">
+                  <span className="text-lg md:text-xl">✓</span>
+                  <span className="text-green-700">
+                    Todos los horarios están disponibles
+                  </span>
+                </div>
+              )}
+
+              {/* Botón para crear el paquete */}
+              <button
+                type="button"
+                onClick={handleRepetirClase}
+                disabled={
+                  isRepitiendo ||
+                  diasSeleccionados.length === 0 ||
+                  hayConflictos ||
+                  validandoDisponibilidad ||
+                  !puedeEditar ||
+                  Boolean(fieldErrors.fecha) ||
+                  Boolean(fieldErrors.hora) ||
+                  (!mantenerHorarioRepeticion && diasSeleccionados.some((d) => !horariosPorDiaRepeticion[d]))
+                }
+                className="w-full px-4 py-2 bg-brand text-white rounded-md hover:bg-brand-active disabled:opacity-50 transition-colors text-sm font-medium"
+              >
+                {isRepitiendo
+                  ? 'Creando sesiones...'
+                  : hayConflictos
+                    ? '⚠️ Horarios ocupados'
+                    : validandoDisponibilidad
+                      ? 'Validando...'
+                      : `Crear ${numeroSesiones} sesiones`}
+              </button>
+            </div>
           )}
         </div>
 
@@ -1617,23 +1343,13 @@ export function DetalleClaseModal({
             <span className="hidden md:inline">Eliminar clase</span>
             <span className="md:hidden">Eliminar</span>
           </button>
-          
-          <button
-            onClick={() => setMostrarModalRepetir(true)}
-            className={`flex items-center justify-center gap-2 px-3 md:px-4 py-2 text-sm bg-purple-50 text-purple-600 rounded-md hover:bg-purple-100 transition-colors ${!puedeEditar ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={!puedeEditar}
-          >
-            <Repeat className="w-3 h-3 md:w-4 md:h-4" />
-            <span className="hidden md:inline">Repetir clase</span>
-            <span className="md:hidden">Repetir</span>
-          </button>
-          
+
           <div className="flex-1 hidden md:block"></div>
-          
+
           {cambiosPendientes && (
             <button
               onClick={handleGuardarCambios}
-              disabled={isSubmitting || !puedeEditar}
+              disabled={isSubmitting || !puedeEditar || Boolean(fieldErrors.fecha) || Boolean(fieldErrors.hora)}
               className="px-4 md:px-6 py-2 text-sm bg-[#9C1838] text-white rounded-md hover:bg-[#7d1329] disabled:opacity-50 transition-colors font-medium"
             >
               {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
