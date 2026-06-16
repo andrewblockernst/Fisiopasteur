@@ -7,6 +7,7 @@ import { dayjs, diffMsFromNow } from "@/lib/dayjs";
 import { Check, Edit2, X, Calendar, Ban, Clock, ClipboardList } from "lucide-react";
 import { EvaluacionInicialModal } from "./evaluacion-inicial-modal";
 import BaseDialog from "@/componentes/dialog/base-dialog";
+import { Input, Textarea, IconButton } from "@/componentes/ui";
 
 interface Turno {
   id_turno: number;
@@ -208,7 +209,7 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
     <>
       <div className="mb-8 border border-gray-200 rounded-lg overflow-hidden">
         {/* Título del tratamiento - EDITABLE */}
-        <div className="bg-[#9C1838] text-white px-6 py-3">
+        <div className="bg-brand text-white px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <h3 className="text-lg font-semibold">
@@ -216,39 +217,41 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
               </h3>
               {editandoTratamiento ? (
                 <div className="flex items-center gap-2">
-                  <input
+                  <Input
                     type="text"
                     value={tratamientoTemp}
                     onChange={(e) => setTratamientoTemp(e.target.value)}
-                    className="px-2 py-1 rounded text-black text-sm"
                     placeholder="Ej: Lesión hombro"
+                    size="sm"
+                    className="text-foreground"
                   />
-                  <button
+                  <IconButton
+                    aria-label="Guardar tratamiento"
+                    variant="success"
+                    size="sm"
+                    icon={<Check size={16} />}
                     onClick={handleGuardarTratamiento}
                     disabled={guardando}
-                    className="p-1 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50"
-                    title="Guardar"
-                  >
-                    <Check size={16} />
-                  </button>
-                  <button
+                  />
+                  <IconButton
+                    aria-label="Cancelar edición"
+                    variant="destructive"
+                    size="sm"
+                    icon={<X size={16} />}
                     onClick={() => {
                       setEditandoTratamiento(false);
                       setTratamientoTemp(grupo.especialidad || "");
                     }}
-                    className="p-1 bg-red-600 hover:bg-red-700 rounded"
-                    title="Cancelar"
-                  >
-                    <X size={16} />
-                  </button>
+                  />
                 </div>
               ) : (
                 <>
                   <span>{grupo.especialidad || "Sin especialidad"}</span>
                   <button
+                    type="button"
                     onClick={() => setEditandoTratamiento(true)}
-                    className="p-1 hover:bg-white/20 rounded"
-                    title="Editar nombre del tratamiento"
+                    aria-label="Editar nombre del tratamiento"
+                    className="p-1 hover:bg-white/20 rounded transition-colors"
                   >
                     <Edit2 size={16} />
                   </button>
@@ -321,12 +324,12 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
                             <span className="text-red-600 ml-1">(bloqueada - pasaron más de 5 min)</span>
                           )}
                         </label>
-                        <textarea
+                        <Textarea
                           value={evolucionTemp}
                           onChange={(e) => setEvolucionTemp(e.target.value)}
-                          className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-black mt-1"
                           rows={4}
                           placeholder="Describa la evolución del paciente en esta sesión..."
+                          className="mt-1"
                           disabled={guardando || !puedeEditar(turno)}
                         />
                         {!puedeEditar(turno) && (

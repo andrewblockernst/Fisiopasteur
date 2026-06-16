@@ -49,14 +49,14 @@ export function DeletePacienteDialog({isOpen, onClose, paciente, handleToast}: D
         <>
             <BaseDialog
                 type="warning"
-                title="confirmar eliminacion de paciente"
+                title="Confirmar eliminación de paciente"
                 message={
                     <>
-                        ¿Estás seguro de que deseas eliminar al paciente "<b>{paciente.nombre + ' ' + paciente.apellido}</b>"?
+                        ¿Estás seguro de que deseas eliminar al paciente <b>{paciente.nombre} {paciente.apellido}</b>?
                         <br />
-                        <i style={{ marginTop: 12, display: "block", fontSize: 12, fontWeight: "bold" }}>
-                        Esta acción se puede deshacer.
-                        </i>
+                        <span className="mt-3 block text-xs font-semibold text-muted-foreground">
+                            Podrás reactivar al paciente más tarde si lo necesitás.
+                        </span>
                     </>
                 }
                 isOpen={isOpen}

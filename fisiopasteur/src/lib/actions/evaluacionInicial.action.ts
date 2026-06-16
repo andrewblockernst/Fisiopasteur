@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { nowIso } from "@/lib/dayjs";
 import { revalidatePath } from "next/cache";
+import { evaluacionInicialSchema } from "@/lib/schemas/evaluacion-inicial.schema";
 
 export async function obtenerEvaluacionInicial(idGrupo: string) {
   const supabase = await createClient();
@@ -31,7 +32,15 @@ export async function obtenerEvaluacionInicial(idGrupo: string) {
 
 export async function guardarEvaluacionInicial(idGrupo: string, datos: any) {
   const supabase = await createClient();
-  
+
+  // Validación contra schema (textos con cota máx, TA con formato, booleans).
+  const parsed = evaluacionInicialSchema.safeParse(datos);
+  if (!parsed.success) {
+    const mensaje = parsed.error.issues.map((i) => i.message).join(", ");
+    return { success: false, error: `Datos de la evaluación inválidos: ${mensaje}` };
+  }
+  const datosLimpios = parsed.data;
+
   try {
     // Verificar si ya existe una evaluación
     const { data: existente } = await supabase
@@ -45,7 +54,7 @@ export async function guardarEvaluacionInicial(idGrupo: string, datos: any) {
       const { error } = await supabase
         .from('evaluacion_inicial')
         .update({
-          ...datos,
+          ...datosLimpios,
           updated_at: nowIso()
         })
         .eq('id_grupo', idGrupo);
@@ -62,7 +71,7 @@ export async function guardarEvaluacionInicial(idGrupo: string, datos: any) {
         .from('evaluacion_inicial')
         .insert({
           id_grupo: idGrupo,
-          ...datos
+          ...datosLimpios
         });
 
       if (error) {

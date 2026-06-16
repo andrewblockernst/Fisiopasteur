@@ -14,6 +14,7 @@ import Button from "@/componentes/boton";
 import { FullScreenLoading } from "@/componentes/loading";
 import { DeletePacienteDialog } from "@/componentes/paciente/eliminar-dialog";
 import { useToastStore } from "@/stores/toast-store";
+import { useInvalidatePacientes } from "@/hooks/usePacientesQuery";
 
 type Paciente = Tables<'paciente'>;
 
@@ -32,6 +33,7 @@ export default function ConsultaPacienteMobile() {
     const [viewingPaciente, setViewingPaciente] = useState<Paciente | null>(null);
     const [loading, setLoading] = useState(true);
     const toast = useToastStore();
+    const invalidatePacientes = useInvalidatePacientes();
 
     useEffect(() => {
         const loadPaciente = async () => {
@@ -86,6 +88,7 @@ export default function ConsultaPacienteMobile() {
         } catch (error) {
             console.error('Error fetching deleted paciente:', error);
         }
+        await invalidatePacientes();
     };
 
     const handleEditClose = async () => {
@@ -100,6 +103,7 @@ export default function ConsultaPacienteMobile() {
         } catch (error) {
             console.error('Error fetching updated paciente:', error);
         }
+        await invalidatePacientes();
     };
 
 
@@ -127,7 +131,7 @@ export default function ConsultaPacienteMobile() {
         <>
             
 
-            <div className="md:hidden fixed inset-0 bg-gray-50 z-50 flex flex-col text-black">
+            <div className="lg:hidden fixed inset-0 bg-gray-50 z-50 flex flex-col text-black">
                 {/* Header */}
                 <div className="bg-white border-b border-gray-100 px-4 py-4 flex-shrink-0">
                     <div className="flex items-center justify-between">
@@ -140,14 +144,14 @@ export default function ConsultaPacienteMobile() {
                             </svg>
                         </button>
                         
-                        <h1 className="text-lg font-semibold text-gray-900 absolute left-1/2 transform -translate-x-1/2">
-                            Perfil
+                        <h1 className="text-lg font-semibold text-gray-900 absolute left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+                            Perfil Paciente
                         </h1>
                         
                         <div className="flex space-x-2">
                             <button 
                                 onClick={() => setIsEditing(true)}
-                                className="p-2 bg-[#9C1838] rounded-full hover:bg-[#7D1329] transition-colors"
+                                className="p-2 bg-brand rounded-full hover:bg-brand-active transition-colors"
                             >
                                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -156,7 +160,7 @@ export default function ConsultaPacienteMobile() {
 
                             <button 
                                 onClick={() => setIsDeleting(true)}
-                                className="p-2 bg-[#9C1838] rounded-full hover:bg-[#7D1329] transition-colors"
+                                className="p-2 bg-brand rounded-full hover:bg-brand-active transition-colors"
                             >
                                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -200,7 +204,7 @@ export default function ConsultaPacienteMobile() {
                     <div className="bg-white mt-6 mx-4 rounded-lg shadow-sm">
                         <div className="px-6 py-4 border-b border-gray-100">
                             <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                                <svg className="w-5 h-5 mr-2 text-[#9C1838]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5 mr-2 text-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
                                 Información Personal
