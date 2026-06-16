@@ -1,88 +1,63 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { KPIsCardsConFiltro } from '@/componentes/dashboard/kpis-cards-con-filtro';
-import { ProximosTurnosDia } from '@/componentes/dashboard/proximos-turnos-dia';
-import { OcupacionBoxes } from '@/componentes/dashboard/ocupacion-boxes';
+import { Suspense } from "react";
+import { KPIsCardsConFiltro } from "@/componentes/dashboard/kpis-cards-con-filtro";
+import { ProximosTurnosWidget } from "@/componentes/dashboard/proximos-turnos-widget";
+import { OcupacionBoxesWidget } from "@/componentes/dashboard/ocupacion-boxes-widget";
+import { DashboardRealtimeBridge } from "@/componentes/dashboard/dashboard-realtime-bridge";
 import {
   obtenerProximosTurnos,
   obtenerOcupacionBoxes,
-  obtenerNombreOrganizacion,
-  type ProximoTurno,
-  type OcupacionBox,
-} from '@/lib/actions/dashboard.action';
-import { useAuth } from '@/hooks/AuthContext';
+} from "@/lib/actions/dashboard.action";
+import { obtenerUsuarioActual } from "@/lib/auth/usuario-actual";
+import { PageHeader } from "@/componentes/ui";
+import { cn } from "@/lib/utils";
 
-export default function Inicio() {
-  const { user, loading: authLoading } = useAuth();
-  const puedeVerBoxes = user?.puedeGestionarTurnos ?? false;
+export const dynamic = "force-dynamic";
 
-  const [proximosTurnos, setProximosTurnos] = useState<ProximoTurno[]>([]);
-  const [ocupacionBoxes, setOcupacionBoxes] = useState<OcupacionBox[]>([]);
-  const [nombreOrganizacion, setNombreOrganizacion] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+async function ProximosTurnosSection() {
+  const turnos = await obtenerProximosTurnos();
+  return <ProximosTurnosWidget initial={turnos} />;
+}
 
-  useEffect(() => {
-    const cargarDatos = async () => {
-      setLoading(true);
-      try {
-        const [turnosData, boxesResult, nombreOrganizacionData] = await Promise.all([
-          obtenerProximosTurnos(),
-          obtenerOcupacionBoxes(),
-          obtenerNombreOrganizacion(),
-        ]);
+async function OcupacionBoxesSection() {
+  const res = await obtenerOcupacionBoxes("semana");
+  if (!res.success) return null;
+  return (
+    <OcupacionBoxesWidget
+      initial={{ boxes: res.boxes, turnos: res.turnos, rango: res.rango }}
+    />
+  );
+}
 
-        setProximosTurnos(turnosData);
-        
-        if (boxesResult.success) {
-            setOcupacionBoxes(boxesResult.data);
-        }
-        
-        setNombreOrganizacion(nombreOrganizacionData);
-      } catch (error) {
-        console.error('Error cargando datos del dashboard:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+function SeccionSkeleton({ alto = "h-96" }: { alto?: string }) {
+  return <div className={cn("rounded-md bg-muted/40 animate-pulse", alto)} />;
+}
 
-    cargarDatos();
-
-    // Recargar cada 5 minutos
-    const intervalo = setInterval(cargarDatos, 5 * 60 * 1000);
-
-    return () => clearInterval(intervalo);
-  }, []);
+export default async function Inicio() {
+  const usuario = await obtenerUsuarioActual();
+  const nombreUsuario = usuario?.nombre?.trim() || "usuario";
 
   return (
-    <div className="min-h-screen text-black p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          {loading ? (
-            <div className="h-8 w-1/3 bg-gray-300 rounded animate-pulse"></div>
-          ) : (
-            <>
-              <h1 className="text-3xl font-bold text-gray-900">Bienvenido a {nombreOrganizacion}</h1>
-              <p className="text-gray-600 mt-2">Panel de control para especialistas y administradores</p>
-            </>
-          )}
-          
+    <div className="min-h-screen text-foreground">
+      <DashboardRealtimeBridge />
+      <div className="mx-auto w-full bg-background p-3 sm:p-6 lg:px-8 lg:pt-6">
+        <PageHeader
+          title={`Bienvenido ${nombreUsuario}`}
+          description="Panel de control para especialistas y administradores"
+        />
+
+        <div className="mb-6 sm:mb-8">
+          <KPIsCardsConFiltro />
         </div>
 
-        {/* Fila 1: KPIs con Filtro */}
-        <div className="mb-8">
-          <KPIsCardsConFiltro loading={loading} />
-        </div>
+        <div className={cn("grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8")}>
+          <Suspense fallback={<SeccionSkeleton />}>
+            <ProximosTurnosSection />
+          </Suspense>
 
-        {/* Fila 2: Próximos Turnos + Ocupación de Boxes (boxes solo para admin/programador) */}
-        <div className={`grid grid-cols-1 ${!authLoading && puedeVerBoxes ? 'lg:grid-cols-2' : ''} gap-8 mb-8`}>
-          <ProximosTurnosDia turnos={proximosTurnos} isLoading={loading} />
-          {!authLoading && puedeVerBoxes && (
-            <OcupacionBoxes boxes={ocupacionBoxes} isLoading={loading} />
-          )}
+          <Suspense fallback={<SeccionSkeleton />}>
+            <OcupacionBoxesSection />
+          </Suspense>
         </div>
-
       </div>
     </div>
   );

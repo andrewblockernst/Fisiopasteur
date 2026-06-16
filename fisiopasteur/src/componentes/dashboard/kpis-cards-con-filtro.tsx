@@ -1,22 +1,36 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Clock, CheckCircle, XCircle, DollarSign } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Clock, CheckCircle, XCircle, DollarSign, TrendingUp, TrendingDown, Minus, ChevronLeft, ChevronRight } from "lucide-react";
+import { dayjs, ARG_TIMEZONE } from "@/lib/dayjs";
+import { useKPIs } from "@/hooks/useDashboardQuery";
 import {
-  obtenerKPIsConHistorial,
+  BarChart,
+  Bar,
+  XAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import {
   type PeriodoFiltro,
   type KPIHistorico,
   type KPIsDashboard,
 } from "@/lib/actions/dashboard.action";
 import { getEspecialistas } from "@/lib/actions/especialista.action";
 import { useAuth } from "@/hooks/AuthContext";
+import { Card, Skeleton } from "@/componentes/ui";
+import { cn } from "@/lib/utils";
 
 interface KPICardMetricsProps {
   titulo: string;
   valor: number;
+  valorAnterior?: number;
+  /** Si true, una baja se considera positiva (ej. cancelaciones). */
+  inversoEsBueno?: boolean;
   icono: React.ReactNode;
-  color: string;
+  /** Color semántico del KPI: define el color del número y del fill de la barra. */
+  accent: "info" | "success" | "warning" | "destructive";
   datos: KPIHistorico[];
   dataKey: "Programados" | "Atendidos" | "Cancelaciones" | "Ingresos";
   descripcion: string;
@@ -24,11 +38,87 @@ interface KPICardMetricsProps {
   esMoneda?: boolean;
 }
 
-function KPICardWithChart({
+const labelComparativa: Record<PeriodoFiltro, string> = {
+  hoy: "vs día anterior",
+  semana: "vs semana anterior",
+  mes: "vs mes anterior",
+};
+
+function DeltaIndicator({
+  valor,
+  anterior,
+  inversoEsBueno = false,
+  periodo,
+}: {
+  valor: number;
+  anterior: number;
+  inversoEsBueno?: boolean;
+  periodo: PeriodoFiltro;
+}) {
+  if (anterior === 0 && valor === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <Minus className="w-3 h-3" /> {labelComparativa[periodo]}
+      </span>
+    );
+  }
+  if (anterior === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        nuevo {labelComparativa[periodo]}
+      </span>
+    );
+  }
+  const diff = valor - anterior;
+  const pct = (diff / anterior) * 100;
+  const sube = diff > 0;
+  const baja = diff < 0;
+  const esPositivo = inversoEsBueno ? baja : sube;
+  const esNegativo = inversoEsBueno ? sube : baja;
+  const colorClass = esPositivo
+    ? "text-success"
+    : esNegativo
+    ? "text-destructive"
+    : "text-muted-foreground";
+  const Icon = sube ? TrendingUp : baja ? TrendingDown : Minus;
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-xs font-medium", colorClass)}>
+      <Icon className="w-3 h-3" />
+      {sube ? "+" : ""}
+      {pct.toFixed(0)}% <span className="text-muted-foreground font-normal">{labelComparativa[periodo]}</span>
+    </span>
+  );
+}
+
+/** Maps the accent token name to a CSS variable usable by Recharts. */
+const accentColorVar: Record<KPICardMetricsProps["accent"], string> = {
+  info: "var(--info)",
+  success: "var(--success)",
+  warning: "var(--warning)",
+  destructive: "var(--destructive)",
+};
+
+const accentTextClass: Record<KPICardMetricsProps["accent"], string> = {
+  info: "text-info",
+  success: "text-success",
+  warning: "text-warning",
+  destructive: "text-destructive",
+};
+
+const accentBgClass: Record<KPICardMetricsProps["accent"], string> = {
+  info: "bg-info/10",
+  success: "bg-success/10",
+  warning: "bg-warning/10",
+  destructive: "bg-destructive/10",
+};
+
+function KPICard({
   titulo,
   valor,
+  valorAnterior,
+  inversoEsBueno,
   icono,
-  color,
+  accent,
   datos,
   dataKey,
   descripcion,
@@ -36,69 +126,98 @@ function KPICardWithChart({
   esMoneda = false,
 }: KPICardMetricsProps) {
   const tickFormatter = (value: string) => {
-    if (periodo === "hoy") {
-      return `${value}:00`;
-    } else {
-      return new Date(value + "T00:00:00").toLocaleDateString("es-ES", { month: "short", day: "numeric" });
-    }
+    if (periodo === "hoy") return `${value}:00`;
+    return new Date(value + "T00:00:00").toLocaleDateString("es-ES", {
+      month: "short",
+      day: "numeric",
+    });
   };
 
-  const formatearMoneda = (valor: number) => {
-    return new Intl.NumberFormat("es-AR", {
+  const formatearMoneda = (v: number) =>
+    new Intl.NumberFormat("es-AR", {
       style: "currency",
       currency: "ARS",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(valor);
-  };
+    }).format(v);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <p className="text-sm font-medium text-gray-600 mb-2">{titulo}</p>
-          <div className="flex items-baseline gap-2">
-            <p className={`text-3xl font-bold ${color}`}>{esMoneda ? formatearMoneda(valor) : valor}</p>
-            <p className="text-xs text-gray-500">{descripcion}</p>
+    <Card padding="md">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5">
+            {titulo}
+          </p>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <p className={cn("text-2xl sm:text-3xl font-bold leading-tight", accentTextClass[accent])}>
+              {esMoneda ? formatearMoneda(valor) : valor}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {descripcion || " "}
+            </p>
           </div>
+          {typeof valorAnterior === "number" && (
+            <div className="mt-2">
+              <DeltaIndicator
+                valor={valor}
+                anterior={valorAnterior}
+                inversoEsBueno={inversoEsBueno}
+                periodo={periodo}
+              />
+            </div>
+          )}
         </div>
-        <div className={`${color} bg-opacity-10 rounded-lg p-3 flex-shrink-0`}>
+        <div
+          className={cn(
+            "rounded-md p-2 sm:p-2.5 flex items-center justify-center shrink-0",
+            accentBgClass[accent],
+          )}
+          aria-hidden="true"
+        >
           {icono}
         </div>
       </div>
 
-      <div className="w-full h-48 mt-4">
+      {/* Gráfico de barras: oculto en mobile, visible desde sm. */}
+      <div className="hidden sm:block w-full h-40 sm:h-48 mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={datos} margin={{ top: 10, right: 15, left: 15, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+          <BarChart
+            data={datos}
+            margin={{ top: 10, right: 15, left: 15, bottom: 20 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              vertical={false}
+              stroke="var(--border)"
+            />
             <XAxis
               dataKey="fecha"
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
               tickFormatter={tickFormatter}
               tickLine={false}
               tickCount={2}
-              interval={periodo === "hoy" ? 22 : periodo === "semana" ? 5 : 28}
+              interval={periodo === "hoy" ? 6 : periodo === "semana" ? 5 : 28}
             />
             <Tooltip
-              contentStyle={{ backgroundColor: "#f3f4f6", border: "1px solid #e5e7eb" }}
-              formatter={(value) => [esMoneda ? formatearMoneda(value as number) : value, titulo]}
-              labelFormatter={(label) => `${label}${periodo === "hoy" ? ":00" : ""}`}
-            />
-            <Bar
-              dataKey={dataKey}
-              fill={
-                color.includes("blue") ? "#2563eb" :
-                color.includes("green") ? "#16a34a" :
-                color.includes("orange") ? "#ea580c" :
-                color.includes("yellow") ? "#cb9610ff" :
-                "#6b7280"
+              contentStyle={{
+                backgroundColor: "var(--popover)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-md)",
+                fontSize: 12,
+              }}
+              formatter={(value) => [
+                esMoneda ? formatearMoneda(value as number) : value,
+                titulo,
+              ]}
+              labelFormatter={(label) =>
+                `${label}${periodo === "hoy" ? ":00" : ""}`
               }
-              radius={[0, 0, 0, 0]}
             />
+            <Bar dataKey={dataKey} fill={accentColorVar[accent]} radius={[0, 0, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -112,23 +231,27 @@ interface KPIsCardsConFiltroProps {
   loading?: boolean;
 }
 
-export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps) {
+export function KPIsCardsConFiltro({
+  loading = false,
+}: KPIsCardsConFiltroProps) {
   const { user, loading: authLoading } = useAuth();
   const puedeVerTodos = user?.puedeGestionarTurnos ?? false;
 
-  const [periodo, setPeriodo] = useState<PeriodoFiltro>("hoy");
+  const [periodo, setPeriodo] = useState<PeriodoFiltro>("semana");
+  // offset = unidades de período hacia atrás (-1) o adelante (+1) desde hoy.
+  // Se resetea cuando cambia el período (los rangos no son comparables).
+  const [offset, setOffset] = useState<number>(0);
   const [especialistaId, setEspecialistaId] = useState<string>("");
   const [especialistas, setEspecialistas] = useState<EspecialistaSimple[]>([]);
-  const [datos, setDatos] = useState<KPIHistorico[]>([]);
-  const [totales, setTotales] = useState<KPIsDashboard>({
+  const TOTAL_VACIO: KPIsDashboard = {
     Programados: 0,
     Atendidos: 0,
     Cancelaciones: 0,
     Ingresos: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
+    tasaAsistencia: null,
+  };
 
-  // Cargar lista de especialistas (solo para admin/programador)
+  // Lista de especialistas (solo admin)
   useEffect(() => {
     if (!puedeVerTodos) return;
     getEspecialistas({ status: "activos" }).then((res) => {
@@ -138,78 +261,90 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
             id_usuario: e.id_usuario,
             nombre: e.nombre,
             apellido: e.apellido,
-          }))
+          })),
         );
       }
     });
   }, [puedeVerTodos]);
 
-  // Cargar KPIs — esperar a que la auth esté resuelta para no mostrar datos sin filtro
-  useEffect(() => {
-    if (authLoading) return;
+  // Unidad de dayjs para sumar/restar segun periodo
+  const unidadDelPeriodo: Record<PeriodoFiltro, "day" | "week" | "month"> = {
+    hoy: "day",
+    semana: "week",
+    mes: "month",
+  };
 
-    const cargarDatos = async () => {
-      setIsLoading(true);
-      try {
-        // Para especialistas, el servidor fuerza su propio ID; para admin, pasamos el seleccionado
-        const idAFiltrar = puedeVerTodos ? (especialistaId || undefined) : undefined;
-        const resultado = await obtenerKPIsConHistorial(periodo, idAFiltrar);
-        if (resultado.success) {
-          setDatos(resultado.datos);
-          setTotales(resultado.total);
-        } else {
-          console.error("Error cargando KPIs:", resultado.error);
-        }
-      } catch (error) {
-        console.error("Error cargando KPIs:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Fecha de referencia (YYYY-MM-DD) calculada a partir del offset
+  const referencia = dayjs()
+    .tz(ARG_TIMEZONE)
+    .add(offset, unidadDelPeriodo[periodo])
+    .format("YYYY-MM-DD");
 
-    cargarDatos();
-  }, [periodo, especialistaId, puedeVerTodos, authLoading]);
+  // Label legible del período actual mostrado
+  const labelPeriodo = (() => {
+    const ref = dayjs().tz(ARG_TIMEZONE).add(offset, unidadDelPeriodo[periodo]);
+    if (periodo === "hoy") {
+      if (offset === 0) return "Hoy";
+      if (offset === -1) return "Ayer";
+      if (offset === 1) return "Mañana";
+      return ref.format("dddd D [de] MMMM");
+    }
+    if (periodo === "semana") {
+      if (offset === 0) return "Esta semana";
+      const inicio = ref.subtract(ref.day(), "day");
+      const fin = inicio.add(6, "day");
+      const mismoMes = inicio.month() === fin.month();
+      return mismoMes
+        ? `${inicio.format("D")}–${fin.format("D [de] MMMM")}`
+        : `${inicio.format("D MMM")} – ${fin.format("D MMM")}`;
+    }
+    if (offset === 0) return "Este mes";
+    return ref.format("MMMM YYYY");
+  })();
 
-  const filtrosPeriodo: { label: string; value: PeriodoFiltro }[] = [
-    { label: "Hoy", value: "hoy" },
-    { label: "Esta Semana", value: "semana" },
-    { label: "Este Mes", value: "mes" },
+  // KPIs vía TanStack Query (cache por filtros + invalidación desde el bridge realtime).
+  // Admin/programador: filtro libre. Especialista: forzado a sus propios turnos.
+  const idAFiltrar = puedeVerTodos
+    ? especialistaId || undefined
+    : user?.id_usuario || undefined;
+  // Si el usuario no es admin/programador, exigimos su id_usuario antes de pedir
+  // KPIs — para no mostrarle datos de todos los especialistas mientras carga.
+  const filtroListo = puedeVerTodos || !!user?.id_usuario;
+  const { data: kpisData, isFetching: isFetchingKPIs } = useKPIs({
+    periodo,
+    especialistaId: idAFiltrar,
+    referencia,
+    enabled: !authLoading && filtroListo,
+  });
+
+  const datos: KPIHistorico[] = kpisData?.datos ?? [];
+  const totales: KPIsDashboard = kpisData?.total ?? TOTAL_VACIO;
+  const anterior: KPIsDashboard = kpisData?.anterior ?? TOTAL_VACIO;
+  // Skeleton solo cuando no hay datos aún (primer fetch). En refetches placeholderData
+  // mantiene el render anterior, así que no flashea.
+  const isLoading = (isFetchingKPIs && !kpisData) || authLoading;
+
+  const filtrosPeriodo: { label: string; labelCorto: string; value: PeriodoFiltro }[] = [
+    { label: "Hoy", labelCorto: "Hoy", value: "hoy" },
+    { label: "Esta semana", labelCorto: "Semana", value: "semana" },
+    { label: "Este mes", labelCorto: "Mes", value: "mes" },
   ];
 
-  if (authLoading || isLoading || loading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-between gap-2 mb-6">
-          <div className="h-10 w-48 bg-gray-200 rounded animate-pulse" />
-          <div className="flex gap-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-lg border border-gray-200 p-6 h-96 animate-pulse">
-              <div className="h-4 w-20 bg-gray-200 rounded mb-4" />
-              <div className="h-8 w-16 bg-gray-200 rounded mb-4" />
-              <div className="h-40 bg-gray-100 rounded mt-4" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Skeleton solo sobre el grid de KPIs — los controles (filtros, navegador temporal,
+  // tabs de período) permanecen visibles e interactivos durante refetches.
+  const mostrandoSkeleton = authLoading || isLoading || loading;
 
   return (
     <div>
-      {/* Barra de controles */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        {/* Selector de especialista — solo para admin/programador */}
+      {/* Barra de controles: stack en mobile, side-by-side en desktop */}
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-2 sm:gap-3 mb-4 sm:mb-6">
+        {/* Selector de especialista — solo admin */}
         {puedeVerTodos ? (
           <select
             value={especialistaId}
             onChange={(e) => setEspecialistaId(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#9C1838] focus:border-transparent"
+            aria-label="Filtrar por especialista"
+            className="h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand transition-colors w-full sm:w-auto sm:min-w-[220px] sm:max-w-xs"
           >
             <option value="">Todos los especialistas</option>
             {especialistas.map((e) => (
@@ -219,74 +354,149 @@ export function KPIsCardsConFiltro({ loading = false }: KPIsCardsConFiltroProps)
             ))}
           </select>
         ) : (
-          <div />
+          <div className="hidden sm:block" />
         )}
 
-        {/* Filtros de período */}
-        <div className="flex gap-2">
-          {filtrosPeriodo.map((filtro) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Navegador temporal: ← label → */}
+          <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
             <button
-              key={filtro.value}
-              onClick={() => setPeriodo(filtro.value)}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
-                periodo === filtro.value
-                  ? "bg-[#9C1838] text-white shadow-md"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
+              type="button"
+              aria-label="Período anterior"
+              onClick={() => setOffset((o) => o - 1)}
+              className="h-7 w-7 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             >
-              {filtro.label}
+              <ChevronLeft className="w-4 h-4" />
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setOffset(0)}
+              disabled={offset === 0}
+              aria-label="Volver al período actual"
+              className={cn(
+                "h-7 px-2.5 rounded-sm text-xs sm:text-sm font-medium min-w-[90px] sm:min-w-[110px] capitalize",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                offset === 0
+                  ? "bg-brand text-brand-foreground shadow-sm cursor-default"
+                  : "text-foreground hover:bg-background",
+              )}
+            >
+              {labelPeriodo}
+            </button>
+            <button
+              type="button"
+              aria-label="Período siguiente"
+              onClick={() => setOffset((o) => o + 1)}
+              className="h-7 w-7 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Tabs de período (segmented control) */}
+          <div
+            role="tablist"
+            aria-label="Período del dashboard"
+            className="flex gap-0.5 bg-muted rounded-md p-0.5"
+          >
+            {filtrosPeriodo.map((filtro) => (
+              <button
+                key={filtro.value}
+                role="tab"
+                aria-selected={periodo === filtro.value}
+                onClick={() => {
+                  setPeriodo(filtro.value);
+                  setOffset(0);
+                }}
+                className={cn(
+                  "h-7 px-2.5 sm:px-3 rounded-sm text-xs sm:text-sm font-medium transition-colors",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                  periodo === filtro.value
+                    ? "bg-brand text-brand-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span className="sm:hidden">{filtro.labelCorto}</span>
+                <span className="hidden sm:inline">{filtro.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICardWithChart
+      {/* Grid de KPIs (2 cols móvil → 4 cols desktop) */}
+      {mostrandoSkeleton ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} padding="md">
+              <Skeleton className="h-4 w-20 mb-3" />
+              <Skeleton className="h-8 w-16 mb-2" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="hidden sm:block h-40 w-full mt-4" />
+            </Card>
+          ))}
+        </div>
+      ) : (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <KPICard
           titulo="Programados"
           valor={totales.Programados}
-          icono={<Clock className="w-6 h-6 text-blue-600" />}
-          color="text-blue-600"
+          valorAnterior={anterior.Programados}
+          icono={<Clock className="w-5 h-5 sm:w-6 sm:h-6 text-info" />}
+          accent="info"
           datos={datos}
           dataKey="Programados"
-          descripcion=""
+          descripcion="programados + pendientes"
           periodo={periodo}
         />
 
-        <KPICardWithChart
+        <KPICard
           titulo="Atendidos"
           valor={totales.Atendidos}
-          icono={<CheckCircle className="w-6 h-6 text-green-600" />}
-          color="text-green-600"
+          valorAnterior={anterior.Atendidos}
+          icono={<CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-success" />}
+          accent="success"
           datos={datos}
           dataKey="Atendidos"
-          descripcion=""
+          descripcion={
+            totales.tasaAsistencia !== null
+              ? `${totales.tasaAsistencia.toFixed(0)}% asistencia`
+              : ""
+          }
           periodo={periodo}
         />
 
-        <KPICardWithChart
+        <KPICard
           titulo="Cancelaciones"
           valor={totales.Cancelaciones}
-          icono={<XCircle className="w-6 h-6 text-orange-600" />}
-          color="text-orange-600"
+          valorAnterior={anterior.Cancelaciones}
+          inversoEsBueno
+          icono={<XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-destructive" />}
+          accent="destructive"
           datos={datos}
           dataKey="Cancelaciones"
-          descripcion=""
+          descripcion={
+            totales.tasaAsistencia !== null
+              ? `${(100 - totales.tasaAsistencia).toFixed(0)}% cancelación`
+              : ""
+          }
           periodo={periodo}
         />
 
-        <KPICardWithChart
+        <KPICard
           titulo="Ingresos"
           valor={totales.Ingresos}
-          icono={<DollarSign className="w-6 h-6 text-yellow-600" />}
-          color="text-yellow-600"
+          valorAnterior={anterior.Ingresos}
+          icono={<DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-warning" />}
+          accent="warning"
           datos={datos}
           dataKey="Ingresos"
-          descripcion="Total"
+          descripcion="atendidos"
           periodo={periodo}
           esMoneda={true}
         />
       </div>
+      )}
     </div>
   );
 }
