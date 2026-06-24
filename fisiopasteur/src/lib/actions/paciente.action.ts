@@ -627,11 +627,11 @@ export async function agregarEvolucionClinica(idTurno: number, observaciones: st
 // Activar paciente
 export async function obtenerPrefsNotificacionPaciente(
   id: number,
-): Promise<{ success: true; data: { notif_confirmacion: boolean; notif_recordatorios: boolean } } | { success: false; error: string }> {
+): Promise<{ success: true; data: { notif_confirmacion: boolean; notif_recordatorios: boolean; activo: boolean } } | { success: false; error: string }> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("paciente")
-    .select("notif_confirmacion, notif_recordatorios")
+    .select("notif_confirmacion, notif_recordatorios, activo")
     .eq("id_paciente", id)
     .single();
 
@@ -641,6 +641,7 @@ export async function obtenerPrefsNotificacionPaciente(
     data: {
       notif_confirmacion: data.notif_confirmacion ?? true,
       notif_recordatorios: data.notif_recordatorios ?? true,
+      activo: data.activo !== false,
     },
   };
 }
