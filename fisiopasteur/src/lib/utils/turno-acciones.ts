@@ -5,7 +5,7 @@
  *  ------------ | --------- | -------- | ------ | --------
  *  programado   |    ✓      |    ✓     |   ✓    |    ✓
  *  pendiente    |    ✓      |    ✓     |   ✓    |    ✓
- *  atendido     |    ·      |    ✓     |   ✓    |    ✓
+ *  atendido     |    ·      |    ✓     |   ✓    |    ·
  *  cancelado    |    ✓      |    ·     |   ✓    |    ✓
  *
  * "confirmar" = marcar como atendido (transiciona estado → 'atendido').
@@ -31,8 +31,8 @@ export function puedeEditar(_estado: EstadoTurno | null | undefined): boolean {
   return true;
 }
 
-export function puedeEliminar(_estado: EstadoTurno | null | undefined): boolean {
-  return true;
+export function puedeEliminar(estado: EstadoTurno | null | undefined): boolean {
+  return estado !== "atendido";
 }
 
 export const ESTADOS_PARA_CONFIRMAR = Array.from(ESTADOS_CONFIRMABLES);

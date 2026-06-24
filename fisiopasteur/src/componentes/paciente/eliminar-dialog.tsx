@@ -31,14 +31,14 @@ export function DeletePacienteDialog({isOpen, onClose, paciente, handleToast}: D
             }
             handleToast({
                 variant: "success",
-                message: "El paciente se ha eliminado correctamente.",
+                message: "Paciente desactivado.",
             });
             onClose();
         } catch (error) {
             console.error( error);
             handleToast({
                 variant: "error",
-                message: error instanceof Error ? error.message : "Error al eliminar el paciente.",
+                message: error instanceof Error ? error.message : "Error al desactivar el paciente.",
             });
         } finally {
             setIsDeleting(false);
@@ -49,19 +49,22 @@ export function DeletePacienteDialog({isOpen, onClose, paciente, handleToast}: D
         <>
             <BaseDialog
                 type="warning"
-                title="Confirmar eliminación de paciente"
+                title="Desactivar paciente"
                 message={
-                    <>
-                        ¿Estás seguro de que deseas eliminar al paciente <b>{paciente.nombre} {paciente.apellido}</b>?
-                        <br />
-                        <span className="mt-3 block text-xs font-semibold text-muted-foreground">
-                            Podrás reactivar al paciente más tarde si lo necesitás.
-                        </span>
-                    </>
+                    <div className="space-y-3">
+                        <p>
+                            ¿Desactivar a <b>{paciente.nombre} {paciente.apellido}</b>?
+                        </p>
+                        <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+                            <li>El paciente queda como <b>inactivo</b> (no se elimina ni se borran sus datos).</li>
+                            <li>Sus turnos existentes se mantienen, pero el bot <b>deja de enviar confirmaciones y recordatorios</b> por WhatsApp.</li>
+                            <li>Si lo reactivás más adelante, vas a tener que <b>volver a agendar</b> los turnos futuros para que el bot envíe avisos: los recordatorios cancelados no se reactivan solos.</li>
+                        </ul>
+                    </div>
                 }
                 isOpen={isOpen}
                 primaryButton={{
-                    text: isDeleting ? "Eliminando..." : "Eliminar",
+                    text: isDeleting ? "Desactivando..." : "Desactivar",
                     onClick: handleDelete,
                 }}
                 secondaryButton={{

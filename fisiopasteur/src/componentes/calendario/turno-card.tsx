@@ -2,7 +2,7 @@ import { Clock, FileText, Phone, Pen, Trash, Handshake, MapPin, CheckCircle, XCi
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { formatoNumeroTelefono } from "@/lib/utils";
 import { Card, Badge, IconButton } from "@/componentes/ui";
-import { puedeConfirmar, puedeCancelar } from "@/lib/utils/turno-acciones";
+import { puedeConfirmar, puedeCancelar, puedeEliminar } from "@/lib/utils/turno-acciones";
 
 interface TurnoCardProps {
   turno: TurnoConDetalles;
@@ -76,14 +76,16 @@ export default function TurnoCard({
             icon={<Pen className="w-4 h-4" />}
             onClick={() => onEdit(turno)}
           />
-          <IconButton
-            aria-label="Eliminar turno"
-            size="sm"
-            variant="primary"
-            className="rounded-full"
-            icon={<Trash className="w-4 h-4" />}
-            onClick={() => onDelete(turno)}
-          />
+          {puedeEliminar(turno.estado) && (
+            <IconButton
+              aria-label="Eliminar turno"
+              size="sm"
+              variant="primary"
+              className="rounded-full"
+              icon={<Trash className="w-4 h-4" />}
+              onClick={() => onDelete(turno)}
+            />
+          )}
         </div>
       </div>
 

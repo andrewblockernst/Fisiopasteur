@@ -458,28 +458,33 @@ export async function deletePaciente(id: number): Promise<ActionResult> {
   const supabase = await createClient();
 
   try {
-    // Verificar si el paciente tiene turnos programados (futuros) asociados.
-    // Los `pendiente` corresponden a turnos pasados sin atender y no bloquean la desactivación.
-    const { data: turnos } = await supabase
-      .from("turno")
-      .select("id_turno")
-      .eq("id_paciente", id)
-      .eq("estado", "programado")
-      .limit(1);
-
-    if (turnos && turnos.length > 0) {
-      return { success: false, error: "No se puede desactivar el paciente porque tiene turnos programados asociados" };
-    }
-
     const { error } = await supabase
       .from("paciente")
       .update({ activo: false })
       .eq("id_paciente", id);
 
-
     if (error) {
       console.error("Error deleting paciente:", error);
       return { success: false, error: "Error al eliminar paciente" };
+    }
+
+    // ponytail: cancelar notificaciones pendientes para que el bot no mande recordatorios.
+    // Sin esto el cron sigue enviando porque no filtra por paciente.activo.
+    const { data: turnosDelPaciente } = await supabase
+      .from("turno")
+      .select("id_turno")
+      .eq("id_paciente", id);
+
+    const idsTurnos = (turnosDelPaciente ?? []).map((t) => t.id_turno);
+    if (idsTurnos.length > 0) {
+      const { error: notifError } = await supabase
+        .from("notificacion")
+        .delete()
+        .in("id_turno", idsTurnos)
+        .eq("estado", "pendiente");
+      if (notifError) {
+        console.error("⚠️ Error cancelando notificaciones del paciente:", notifError.message);
+      }
     }
 
     revalidatePath("/paciente");

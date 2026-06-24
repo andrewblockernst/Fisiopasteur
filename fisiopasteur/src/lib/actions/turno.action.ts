@@ -857,6 +857,10 @@ export async function eliminarTurno(id: number, opciones?: { notificar?: boolean
       return { success: false, error: "Turno no encontrado o no pertenece a esta organización" };
     }
 
+    if (turnoVerificado.estado === "atendido") {
+      return { success: false, error: "No se puede eliminar un turno marcado como atendido" };
+    }
+
     // ✅ SOFT DELETE: Cambiar estado a "eliminado" en lugar de borrar
     const { error: turnoError } = await supabase
       .from("turno")
