@@ -7,6 +7,7 @@ import { Button, IconButton, Card } from "@/componentes/ui";
 import { cn } from "@/lib/utils";
 import { useHorizontalSwipe } from "@/hooks/useHorizontalSwipe";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { toYmd } from "@/lib/dayjs";
 
 interface CalendarioTurnosProps {
   turnos: TurnoConDetalles[];
@@ -75,7 +76,12 @@ export function CalendarioTurnos({
     return index;
   }, [turnos]);
 
-  const formatDateKey = (fecha: Date) => fecha.toISOString().split('T')[0];
+  // Usa la fecha en timezone ART, no UTC: `toISOString()` corre el día al
+  // siguiente cuando la Date conserva la hora del reloj (vistas semana/día
+  // arman fechas desde `fechaActual`, que lleva la hora actual). Después de
+  // las 21:00 ART el día UTC ya cambió y los turnos se buscaban con la key
+  // equivocada. La vista mes no fallaba porque arma fechas a medianoche local.
+  const formatDateKey = (fecha: Date) => toYmd(fecha);
 
   useEffect(() => {
     if (!onViewContextChange) return;

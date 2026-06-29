@@ -38,6 +38,15 @@ const getCacheWindowRange = (fechaVisible: Date, blockOffset = 0) => {
   const primerDiaVentana = new Date(startYear, startMonth, 1);
   const ultimoDiaVentana = new Date(endYear, endMonth, 0);
 
+  // Padding de 7 días a cada lado del bloque trimestral.
+  // La vista semana puede mostrar una semana que CRUZA el borde del bloque
+  // (ej. la semana del 28/06 llega al 04/07, fuera del bloque Abr-Jun), y esos
+  // días quedaban sin datos. Una semana se extiende como máximo 6 días más allá
+  // del día de referencia, así que 7 días de margen la cubren entera. El rango
+  // sigue siendo determinístico por bloque, por lo que el cacheo no se rompe.
+  primerDiaVentana.setDate(primerDiaVentana.getDate() - 7);
+  ultimoDiaVentana.setDate(ultimoDiaVentana.getDate() + 7);
+
   return {
     fecha_desde: formatDateISO(primerDiaVentana),
     fecha_hasta: formatDateISO(ultimoDiaVentana),
