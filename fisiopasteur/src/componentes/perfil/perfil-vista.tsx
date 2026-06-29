@@ -13,8 +13,8 @@ import Button from '../boton';
 import { cerrarSesionServer } from '@/lib/actions/logOut.action';
 import EditarPerfilDialog from './editarperfil-dialog';
 import { formatoNumeroTelefono } from '@/lib/utils';
-import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
 import { useAuth } from '@/hooks/usePerfil';
+import { useReportNavigationLoading } from '@/hooks/useReportNavigationLoading';
 import { PerfilEspecialistaDesktop, ResumenActividad } from '@/componentes/especialista/perfil-especialista-desktop';
 
 interface PerfilClienteProps {
@@ -88,8 +88,10 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
     }
   };
 
+  useReportNavigationLoading(cargandoPrecios);
+
   if (cargandoPrecios) {
-    return <UnifiedSkeletonLoader type="form" showHeader={true} showFilters={false} />;
+    return null;
   }
 
   const preciosBody = (

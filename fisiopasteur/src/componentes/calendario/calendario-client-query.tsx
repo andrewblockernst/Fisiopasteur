@@ -7,9 +7,9 @@ import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { ArrowLeft, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
 import { PageHeader } from "@/componentes/ui";
 import { useTurnos, useInvalidateTurnos, usePrefetchTurnos } from "@/hooks/useTurnosQuery";
+import { useReportNavigationLoading } from "@/hooks/useReportNavigationLoading";
 
 interface CalendarioClientQueryProps {
   especialistas: any[];
@@ -119,15 +119,12 @@ export function CalendarioClientQuery({
     invalidateTurnos({ scope: 'lists' });
   };
 
-  // ✅ Mostrar skeleton solo durante la carga inicial o mientras carga datos
-  if (isInitialLoad || (turnosLoading && turnos.length === 0)) {
-    return (
-      <UnifiedSkeletonLoader 
-        type="calendar" 
-        showHeader={true} 
-        showFilters={false}
-      />
-    );
+  // Reportar carga inicial a la navbar
+  const cargandoInicial = isInitialLoad || (turnosLoading && turnos.length === 0);
+  useReportNavigationLoading(cargandoInicial);
+
+  if (cargandoInicial) {
+    return null;
   }
 
   return (

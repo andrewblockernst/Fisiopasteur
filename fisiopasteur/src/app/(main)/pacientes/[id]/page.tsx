@@ -11,10 +11,10 @@ import BarraCelular from "@/componentes/barra/barra";
 import { HistorialClinicoMobile } from "@/componentes/paciente/historial-clinico-mobile";
 import { Bone } from "lucide-react";
 import Button from "@/componentes/boton";
-import { FullScreenLoading } from "@/componentes/loading";
 import { DeletePacienteDialog } from "@/componentes/paciente/eliminar-dialog";
 import { useToastStore } from "@/stores/toast-store";
 import { useInvalidatePacientes } from "@/hooks/usePacientesQuery";
+import { useReportNavigationLoading } from "@/hooks/useReportNavigationLoading";
 
 type Paciente = Tables<'paciente'>;
 
@@ -59,8 +59,10 @@ export default function ConsultaPacienteMobile() {
         loadPaciente();
     }, [params.id, router]);
 
+    useReportNavigationLoading(loading);
+
     if (loading) {
-        return <FullScreenLoading />;
+        return null;
     }
 
     if (!viewingPaciente) {

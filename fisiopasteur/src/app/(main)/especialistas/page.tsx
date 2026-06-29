@@ -13,7 +13,8 @@ import { useAuth } from "@/hooks/usePerfil";
 import { especialistaKeys, useEspecialistasPaginated, useInvalidateEspecialistas } from "@/hooks/useEspecialistasQuery";
 import PaginacionBar from "@/componentes/paginacion/paginacion-bar";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button, Card, IconButton, Input, PageHeader, Skeleton } from "@/componentes/ui";
+import { Button, Card, IconButton, Input, PageHeader } from "@/componentes/ui";
+import { useReportNavigationLoading } from "@/hooks/useReportNavigationLoading";
 
 // type Especialidad = Tables<"especialidad">;
 type Especialidad = {
@@ -167,47 +168,10 @@ export default function EspecialistasPage() {
     router.back();
   };
 
-  // ✅ Skeleton mientras cargan los datos
+  useReportNavigationLoading(isLoading && !especialistasPaginated);
+
   if (isLoading && !especialistasPaginated) {
-    return (
-      <div className="min-h-screen text-foreground">
-        {/* Mobile header skeleton */}
-        <div className="sm:hidden bg-background border-b border-border">
-          <div className="flex items-center px-4 py-3 gap-3">
-            <Skeleton className="h-6 w-6" />
-            <Skeleton className="h-6 flex-1" />
-          </div>
-          <div className="px-4 pb-3">
-            <Skeleton className="h-10 w-full" />
-          </div>
-        </div>
-
-        <div className="mx-auto w-full bg-background p-4 sm:p-6 lg:px-8 lg:pt-6">
-          {/* Desktop header skeleton — imita el padding interno de <PageHeader /> */}
-          <div className="hidden sm:block px-4 sm:px-6 lg:px-8 pt-4 sm:pt-8 pb-4 sm:pb-6 mb-4">
-            <Skeleton className="h-8 sm:h-9 w-64" />
-          </div>
-
-          {/* Filtros skeleton */}
-          <Card className="hidden sm:block mb-4" padding="md">
-            <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
-              <div className="flex gap-3 flex-1">
-                <Skeleton className="h-10 w-80" />
-                <Skeleton className="h-10 w-32" />
-              </div>
-              <Skeleton className="h-10 w-40" />
-            </div>
-          </Card>
-
-          {/* Table/cards skeleton */}
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (

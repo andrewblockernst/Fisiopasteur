@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { PacientesTable } from "@/componentes/paciente/paciente-listado";
 import { activarPaciente } from "@/lib/actions/paciente.action";
 import type { Tables } from "@/types/database.types";
-import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
 import { NuevoPacienteDialog } from "@/componentes/paciente/nuevo-paciente-dialog";
+import { useReportNavigationLoading } from "@/hooks/useReportNavigationLoading";
 import { Search, Filter, ArrowLeft, X, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useToastStore } from "@/stores/toast-store";
@@ -116,8 +116,10 @@ export default function PacientePage() {
         router.back();
     }
 
+    useReportNavigationLoading(isLoading && !pacientesPaginated);
+
     if (isLoading && !pacientesPaginated) {
-        return <UnifiedSkeletonLoader type="table" />;
+        return null;
     }
 
     return (
