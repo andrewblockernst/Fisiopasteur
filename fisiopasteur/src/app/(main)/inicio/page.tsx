@@ -13,6 +13,9 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+ 
+// cambio
+
 async function ProximosTurnosSection() {
   const turnos = await obtenerProximosTurnos();
   return <ProximosTurnosWidget initial={turnos} />;
