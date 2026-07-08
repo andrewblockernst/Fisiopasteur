@@ -468,6 +468,7 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
       <EvaluacionInicialModal
         isOpen={modalEvaluacionAbierto}
         onClose={() => setModalEvaluacionAbierto(false)}
+        onGuardado={onActualizar}
         idGrupo={grupo.id_grupo}
         paciente={{
           nombre: grupo.paciente?.nombre || '',

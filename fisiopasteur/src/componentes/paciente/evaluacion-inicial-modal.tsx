@@ -13,6 +13,7 @@ import { LIMITES } from "@/lib/validators/common";
 interface EvaluacionInicialModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onGuardado?: () => void | Promise<void>;
   idGrupo: string;
   paciente: {
     nombre: string;
@@ -64,6 +65,7 @@ interface EvaluacionData {
 export function EvaluacionInicialModal({
   isOpen,
   onClose,
+  onGuardado,
   idGrupo,
   paciente
 }: EvaluacionInicialModalProps) {
@@ -128,6 +130,8 @@ export function EvaluacionInicialModal({
         description: "La evaluación inicial se guardó correctamente"
       });
       onClose();
+      // Refresca el historial: si el turno era individual, ahora pertenece a un grupo real
+      await onGuardado?.();
     } else {
       addToast({
         variant: "error",
