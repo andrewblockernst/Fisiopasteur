@@ -17,7 +17,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     <PerfilNavProvider flags={flags}>
       {/* Logo fijo */}
       <div className="hidden lg:block fixed top-6 left-2 z-50 bg-white rounded-full p-2 shadow-lg">
-        <Image src="/favicon.svg" alt="Logo" width={32} height={32} />
+        <Image src="/favicon.svg" alt="Logo" width={32} height={32} priority />
       </div>
 
       {/* Navegación */}

@@ -6,6 +6,7 @@ import { DayViewModal } from "@/componentes/calendario/dia-vista-dialog";
 import NuevoTurnoModal from "@/componentes/calendario/nuevo-turno-dialog";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { ArrowLeft, Plus } from "lucide-react";
+import { EspecialistaMultiSelect } from "@/componentes/calendario/especialista-multi-select";
 import { useRouter } from "next/navigation";
 import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
 import { PageHeader } from "@/componentes/ui";
@@ -13,7 +14,7 @@ import { useTurnos, useInvalidateTurnos, usePrefetchTurnos } from "@/hooks/useTu
 
 interface CalendarioClientQueryProps {
   especialistas: any[];
-  initialEspecialistaFiltro?: string;
+  initialEspecialistasFiltro?: string[];
   // pacientes: any[];
 }
 
@@ -55,7 +56,7 @@ const getCacheWindowRange = (fechaVisible: Date, blockOffset = 0) => {
 
 export function CalendarioClientQuery({
   especialistas,
-  initialEspecialistaFiltro = "",
+  initialEspecialistasFiltro = [],
   // pacientes
 }: CalendarioClientQueryProps) {
   const router = useRouter();
@@ -64,7 +65,7 @@ export function CalendarioClientQuery({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedDayTurnos, setSelectedDayTurnos] = useState<TurnoConDetalles[]>([]);
-  const [especialistaFiltro, setEspecialistaFiltro] = useState<string>(initialEspecialistaFiltro);
+  const [especialistasFiltro, setEspecialistasFiltro] = useState<string[]>(initialEspecialistasFiltro);
   const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [vistaCalendario, setVistaCalendario] = useState<VistaCalendario>('mes');
@@ -80,9 +81,9 @@ export function CalendarioClientQuery({
 
     return {
       ...range,
-      especialista_ids: especialistaFiltro ? [especialistaFiltro] : undefined,
+      especialista_ids: especialistasFiltro.length > 0 ? especialistasFiltro : undefined,
     };
-  }, [fechaVisible, especialistaFiltro]);
+  }, [fechaVisible, especialistasFiltro]);
   
   // ✅ React Query - obtener turnos con caché
   // refetchOnMount: true para que, al volver a /calendario después de crear un turno
@@ -105,11 +106,11 @@ export function CalendarioClientQuery({
     const prevRange = getCacheWindowRange(fechaVisible, -1);
     const nextRange = getCacheWindowRange(fechaVisible, 1);
 
-    const base = especialistaFiltro ? { especialista_ids: [especialistaFiltro] } : {};
+    const base = especialistasFiltro.length > 0 ? { especialista_ids: especialistasFiltro } : {};
 
     prefetchTurnos({ ...prevRange, ...base });
     prefetchTurnos({ ...nextRange, ...base });
-  }, [fechaVisible, especialistaFiltro, prefetchTurnos]);
+  }, [fechaVisible, especialistasFiltro, prefetchTurnos]);
 
   // Handler para volver (mobile)
   const handleBack = () => {
@@ -158,18 +159,13 @@ export function CalendarioClientQuery({
 
       {/* Mobile Filter */}
       <div className="shrink-0 lg:hidden px-3 py-1.5 bg-gray-50 border-b border-gray-200">
-        <select
-          value={especialistaFiltro}
-          onChange={(e) => setEspecialistaFiltro(e.target.value)}
-          className="w-full h-8 border border-gray-300 rounded-md px-2 text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent bg-white"
-        >
-          <option value="">Todos los especialistas</option>
-          {especialistas.map((especialista) => (
-            <option key={especialista.id_usuario} value={especialista.id_usuario}>
-              {especialista.apellido}, {especialista.nombre}
-            </option>
-          ))}
-        </select>
+        <EspecialistaMultiSelect
+          especialistas={especialistas}
+          seleccionados={especialistasFiltro}
+          onChange={setEspecialistasFiltro}
+          compact
+          disabled={initialEspecialistasFiltro.length > 0 && especialistas.length <= 1}
+        />
       </div>
 
       {/* Contenido Principal */}
@@ -194,8 +190,8 @@ export function CalendarioClientQuery({
             }}
             setIsCreateModalOpen={setIsCreateModalOpen}
             especialistas={especialistas}
-            especialistaSeleccionado={especialistaFiltro}
-            onEspecialistaChange={setEspecialistaFiltro}
+            especialistasSeleccionados={especialistasFiltro}
+            onEspecialistasChange={setEspecialistasFiltro}
             vistaProp={vistaCalendario}
             onVistaChange={setVistaCalendario}
             onViewContextChange={handleViewContextChange}
@@ -220,7 +216,7 @@ export function CalendarioClientQuery({
         }}
         fechaSeleccionada={selectedDate}
         horaSeleccionada={horaSeleccionada}
-        especialistaPreseleccionado={especialistaFiltro || null}
+        especialistaPreseleccionado={especialistasFiltro.length === 1 ? especialistasFiltro[0] : null}
         especialistas={especialistas}
         // pacientes={pacientes}
         onTurnoCreated={handleSuccessfulTurnoCreation}

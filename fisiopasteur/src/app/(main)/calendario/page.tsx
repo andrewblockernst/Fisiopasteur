@@ -13,7 +13,7 @@ export default async function CalendarioPage() {
   ]);
 
   let especialistas = resEspecialistas.success ? resEspecialistas.data || [] : [];
-  let initialEspecialistaFiltro = "";
+  let initialEspecialistasFiltro: string[] = [];
 
   if (user) {
     const { data: usuario } = await supabase
@@ -26,7 +26,7 @@ export default async function CalendarioPage() {
       const esEspecialista = especialistas.some((esp: any) => esp.id_usuario === usuario.id_usuario);
       if (esEspecialista) {
         especialistas = especialistas.filter((esp: any) => esp.id_usuario === usuario.id_usuario);
-        initialEspecialistaFiltro = usuario.id_usuario;
+        initialEspecialistasFiltro = [usuario.id_usuario];
       }
     }
   }
@@ -34,7 +34,7 @@ export default async function CalendarioPage() {
   return (
     <CalendarioClientQuery
       especialistas={especialistas}
-      initialEspecialistaFiltro={initialEspecialistaFiltro}
+      initialEspecialistasFiltro={initialEspecialistasFiltro}
     />
   );
 }

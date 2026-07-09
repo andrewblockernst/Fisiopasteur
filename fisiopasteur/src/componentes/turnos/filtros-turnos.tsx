@@ -350,6 +350,13 @@ export default function FiltrosTurnos({
                     return (
                       <label key={esp.id_usuario} className={optionCn}>
                         <Checkbox checked={checked} onCheckedChange={() => handleEspecialistaToggle(esp.id_usuario)} />
+                        {esp.color && (
+                          <span
+                            aria-hidden="true"
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: esp.color }}
+                          />
+                        )}
                         <span className="text-sm">{esp.apellido}, {esp.nombre}</span>
                       </label>
                     );

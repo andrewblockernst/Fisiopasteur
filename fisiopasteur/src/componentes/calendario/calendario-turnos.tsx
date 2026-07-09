@@ -8,12 +8,13 @@ import { cn } from "@/lib/utils";
 import { useHorizontalSwipe } from "@/hooks/useHorizontalSwipe";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { toYmd } from "@/lib/dayjs";
+import { EspecialistaMultiSelect } from "@/componentes/calendario/especialista-multi-select";
 
 interface CalendarioTurnosProps {
   turnos: TurnoConDetalles[];
   especialistas: any[];
-  especialistaSeleccionado: string;
-  onEspecialistaChange: (especialistaId: string) => void;
+  especialistasSeleccionados: string[];
+  onEspecialistasChange: (ids: string[]) => void;
   onDayClick: (date: Date, turnos: TurnoConDetalles[]) => void;
   onCreateTurno: (date: Date, hora?: string) => void;
   setIsCreateModalOpen?: (open: boolean) => void; // ✅ Nueva prop para controlar el modal desde el padre
@@ -42,8 +43,8 @@ interface CalendarioTurnosExtraProps {
 export function CalendarioTurnos({
   turnos,
   especialistas,
-  especialistaSeleccionado,
-  onEspecialistaChange,
+  especialistasSeleccionados,
+  onEspecialistasChange,
   onDayClick,
   onCreateTurno,
   setIsCreateModalOpen,
@@ -832,18 +833,11 @@ export function CalendarioTurnos({
                   ))}
                 </div>
 
-                <select
-                  value={especialistaSeleccionado}
-                  onChange={(e) => onEspecialistaChange(e.target.value)}
-                  className="h-10 px-3 py-2 border border-input bg-background text-foreground rounded-md text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand transition-colors"
-                >
-                  <option value="">Todos los especialistas</option>
-                  {especialistas.map((especialista) => (
-                    <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                      {especialista.apellido}, {especialista.nombre}
-                    </option>
-                  ))}
-                </select>
+                <EspecialistaMultiSelect
+                  especialistas={especialistas}
+                  seleccionados={especialistasSeleccionados}
+                  onChange={onEspecialistasChange}
+                />
 
                 <Button
                   onClick={handleCreateTurno}
