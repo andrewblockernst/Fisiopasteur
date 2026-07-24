@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSesion } from "@/lib/auth/api-auth";
 import {
     getAnalisisNoShows,
     getNoShowsPorEspecialista,
@@ -8,6 +9,8 @@ import {
 } from "@/lib/actions/analytics.action";
 
 export async function GET(request: NextRequest) {
+    const bloqueo = await requireSesion();
+    if (bloqueo) return bloqueo;
     try {
         const { searchParams } = new URL(request.url);
         const fechaInicio = searchParams.get("inicio");
@@ -80,8 +83,8 @@ export async function GET(request: NextRequest) {
             },
             {
                 headers: {
-                    // 🚀 Navegador cachea 5 minutos
-                    "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
+                    // 🚀 Navegador cachea 5 min — PRIVATE: datos por-especialista, nunca en cache compartida
+                    "Cache-Control": "private, max-age=300, stale-while-revalidate=3600",
                     // 🔐 Validar con servidor si es necesario
                     "ETag": `"${fechaInicio}-${fechaFin}"`, // -${Date.now()}
                 },

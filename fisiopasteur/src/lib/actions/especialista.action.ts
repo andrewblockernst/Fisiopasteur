@@ -6,6 +6,7 @@ const { revalidatePath } = require("next/cache");
 import type { ActionResult } from "@/lib/actions/action-result";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 import { ROLES_ESPECIALISTAS } from "@/lib/constants/roles";
+import { requireAdmin } from "@/lib/auth/guards";
 
 import {
   especialistaCreateSchema,
@@ -350,6 +351,10 @@ export async function getEspecialista(id: string): Promise<
 // Crear especialista con múltiples especialidades
 export async function createEspecialista(formData: FormData): Promise<ActionResult> {
   try {
+    // Solo admin/programador puede crear cuentas de especialista (usa service-role).
+    const admin = await requireAdmin();
+    if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
     const supabase = await createClient();
 
     const email = formData.get("email") as string;
@@ -497,6 +502,11 @@ export async function createEspecialista(formData: FormData): Promise<ActionResu
 // Actualizar especialista con múltiples especialidades
 export async function updateEspecialista(id: string, formData: FormData): Promise<ActionResult> {
   try {
+    // Solo admin/programador: puede cambiar contraseñas de cualquier cuenta (service-role).
+    // El auto-edit de perfil va por perfil.action.ts, no por acá.
+    const admin = await requireAdmin();
+    if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
     const supabase = await createClient();
 
     const nombre = formData.get("nombre") as string;
@@ -677,6 +687,10 @@ export async function updateEspecialista(id: string, formData: FormData): Promis
 // Función auxiliar para toggle activo/inactivo
 export async function toggleEspecialistaActivo(id: string, activo: boolean): Promise<ActionResult> {
   try {
+    // Solo admin/programador puede activar/desactivar especialistas.
+    const admin = await requireAdmin();
+    if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
     const supabase = await createClient();
 
     const { data: usuario, error: errorVerificacion } = await supabase

@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { obtenerProximoTurnoPorTelefono } from '@/lib/actions/turno.action';
+import { requireSesionOSecreto } from '@/lib/auth/api-auth';
 
 export async function GET(request: NextRequest) {
+  // Devuelve PII del paciente por teléfono (oráculo de enumeración): exige
+  // sesión de staff O el secreto de máquina (para un futuro uso del bot).
+  const bloqueo = await requireSesionOSecreto(request);
+  if (bloqueo) return bloqueo;
   try {
     const { searchParams } = new URL(request.url);
     const telefono = searchParams.get('telefono');
-    
-    console.log('🌐 [API] Solicitud recibida para próximo turno');
-    console.log(`📱 [API] Teléfono recibido: ${telefono}`);
-    
+
     if (!telefono) {
-      console.log('❌ [API] No se recibió teléfono');
       return NextResponse.json(
         { success: false, message: 'Teléfono es requerido' },
         { status: 400 }

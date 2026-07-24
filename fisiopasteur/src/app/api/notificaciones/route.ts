@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { 
-  obtenerNotificacionesPendientes, 
+import { requireSesion } from '@/lib/auth/api-auth';
+import {
+  obtenerNotificacionesPendientes,
   marcarNotificacionEnviada,
   marcarNotificacionFallida 
 } from '@/lib/services/notificacion.service';
@@ -8,6 +9,8 @@ import { enviarMensajePersonalizado, verificarEstadoBot } from '@/lib/services/w
 import { nowIso } from '@/lib/dayjs';
 
 export async function GET(request: NextRequest) {
+  const bloqueo = await requireSesion();
+  if (bloqueo) return bloqueo;
   try {
     // Verificar que el bot esté disponible
     const botDisponible = await verificarEstadoBot();
@@ -92,38 +95,45 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const bloqueo = await requireSesion();
+  if (bloqueo) return bloqueo;
   try {
-    const { action } = await request.json();
-    
+    // Leer el body UNA sola vez (antes se llamaba request.json() dos veces
+    // en send-test-message → "body already read" → 500).
+    const body = await request.json();
+    const { action } = body;
+
     switch (action) {
-      case 'test-bot':
+      case 'test-bot': {
         const botDisponible = await verificarEstadoBot();
         return NextResponse.json({
           success: true,
           botDisponible,
           timestamp: nowIso()
         });
-        
-      case 'send-test-message':
-        const { telefono, mensaje } = await request.json();
-        
+      }
+
+      case 'send-test-message': {
+        const { telefono, mensaje } = body;
+
         if (!telefono || !mensaje) {
           return NextResponse.json({
             success: false,
             error: 'Teléfono y mensaje son requeridos'
           }, { status: 400 });
         }
-        
+
         const resultado = await enviarMensajePersonalizado(telefono, mensaje);
         return NextResponse.json(resultado);
-        
+      }
+
       default:
         return NextResponse.json({
           success: false,
           error: 'Acción no reconocida'
         }, { status: 400 });
     }
-    
+
   } catch (error) {
     console.error('Error en endpoint de notificaciones:', error);
     return NextResponse.json({

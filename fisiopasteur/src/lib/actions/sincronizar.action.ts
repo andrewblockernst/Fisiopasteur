@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { nowIso } from '@/lib/dayjs';
+import { ROLES, esAdmin } from '@/lib/constants/roles';
 
 export async function sincronizarUsuarioAuth() {
   try {
@@ -25,11 +26,17 @@ export async function sincronizarUsuarioAuth() {
       // Buscar por email
       const { data: existeUsuarioPorEmail } = await supabase
         .from('usuario')
-        .select('id_usuario, email')
+        .select('id_usuario, email, id_rol')
         .eq('email', user.email || '')
         .single();
 
       if (existeUsuarioPorEmail) {
+        // Seguridad: no re-vincular automáticamente una cuenta admin por email.
+        // Con el signup por email sin confirmación abierto (se cierra en Fase 2),
+        // esto sería un vector de toma de cuenta / escalada de privilegios.
+        if (esAdmin((existeUsuarioPorEmail as { id_rol: number | null }).id_rol)) {
+          return { success: false, error: 'No se puede vincular automáticamente una cuenta administrativa.' };
+        }
         // Usuario existe con el email, actualizar id_usuario
         const { data: usuarioActualizado, error: updateError } = await supabase
           .from('usuario')
@@ -56,7 +63,8 @@ export async function sincronizarUsuarioAuth() {
             email: user.email || '',
             usuario: user.email?.split('@')[0] || 'usuario',
             contraseña: '',
-            id_rol: 1,
+            // Default al rol de MENOR privilegio, nunca ADMIN.
+            id_rol: ROLES.ESPECIALISTA,
             created_at: nowIso()
           })
           .select()
