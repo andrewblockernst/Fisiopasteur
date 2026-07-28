@@ -12,6 +12,28 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+ 
+// cambio
+
+async function ProximosTurnosSection() {
+  const turnos = await obtenerProximosTurnos();
+  return <ProximosTurnosWidget initial={turnos} />;
+}
+
+async function OcupacionBoxesSection() {
+  const res = await obtenerOcupacionBoxes("semana");
+  if (!res.success) return null;
+  return (
+    <OcupacionBoxesWidget
+      initial={{ boxes: res.boxes, turnos: res.turnos, rango: res.rango }}
+    />
+  );
+}
+
+function SeccionSkeleton({ alto = "h-96" }: { alto?: string }) {
+  return <div className={cn("rounded-md bg-muted/40 animate-pulse", alto)} />;
+}
+
 export default async function Inicio() {
   const [usuario, turnos, ocupacionRes] = await Promise.all([
     obtenerUsuarioActual(),
@@ -27,10 +49,11 @@ export default async function Inicio() {
   return (
     <div className="min-h-screen text-foreground">
       <DashboardRealtimeBridge />
-      <div className="mx-auto w-full bg-background p-3 sm:p-6 lg:px-8 lg:pt-6">
+      <div className="mx-auto w-full bg-background p-3 sm:px-6 sm:pb-6 sm:pt-2 lg:px-8 lg:pt-2">
         <PageHeader
           title={`Bienvenido ${nombreUsuario}`}
           description="Panel de control para especialistas y administradores"
+          showTitle
         />
 
         <div className="mb-6 sm:mb-8">

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verificarEstadoSistemaNotificaciones } from '@/lib/services/cron-recordatorios.service';
 import { obtenerEstadisticasNotificaciones } from '@/lib/services/notificacion.service';
+import { requireCronSecret } from '@/lib/auth/api-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const bloqueo = requireCronSecret(request);
+  if (bloqueo) return bloqueo;
   try {
     // Verificar estado del sistema
     const estadoSistema = await verificarEstadoSistemaNotificaciones();

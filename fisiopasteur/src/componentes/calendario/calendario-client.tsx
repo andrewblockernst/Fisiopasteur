@@ -31,7 +31,7 @@ export function CalendarioClient({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedDayTurnos, setSelectedDayTurnos] = useState<TurnoConDetalles[]>([]);
-  const [especialistaFiltro, setEspecialistaFiltro] = useState<string>("");
+  const [especialistasFiltro, setEspecialistasFiltro] = useState<string[]>([]);
   const [horaSeleccionada, setHoraSeleccionada] = useState<string>("");
   const [goToTodaySignal, setGoToTodaySignal] = useState(0);
   const [vistaCalendario, setVistaCalendario] = useState<'mes' | 'semana' | 'dia'>('mes');
@@ -69,7 +69,7 @@ export function CalendarioClient({
 
   // Aplicar filtro automático por especialista al cargar
   useEffect(() => {
-    if (!authLoading && user && !especialistaFiltro) {
+    if (!authLoading && user && especialistasFiltro.length === 0) {
       // Verificar si el usuario es especialista activo
       const esEspecialistaActivo = especialistas?.some((esp: any) => esp.id_usuario === user.id_usuario);
       
@@ -79,10 +79,10 @@ export function CalendarioClient({
       const debeAplicarFiltro = !user.puedeGestionarTurnos && esEspecialistaActivo;
       
       if (debeAplicarFiltro && user.id_usuario) {
-        setEspecialistaFiltro(user.id_usuario);
+        setEspecialistasFiltro([user.id_usuario]);
       }
     }
-  }, [user, authLoading, especialistas, especialistaFiltro]);
+  }, [user, authLoading, especialistas, especialistasFiltro]);
 
   // Handler para volver (mobile)
   const handleBack = () => {
@@ -131,8 +131,8 @@ export function CalendarioClient({
   }
 
   // Filtrar turnos por especialista
-  const turnosFiltrados = especialistaFiltro 
-    ? turnos.filter(turno => turno.id_especialista === especialistaFiltro)
+  const turnosFiltrados = especialistasFiltro.length > 0
+    ? turnos.filter(turno => especialistasFiltro.includes(turno.id_especialista))
     : turnos;
 
   const turnosHoy = getTurnosHoy();
@@ -170,8 +170,8 @@ export function CalendarioClient({
       <div className="sm:hidden px-4 py-3 bg-gray-50 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <select
-            value={especialistaFiltro}
-            onChange={(e) => setEspecialistaFiltro(e.target.value)}
+            value={especialistasFiltro.length === 1 ? especialistasFiltro[0] : ""}
+            onChange={(e) => setEspecialistasFiltro(e.target.value ? [e.target.value] : [])}
             className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#9C1838] focus:border-transparent bg-white"
           >
             <option value="">Todos los especialistas</option>
@@ -200,8 +200,8 @@ export function CalendarioClient({
               setIsCreateModalOpen(true);
             }}
             especialistas={especialistas}
-            especialistaSeleccionado={especialistaFiltro}
-            onEspecialistaChange={setEspecialistaFiltro}
+            especialistasSeleccionados={especialistasFiltro}
+            onEspecialistasChange={setEspecialistasFiltro}
           />
         </div>
       </div>
@@ -223,7 +223,7 @@ export function CalendarioClient({
         }}
         fechaSeleccionada={selectedDate}
         horaSeleccionada={horaSeleccionada} // Pasar la hora preseleccionada
-        especialistaPreseleccionado={especialistaFiltro || null}
+        especialistaPreseleccionado={especialistasFiltro.length === 1 ? especialistasFiltro[0] : null}
         especialistas={especialistas}
         // pacientes={pacientes}
         onTurnoCreated={handleSuccessfulTurnoCreation}

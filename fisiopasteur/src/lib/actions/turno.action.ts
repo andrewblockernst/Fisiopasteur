@@ -14,6 +14,7 @@ import {
   turnoUpdateSchema,
   paqueteSesionesSchema,
 } from "@/lib/schemas/turno.schema";
+import { requireOwnerOfTurno, requireAdmin } from "@/lib/auth/guards";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
@@ -490,6 +491,18 @@ export async function crearTurno(
 
     // ===== 🤖 INTEGRACIÓN CON BOT DE WHATSAPP =====
     if (enviarNotificacion) {
+      // ponytail: las prefs del paciente son la fuente de verdad. El cliente puede
+      // pedir lo que quiera, pero si el paciente tiene notif_* en false, no se envía.
+      const { data: prefsPaciente } = await supabase
+        .from("paciente")
+        .select("notif_confirmacion, notif_recordatorios, activo")
+        .eq("id_paciente", turnoCreado.id_paciente)
+        .single();
+
+      const pacienteActivo = prefsPaciente?.activo !== false;
+      const permiteConfirmacion = pacienteActivo && (prefsPaciente?.notif_confirmacion ?? true);
+      const permiteRecordatorios = pacienteActivo && (prefsPaciente?.notif_recordatorios ?? true);
+
       // ⚡ Ejecutar notificaciones en segundo plano (no blocking)
       // Esto evita que un error o timeout en WhatsApp bloquee la creación del turno
       Promise.resolve().then(async () => {
@@ -498,7 +511,7 @@ export async function crearTurno(
           const { enviarConfirmacionTurno } = await import("@/lib/services/whatsapp-bot.service");
 
           if (turnoCreado.paciente?.telefono) {
-            const debeConfirmar = opciones?.enviarConfirmacion !== false;
+            const debeConfirmar = opciones?.enviarConfirmacion !== false && permiteConfirmacion;
 
             if (debeConfirmar) {
               const mensajeConfirmacion = `Turno confirmado para ${turnoCreado.fecha} a las ${turnoCreado.hora}`;
@@ -535,9 +548,12 @@ export async function crearTurno(
             }
 
             // 4. Programar recordatorios en DB (el scheduler los enviará a su tiempo)
+            if (!permiteRecordatorios) {
+              return;
+            }
             const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
 
-            const tiposRecordatorio = recordatorios || ['1d', '2h'];
+            const tiposRecordatorio = (recordatorios && recordatorios.length > 0) ? recordatorios : ['1d', '2h'];
             const tiemposRecordatorio = calcularTiemposRecordatorio(turnoCreado.fecha, turnoCreado.hora, tiposRecordatorio);
 
             const recordatoriosValidos = Object.entries(tiemposRecordatorio)
@@ -576,6 +592,10 @@ export async function crearTurno(
 
 
 export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?: { notificar?: boolean }) {
+  const autorizado = await requireOwnerOfTurno(id);
+  if (!autorizado) {
+    return { success: false, error: "No autorizado para modificar este turno" };
+  }
   const supabase = await createClient();
 
   // Validación: solo aplican los campos efectivamente provistos.
@@ -834,6 +854,10 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
 
 // Eliminar un turno (soft delete - cambia estado a "eliminado")
 export async function eliminarTurno(id: number, opciones?: { notificar?: boolean }) {
+  const autorizado = await requireOwnerOfTurno(id);
+  if (!autorizado) {
+    return { success: false, error: "No autorizado para eliminar este turno" };
+  }
   const supabase = await createClient();
 
   try {
@@ -855,6 +879,10 @@ export async function eliminarTurno(id: number, opciones?: { notificar?: boolean
 
     if (errorVerificar || !turnoVerificado) {
       return { success: false, error: "Turno no encontrado o no pertenece a esta organización" };
+    }
+
+    if (turnoVerificado.estado === "atendido") {
+      return { success: false, error: "No se puede eliminar un turno marcado como atendido" };
     }
 
     // ✅ SOFT DELETE: Cambiar estado a "eliminado" en lugar de borrar
@@ -920,6 +948,10 @@ export async function eliminarTurno(id: number, opciones?: { notificar?: boolean
 }
 
 export async function marcarComoAtendido(id_turno: number) {
+  const autorizado = await requireOwnerOfTurno(id_turno);
+  if (!autorizado) {
+    return { success: false, error: "No autorizado para modificar este turno" };
+  }
   const supabase = await createClient();
 
   try {
@@ -993,6 +1025,11 @@ export async function actualizarEstadoTurnosMasivo(
     return { success: true, updatedIds: [], failedCount: 0 };
   }
 
+  const admin = await requireAdmin();
+  if (!admin) {
+    return { success: false, error: 'No autorizado para actualizaciones masivas de turnos' };
+  }
+
   const supabase = await createClient();
 
   try {
@@ -1028,6 +1065,10 @@ export async function actualizarEstadoTurnosMasivo(
  * Permite cambiar desde: programado, pendiente o atendido (corrección).
  */
 export async function cancelarTurno(id: number, motivo?: string) {
+  const autorizado = await requireOwnerOfTurno(id);
+  if (!autorizado) {
+    return { success: false, error: "No autorizado para cancelar este turno" };
+  }
   const supabase = await createClient();
 
   try {
@@ -2396,6 +2437,21 @@ export async function crearTurnosEnLote(turnos: Array<{
     const errores = [];
     const idPilates = await obtenerIdPilates();
 
+    // ponytail: cargar prefs en bulk una vez. Single source of truth en server.
+    const idsPacientesUnicos = Array.from(new Set(turnos.map((t) => parseInt(t.id_paciente))));
+    const { data: prefsPacientes } = await supabase
+      .from("paciente")
+      .select("id_paciente, notif_confirmacion, notif_recordatorios, activo")
+      .in("id_paciente", idsPacientesUnicos);
+    const prefsMap = new Map<number, { confirmacion: boolean; recordatorios: boolean }>();
+    for (const p of (prefsPacientes ?? []) as Array<{ id_paciente: number; notif_confirmacion: boolean | null; notif_recordatorios: boolean | null; activo: boolean | null }>) {
+      const activo = p.activo !== false;
+      prefsMap.set(p.id_paciente, {
+        confirmacion: activo && (p.notif_confirmacion ?? true),
+        recordatorios: activo && (p.notif_recordatorios ?? true),
+      });
+    }
+
     // Crear turnos uno por uno
     for (const turnoData of turnos) {
       try {
@@ -2427,6 +2483,7 @@ export async function crearTurnosEnLote(turnos: Array<{
         // Programar recordatorios individuales para cada turno
         const tiposRecordatorio = opciones?.tiposRecordatorio ?? ['1d', '2h', '1h'];
         if (tiposRecordatorio.length === 0) continue;
+        if (!prefsMap.get(turno.id_paciente!)?.recordatorios) continue;
         try {
           const { calcularTiemposRecordatorio } = await import("@/lib/utils/whatsapp.utils");
           const { registrarNotificacionesRecordatorioFlexible } = await import("@/lib/services/notificacion.service");
@@ -2471,9 +2528,12 @@ export async function crearTurnosEnLote(turnos: Array<{
     }
 
     // Procesar notificaciones agrupadas de confirmación (después de responder al usuario)
-    if (turnosCreados.length > 0 && opciones?.enviarNotificacion !== false) {
+    const turnosParaConfirmar = turnosCreados.filter(
+      (t: any) => prefsMap.get(t.id_paciente)?.confirmacion,
+    );
+    if (turnosParaConfirmar.length > 0 && opciones?.enviarNotificacion !== false) {
       after(async () => {
-        await procesarNotificacionesRepeticion(turnosCreados);
+        await procesarNotificacionesRepeticion(turnosParaConfirmar);
       });
     }
 
@@ -3013,11 +3073,24 @@ export async function crearPaqueteSesiones(params: {
 
     // ============= PASO 3: ENVIAR NOTIFICACIÓN GRUPAL + PROGRAMAR RECORDATORIOS =============
     if (turnosCreados && turnosCreados.length > 0) {
+      // ponytail: leer prefs del paciente UNA vez fuera del after(). Es la fuente de
+      // verdad: el toggle del cliente no se respeta para paquetes históricamente.
+      const { data: prefsPaciente } = await supabase
+        .from("paciente")
+        .select("notif_confirmacion, notif_recordatorios, activo")
+        .eq("id_paciente", params.id_paciente)
+        .single();
+
+      const pacienteActivo = prefsPaciente?.activo !== false;
+      const permiteConfirmacion = pacienteActivo && (prefsPaciente?.notif_confirmacion ?? true);
+      const permiteRecordatorios = pacienteActivo && (prefsPaciente?.notif_recordatorios ?? true);
+
       // En serverless usar after para ejecutar tareas post-respuesta de forma confiable.
       after(async () => {
         const telefonoPaciente = String(turnosCreados[0]?.paciente?.telefono || '').trim();
 
         try {
+          if (!permiteConfirmacion) return;
           const paciente = (turnosCreados[0] as any).paciente;
           const especialista = (turnosCreados[0] as any).especialista;
 
@@ -3034,6 +3107,7 @@ export async function crearPaqueteSesiones(params: {
         }
 
         try {
+          if (!permiteRecordatorios) return;
           if (!telefonoPaciente) {
             return;
           }
@@ -3186,11 +3260,31 @@ export async function crearPaquetePilates(params: {
       return { success: false, error: 'No se creó ningún turno' };
     }
 
+    // ponytail: bulk-load prefs (igual que crearTurnosEnLote). Single source of truth.
+    const idsPacientesPaquete = Array.from(new Set(turnosCreados.map((t: any) => t.id_paciente).filter((id: any): id is number => typeof id === 'number')));
+    const { data: prefsPacientesPaquete } = await supabase
+      .from("paciente")
+      .select("id_paciente, notif_confirmacion, notif_recordatorios, activo")
+      .in("id_paciente", idsPacientesPaquete);
+    const prefsMapPaquete = new Map<number, { confirmacion: boolean; recordatorios: boolean }>();
+    for (const p of (prefsPacientesPaquete ?? []) as Array<{ id_paciente: number; notif_confirmacion: boolean | null; notif_recordatorios: boolean | null; activo: boolean | null }>) {
+      const activo = p.activo !== false;
+      prefsMapPaquete.set(p.id_paciente, {
+        confirmacion: activo && (p.notif_confirmacion ?? true),
+        recordatorios: activo && (p.notif_recordatorios ?? true),
+      });
+    }
+
     // Confirmación agrupada por paciente + recordatorios, en background.
     if (params.enviarNotificacion !== false) {
       after(async () => {
         try {
-          await procesarNotificacionesRepeticion(turnosCreados);
+          const turnosParaConfirmar = turnosCreados.filter(
+            (t: any) => prefsMapPaquete.get(t.id_paciente)?.confirmacion,
+          );
+          if (turnosParaConfirmar.length > 0) {
+            await procesarNotificacionesRepeticion(turnosParaConfirmar);
+          }
         } catch (e) {
           console.error('Error procesando notificaciones de paquete pilates:', e);
         }
@@ -3206,6 +3300,7 @@ export async function crearPaquetePilates(params: {
           const { registrarNotificacionesRecordatorioFlexible } = await import('@/lib/services/notificacion.service');
 
           for (const t of turnosCreados) {
+            if (!prefsMapPaquete.get(t.id_paciente)?.recordatorios) continue;
             const telefono = String(t.paciente?.telefono || '').trim();
             if (!telefono) continue;
 

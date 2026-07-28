@@ -13,7 +13,7 @@ export default async function CalendarioPage() {
   ]);
 
   let especialistas = resEspecialistas.success ? resEspecialistas.data || [] : [];
-  let initialEspecialistaFiltro = "";
+  let initialEspecialistasFiltro: string[] = [];
 
   if (user) {
     const { data: usuario } = await supabase
@@ -25,8 +25,9 @@ export default async function CalendarioPage() {
     if (usuario && !puedeGestionarTurnos(usuario.id_rol ?? undefined)) {
       const esEspecialista = especialistas.some((esp: any) => esp.id_usuario === usuario.id_usuario);
       if (esEspecialista) {
-        especialistas = especialistas.filter((esp: any) => esp.id_usuario === usuario.id_usuario);
-        initialEspecialistaFiltro = usuario.id_usuario;
+        // Pre-selecciona al usuario en el filtro inicial pero no lo restringe:
+        // puede destildar/tildar a otros especialistas o usar "Todos".
+        initialEspecialistasFiltro = [usuario.id_usuario];
       }
     }
   }
@@ -34,7 +35,7 @@ export default async function CalendarioPage() {
   return (
     <CalendarioClientQuery
       especialistas={especialistas}
-      initialEspecialistaFiltro={initialEspecialistaFiltro}
+      initialEspecialistasFiltro={initialEspecialistasFiltro}
     />
   );
 }

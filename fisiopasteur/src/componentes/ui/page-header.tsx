@@ -37,6 +37,8 @@ export interface PageHeaderProps {
   className?: string;
   /** Stack para acciones en mobile: 'inline' (al lado del título) o 'below' (debajo, full width). */
   mobileActionsLayout?: "inline" | "below";
+  /** Si true, muestra el título/descripcion en desktop (por defecto se oculta ya que el navbar ya lo indica). */
+  showTitle?: boolean;
 }
 
 const PageHeader: React.FC<PageHeaderProps> = ({
@@ -47,6 +49,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   eyebrow,
   className,
   mobileActionsLayout = "inline",
+  showTitle = false,
 }) => {
   const router = useRouter();
   const showMobileHeader = !!backHref || mobileActionsLayout === "inline";
@@ -91,14 +94,14 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       {/* Desktop header + (mobile below header si mobileActionsLayout === 'below') */}
       <div
         className={cn(
-          "px-4 sm:px-6 lg:px-8 pt-0 sm:pt-4 pb-2 sm:pb-3",
+          "px-4 sm:px-6 lg:px-8 pt-0 sm:pt-1 pb-2 sm:pb-1",
           showMobileHeader && "hidden sm:block",
           className,
         )}
       >
         {eyebrow && <div className="mb-2">{eyebrow}</div>}
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-          <div className="min-w-0">
+          <div className={cn("min-w-0", !showTitle && "hidden")}>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">
               {title}
             </h1>

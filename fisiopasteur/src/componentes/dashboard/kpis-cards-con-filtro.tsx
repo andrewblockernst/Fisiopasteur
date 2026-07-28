@@ -180,7 +180,7 @@ function KPICard({
 
       {/* Gráfico de barras: oculto en mobile, visible desde sm. */}
       <div className="hidden sm:block w-full h-40 sm:h-48 mt-4">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={160}>
           <BarChart
             data={datos}
             margin={{ top: 10, right: 15, left: 15, bottom: 20 }}

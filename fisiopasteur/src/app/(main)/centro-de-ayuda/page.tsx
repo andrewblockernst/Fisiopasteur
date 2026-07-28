@@ -97,7 +97,7 @@ export default function HelpPage() {
 
   return (
     <div className="min-h-screen text-foreground">
-      <div className="mx-auto w-full bg-background p-4 sm:p-6 lg:px-8 lg:pt-6">
+      <div className="mx-auto w-full bg-background p-4 sm:p-6 sm:pt-2 lg:px-8 lg:pt-2">
         <PageHeader title="Centro de Ayuda"/>
 
       {/* Manual de Usuario */}

@@ -142,7 +142,7 @@ export default function TurnosPageContainer({
   return (
     <div className="h-[calc(100dvh-5rem)] lg:h-[100dvh] flex flex-col text-foreground overflow-hidden">
       {/* Contenido Principal */}
-      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background sm:p-6 lg:px-8 sm:flex sm:flex-col sm:h-[calc(100vh-3rem)]">
+      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background sm:px-6 sm:pb-6 sm:pt-2 lg:px-8 sm:flex sm:flex-col sm:h-[calc(100vh-3rem)]">
         {/* Header de página + leyenda en la misma fila (solo desktop) */}
         <div className="hidden sm:flex items-center justify-between gap-4">
           <PageHeader title="Turnos" />

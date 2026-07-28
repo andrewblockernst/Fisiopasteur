@@ -2,7 +2,7 @@ import { Clock, FileText, Phone, Pen, Trash, Handshake, MapPin, CheckCircle, XCi
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { formatoNumeroTelefono } from "@/lib/utils";
 import { Card, Badge, IconButton } from "@/componentes/ui";
-import { puedeConfirmar, puedeCancelar } from "@/lib/utils/turno-acciones";
+import { puedeConfirmar, puedeCancelar, puedeEliminar } from "@/lib/utils/turno-acciones";
 
 interface TurnoCardProps {
   turno: TurnoConDetalles;
@@ -15,6 +15,8 @@ interface TurnoCardProps {
   /** Devuelve clases tailwind para colorear el badge según el estado del turno. */
   getEstadoColor: (estado: string) => string;
   formatearHora: (hora: string) => string;
+  /** Si false, oculta todas las acciones (editar/eliminar/atender/cancelar). Default true. */
+  canModify?: boolean;
 }
 
 export default function TurnoCard({
@@ -25,9 +27,10 @@ export default function TurnoCard({
   onCancelar,
   getEstadoColor,
   formatearHora,
+  canModify = true,
 }: TurnoCardProps) {
-  const mostrarMarcarAtendido = !!onMarcarAtendido && puedeConfirmar(turno.estado);
-  const mostrarCancelar = !!onCancelar && puedeCancelar(turno.estado);
+  const mostrarMarcarAtendido = canModify && !!onMarcarAtendido && puedeConfirmar(turno.estado);
+  const mostrarCancelar = canModify && !!onCancelar && puedeCancelar(turno.estado);
   return (
     <Card padding="md" interactive={false} className="relative hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-4 gap-3">
@@ -68,22 +71,26 @@ export default function TurnoCard({
               onClick={() => onCancelar?.(turno)}
             />
           )}
-          <IconButton
-            aria-label="Editar turno"
-            size="sm"
-            variant="primary"
-            className="rounded-full"
-            icon={<Pen className="w-4 h-4" />}
-            onClick={() => onEdit(turno)}
-          />
-          <IconButton
-            aria-label="Eliminar turno"
-            size="sm"
-            variant="primary"
-            className="rounded-full"
-            icon={<Trash className="w-4 h-4" />}
-            onClick={() => onDelete(turno)}
-          />
+          {canModify && (
+            <IconButton
+              aria-label="Editar turno"
+              size="sm"
+              variant="primary"
+              className="rounded-full"
+              icon={<Pen className="w-4 h-4" />}
+              onClick={() => onEdit(turno)}
+            />
+          )}
+          {canModify && puedeEliminar(turno.estado) && (
+            <IconButton
+              aria-label="Eliminar turno"
+              size="sm"
+              variant="primary"
+              className="rounded-full"
+              icon={<Trash className="w-4 h-4" />}
+              onClick={() => onDelete(turno)}
+            />
+          )}
         </div>
       </div>
 

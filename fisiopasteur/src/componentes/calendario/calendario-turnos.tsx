@@ -7,12 +7,14 @@ import { Button, IconButton, Card } from "@/componentes/ui";
 import { cn } from "@/lib/utils";
 import { useHorizontalSwipe } from "@/hooks/useHorizontalSwipe";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { toYmd } from "@/lib/dayjs";
+import { EspecialistaMultiSelect } from "@/componentes/calendario/especialista-multi-select";
 
 interface CalendarioTurnosProps {
   turnos: TurnoConDetalles[];
   especialistas: any[];
-  especialistaSeleccionado: string;
-  onEspecialistaChange: (especialistaId: string) => void;
+  especialistasSeleccionados: string[];
+  onEspecialistasChange: (ids: string[]) => void;
   onDayClick: (date: Date, turnos: TurnoConDetalles[]) => void;
   onCreateTurno: (date: Date, hora?: string) => void;
   setIsCreateModalOpen?: (open: boolean) => void; // ✅ Nueva prop para controlar el modal desde el padre
@@ -41,8 +43,8 @@ interface CalendarioTurnosExtraProps {
 export function CalendarioTurnos({
   turnos,
   especialistas,
-  especialistaSeleccionado,
-  onEspecialistaChange,
+  especialistasSeleccionados,
+  onEspecialistasChange,
   onDayClick,
   onCreateTurno,
   setIsCreateModalOpen,
@@ -54,10 +56,6 @@ export function CalendarioTurnos({
 }: CalendarioTurnosProps & CalendarioTurnosExtraProps) {
   const [fechaActual, setFechaActual] = useState(new Date());
   const [vistaInternal, setVistaInternal] = useState<VistaCalendario>('mes');
-  // Alto del contenedor scrollable de la vista mes. Lo usamos para cotar el
-  // alto MÁXIMO de cada fila a (alto/6), garantizando que entren 6 filas.
-  const mesScrollRef = useRef<HTMLDivElement | null>(null);
-  const [mesScrollHeight, setMesScrollHeight] = useState<number>(0);
   const vista = vistaProp ?? vistaInternal;
   const turnosPorFecha = useMemo(() => {
     const index = new Map<string, TurnoConDetalles[]>();
@@ -75,7 +73,12 @@ export function CalendarioTurnos({
     return index;
   }, [turnos]);
 
-  const formatDateKey = (fecha: Date) => fecha.toISOString().split('T')[0];
+  // Usa la fecha en timezone ART, no UTC: `toISOString()` corre el día al
+  // siguiente cuando la Date conserva la hora del reloj (vistas semana/día
+  // arman fechas desde `fechaActual`, que lleva la hora actual). Después de
+  // las 21:00 ART el día UTC ya cambió y los turnos se buscaban con la key
+  // equivocada. La vista mes no fallaba porque arma fechas a medianoche local.
+  const formatDateKey = (fecha: Date) => toYmd(fecha);
 
   useEffect(() => {
     if (!onViewContextChange) return;
@@ -85,18 +88,6 @@ export function CalendarioTurnos({
     });
   }, [vista, fechaActual, onViewContextChange]);
 
-  // Observa el alto del contenedor scrollable del mes para cotar las filas.
-  // Se re-monta cuando cambia la vista (porque el ref del DOM cambia).
-  useLayoutEffect(() => {
-    if (vista !== 'mes') return;
-    const el = mesScrollRef.current;
-    if (!el) return;
-    const recompute = () => setMesScrollHeight(el.clientHeight);
-    recompute();
-    const ro = new ResizeObserver(recompute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [vista]);
 
   // Maneja el estado para abrir/cerrar el modal de creación de turno
 // const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -263,22 +254,8 @@ export function CalendarioTurnos({
       dias.push(new Date(fechaActual.getFullYear(), fechaActual.getMonth(), dia));
     }
 
-    // Calcular cuántas filas tiene el mes para distribuir el alto disponible
     const totalCeldas = diaSemanaInicio + diasEnMes;
     const filas = Math.ceil(totalCeldas / 7);
-
-    // Cota MÁXIMA por fila: garantiza que 6 filas entren en pantalla.
-    // - Si mesScrollHeight = 0 (primer render) → no aplicamos cap todavía.
-    // - El piso real lo impone minmax(108px, ...): si maxRowPx < 108, igualmente
-    //   las filas valen 108 y el calendario scrollea internamente.
-    const MIN_ROW = 108;
-    const ROWS_TARGET = 6;
-    const maxRowPx = mesScrollHeight > 0
-      ? Math.max(MIN_ROW, Math.floor(mesScrollHeight / ROWS_TARGET))
-      : null;
-    // maxHeight del grid: filas × maxRowPx + (filas-1) px de gap.
-    // Sin esto, con `1fr` las filas crecerían a todo el alto disponible.
-    const gridMaxHeight = maxRowPx ? filas * maxRowPx + (filas - 1) : null;
 
     return (
       <Card variant="elevated" padding="none" className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -291,27 +268,11 @@ export function CalendarioTurnos({
           ))}
         </div>
 
-        {/*
-          Contenedor scrollable: si las filas no entran en pantalla, el SCROLL
-          ocurre acá adentro (calendario), no en la página. El header de días
-          queda fijo arriba porque está fuera de este contenedor.
-        */}
-        <div ref={mesScrollRef} className="flex-1 min-h-0 overflow-y-auto">
-          {/*
-            Grid de días.
-            - minmax(108px, 1fr): pisos de 108px garantizan espacio para el número
-              del día + 3 turnos + línea "+X más". Si hay espacio extra, 1fr
-              hace crecer las filas — pero el `maxHeight` de abajo las acota.
-            - min-h-full: cuando el viewport es alto, el grid intenta llenar el
-              contenedor; max-h le pone techo (filas × maxRowPx) → "6 filas en pantalla".
-            - gap-px sobre bg-border: las líneas divisorias son el fondo del grid
-              mostrándose a través de los 1px de gap.
-          */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div
             className="grid grid-cols-7 gap-px bg-border min-h-full"
             style={{
-              gridTemplateRows: `repeat(${filas}, minmax(108px, 1fr))`,
-              ...(gridMaxHeight ? { maxHeight: `${gridMaxHeight}px` } : {}),
+              gridTemplateRows: `repeat(${filas}, minmax(124px, 1fr))`,
             }}
           >
           {dias.map((fecha, index) => {
@@ -320,15 +281,17 @@ export function CalendarioTurnos({
             }
             
             const turnosDelDia = getTurnosParaDia(fecha);
+            // En los recuadros ocultamos cancelados; el modal recibe la lista completa.
+            const turnosVisibles = turnosDelDia.filter((t) => t.estado !== 'cancelado');
             const esHoy = esDiaActual(fecha);
             const puedeAgregarEnFecha = !isFechaPasada(fecha);
             
             return (
               <div
                 key={index}
-                // Coherente con el minmax(108px, 1fr) del grid: garantiza
-                // ~24px del número + 3 turnos (≈ 18px c/u) + línea "+X más".
-                className="bg-white min-h-[108px] p-1 relative group transition-all overflow-hidden"
+                // Coherente con el minmax(124px, 1fr) del grid: garantiza
+                // ~26px del número + 3 turnos (~20px c/u con gap) + línea "+X más" (~16px).
+                className="bg-white min-h-[124px] p-1 relative group transition-all overflow-hidden"
               >
                 <div
                   className="w-full h-full rounded cursor-pointer transition-colors relative hover:bg-gray-50"
@@ -348,7 +311,7 @@ export function CalendarioTurnos({
                     </div>
 
                     {/* Lista de turnos — calcula dinámicamente cuántos entran */}
-                    <DiaTurnosLista turnos={turnosDelDia} />
+                    <DiaTurnosLista turnos={turnosVisibles} />
                   </div>
 
                   {/* Botón crear turno (visible en hover) */}
@@ -392,8 +355,9 @@ export function CalendarioTurnos({
     const getTurnoEnHora = (fecha: Date, hora: number) => {
       const turnosDelDia = getTurnosParaDia(fecha);
       const horaStr = hora.toString().padStart(2, '0');
+      // Los recuadros no muestran cancelados; el modal del día sí los incluye.
       return turnosDelDia.filter(
-        (t) => t.hora.startsWith(horaStr) || t.hora.startsWith(`${horaStr}:`)
+        (t) => t.estado !== 'cancelado' && (t.hora.startsWith(horaStr) || t.hora.startsWith(`${horaStr}:`))
       );
     };
 
@@ -826,18 +790,11 @@ export function CalendarioTurnos({
                   ))}
                 </div>
 
-                <select
-                  value={especialistaSeleccionado}
-                  onChange={(e) => onEspecialistaChange(e.target.value)}
-                  className="h-10 px-3 py-2 border border-input bg-background text-foreground rounded-md text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-brand transition-colors"
-                >
-                  <option value="">Todos los especialistas</option>
-                  {especialistas.map((especialista) => (
-                    <option key={especialista.id_usuario} value={especialista.id_usuario}>
-                      {especialista.apellido}, {especialista.nombre}
-                    </option>
-                  ))}
-                </select>
+                <EspecialistaMultiSelect
+                  especialistas={especialistas}
+                  seleccionados={especialistasSeleccionados}
+                  onChange={onEspecialistasChange}
+                />
 
                 <Button
                   onClick={handleCreateTurno}
@@ -872,7 +829,7 @@ export default CalendarioTurnos;
  * Altura por ítem: ~18px (text-xs + py-0.5 + gap del space-y-0.5).
  */
 function DiaTurnosLista({ turnos }: { turnos: TurnoConDetalles[] }) {
-  const ITEM_HEIGHT = 18; // alto aproximado por ítem (incluye gap vertical)
+  const ITEM_HEIGHT = 20; // alto aproximado por ítem (16px item + 2px gap + margen)
   // Piso garantizado: la cell siempre tiene altura para 3 registros + "+X más".
   // Si la medición devuelve algo más chico (primer render, layout transitorio),
   // forzamos al menos 4 slots para nunca caer por debajo de 3 turnos visibles.

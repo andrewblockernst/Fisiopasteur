@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { 
+import { requireSesion } from '@/lib/auth/api-auth';
+import {
   obtenerEstadisticasNotificaciones,
   limpiarNotificacionesAntiguas,
   obtenerNotificacionesTurno
@@ -8,6 +9,8 @@ import { verificarEstadoBot } from '@/lib/services/whatsapp-bot.service';
 import { nowIso } from '@/lib/dayjs';
 
 export async function GET(request: NextRequest) {
+  const bloqueo = await requireSesion();
+  if (bloqueo) return bloqueo;
   try {
     const { searchParams } = new URL(request.url);
     const accion = searchParams.get('action') || 'estadisticas';
@@ -68,6 +71,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const bloqueo = await requireSesion();
+  if (bloqueo) return bloqueo;
   try {
     const { action } = await request.json();
 

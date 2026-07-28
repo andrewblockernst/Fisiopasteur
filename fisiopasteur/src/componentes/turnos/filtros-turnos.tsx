@@ -345,11 +345,33 @@ export default function FiltrosTurnos({
 
               {openDropdown === 'especialista' && (
                 <div data-dropdown-content role="listbox" aria-multiselectable className={popoverCn}>
+                  {(() => {
+                    const selCount = Array.isArray(filter.especialista_ids) ? filter.especialista_ids.length : 0;
+                    const todosMarcados = selCount === 0 || selCount === especialistas.length;
+                    const handleToggleTodos = () => {
+                      const nuevosFiltros = { ...filter, especialista_ids: todosMarcados ? [] : especialistas.map((e: any) => String(e.id_usuario)) };
+                      setFilter(nuevosFiltros);
+                      aplicarFiltros(nuevosFiltros);
+                    };
+                    return (
+                      <label className={cn(optionCn, "border-b border-border mb-1 font-medium")}>
+                        <Checkbox checked={todosMarcados} onCheckedChange={handleToggleTodos} />
+                        <span className="text-sm">Todos</span>
+                      </label>
+                    );
+                  })()}
                   {especialistas.map((esp: any) => {
                     const checked = Array.isArray(filter.especialista_ids) && filter.especialista_ids.includes(esp.id_usuario);
                     return (
                       <label key={esp.id_usuario} className={optionCn}>
                         <Checkbox checked={checked} onCheckedChange={() => handleEspecialistaToggle(esp.id_usuario)} />
+                        {esp.color && (
+                          <span
+                            aria-hidden="true"
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: esp.color }}
+                          />
+                        )}
                         <span className="text-sm">{esp.apellido}, {esp.nombre}</span>
                       </label>
                     );

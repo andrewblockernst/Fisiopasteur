@@ -15,7 +15,9 @@ export const obtenerUsuarioActual = cache(async (): Promise<UsuarioActual | null
     .eq("id_usuario", user.id)
     .single();
 
-  return {
-    ...(data as UsuarioActual),
-  };
+  // Sin fila en `usuario` → no autenticado a efectos de la app
+  // (antes `{...null}` devolvía `{}`, que pasaba como usuario válido).
+  if (!data) return null;
+
+  return data as UsuarioActual;
 });

@@ -50,9 +50,8 @@ function HistorialClinicoContent() {
         </div>
       </header>
 
-      {/* HEADER desktop */}
-      <div className="hidden sm:flex items-center gap-4 mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-black">Historial Clínico</h1>
+      {/* HEADER desktop — título oculto, la navbar ya indica la página */}
+      <div className="hidden sm:flex items-center gap-4 mb-2">
       </div>
 
       {/* Detalles del paciente */}

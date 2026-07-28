@@ -136,6 +136,7 @@ export function NuevoTurnoModal({
 
   // Preferencias de notificación del paciente seleccionado
   const [notifPrefs, setNotifPrefs] = useState({ confirmacion: true, recordatorios: true });
+  const [pacienteActivo, setPacienteActivo] = useState(true);
 
   // ✅ LIMPIAR ESTADO AL CERRAR EL MODAL
   useEffect(() => {
@@ -173,6 +174,7 @@ export function NuevoTurnoModal({
         setBusquedaPaciente('');
         setPacienteSeleccionado(null);
         setNotifPrefs({ confirmacion: true, recordatorios: true });
+      setPacienteActivo(true);
       }, 300);
     }
   }, [isOpen, showNuevoPacienteDialog]);
@@ -724,6 +726,7 @@ useEffect(() => {
           confirmacion: res.data.notif_confirmacion,
           recordatorios: res.data.notif_recordatorios,
         });
+        setPacienteActivo(res.data.activo);
       }
     });
   }, []);
@@ -735,12 +738,14 @@ useEffect(() => {
       setPacienteSeleccionado(null);
       setFormData(prev => ({ ...prev, id_paciente: '' }));
       setNotifPrefs({ confirmacion: true, recordatorios: true });
+      setPacienteActivo(true);
     }
 
     if (!valor.trim()) {
       setPacienteSeleccionado(null);
       setFormData(prev => ({ ...prev, id_paciente: '' }));
       setNotifPrefs({ confirmacion: true, recordatorios: true });
+      setPacienteActivo(true);
     }
   }, [pacienteSeleccionado]);
 
@@ -1449,6 +1454,12 @@ useEffect(() => {
               <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
                 Notificaciones WhatsApp
               </label>
+
+              {pacienteSeleccionado && !pacienteActivo && (
+                <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                  <b>Paciente inactivo.</b> El bot no va a enviar confirmaciones ni recordatorios por WhatsApp aunque los toggles estén activos. Reactivá al paciente para que los avisos vuelvan a funcionar.
+                </div>
+              )}
 
               {!pacienteSeleccionado?.telefono ? (
                 <p className="text-xs text-gray-400 italic">

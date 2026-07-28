@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback, useMemo, useRef } from "react";
 import { actualizarTurno, obtenerEspecialistasParaTurnos, obtenerBoxes, obtenerSlotsOcupados, obtenerTurnosParaValidarBoxes, obtenerPrecioEspecialidad } from "@/lib/actions/turno.action";
+import { obtenerPrefsNotificacionPaciente } from "@/lib/actions/paciente.action";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { DiscardChangesDialog } from "@/componentes/dialog/discard-changes-dialog";
 import { scrollToFirstError } from "@/lib/utils/scroll-to-error";
@@ -37,6 +38,7 @@ type PacienteAPI = {
   dni: string;
   telefono: string | null;
   email: string | null;
+  activo?: boolean | null;
 };
 
 function esEspecialidadPilates(especialidad: any): boolean {
@@ -131,6 +133,7 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
   // Estados para el autocomplete de pacientes
   const [busquedaPaciente, setBusquedaPaciente] = useState('');
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<PacienteAPI | null>(null);
+  const [pacienteActivo, setPacienteActivo] = useState(true);
 
   // Dialog para mensajes (reemplaza los toasts)
   const [dialog, setDialog] = useState<{ open: boolean; type: 'success' | 'error'; message: string }>({
@@ -200,6 +203,9 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
           };
           setPacienteSeleccionado(pacienteActual);
           setBusquedaPaciente(`${pacienteActual.nombre} ${pacienteActual.apellido}`);
+          obtenerPrefsNotificacionPaciente(pacienteActual.id_paciente).then((res) => {
+            if (res.success) setPacienteActivo(res.data.activo);
+          });
         }
         
         setEspecialistas(especialistasData);
@@ -435,6 +441,9 @@ export default function EditarTurnoDialog({ turno, open, onClose, onSaved }: Edi
     setPacienteSeleccionado(paciente);
     setBusquedaPaciente(`${paciente.nombre} ${paciente.apellido}`);
     setFormData(prev => ({ ...prev, id_paciente: String(paciente.id_paciente) }));
+    obtenerPrefsNotificacionPaciente(paciente.id_paciente).then((res) => {
+      if (res.success) setPacienteActivo(res.data.activo);
+    });
   }, []);
 
   // Manejar cambio en input de búsqueda
@@ -710,6 +719,11 @@ const handleSubmit = async () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Paciente*
               </label>
+              {pacienteSeleccionado && !pacienteActivo && (
+                <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                  <b>Paciente inactivo.</b> El bot no va a enviar confirmaciones ni recordatorios por WhatsApp. Reactivá al paciente para que los avisos vuelvan a funcionar.
+                </div>
+              )}
               <PacienteAutocomplete
                 value={busquedaPaciente}
                 onChange={(v) => { handleBusquedaPacienteChange(v); if (fieldErrors.id_paciente) setFieldErrors(p => ({ ...p, id_paciente: undefined })); }}

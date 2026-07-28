@@ -7,6 +7,7 @@ import {
   optionalString,
   LIMITES,
 } from "@/lib/validators/common";
+import { passwordSchema } from "@/lib/schemas/password.schema";
 
 export const especialistaBaseSchema = z.object({
   nombre: nombrePersona("nombre"),
@@ -20,20 +21,11 @@ export const especialistaBaseSchema = z.object({
 });
 
 export const especialistaCreateSchema = especialistaBaseSchema.extend({
-  contraseña: z
-    .string()
-    .min(6, "La contraseña debe tener al menos 6 caracteres.")
-    .max(72, "La contraseña no puede superar 72 caracteres."),
+  contraseña: passwordSchema,
 });
 
 export const especialistaUpdateSchema = especialistaBaseSchema.extend({
-  contraseña: optionalString.pipe(
-    z
-      .string()
-      .min(6, "La contraseña debe tener al menos 6 caracteres.")
-      .max(72, "La contraseña no puede superar 72 caracteres.")
-      .optional(),
-  ),
+  contraseña: optionalString.pipe(passwordSchema.optional()),
 });
 
 export type EspecialistaCreateInput = z.infer<typeof especialistaCreateSchema>;

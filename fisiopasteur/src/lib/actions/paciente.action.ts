@@ -6,6 +6,7 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types"
 import { normalizePhoneNumber } from "@/lib/utils/phone.utils";
 import type { ActionResult } from "@/lib/actions/action-result";
 import { pacienteCreateSchema, pacienteUpdateSchema } from "@/lib/schemas/paciente.schema";
+import { requireAdmin } from "@/lib/auth/guards";
 
 type Paciente = Tables<"paciente">;
 type PacienteInsert = TablesInsert<"paciente">;
@@ -455,31 +456,39 @@ export async function updatePaciente(id: number, formData: FormData): Promise<Ac
 
 // Eliminar paciente (soft delete si tienes el campo, hard delete si no)
 export async function deletePaciente(id: number): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
 
   try {
-    // Verificar si el paciente tiene turnos programados (futuros) asociados.
-    // Los `pendiente` corresponden a turnos pasados sin atender y no bloquean la desactivación.
-    const { data: turnos } = await supabase
-      .from("turno")
-      .select("id_turno")
-      .eq("id_paciente", id)
-      .eq("estado", "programado")
-      .limit(1);
-
-    if (turnos && turnos.length > 0) {
-      return { success: false, error: "No se puede desactivar el paciente porque tiene turnos programados asociados" };
-    }
-
     const { error } = await supabase
       .from("paciente")
       .update({ activo: false })
       .eq("id_paciente", id);
 
-
     if (error) {
       console.error("Error deleting paciente:", error);
       return { success: false, error: "Error al eliminar paciente" };
+    }
+
+    // ponytail: cancelar notificaciones pendientes para que el bot no mande recordatorios.
+    // Sin esto el cron sigue enviando porque no filtra por paciente.activo.
+    const { data: turnosDelPaciente } = await supabase
+      .from("turno")
+      .select("id_turno")
+      .eq("id_paciente", id);
+
+    const idsTurnos = (turnosDelPaciente ?? []).map((t) => t.id_turno);
+    if (idsTurnos.length > 0) {
+      const { error: notifError } = await supabase
+        .from("notificacion")
+        .delete()
+        .in("id_turno", idsTurnos)
+        .eq("estado", "pendiente");
+      if (notifError) {
+        console.error("⚠️ Error cancelando notificaciones del paciente:", notifError.message);
+      }
     }
 
     revalidatePath("/paciente");
@@ -622,11 +631,11 @@ export async function agregarEvolucionClinica(idTurno: number, observaciones: st
 // Activar paciente
 export async function obtenerPrefsNotificacionPaciente(
   id: number,
-): Promise<{ success: true; data: { notif_confirmacion: boolean; notif_recordatorios: boolean } } | { success: false; error: string }> {
+): Promise<{ success: true; data: { notif_confirmacion: boolean; notif_recordatorios: boolean; activo: boolean } } | { success: false; error: string }> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("paciente")
-    .select("notif_confirmacion, notif_recordatorios")
+    .select("notif_confirmacion, notif_recordatorios, activo")
     .eq("id_paciente", id)
     .single();
 
@@ -636,6 +645,7 @@ export async function obtenerPrefsNotificacionPaciente(
     data: {
       notif_confirmacion: data.notif_confirmacion ?? true,
       notif_recordatorios: data.notif_recordatorios ?? true,
+      activo: data.activo !== false,
     },
   };
 }
@@ -655,6 +665,9 @@ export async function actualizarPreferenciasNotificacion(
 }
 
 export async function activarPaciente(idPaciente: number): Promise<ActionResult<Paciente>> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("paciente")

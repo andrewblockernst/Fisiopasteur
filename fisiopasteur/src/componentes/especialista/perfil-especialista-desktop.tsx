@@ -47,7 +47,7 @@ export function PerfilEspecialistaDesktop({
 
   return (
     <div className="hidden lg:block">
-      <PageHeader title={title} description={description} actions={actions} />
+      <PageHeader title={title} description={description} />
 
       <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10 space-y-6 max-w-[1500px]">
         {/* Hero card */}
@@ -92,6 +92,11 @@ export function PerfilEspecialistaDesktop({
                     </div>
                   </div>
                 </div>
+                {actions && (
+                  <div className="flex flex-wrap items-center gap-2 lg:shrink-0 pb-1">
+                    {actions}
+                  </div>
+                )}
               </div>
 
               {/* Contact + especialidades */}
