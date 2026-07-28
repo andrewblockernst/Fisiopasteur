@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { Database } from "@/types/database.types";
 import type { ActionResult } from "@/lib/actions/action-result";
 import { textoCorto } from "@/lib/validators/common";
+import { requireAdmin } from "@/lib/auth/guards";
 
 const nombreEspecialidadSchema = textoCorto("nombre de la especialidad", 60).min(
   2,
@@ -55,6 +56,9 @@ export async function getEspecialidades(): Promise<
  * Crear una nueva especialidad
  */
 export async function createEspecialidad(nombre: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
   
   try {
@@ -139,6 +143,9 @@ export async function createEspecialidad(nombre: string): Promise<ActionResult> 
  * Actualizar una especialidad existente
  */
 export async function updateEspecialidad(id: number, nombre: string): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
   
   try {
@@ -243,6 +250,9 @@ export async function updateEspecialidad(id: number, nombre: string): Promise<Ac
  * Eliminar una especialidad (solo si no está en uso)
  */
 export async function deleteEspecialidad(id: number): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
   
   try {

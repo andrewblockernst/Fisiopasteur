@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/actions/action-result";
 import type { Database, TablesInsert } from "@/lib/database.types";
 import { boxSchema } from "@/lib/schemas/box.schema";
+import { requireAdmin } from "@/lib/auth/guards";
 
 type BoxInsert = Database["public"]["Tables"]["box"]["Insert"];
 
@@ -29,6 +30,9 @@ export async function obtenerBoxes() {
 
 // Crear un nuevo box
 export async function crearBox(formData: FormData): Promise<ActionResult<any>> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
 
   const parsed = boxSchema.safeParse({
@@ -74,6 +78,9 @@ export async function crearBox(formData: FormData): Promise<ActionResult<any>> {
 
 // Actualizar un box
 export async function actualizarBox(id: number, formData: FormData): Promise<ActionResult<any>> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
 
   const parsed = boxSchema.safeParse({
@@ -118,6 +125,9 @@ export async function actualizarBox(id: number, formData: FormData): Promise<Act
 
 // Eliminar (desactivar) un box
 export async function eliminarBox(id: number): Promise<ActionResult<any>> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
 
   // Verificar si hay turnos asociados al box

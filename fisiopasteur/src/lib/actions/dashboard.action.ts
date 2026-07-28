@@ -196,8 +196,9 @@ export async function obtenerKPIsConHistorial(
 > {
   try {
     const usuario = await obtenerUsuarioActual();
+    if (!usuario) return { success: false, error: "No autorizado" };
     let filtroEspecialistaId = especialista_id;
-    if (usuario?.id_rol === ROLES.ESPECIALISTA) {
+    if (usuario.id_rol === ROLES.ESPECIALISTA) {
       filtroEspecialistaId = usuario.id_usuario;
     }
 
@@ -314,6 +315,7 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
 
   try {
     const usuario = await obtenerUsuarioActual();
+    if (!usuario) return [];
     const hoy = todayYmd();
     const ahora = dayjs().tz(ARG_TIMEZONE).format("HH:mm:ss");
 

@@ -6,6 +6,7 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types"
 import { normalizePhoneNumber } from "@/lib/utils/phone.utils";
 import type { ActionResult } from "@/lib/actions/action-result";
 import { pacienteCreateSchema, pacienteUpdateSchema } from "@/lib/schemas/paciente.schema";
+import { requireAdmin } from "@/lib/auth/guards";
 
 type Paciente = Tables<"paciente">;
 type PacienteInsert = TablesInsert<"paciente">;
@@ -455,6 +456,9 @@ export async function updatePaciente(id: number, formData: FormData): Promise<Ac
 
 // Eliminar paciente (soft delete si tienes el campo, hard delete si no)
 export async function deletePaciente(id: number): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
 
   try {
@@ -661,6 +665,9 @@ export async function actualizarPreferenciasNotificacion(
 }
 
 export async function activarPaciente(idPaciente: number): Promise<ActionResult<Paciente>> {
+  const admin = await requireAdmin();
+  if (!admin) return { success: false, error: 'No autorizado. Se requieren permisos de administrador.' };
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("paciente")

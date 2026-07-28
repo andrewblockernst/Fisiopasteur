@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { Tables } from "@/types/database.types";
+import { obtenerUsuarioActual } from "@/lib/auth/usuario-actual";
+import { esAdmin } from "@/lib/constants/roles";
 
 type Turno = Tables<"turno">;
 
@@ -56,6 +58,19 @@ type AnalyticsResult<T> =
 
 // ✅ Funciones normales SIN caché (el caché está en React Query + HTTP headers)
 
+// Scoping por rol: admin/programador ve a todos los especialistas;
+// un especialista solo ve sus propios turnos. Devuelve el id a filtrar
+// o null (= ver todos). Rechaza si no hay usuario autenticado.
+async function obtenerFiltroEspecialista(): Promise<
+    | { ok: true; idEspecialista: string | null }
+    | { ok: false; error: string }
+> {
+    const usuario = await obtenerUsuarioActual();
+    if (!usuario) return { ok: false, error: "No autorizado" };
+    if (esAdmin(usuario.id_rol)) return { ok: true, idEspecialista: null };
+    return { ok: true, idEspecialista: usuario.id_usuario };
+}
+
 export async function getAnalisisNoShows(
     fechaInicio?: string,
     fechaFin?: string
@@ -72,12 +87,17 @@ export async function getAnalisisNoShows(
     console.log("🧮 Consultando análisis general...", fechaInicio, fechaFin);
     const inicio = performance.now();
 
+    const filtro = await obtenerFiltroEspecialista();
+    if (!filtro.ok) return { success: false, error: filtro.error };
+
     const supabase = await createClient();
-    const { data: turnos, error } = await supabase
+    let query = supabase
         .from("turno")
         .select("*")
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin);
+    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
+    const { data: turnos, error } = await query;
 
     const duracion = performance.now() - inicio;
     console.log(`⏱️ Consulta tardó ${duracion.toFixed(2)}ms`);
@@ -115,8 +135,11 @@ export async function getNoShowsPorEspecialista(
 
     console.log("👥 Consultando especialistas...", fechaInicio, fechaFin);
 
+    const filtro = await obtenerFiltroEspecialista();
+    if (!filtro.ok) return { success: false, error: filtro.error };
+
     const supabase = await createClient();
-    const { data: turnos, error } = await supabase
+    let query = supabase
         .from("turno")
         .select(`
       id_turno,
@@ -129,6 +152,8 @@ export async function getNoShowsPorEspecialista(
     `)
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin);
+    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
+    const { data: turnos, error } = await query;
 
     if (error) {
         console.error("Error consultando especialistas:", error);
@@ -191,12 +216,17 @@ export async function getNoShowsPorHorario(
 
     console.log("⏰ Consultando horarios...", fechaInicio, fechaFin);
 
+    const filtro = await obtenerFiltroEspecialista();
+    if (!filtro.ok) return { success: false, error: filtro.error };
+
     const supabase = await createClient();
-    const { data: turnos, error } = await supabase
+    let query = supabase
         .from("turno")
         .select("estado, hora")
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin);
+    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
+    const { data: turnos, error } = await query;
 
     if (error) return { success: false, error: `Error en BD: ${error.message}` };
 
@@ -237,12 +267,17 @@ export async function getNoShowsPorDia(
 
     console.log("📅 Consultando días...", fechaInicio, fechaFin);
 
+    const filtro = await obtenerFiltroEspecialista();
+    if (!filtro.ok) return { success: false, error: filtro.error };
+
     const supabase = await createClient();
-    const { data: turnos, error } = await supabase
+    let query = supabase
         .from("turno")
         .select("estado, fecha")
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin);
+    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
+    const { data: turnos, error } = await query;
 
     if (error) return { success: false, error: `Error en BD: ${error.message}` };
 
@@ -287,12 +322,17 @@ export async function getTendenciaNoShows(
 
     console.log("📈 Consultando tendencia...", fechaInicio, fechaFin);
 
+    const filtro = await obtenerFiltroEspecialista();
+    if (!filtro.ok) return { success: false, error: filtro.error };
+
     const supabase = await createClient();
-    const { data: turnos, error } = await supabase
+    let query = supabase
         .from("turno")
         .select("estado, fecha")
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin);
+    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
+    const { data: turnos, error } = await query;
 
     if (error) return { success: false, error: `Error en BD: ${error.message}` };
 
