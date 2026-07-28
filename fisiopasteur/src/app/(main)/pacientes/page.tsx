@@ -167,7 +167,7 @@ export default function PacientePage() {
             </div>
 
             {/* Contenido Principal */}
-            <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background md:p-6 md:pb-0 lg:p-6 lg:px-8 lg:pt-6 overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background md:p-6 md:pb-0 md:pt-2 lg:p-6 lg:px-8 lg:pt-2 overflow-hidden">
                 {/* md..<lg: PageHeader con acción + search row compacta */}
                 <div className="hidden md:block lg:hidden">
                     <PageHeader

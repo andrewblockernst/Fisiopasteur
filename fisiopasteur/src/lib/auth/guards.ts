@@ -1,4 +1,5 @@
 import { obtenerUsuarioActual, type UsuarioActual } from '@/lib/auth/usuario-actual';
+import { createClient } from '@/lib/supabase/server';
 import { esAdmin } from '@/lib/constants/roles';
 
 /**
@@ -20,5 +21,28 @@ export async function requireUsuario(): Promise<UsuarioActual | null> {
 export async function requireAdmin(): Promise<UsuarioActual | null> {
   const usuario = await obtenerUsuarioActual();
   if (!usuario || !esAdmin(usuario.id_rol)) return null;
+  return usuario;
+}
+
+/**
+ * Requiere que el usuario logueado sea admin/programador, o el especialista
+ * dueño del turno. Devuelve el usuario si pasa; null si no.
+ * Si el turno no existe, también devuelve null (el llamador debe reportar como
+ * "turno no encontrado o no autorizado" sin filtrar cuál de los dos fue).
+ */
+export async function requireOwnerOfTurno(id_turno: number): Promise<UsuarioActual | null> {
+  const usuario = await obtenerUsuarioActual();
+  if (!usuario) return null;
+  if (esAdmin(usuario.id_rol)) return usuario;
+
+  const supabase = await createClient();
+  const { data: turno } = await supabase
+    .from('turno')
+    .select('id_especialista')
+    .eq('id_turno', id_turno)
+    .maybeSingle();
+
+  if (!turno) return null;
+  if (turno.id_especialista !== usuario.id_usuario) return null;
   return usuario;
 }

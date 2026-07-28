@@ -15,6 +15,8 @@ interface TurnoCardProps {
   /** Devuelve clases tailwind para colorear el badge según el estado del turno. */
   getEstadoColor: (estado: string) => string;
   formatearHora: (hora: string) => string;
+  /** Si false, oculta todas las acciones (editar/eliminar/atender/cancelar). Default true. */
+  canModify?: boolean;
 }
 
 export default function TurnoCard({
@@ -25,9 +27,10 @@ export default function TurnoCard({
   onCancelar,
   getEstadoColor,
   formatearHora,
+  canModify = true,
 }: TurnoCardProps) {
-  const mostrarMarcarAtendido = !!onMarcarAtendido && puedeConfirmar(turno.estado);
-  const mostrarCancelar = !!onCancelar && puedeCancelar(turno.estado);
+  const mostrarMarcarAtendido = canModify && !!onMarcarAtendido && puedeConfirmar(turno.estado);
+  const mostrarCancelar = canModify && !!onCancelar && puedeCancelar(turno.estado);
   return (
     <Card padding="md" interactive={false} className="relative hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-4 gap-3">
@@ -68,15 +71,17 @@ export default function TurnoCard({
               onClick={() => onCancelar?.(turno)}
             />
           )}
-          <IconButton
-            aria-label="Editar turno"
-            size="sm"
-            variant="primary"
-            className="rounded-full"
-            icon={<Pen className="w-4 h-4" />}
-            onClick={() => onEdit(turno)}
-          />
-          {puedeEliminar(turno.estado) && (
+          {canModify && (
+            <IconButton
+              aria-label="Editar turno"
+              size="sm"
+              variant="primary"
+              className="rounded-full"
+              icon={<Pen className="w-4 h-4" />}
+              onClick={() => onEdit(turno)}
+            />
+          )}
+          {canModify && puedeEliminar(turno.estado) && (
             <IconButton
               aria-label="Eliminar turno"
               size="sm"

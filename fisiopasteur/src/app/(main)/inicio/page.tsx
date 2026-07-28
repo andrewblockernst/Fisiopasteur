@@ -42,10 +42,11 @@ export default async function Inicio() {
   return (
     <div className="min-h-screen text-foreground">
       <DashboardRealtimeBridge />
-      <div className="mx-auto w-full bg-background p-3 sm:p-6 lg:px-8 lg:pt-6">
+      <div className="mx-auto w-full bg-background p-3 sm:px-6 sm:pb-6 sm:pt-2 lg:px-8 lg:pt-2">
         <PageHeader
           title={`Bienvenido ${nombreUsuario}`}
           description="Panel de control para especialistas y administradores"
+          showTitle
         />
 
         <div className="mb-6 sm:mb-8">

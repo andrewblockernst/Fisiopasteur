@@ -210,7 +210,7 @@ export default function PilatesPage() {
       </div>
 
       {/* Contenido Principal */}
-      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background p-2 md:p-6 lg:px-8 lg:pt-6">
+      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background p-2 md:p-6 md:pt-2 lg:px-8 lg:pt-2">
         {/* Desktop Header */}
         <div className="hidden md:block shrink-0">
           <PageHeader title="Pilates" />

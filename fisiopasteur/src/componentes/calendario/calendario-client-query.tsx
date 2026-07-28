@@ -164,12 +164,11 @@ export function CalendarioClientQuery({
           seleccionados={especialistasFiltro}
           onChange={setEspecialistasFiltro}
           compact
-          disabled={initialEspecialistasFiltro.length > 0 && especialistas.length <= 1}
         />
       </div>
 
       {/* Contenido Principal */}
-      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background p-2 lg:p-6 lg:px-8 lg:pt-6">
+      <div className="flex-1 min-h-0 flex flex-col mx-auto w-full bg-background p-2 lg:p-6 lg:px-8 lg:pt-2">
         {/* Desktop Header */}
         <div className="hidden lg:block shrink-0">
           <PageHeader title="Calendario" />

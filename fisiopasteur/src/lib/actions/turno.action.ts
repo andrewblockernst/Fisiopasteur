@@ -14,6 +14,7 @@ import {
   turnoUpdateSchema,
   paqueteSesionesSchema,
 } from "@/lib/schemas/turno.schema";
+import { requireOwnerOfTurno, requireAdmin } from "@/lib/auth/guards";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
@@ -591,6 +592,10 @@ export async function crearTurno(
 
 
 export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?: { notificar?: boolean }) {
+  const autorizado = await requireOwnerOfTurno(id);
+  if (!autorizado) {
+    return { success: false, error: "No autorizado para modificar este turno" };
+  }
   const supabase = await createClient();
 
   // Validación: solo aplican los campos efectivamente provistos.
@@ -849,6 +854,10 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
 
 // Eliminar un turno (soft delete - cambia estado a "eliminado")
 export async function eliminarTurno(id: number, opciones?: { notificar?: boolean }) {
+  const autorizado = await requireOwnerOfTurno(id);
+  if (!autorizado) {
+    return { success: false, error: "No autorizado para eliminar este turno" };
+  }
   const supabase = await createClient();
 
   try {
@@ -939,6 +948,10 @@ export async function eliminarTurno(id: number, opciones?: { notificar?: boolean
 }
 
 export async function marcarComoAtendido(id_turno: number) {
+  const autorizado = await requireOwnerOfTurno(id_turno);
+  if (!autorizado) {
+    return { success: false, error: "No autorizado para modificar este turno" };
+  }
   const supabase = await createClient();
 
   try {
@@ -1012,6 +1025,11 @@ export async function actualizarEstadoTurnosMasivo(
     return { success: true, updatedIds: [], failedCount: 0 };
   }
 
+  const admin = await requireAdmin();
+  if (!admin) {
+    return { success: false, error: 'No autorizado para actualizaciones masivas de turnos' };
+  }
+
   const supabase = await createClient();
 
   try {
@@ -1047,6 +1065,10 @@ export async function actualizarEstadoTurnosMasivo(
  * Permite cambiar desde: programado, pendiente o atendido (corrección).
  */
 export async function cancelarTurno(id: number, motivo?: string) {
+  const autorizado = await requireOwnerOfTurno(id);
+  if (!autorizado) {
+    return { success: false, error: "No autorizado para cancelar este turno" };
+  }
   const supabase = await createClient();
 
   try {

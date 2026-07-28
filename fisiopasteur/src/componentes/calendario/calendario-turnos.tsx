@@ -317,7 +317,7 @@ export function CalendarioTurnos({
           <div
             className="grid grid-cols-7 gap-px bg-border min-h-full"
             style={{
-              gridTemplateRows: `repeat(${filas}, minmax(108px, 1fr))`,
+              gridTemplateRows: `repeat(${filas}, minmax(124px, 1fr))`,
               ...(gridMaxHeight ? { maxHeight: `${gridMaxHeight}px` } : {}),
             }}
           >
@@ -327,15 +327,17 @@ export function CalendarioTurnos({
             }
             
             const turnosDelDia = getTurnosParaDia(fecha);
+            // En los recuadros ocultamos cancelados; el modal recibe la lista completa.
+            const turnosVisibles = turnosDelDia.filter((t) => t.estado !== 'cancelado');
             const esHoy = esDiaActual(fecha);
             const puedeAgregarEnFecha = !isFechaPasada(fecha);
             
             return (
               <div
                 key={index}
-                // Coherente con el minmax(108px, 1fr) del grid: garantiza
-                // ~24px del número + 3 turnos (≈ 18px c/u) + línea "+X más".
-                className="bg-white min-h-[108px] p-1 relative group transition-all overflow-hidden"
+                // Coherente con el minmax(124px, 1fr) del grid: garantiza
+                // ~26px del número + 3 turnos (~20px c/u con gap) + línea "+X más" (~16px).
+                className="bg-white min-h-[124px] p-1 relative group transition-all overflow-hidden"
               >
                 <div
                   className="w-full h-full rounded cursor-pointer transition-colors relative hover:bg-gray-50"
@@ -355,7 +357,7 @@ export function CalendarioTurnos({
                     </div>
 
                     {/* Lista de turnos — calcula dinámicamente cuántos entran */}
-                    <DiaTurnosLista turnos={turnosDelDia} />
+                    <DiaTurnosLista turnos={turnosVisibles} />
                   </div>
 
                   {/* Botón crear turno (visible en hover) */}
@@ -399,8 +401,9 @@ export function CalendarioTurnos({
     const getTurnoEnHora = (fecha: Date, hora: number) => {
       const turnosDelDia = getTurnosParaDia(fecha);
       const horaStr = hora.toString().padStart(2, '0');
+      // Los recuadros no muestran cancelados; el modal del día sí los incluye.
       return turnosDelDia.filter(
-        (t) => t.hora.startsWith(horaStr) || t.hora.startsWith(`${horaStr}:`)
+        (t) => t.estado !== 'cancelado' && (t.hora.startsWith(horaStr) || t.hora.startsWith(`${horaStr}:`))
       );
     };
 
@@ -872,7 +875,7 @@ export default CalendarioTurnos;
  * Altura por ítem: ~18px (text-xs + py-0.5 + gap del space-y-0.5).
  */
 function DiaTurnosLista({ turnos }: { turnos: TurnoConDetalles[] }) {
-  const ITEM_HEIGHT = 18; // alto aproximado por ítem (incluye gap vertical)
+  const ITEM_HEIGHT = 20; // alto aproximado por ítem (16px item + 2px gap + margen)
   // Piso garantizado: la cell siempre tiene altura para 3 registros + "+X más".
   // Si la medición devuelve algo más chico (primer render, layout transitorio),
   // forzamos al menos 4 slots para nunca caer por debajo de 3 turnos visibles.

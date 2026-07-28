@@ -12,6 +12,7 @@ import { turnoKeys, useInvalidateTurnos } from "@/hooks/useTurnosQuery";
 import Image from "next/image";
 import TurnoCard from "./turno-card";
 import { dayjs, nowIso } from "@/lib/dayjs";
+import { useAuth } from "@/hooks/AuthContext";
 
 interface DayViewModalProps {
   isOpen: boolean;
@@ -31,6 +32,11 @@ export function DayViewModal({
   const { addToast } = useToastStore();
   const queryClient = useQueryClient();
   const invalidateTurnos = useInvalidateTurnos();
+  const { user } = useAuth();
+  const puedeModificarTurno = (turno: TurnoConDetalles) => {
+    if (user?.puedeGestionarTurnos) return true;
+    return !!user?.id_usuario && turno.id_especialista === user.id_usuario;
+  };
   const [turnoEditando, setTurnoEditando] = useState<TurnoConDetalles | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; turno?: TurnoConDetalles }>(
     { open: false }
@@ -120,14 +126,17 @@ export function DayViewModal({
   };
 
   const handleEdit = (turno: TurnoConDetalles) => {
+    if (!puedeModificarTurno(turno)) return;
     setTurnoEditando(turno);
   };
 
   const handleDelete = (turno: TurnoConDetalles) => {
+    if (!puedeModificarTurno(turno)) return;
     setConfirmDelete({ open: true, turno });
   };
 
   const handleCancelarTurno = async (turno: TurnoConDetalles) => {
+    if (!puedeModificarTurno(turno)) return;
     const snapshots = getTurnosSnapshots();
     const patch = { estado: "cancelado", updated_at: nowIso() } as Partial<TurnoConDetalles>;
 
@@ -154,6 +163,7 @@ export function DayViewModal({
   };
 
   const handleMarcarAtendido = async (turno: TurnoConDetalles) => {
+    if (!puedeModificarTurno(turno)) return;
     const snapshots = getTurnosSnapshots();
     const patch = { estado: "atendido", updated_at: nowIso() } as Partial<TurnoConDetalles>;
 
@@ -233,6 +243,7 @@ export function DayViewModal({
                     onCancelar={handleCancelarTurno}
                     getEstadoColor={getEstadoColor}
                     formatearHora={formatearHora}
+                    canModify={puedeModificarTurno(turno)}
                   />
                 ))}
             </div>
