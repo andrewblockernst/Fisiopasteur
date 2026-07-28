@@ -56,10 +56,6 @@ export function CalendarioTurnos({
 }: CalendarioTurnosProps & CalendarioTurnosExtraProps) {
   const [fechaActual, setFechaActual] = useState(new Date());
   const [vistaInternal, setVistaInternal] = useState<VistaCalendario>('mes');
-  // Alto del contenedor scrollable de la vista mes. Lo usamos para cotar el
-  // alto MÁXIMO de cada fila a (alto/6), garantizando que entren 6 filas.
-  const mesScrollRef = useRef<HTMLDivElement | null>(null);
-  const [mesScrollHeight, setMesScrollHeight] = useState<number>(0);
   const vista = vistaProp ?? vistaInternal;
   const turnosPorFecha = useMemo(() => {
     const index = new Map<string, TurnoConDetalles[]>();
@@ -92,18 +88,6 @@ export function CalendarioTurnos({
     });
   }, [vista, fechaActual, onViewContextChange]);
 
-  // Observa el alto del contenedor scrollable del mes para cotar las filas.
-  // Se re-monta cuando cambia la vista (porque el ref del DOM cambia).
-  useLayoutEffect(() => {
-    if (vista !== 'mes') return;
-    const el = mesScrollRef.current;
-    if (!el) return;
-    const recompute = () => setMesScrollHeight(el.clientHeight);
-    recompute();
-    const ro = new ResizeObserver(recompute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [vista]);
 
   // Maneja el estado para abrir/cerrar el modal de creación de turno
 // const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -270,22 +254,8 @@ export function CalendarioTurnos({
       dias.push(new Date(fechaActual.getFullYear(), fechaActual.getMonth(), dia));
     }
 
-    // Calcular cuántas filas tiene el mes para distribuir el alto disponible
     const totalCeldas = diaSemanaInicio + diasEnMes;
     const filas = Math.ceil(totalCeldas / 7);
-
-    // Cota MÁXIMA por fila: garantiza que 6 filas entren en pantalla.
-    // - Si mesScrollHeight = 0 (primer render) → no aplicamos cap todavía.
-    // - El piso real lo impone minmax(108px, ...): si maxRowPx < 108, igualmente
-    //   las filas valen 108 y el calendario scrollea internamente.
-    const MIN_ROW = 108;
-    const ROWS_TARGET = 6;
-    const maxRowPx = mesScrollHeight > 0
-      ? Math.max(MIN_ROW, Math.floor(mesScrollHeight / ROWS_TARGET))
-      : null;
-    // maxHeight del grid: filas × maxRowPx + (filas-1) px de gap.
-    // Sin esto, con `1fr` las filas crecerían a todo el alto disponible.
-    const gridMaxHeight = maxRowPx ? filas * maxRowPx + (filas - 1) : null;
 
     return (
       <Card variant="elevated" padding="none" className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -298,27 +268,11 @@ export function CalendarioTurnos({
           ))}
         </div>
 
-        {/*
-          Contenedor scrollable: si las filas no entran en pantalla, el SCROLL
-          ocurre acá adentro (calendario), no en la página. El header de días
-          queda fijo arriba porque está fuera de este contenedor.
-        */}
-        <div ref={mesScrollRef} className="flex-1 min-h-0 overflow-y-auto">
-          {/*
-            Grid de días.
-            - minmax(108px, 1fr): pisos de 108px garantizan espacio para el número
-              del día + 3 turnos + línea "+X más". Si hay espacio extra, 1fr
-              hace crecer las filas — pero el `maxHeight` de abajo las acota.
-            - min-h-full: cuando el viewport es alto, el grid intenta llenar el
-              contenedor; max-h le pone techo (filas × maxRowPx) → "6 filas en pantalla".
-            - gap-px sobre bg-border: las líneas divisorias son el fondo del grid
-              mostrándose a través de los 1px de gap.
-          */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div
             className="grid grid-cols-7 gap-px bg-border min-h-full"
             style={{
               gridTemplateRows: `repeat(${filas}, minmax(124px, 1fr))`,
-              ...(gridMaxHeight ? { maxHeight: `${gridMaxHeight}px` } : {}),
             }}
           >
           {dias.map((fecha, index) => {

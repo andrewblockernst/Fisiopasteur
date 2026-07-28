@@ -7,8 +7,8 @@ import { NuevoTurnoPilatesModal } from "@/componentes/pilates/nuevoTurnoPilatesD
 import { DetalleClaseModal } from "@/componentes/pilates/detalleClaseModal";
 import { obtenerEspecialistasPilates, obtenerPacientes } from "@/lib/actions/turno.action";
 import { getIdPilates } from "@/lib/constants/especialidades";
-import UnifiedSkeletonLoader from "@/componentes/unified-skeleton-loader";
 import { PageHeader } from "@/componentes/ui";
+import { useReportNavigationLoading } from "@/hooks/useReportNavigationLoading";
 import { usePilatesTurnos, useInvalidatePilatesTurnos, usePrefetchPilatesTurnos, getCacheWindowRange } from "@/hooks/usePilatesTurnosQuery";
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import { useAuth } from "@/hooks/usePerfil";
@@ -164,15 +164,11 @@ export default function PilatesPage() {
     invalidatePilatesTurnos({ scope: 'lists' });
   };
 
-  // ============= MOSTRAR SKELETON DURANTE CARGA INICIAL =============
+  // ============= REPORTAR CARGA INICIAL A LA NAVBAR =============
+  useReportNavigationLoading(!idPilates || turnosLoading);
+
   if (!idPilates || turnosLoading) {
-    return (
-      <UnifiedSkeletonLoader
-        type="calendar"
-        showHeader={true}
-        showFilters={false}
-      />
-    );
+    return null;
   }
 
   // ============= RENDER PRINCIPAL =============

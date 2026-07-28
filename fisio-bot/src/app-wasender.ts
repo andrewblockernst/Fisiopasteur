@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import { waSenderService } from './wasender.service'
+import { sendViaProvider, PROVIDER, type OutgoingMessage } from './whatsapp.provider'
 import { supabase } from './supabase.client'
 import { nowIso } from './dayjs'
 
@@ -19,10 +20,12 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 // Los endpoints HTTP responden 200 inmediatamente (el envío ocurre en background).
 // El procesador de recordatorios autónomo usa sendQueued() y espera el resultado real.
 
-const SEND_INTERVAL_MS = 6000
+// WaSender ("Account Protection") exige 6s entre mensajes. Meta no tiene ese
+// límite, así que con PROVIDER=meta la cola no pausa.
+const SEND_INTERVAL_MS = PROVIDER === 'meta' ? 0 : 6000
 
 interface QueueEntry {
-    params: { to: string; text: string; media?: string }
+    msg: OutgoingMessage
     resolve: (result: any) => void
     reject: (error: any) => void
 }
@@ -35,14 +38,14 @@ async function drainQueue() {
     queueRunning = true
     while (msgQueue.length > 0) {
         const entry = msgQueue.shift()!
-        console.log(`📤 [Queue] Enviando a ${entry.params.to} (${msgQueue.length} en espera)`)
+        console.log(`📤 [Queue] Enviando a ${entry.msg.to} (${msgQueue.length} en espera)`)
         try {
-            const result = await waSenderService.sendMessage(entry.params)
+            const result = await sendViaProvider(entry.msg)
             entry.resolve(result)
         } catch (err) {
             entry.reject(err)
         }
-        if (msgQueue.length > 0) {
+        if (msgQueue.length > 0 && SEND_INTERVAL_MS > 0) {
             console.log(`⏳ [Queue] Pausa ${SEND_INTERVAL_MS}ms antes del próximo envío...`)
             await delay(SEND_INTERVAL_MS)
         }
@@ -51,9 +54,9 @@ async function drainQueue() {
 }
 
 // Encola un mensaje y devuelve una promesa que resuelve cuando el mensaje fue enviado.
-function sendQueued(params: { to: string; text: string; media?: string }): Promise<any> {
+function sendQueued(msg: OutgoingMessage): Promise<any> {
     return new Promise((resolve, reject) => {
-        msgQueue.push({ params, resolve, reject })
+        msgQueue.push({ msg, resolve, reject })
         drainQueue() // no-await: arranca la cola sin bloquear
     })
 }
@@ -198,6 +201,7 @@ const procesarRecordatoriosAutonomo = async () => {
             // - Si el texto contiene [RECORDATORIO → generarlo desde los datos del turno
             // - Si no → enviarlo tal cual está almacenado (confirmaciones, cancelaciones, etc.)
             let mensaje: string
+            let template: OutgoingMessage['template'] | undefined
             if (notif.mensaje?.includes('[RECORDATORIO')) {
                 if (!turno?.paciente) {
                     console.error(`❌ Notificación ${notif.id_notificacion} recordatorio sin datos de turno`)
@@ -218,6 +222,16 @@ const procesarRecordatoriosAutonomo = async () => {
                     turnoId: String(notif.id_turno),
                 }
                 mensaje = formatearMensajeTurno(turnoData, 'recordatorio')
+                template = {
+                    name: 'recordatorio_turno',
+                    variables: [
+                        turnoData.pacienteNombre,
+                        turnoData.fecha,
+                        turnoData.hora,
+                        turnoData.profesional,
+                        turnoData.especialidad,
+                    ],
+                }
             } else {
                 // Mensaje directo: confirmación Pilates, cancelación, modificación, etc.
                 mensaje = notif.mensaje || ''
@@ -238,7 +252,7 @@ const procesarRecordatoriosAutonomo = async () => {
                 continue
             }
 
-        const envio = await sendQueued({ to: telefono, text: mensaje })
+        const envio = await sendQueued({ to: telefono, text: mensaje, template })
 
             if (envio.success) {
                 console.log(`✅ Recordatorio ${notif.id_notificacion} enviado`)
@@ -317,7 +331,20 @@ app.post('/api/turno/confirmar', async (req, res) => {
         const mensaje = formatearMensajeTurno(datosNormalizados, 'confirmacion')
         
         console.log(`📤 Encolando confirmación para ${telefono}`)
-        sendQueued({ to: telefono, text: mensaje }) // fire-and-forget
+        sendQueued({
+            to: telefono,
+            text: mensaje,
+            template: {
+                name: 'confirmacion_turno',
+                variables: [
+                    pacienteNombre,
+                    datosNormalizados.fecha,
+                    datosNormalizados.hora,
+                    especialistaNombre || 'Profesional',
+                    datosNormalizados.especialidad || 'Consulta',
+                ],
+            },
+        }) // fire-and-forget
 
         return res.status(200).json({
             status: 'success',
@@ -367,7 +394,20 @@ app.post('/api/turno/recordatorio', async (req, res) => {
         const mensaje = formatearMensajeTurno(datosNormalizados, 'recordatorio')
         
         console.log(`📤 Encolando recordatorio para ${telefono}`)
-        sendQueued({ to: telefono, text: mensaje }) // fire-and-forget
+        sendQueued({
+            to: telefono,
+            text: mensaje,
+            template: {
+                name: 'recordatorio_turno',
+                variables: [
+                    pacienteNombre,
+                    datosNormalizados.fecha,
+                    datosNormalizados.hora,
+                    especialistaNombre || 'Profesional',
+                    datosNormalizados.especialidad || 'Consulta',
+                ],
+            },
+        }) // fire-and-forget
 
         return res.status(200).json({
             status: 'success',
@@ -397,6 +437,7 @@ app.post('/api/mensaje/enviar', async (req, res) => {
             })
         }
         
+        // Texto libre: con Meta solo se entrega dentro de la ventana de 24h.
         sendQueued({ to: telefono, text: mensaje, media }) // fire-and-forget
 
         return res.status(200).json({

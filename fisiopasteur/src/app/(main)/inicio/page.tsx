@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { KPIsCardsConFiltro } from "@/componentes/dashboard/kpis-cards-con-filtro";
 import { ProximosTurnosWidget } from "@/componentes/dashboard/proximos-turnos-widget";
 import { OcupacionBoxesWidget } from "@/componentes/dashboard/ocupacion-boxes-widget";
@@ -36,8 +35,16 @@ function SeccionSkeleton({ alto = "h-96" }: { alto?: string }) {
 }
 
 export default async function Inicio() {
-  const usuario = await obtenerUsuarioActual();
+  const [usuario, turnos, ocupacionRes] = await Promise.all([
+    obtenerUsuarioActual(),
+    obtenerProximosTurnos(),
+    obtenerOcupacionBoxes("semana"),
+  ]);
+
   const nombreUsuario = usuario?.nombre?.trim() || "usuario";
+  const ocupacionInitial = ocupacionRes.success
+    ? { boxes: ocupacionRes.boxes, turnos: ocupacionRes.turnos, rango: ocupacionRes.rango }
+    : null;
 
   return (
     <div className="min-h-screen text-foreground">
@@ -54,13 +61,8 @@ export default async function Inicio() {
         </div>
 
         <div className={cn("grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 mb-6 sm:mb-8")}>
-          <Suspense fallback={<SeccionSkeleton />}>
-            <ProximosTurnosSection />
-          </Suspense>
-
-          <Suspense fallback={<SeccionSkeleton />}>
-            <OcupacionBoxesSection />
-          </Suspense>
+          <ProximosTurnosWidget initial={turnos} />
+          {ocupacionInitial && <OcupacionBoxesWidget initial={ocupacionInitial} />}
         </div>
       </div>
     </div>

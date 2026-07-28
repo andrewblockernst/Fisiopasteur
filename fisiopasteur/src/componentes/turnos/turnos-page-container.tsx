@@ -8,7 +8,7 @@ import TurnosMobileList from './turnos-mobile-list';
 import PaginacionBar from '@/componentes/paginacion/paginacion-bar';
 import { PageHeader } from '@/componentes/ui';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import UnifiedSkeletonLoader from '@/componentes/unified-skeleton-loader';
+import { useReportNavigationLoading } from '@/hooks/useReportNavigationLoading';
 import type { TurnoConDetalles } from "@/stores/turno-store";
 import type { Tables, EspecialistaWithSpecialties } from "@/types";
 import { useInvalidateTurnos, useTurnosPaginated } from '@/hooks/useTurnosQuery';
@@ -126,13 +126,16 @@ export default function TurnosPageContainer({
     onPageSizeChange: handlePageSizeChange,
   };
 
-  if (isCompact) {
-    return <TurnosMobileList {...(mobileListProps as any)} />;
+  // Carga inicial: ocultar la página y dejar que el spinner de la navbar indique progreso.
+  const isInitialLoading = paginatedLoading && !paginatedTurnos;
+  useReportNavigationLoading(isInitialLoading);
+
+  if (isInitialLoading) {
+    return null;
   }
 
-  // ✅ Skeleton de página completa (header + filtros + tabla) en la carga inicial
-  if (paginatedLoading && !paginatedTurnos) {
-    return <UnifiedSkeletonLoader type="table" />;
+  if (isCompact) {
+    return <TurnosMobileList {...(mobileListProps as any)} />;
   }
 
   // Vista desktop

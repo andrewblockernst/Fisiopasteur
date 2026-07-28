@@ -9,9 +9,10 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 import AgregarBoton from './agregar-boton';
 import { usePerfilNav } from '@/hooks/PerfilNavContext';
+import { useNavigationLoadingStore } from '@/stores/navigation-loading';
 import { cn } from '@/lib/utils';
 
 const BarraCelular = () => {
@@ -25,15 +26,22 @@ const BarraCelular = () => {
   const esSoloPilates = tienePilates && !tieneEspecialidadNoPilates && !puedeGestionar;
 
   const [isPending, startTransition] = useTransition();
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const pendingHref = useNavigationLoadingStore((s) => s.pendingHref);
+  const loadingCount = useNavigationLoadingStore((s) => s.loadingCount);
+  const setPending = useNavigationLoadingStore((s) => s.setPending);
 
   useEffect(() => {
-    if (!isPending) setPendingHref(null);
-  }, [isPending, pathname]);
+    if (!pendingHref) return;
+    const matches =
+      pathname === pendingHref || pathname.startsWith(`${pendingHref}/`);
+    if (matches && !isPending && loadingCount === 0) {
+      setPending(null);
+    }
+  }, [pendingHref, pathname, isPending, loadingCount, setPending]);
 
   const navigate = (href: string) => {
     if (pathname === href) return;
-    setPendingHref(href);
+    setPending(href);
     startTransition(() => router.push(href));
   };
 

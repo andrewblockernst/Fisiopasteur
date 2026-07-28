@@ -4,8 +4,8 @@ import BotonLegacy from "@/componentes/boton";
 import { Button } from "@/componentes/ui";
 import { EditarEspecialistaDialog } from "@/componentes/especialista/editar-especialista-dialog";
 import { DeleteEspecialistaDialog } from "@/componentes/especialista/eliminar-especialista-dialog";
-import { PerfilEspecialistaSkeleton } from "@/componentes/especialista/perfil-especialista-skeleton";
 import { PerfilEspecialistaDesktop, ResumenActividad } from "@/componentes/especialista/perfil-especialista-desktop";
+import { useReportNavigationLoading } from "@/hooks/useReportNavigationLoading";
 import {
     getPerfilEspecialista,
     getEstadisticasEspecialista,
@@ -78,8 +78,10 @@ export default function ConsultaEspecialistaPage() {
         loadData();
     }, [params.id]);
 
+    useReportNavigationLoading(isLoading);
+
     if (isLoading) {
-        return <PerfilEspecialistaSkeleton canManage={Boolean(user?.puedeGestionarTurnos)} />;
+        return null;
     }
 
     if (!viewingEspecialista) {
