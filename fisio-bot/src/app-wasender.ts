@@ -76,30 +76,22 @@ interface TurnoData {
 
 // Función auxiliar para formatear mensajes de turno
 const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recordatorio'): string => {
-    const emoji = tipo === 'confirmacion' ? '✅' : '⏰'
-    const titulo = tipo === 'confirmacion' ? 'Confirmación de Turno' : 'Recordatorio de Turno'
-    
-    const mensajeBase = [
-        `${emoji} *${titulo}*`,
-        '',
-        '',
+    const verbo = tipo === 'confirmacion' ? 'confirmarte' : 'recordarte'
+
+    const mensajeFinal = [
+        `Hola! Soy la secretaria virtual de Fisioterapia Pasteur y te escribo para ✅ *${verbo} tu turno*`,
         `Paciente: ${turno.pacienteNombre} ${turno.pacienteApellido}`,
         `Fecha: ${turno.fecha}`,
         `Hora: ${turno.hora}`,
         `Profesional: ${turno.profesional}`,
         `Especialidad: ${turno.especialidad}`,
-        ''
-    ].filter(line => line !== '')
-
-    const mensajeFinal = [
-        ...mensajeBase,
         '',
         '✔️ *Recomendaciones para tu turno:*',
         '• Llegá 10 minutos antes',
         '• Traé ropa cómoda',
         '',
         '📍 Pasteur 206, Libertador San Martín',
-        'Ante cualquier consulta, comuniquese directamente con su especialista.',
+        'Ante cualquier consulta, comunicate directamente con tu especialista, *no respondas a este mensaje*',
         '',
         '💪 ¡Te esperamos!'
     ]
