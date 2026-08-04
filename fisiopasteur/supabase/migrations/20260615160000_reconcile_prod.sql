@@ -49,11 +49,11 @@ drop function if exists "public"."buscar_pacientes_smart"(search_term text, org_
 
 
 
-CREATE INDEX idx_turno_fecha_especialista ON public.turno USING btree (fecha, id_especialista);
+CREATE INDEX IF NOT EXISTS idx_turno_fecha_especialista ON public.turno USING btree (fecha, id_especialista);
 
-CREATE INDEX idx_turno_fecha_estado ON public.turno USING btree (fecha, estado);
+CREATE INDEX IF NOT EXISTS idx_turno_fecha_estado ON public.turno USING btree (fecha, estado);
 
-CREATE INDEX idx_turno_id_box_fecha ON public.turno USING btree (id_box, fecha) WHERE (id_box IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_turno_id_box_fecha ON public.turno USING btree (id_box, fecha) WHERE (id_box IS NOT NULL);
 
 
 
