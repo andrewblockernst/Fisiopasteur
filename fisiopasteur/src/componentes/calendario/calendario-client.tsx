@@ -132,7 +132,7 @@ export function CalendarioClient({
 
   // Filtrar turnos por especialista
   const turnosFiltrados = especialistasFiltro.length > 0
-    ? turnos.filter(turno => especialistasFiltro.includes(turno.id_especialista))
+    ? turnos.filter(turno => turno.id_especialista !== null && especialistasFiltro.includes(turno.id_especialista))
     : turnos;
 
   const turnosHoy = getTurnosHoy();

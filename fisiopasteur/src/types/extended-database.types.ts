@@ -51,9 +51,7 @@ export type Dificultad = 'principiante' | 'intermedio' | 'avanzado';
 // relaciones anidadas. Se derivan con Pick<> de los Row generados para
 // que cualquier cambio en la DB se propague automáticamente.
 
-export type TurnoWithRelations = Omit<Turno, 'dificultad'> & {
-  /** override: en la app la columna se maneja como enum, en DB es text. */
-  dificultad: Dificultad | null;
+export type TurnoWithRelations = Turno & {
   paciente:
     | Pick<Paciente, 'id_paciente' | 'nombre' | 'apellido' | 'telefono' | 'dni' | 'email'>
     | null;
