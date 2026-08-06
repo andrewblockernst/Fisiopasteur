@@ -45,7 +45,10 @@ async function drainQueue() {
         } catch (err) {
             entry.reject(err)
         }
-        if (msgQueue.length > 0 && SEND_INTERVAL_MS > 0) {
+        // Pausar tras CADA envío, no solo si ya hay más en cola: el loop de
+        // recordatorios encola de a uno (await), así la cola vuelve a 0 y sin
+        // esto nunca se respetaba el rate limit de WaSender. // ponytail
+        if (SEND_INTERVAL_MS > 0) {
             console.log(`⏳ [Queue] Pausa ${SEND_INTERVAL_MS}ms antes del próximo envío...`)
             await delay(SEND_INTERVAL_MS)
         }
