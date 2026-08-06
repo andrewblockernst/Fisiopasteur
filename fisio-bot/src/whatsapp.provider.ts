@@ -1,5 +1,5 @@
 import { waSenderService } from './wasender.service'
-import { metaService } from './meta.service'
+import { getMetaService } from './meta.service'
 
 /**
  * Capa de abstracción del proveedor de WhatsApp.
@@ -43,7 +43,7 @@ export interface EnvioResult {
 export async function sendViaProvider(msg: OutgoingMessage): Promise<EnvioResult> {
     if (PROVIDER === 'meta') {
         if (msg.template) {
-            return metaService.sendTemplate({
+            return getMetaService().sendTemplate({
                 to: msg.to,
                 template: msg.template.name,
                 variables: msg.template.variables,
@@ -53,7 +53,7 @@ export async function sendViaProvider(msg: OutgoingMessage): Promise<EnvioResult
         // Sin plantilla -> texto libre. Meta solo lo entrega dentro de la
         // ventana de 24h posterior a un mensaje entrante del paciente.
         console.warn(`⚠️ [Meta] Texto libre a ${msg.to} sin plantilla — solo se entrega dentro de la ventana de 24h.`)
-        return metaService.sendText({ to: msg.to, text: msg.text })
+        return getMetaService().sendText({ to: msg.to, text: msg.text })
     }
 
     // WaSender (default): siempre texto.

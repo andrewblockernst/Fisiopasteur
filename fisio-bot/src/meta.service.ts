@@ -152,5 +152,7 @@ class MetaWhatsAppService {
     }
 }
 
-// Exportar instancia singleton
-export const metaService = new MetaWhatsAppService()
+// Singleton perezoso: NO instanciar al importar, o un import crashea el proceso
+// entero cuando faltan las vars de Meta aunque se use WaSender. // ponytail: lazy
+let _instance: MetaWhatsAppService | null = null
+export const getMetaService = () => (_instance ??= new MetaWhatsAppService())
