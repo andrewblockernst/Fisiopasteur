@@ -40,8 +40,9 @@ export default async function NotificacionesPage() {
   const { resumen } = data;
 
   return (
-    <div className="min-h-screen text-foreground">
-      <div className="mx-auto w-full bg-background p-3 sm:px-6 sm:pb-6 sm:pt-2 lg:px-8 lg:pt-2">
+    <div className="h-[calc(100dvh-5rem)] lg:h-[100dvh] flex flex-col text-foreground overflow-hidden">
+      {/* Header fijo */}
+      <div className="shrink-0 mx-auto w-full bg-background px-3 pt-2 sm:px-6 lg:px-8">
         <PageHeader
           title="Notificaciones"
           description={
@@ -52,7 +53,10 @@ export default async function NotificacionesPage() {
           showTitle
           actions={<RefreshButton />}
         />
+      </div>
 
+      {/* Solo esta zona scrollea; overscroll-contain corta el bounce */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain mx-auto w-full bg-background px-3 pb-6 sm:px-6 lg:px-8">
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Tarjeta n={resumen.vencidas} label="Vencidas sin procesar" tono="text-destructive" />
           <Tarjeta n={resumen.proximas} label="Próximas a enviar" tono="text-info" />
