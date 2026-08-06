@@ -1,115 +1,17 @@
-import type { Tables } from './database.types';
+/**
+ * Tipos derivados de los tipos generados por Supabase.
+ *
+ * Regla: NUNCA repetir a mano columnas que ya existen en `Tables<'x'>`.
+ * Componer con `Pick<>`, `Omit<>` y unions. Si una columna cambia en la DB,
+ * `npm run types:generate` la propaga y estos alias siguen alineados solos.
+ */
+
+import type { Tables } from '@/lib/database.types';
 
 // ========================================
-// TIPOS CONSOLIDADOS PARA COMPONENTES
+// ALIASES DE TABLAS
 // ========================================
 
-/**
- * Tipo para turnos con relaciones completas
- * Usado en listados, detalles y componentes de turnos
- */
-export type TurnoWithRelations = {
-  id_turno: number;
-  fecha: string;
-  hora: string;
-  numero_en_grupo?: number | null;
-  estado: string | null;
-  observaciones: string | null;
-  notas: string | null;
-  precio: number | null;
-  tipo_plan: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-  id_box: number | null;
-  id_especialidad: number | null;
-  id_especialista: string | null;
-  id_paciente: number | null;
-  id_grupo_tratamiento?: string;
-  dificultad: 'principiante' | 'intermedio' | 'avanzado' | null;
-  paciente: {
-    id_paciente: number;
-    nombre: string;
-    apellido: string;
-    telefono: string;
-    dni: string | null;
-    email: string | null;
-  } | null;
-  especialista: {
-    id_usuario: string;
-    nombre: string;
-    apellido: string;
-    color: string | null;
-  } | null;
-  especialidad: {
-    id_especialidad: number;
-    nombre: string;
-  } | null;
-  box: {
-    id_box: number;
-    numero: number;
-  } | null;
-  grupo_tratamiento?: {
-    id_grupo: string;
-    cantidad_turnos_planificados: number | null;
-  } | null;
-};
-
-/**
- * Tipo para especialistas con sus especialidades asignadas
- * Usado en formularios y selects de especialistas
- */
-export type EspecialistaWithSpecialties = {
-  id_usuario: string;
-  nombre: string;
-  apellido: string;
-  color: string | null;
-  email: string;
-  telefono: string | null;
-  activo: boolean | null;
-  especialidad: { 
-    id_especialidad: number; 
-    nombre: string; 
-  } | null;
-  usuario_especialidad: { 
-    especialidad: { 
-      id_especialidad: number; 
-      nombre: string; 
-    }; 
-  }[];
-};
-
-/**
- * Tipo para opciones de select/dropdown
- * Estructura genérica para componentes de selección
- */
-export type SelectOption = { 
-  label: string; 
-  value: string; 
-};
-
-/**
- * Tipos de estado válidos para turnos
- * - programado: Turno agendado (azul)
- * - pendiente: Turno pasado sin actualizar (amarillo) - asignado automáticamente
- * - atendido: Confirmado por especialista (verde)
- * - cancelado: Marcado como cancelado (rojo)
- * - eliminado: Turno eliminado (soft delete, no se muestra en ninguna parte)
- */
-export type EstadoTurno = 'programado' | 'pendiente' | 'atendido' | 'cancelado' | 'eliminado';
-
-/**
- * Tipos de plan de pago para turnos
- */
-export type TipoPlan = 'particular' | 'obra_social';
-
-// ========================================
-// ALIASES DE TIPOS BASE (Para conveniencia)
-// ========================================
-
-/**
- * Tipos base de tablas de Supabase
- * Re-exportados para acceso rápido
- */
 export type Turno = Tables<'turno'>;
 export type Paciente = Tables<'paciente'>;
 export type Usuario = Tables<'usuario'>;
@@ -119,19 +21,79 @@ export type Rol = Tables<'rol'>;
 export type UsuarioEspecialidad = Tables<'usuario_especialidad'>;
 export type Notificacion = Tables<'notificacion'>;
 export type EvolucionClinica = Tables<'evolucion_clinica'>;
+export type GrupoTratamiento = Tables<'grupo_tratamiento'>;
 
 // ========================================
-// RE-EXPORTACIONES DE SUPABASE
+// ENUMS DE APLICACIÓN (no representados en DB como enum)
 // ========================================
 
 /**
- * Re-exportar utilidades de tipos de Supabase
- * para acceso centralizado desde este archivo
+ * Estados válidos para un turno.
+ * - programado: agendado (azul)
+ * - pendiente:  pasado sin actualizar (amarillo) — asignado automáticamente
+ * - atendido:   confirmado por especialista (verde)
+ * - cancelado:  marcado como cancelado (rojo)
+ * - eliminado:  soft-delete, oculto en todas las vistas
  */
-export type { 
-  Tables, 
-  TablesInsert, 
-  TablesUpdate, 
+export type EstadoTurno = 'programado' | 'pendiente' | 'atendido' | 'cancelado' | 'eliminado';
+
+/** Planes de pago para turnos. */
+export type TipoPlan = 'particular' | 'obra_social';
+
+/** Niveles de dificultad para clases de Pilates. */
+export type Dificultad = 'principiante' | 'intermedio' | 'avanzado';
+
+// ========================================
+// SHAPES DE JOINS (relaciones traídas por .select("...,rel(...)") )
+// ========================================
+//
+// Estos tipos modelan la forma que devuelve PostgREST cuando se piden
+// relaciones anidadas. Se derivan con Pick<> de los Row generados para
+// que cualquier cambio en la DB se propague automáticamente.
+
+export type TurnoWithRelations = Omit<Turno, 'dificultad'> & {
+  /** override: en la app la columna se maneja como enum, en DB es text. */
+  dificultad: Dificultad | null;
+  paciente:
+    | Pick<Paciente, 'id_paciente' | 'nombre' | 'apellido' | 'telefono' | 'dni' | 'email'>
+    | null;
+  especialista:
+    | Pick<Usuario, 'id_usuario' | 'nombre' | 'apellido' | 'color'>
+    | null;
+  especialidad: Pick<Especialidad, 'id_especialidad' | 'nombre'> | null;
+  box: Pick<Box, 'id_box' | 'numero'> | null;
+  grupo_tratamiento:
+    | Pick<GrupoTratamiento, 'id_grupo' | 'cantidad_turnos_planificados'>
+    | null;
+};
+
+export type EspecialistaWithSpecialties = Pick<
+  Usuario,
+  'id_usuario' | 'nombre' | 'apellido' | 'color' | 'email' | 'telefono' | 'activo'
+> & {
+  especialidad: Pick<Especialidad, 'id_especialidad' | 'nombre'> | null;
+  usuario_especialidad: {
+    especialidad: Pick<Especialidad, 'id_especialidad' | 'nombre'>;
+  }[];
+};
+
+// ========================================
+// UTILIDADES GENÉRICAS DE UI
+// ========================================
+
+export type SelectOption = {
+  label: string;
+  value: string;
+};
+
+// ========================================
+// RE-EXPORTACIONES
+// ========================================
+
+export type {
+  Tables,
+  TablesInsert,
+  TablesUpdate,
   Enums,
-  Database 
-} from './database.types';
+  Database,
+} from '@/lib/database.types';
