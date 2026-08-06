@@ -135,6 +135,7 @@ export function CalendarioClient({
     ? turnos.filter(turno => especialistasFiltro.includes(turno.id_especialista))
     : turnos;
 
+  //HOLA
   const turnosHoy = getTurnosHoy();
   const turnosProximos = getTurnosProximos();
 
