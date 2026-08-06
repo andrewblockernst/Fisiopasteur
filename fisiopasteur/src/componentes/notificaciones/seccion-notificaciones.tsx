@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Badge } from "@/componentes/ui";
-import { dayjs } from "@/lib/dayjs";
+import { dayjs, ARG_TIMEZONE } from "@/lib/dayjs";
 import type {
   NotificacionPendiente,
   NotificacionReciente,
@@ -11,7 +11,9 @@ import type {
 
 const PAGE_SIZE = 10;
 
-const fmt = (iso: string | null) => (iso ? dayjs(iso).format("DD/MM HH:mm") : "—");
+// Siempre en hora de Argentina, independiente de la zona del dispositivo.
+const fmt = (iso: string | null) =>
+  iso ? dayjs(iso).tz(ARG_TIMEZONE).format("DD/MM HH:mm") : "—";
 
 const enMinutos = (min: number | null) => {
   if (min == null) return "—";
