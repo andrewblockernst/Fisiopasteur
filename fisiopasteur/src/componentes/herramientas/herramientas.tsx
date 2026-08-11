@@ -7,6 +7,7 @@ import {
   Accessibility,
   FileBadge,
   User,
+  BellRing,
   HelpCircle,
   Bed,
   LogOut,
@@ -71,6 +72,7 @@ const Herramientas = () => {
       <IconWrapper label="Pacientes" icon={<Accessibility size={28} />} onClick={() => navigate('/pacientes')} active={isActive('/pacientes')} loading={pendingHref === '/pacientes'} />
       <IconWrapper label="Especialistas" icon={<FileBadge size={28} />} onClick={() => navigate('/especialistas')} active={isActive('/especialistas')} loading={pendingHref === '/especialistas'} />
       <IconWrapper label="Perfil" icon={<User size={28} />} onClick={() => navigate('/perfil')} active={isActive('/perfil')} loading={pendingHref === '/perfil'} />
+      <IconWrapper label="Notificaciones" icon={<BellRing size={28} />} onClick={() => navigate('/notificaciones')} active={isActive('/notificaciones')} loading={pendingHref === '/notificaciones'} />
       <IconWrapper label="Ayuda" icon={<HelpCircle size={28} />} onClick={() => navigate('/centro-de-ayuda')} active={isActive('/centro-de-ayuda')} loading={pendingHref === '/centro-de-ayuda'} />
       <IconWrapper label="Cerrar Sesión" icon={<LogOut size={28} />} onClick={onCerrarSesion} />
     </aside>

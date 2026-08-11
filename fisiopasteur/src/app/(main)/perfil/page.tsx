@@ -1,4 +1,5 @@
 import PerfilServidor from '@/componentes/perfil/perfil-server';
+import { NotificacionesFab } from '@/componentes/notificaciones/notificaciones-fab';
 import { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -11,5 +12,10 @@ export const metadata: Metadata = {
 export const revalidate = 0; // Renderizar dinámicamente en cada request
 
 export default function PerfilPage() {
-  return <PerfilServidor />;
+  return (
+    <>
+      <PerfilServidor />
+      <NotificacionesFab />
+    </>
+  );
 }
