@@ -220,7 +220,7 @@ export async function obtenerKPIsConHistorial(
       return { success: false, error: "Error al obtener datos históricos" };
     }
 
-    const turnos = (actual.data as TurnoFila[]) || [];
+    const turnos = (actual.data as unknown as TurnoFila[]) || [];
 
     const datosMap = new Map<string, KPIHistorico>();
     const fechaInicioStr = rango.inicio.format("YYYY-MM-DD");
@@ -283,7 +283,7 @@ export async function obtenerKPIsConHistorial(
         filtroEspecialistaId,
         "fecha, estado, precio, id_turno",
       );
-      anterior = totalDesdeTurnos((previo.data as TurnoFila[]) || []);
+      anterior = totalDesdeTurnos((previo.data as unknown as TurnoFila[]) || []);
     }
 
     return { success: true, datos, total, anterior };

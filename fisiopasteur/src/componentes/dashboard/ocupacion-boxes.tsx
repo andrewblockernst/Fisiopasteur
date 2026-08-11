@@ -130,7 +130,7 @@ export function OcupacionBoxes({
   const [hover, setHover] = useState<{ fila: string; hora: number; count: number } | null>(null);
 
   // 4. Hora pico (la hora con más turnos sumados sobre todos los boxes/días).
-  const horaPico = useMemo(() => {
+  const horaPico = useMemo<{ hora: number; count: number } | null>(() => {
     const porHora = new Map<number, number>();
     turnos.forEach((t) => porHora.set(t.hora, (porHora.get(t.hora) ?? 0) + 1));
     let best: { hora: number; count: number } | null = null;

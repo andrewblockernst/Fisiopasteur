@@ -61,7 +61,6 @@ export async function sincronizarUsuarioAuth() {
             nombre: user.user_metadata?.nombre || 'Usuario',
             apellido: user.user_metadata?.apellido || 'Nuevo',
             email: user.email || '',
-            usuario: user.email?.split('@')[0] || 'usuario',
             contraseña: '',
             // Default al rol de MENOR privilegio, nunca ADMIN.
             id_rol: ROLES.ESPECIALISTA,

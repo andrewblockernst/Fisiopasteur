@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   useForm,
   type DefaultValues,
+  type FieldValues,
   type Path,
   type UseFormReturn,
 } from "react-hook-form";
@@ -18,7 +19,7 @@ export type ModalFormMode = "create" | "edit";
 export interface UseModalFormOptions<TSchema extends ZodTypeAny> {
   schema: TSchema;
   mode: ModalFormMode;
-  defaultValues: DefaultValues<z.infer<TSchema>>;
+  defaultValues: DefaultValues<(z.infer<TSchema> & FieldValues)>;
   /**
    * Resetea defaultValues cuando cambian (típicamente al reabrir el dialog
    * con un registro distinto). Pasá `isOpen` o el id del registro.
@@ -27,14 +28,14 @@ export interface UseModalFormOptions<TSchema extends ZodTypeAny> {
 }
 
 export interface UseModalFormReturn<TSchema extends ZodTypeAny>
-  extends UseFormReturn<z.infer<TSchema>> {
+  extends UseFormReturn<(z.infer<TSchema> & FieldValues)> {
   mode: ModalFormMode;
   submit: <TData>(
     action: () => Promise<ActionResult<TData>>,
     handlers: {
       onSuccess: (data: TData | undefined) => void;
       onError?: (error: string) => void;
-      fieldErrorMap?: Partial<Record<Path<z.infer<TSchema>>, RegExp[]>>;
+      fieldErrorMap?: Partial<Record<Path<(z.infer<TSchema> & FieldValues)>, RegExp[]>>;
     },
   ) => Promise<void>;
   isSubmitting: boolean;
@@ -74,7 +75,7 @@ export function useModalForm<TSchema extends ZodTypeAny>({
   resetKey,
   onClose,
 }: UseModalFormOptions<TSchema> & { onClose: () => void }): UseModalFormReturn<TSchema> {
-  type Values = z.infer<TSchema>;
+  type Values = (z.infer<TSchema> & FieldValues);
 
   const form = useForm<Values>({
     resolver: zodResolver(schema as any) as any,
