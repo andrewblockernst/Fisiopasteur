@@ -56,10 +56,12 @@ const Herramientas = () => {
   const onCerrarSesion = async () => {
     try {
       await cerrarSesionServer();
-      window.location.href = '/login';
     } catch (error) {
       console.error('❌ Error en onCerrarSesion:', error);
-      window.location.href = '/login';
+    } finally {
+      // Navegación dura con replace: no re-renderiza la página actual (evita el
+      // flash sin usuario) y no deja la ruta protegida en el historial.
+      window.location.replace('/login');
     }
   }
 

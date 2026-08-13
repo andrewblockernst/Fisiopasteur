@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
 
 export async function cerrarSesionServer() {
   try {
@@ -20,7 +19,6 @@ export async function cerrarSesionServer() {
       return { success: false, error: error.message };
     }
 
-    revalidatePath('/');
     return { success: true };
     
   } catch (error) {

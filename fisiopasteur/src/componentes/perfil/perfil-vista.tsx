@@ -81,10 +81,12 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
   const onCerrarSesion = async () => {
     try {
       await cerrarSesionServer();
-      window.location.href = '/login';
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
-      window.location.href = '/login';
+    } finally {
+      // Ver nota en herramientas.tsx: replace evita el flash y no deja la ruta
+      // protegida en el historial.
+      window.location.replace('/login');
     }
   };
 
