@@ -10,7 +10,7 @@ import {
   Palette, HelpCircle
 } from 'lucide-react';
 import Button from '../boton';
-import { cerrarSesionServer } from '@/lib/actions/logOut.action';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import EditarPerfilDialog from './editarperfil-dialog';
 import { formatoNumeroTelefono } from '@/lib/utils';
 import { useAuth } from '@/hooks/usePerfil';
@@ -80,12 +80,13 @@ export default function PerfilCliente({ perfil }: PerfilClienteProps) {
 
   const onCerrarSesion = async () => {
     try {
-      await cerrarSesionServer();
+      // Ver nota en herramientas.tsx: signOut desde el cliente evita la
+      // invalidación automática del Router Cache que produce Next cuando
+      // se mutan cookies dentro de un Server Action.
+      await getSupabaseClient().auth.signOut();
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     } finally {
-      // Ver nota en herramientas.tsx: replace evita el flash y no deja la ruta
-      // protegida en el historial.
       window.location.replace('/login');
     }
   };

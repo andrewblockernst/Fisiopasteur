@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useTransition } from 'react';
-import { cerrarSesionServer } from '@/lib/actions/logOut.action';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { usePerfilNav } from '@/hooks/PerfilNavContext';
 import { useNavigationLoadingStore } from '@/stores/navigation-loading';
 import { cn } from '@/lib/utils';
@@ -55,12 +55,14 @@ const Herramientas = () => {
 
   const onCerrarSesion = async () => {
     try {
-      await cerrarSesionServer();
+      // Sign out desde el cliente (no un Server Action): mutar cookies dentro
+      // de un Server Action invalida el Router Cache de la ruta actual y
+      // Next la re-renderiza sin usuario justo antes de navegar afuera.
+      // Haciéndolo acá evitamos ese refresh intermedio.
+      await getSupabaseClient().auth.signOut();
     } catch (error) {
       console.error('❌ Error en onCerrarSesion:', error);
     } finally {
-      // Navegación dura con replace: no re-renderiza la página actual (evita el
-      // flash sin usuario) y no deja la ruta protegida en el historial.
       window.location.replace('/login');
     }
   }
