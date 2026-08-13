@@ -268,9 +268,17 @@ export function CalendarioTurnos({
           ))}
         </div>
 
+        {/*
+          Contenedor scrollable: la altura del grid está acotada a este
+          contenedor (h-full, no min-h-full), así los tracks `1fr` reparten
+          el espacio real disponible y cada celda recorta su contenido con
+          overflow-hidden en vez de crecer con la cantidad de turnos. Si el
+          mínimo de 124px por fila no entra, el grid excede el contenedor y
+          recién ahí aparece scroll.
+        */}
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div
-            className="grid grid-cols-7 gap-px bg-border min-h-full"
+            className="grid grid-cols-7 gap-px bg-border h-full"
             style={{
               gridTemplateRows: `repeat(${filas}, minmax(124px, 1fr))`,
             }}
