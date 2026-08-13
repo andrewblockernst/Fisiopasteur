@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
+import { Eye, EyeOff } from "lucide-react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
 import { DiscardChangesDialog } from "@/componentes/dialog/discard-changes-dialog";
 import type { Tables } from "@/types/database.types";
@@ -43,6 +45,7 @@ export function NuevoEspecialistaDialog({
   especialidades,
 }: NuevoEspecialistaDialogProps) {
   const { showServerActionResponse, addToast } = useToastStore();
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useModalForm({
     schema: especialistaCreateSchema,
@@ -145,7 +148,24 @@ export function NuevoEspecialistaDialog({
                   <FormField control={form.control} name="contraseña" render={({ field }) => (
                     <FormItem>
                       <FormLabel required>Contraseña</FormLabel>
-                      <FormControl><Input type="password" placeholder="Mínimo 6 caracteres" maxLength={72} {...field} /></FormControl>
+                      <FormControl>
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Mínimo 6 caracteres"
+                          maxLength={72}
+                          rightIcon={
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((prev) => !prev)}
+                              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                              className="pointer-events-auto"
+                            >
+                              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          }
+                          {...field}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
