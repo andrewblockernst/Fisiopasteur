@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from "@/lib/supabase/server";
+import { selectAll } from "@/lib/supabase/select-all";
 import { revalidatePath } from "next/cache";
 import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types";
 import { normalizePhoneNumber } from "@/lib/utils/phone.utils";
@@ -33,6 +34,7 @@ async function checkEmailExists(email: string, excludeId?: number): Promise<bool
     const supabase = await createClient();
 
     let query = supabase
+    // unbounded-ok: chequeo de unicidad, se resuelve con .single() más abajo.
     .from("paciente")
     .select("id_paciente")
     .eq("email", email);
@@ -50,6 +52,7 @@ async function checkDocumentoExists(documento: string, excludeId?: number): Prom
   const supabase = await createClient();
   
   let query = supabase
+    // unbounded-ok: chequeo de unicidad, se resuelve con .single() más abajo.
     .from("paciente")
     .select("id_paciente")
     .eq("dni", documento);
@@ -67,6 +70,7 @@ async function checkTelefonoExists(telefono: string, excludeId?: number): Promis
   const supabase = await createClient();
   
   let query = supabase
+    // unbounded-ok: chequeo de unicidad, se resuelve con .single() más abajo.
     .from("paciente")
     .select("id_paciente")
     .eq("telefono", telefono);
@@ -187,37 +191,33 @@ export async function getPacientes(options?: {
   }
 
   // ✅ Obtener pacientes
-  
-  let query = supabase
-    .from("paciente")
-    .select("*", { count: "exact" });
 
-  if (status === 'activos') {
-    query = query.eq('activo', true);
-  } else if (status === 'inactivos') {
-    query = query.eq('activo', false);
-  }
-
-  // Ordenamiento
-  query = query.order(orderBy as string, { ascending: orderDirection === "asc" });
-
-  if (hasPaginationParams) {
-    query = query.range((safePage - 1) * safePageSize, (safePage - 1) * safePageSize + safePageSize - 1);
-  }
-
-
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    console.error("Error obteniendo pacientes:", error);
-    return { success: false, error: error.message };
-  }
-
-
-  const total = count || 0;
+  const aplicarFiltros = (q: any) => {
+    let query = q;
+    if (status === 'activos') {
+      query = query.eq('activo', true);
+    } else if (status === 'inactivos') {
+      query = query.eq('activo', false);
+    }
+    return query
+      .order(orderBy as string, { ascending: orderDirection === "asc" })
+      // Orden total: `orderBy` puede tener empates (mismo apellido, misma fecha).
+      .order('id_paciente', { ascending: true });
+  };
 
   if (hasPaginationParams) {
+    const query = aplicarFiltros(supabase.from("paciente").select("*", { count: "exact" }))
+      .range((safePage - 1) * safePageSize, (safePage - 1) * safePageSize + safePageSize - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error("Error obteniendo pacientes:", error);
+      return { success: false, error: error.message };
+    }
+
+    const total = count || 0;
+
     return {
       success: true,
       data: data || [],
@@ -231,10 +231,22 @@ export async function getPacientes(options?: {
     } as any;
   }
 
+  // Sin parámetros de paginación el llamador espera la lista COMPLETA. Antes se
+  // cortaba en 1000: con `count: "exact"` el total decía 1200 y la UI mostraba
+  // 1000, sin ningún error.
+  const resultado = await selectAll<any>((from, to) =>
+    aplicarFiltros(supabase.from("paciente").select("*")).range(from, to)
+  );
+
+  if (!resultado.success) {
+    console.error("Error obteniendo pacientes:", resultado.error);
+    return { success: false, error: resultado.error };
+  }
+
   return {
     success: true,
-    data: data || [],
-    total,
+    data: resultado.data,
+    total: resultado.data.length,
   } as any;
 }
 
@@ -474,12 +486,20 @@ export async function deletePaciente(id: number): Promise<ActionResult> {
 
     // ponytail: cancelar notificaciones pendientes para que el bot no mande recordatorios.
     // Sin esto el cron sigue enviando porque no filtra por paciente.activo.
-    const { data: turnosDelPaciente } = await supabase
-      .from("turno")
-      .select("id_turno")
-      .eq("id_paciente", id);
+    // Truncar acá dejaría notificaciones pendientes sin cancelar y el bot
+    // seguiría mandando recordatorios de un paciente ya eliminado.
+    const turnosDelPaciente = await selectAll<{ id_turno: number }>((from, to) =>
+      supabase
+        .from("turno")
+        .select("id_turno")
+        .eq("id_paciente", id)
+        .order("id_turno", { ascending: true })
+        .range(from, to)
+    );
 
-    const idsTurnos = (turnosDelPaciente ?? []).map((t) => t.id_turno);
+    const idsTurnos = turnosDelPaciente.success
+      ? turnosDelPaciente.data.map((t) => t.id_turno)
+      : [];
     if (idsTurnos.length > 0) {
       const { error: notifError } = await supabase
         .from("notificacion")
@@ -587,25 +607,37 @@ export async function editarObservacion(idEvolucion: number, texto: string): Pro
 // Obtener evoluciones clínicas de un paciente
 export async function getEvolucionesClinicas(idPaciente: number) {
   const supabase = await createClient();
-  // 1. Buscar todos los turnos del paciente
-  const { data: turnos, error: errorTurnos } = await supabase
-    .from("turno")
-    .select("id_turno")
-    .eq("id_paciente", idPaciente);
+  // 1. Buscar todos los turnos del paciente.
+  // Es historia clínica: truncar en 1000 le borraría evoluciones al paciente
+  // sin ningún error visible.
+  const turnos = await selectAll<{ id_turno: number }>((from, to) =>
+    supabase
+      .from("turno")
+      .select("id_turno")
+      .eq("id_paciente", idPaciente)
+      .order("id_turno", { ascending: true })
+      .range(from, to)
+  );
 
-  if (errorTurnos || !turnos) return [];
+  if (!turnos.success) return [];
 
-  const turnosIds = turnos.map(t => t.id_turno);
+  const turnosIds = turnos.data.map(t => t.id_turno);
 
-  // 2. Buscar todas las evoluciones clínicas de esos turnos
-  const { data: evoluciones, error: errorEvo } = await supabase
-    .from("evolucion_clinica")
-    .select("*")
-    .in("id_turno", turnosIds);
+  // 2. Buscar todas las evoluciones clínicas de esos turnos.
+  // ponytail: si turnosIds llegara a miles, el techo real pasa a ser el largo
+  // de la URL del .in() — habría que chunkear la lista de ids.
+  const evoluciones = await selectAll<any>((from, to) =>
+    supabase
+      .from("evolucion_clinica")
+      .select("*")
+      .in("id_turno", turnosIds)
+      .order("id_evolucion", { ascending: true })
+      .range(from, to)
+  );
 
-  if (errorEvo || !evoluciones) return [];
+  if (!evoluciones.success) return [];
 
-  return evoluciones;
+  return evoluciones.data;
 }
 
 // Agregar evolución clínica

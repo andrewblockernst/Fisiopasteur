@@ -7,8 +7,10 @@ import { passwordSchema } from "@/lib/schemas/password.schema";
 export async function resetPassword(email: string): Promise<ActionResult> {
   const supabase = await createClient();
 
+  // El link del email va primero al callback PKCE, que intercambia el `code`
+  // por una sesión y recién ahí manda al form de nueva contraseña.
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/login/restablecerContra`, 
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/login/restablecerContra`,
   });
 
   if (error) {

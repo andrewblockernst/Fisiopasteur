@@ -27,6 +27,8 @@ export async function middleware(request: NextRequest) {
     '/centro-de-ayuda',
     '/recuperarContra',
     '/restablecerContra',
+    // Callback PKCE: debe pasar SIN sesión, porque justamente viene a crearla.
+    '/auth/callback',
   ];
 
   const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));

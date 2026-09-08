@@ -7,9 +7,12 @@
   },
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "npm run check:queries",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "check:queries": "node scripts/check-unbounded-queries.mjs",
+    "test:select-all": "node --test src/lib/supabase/select-all.test.ts",
     "types:generate": "npx supabase gen types typescript --project-id qasrvhpdcerymjtvcfed > src/lib/database.types.ts"
   },
   "dependencies": {

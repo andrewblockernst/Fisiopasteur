@@ -62,6 +62,10 @@ export default function ForgotPasswordPage() {
             <p className="text-red-500 text-sm mt-1">{emailError}</p>
           )}
         </div>
+        <p className="text-xs text-gray-500">
+          Vas a recibir un correo de <span className="font-medium">Fisiopasteur Support</span>.
+          Si no lo ves, revisá tu carpeta de spam o correo no deseado.
+        </p>
         <div className="flex gap-2">
           <Boton variant="primary" type="submit" className="w-full text-black">
             Enviar link
