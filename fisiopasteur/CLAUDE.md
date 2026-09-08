@@ -67,8 +67,10 @@ src/
 - `selectAll()` exige **orden total**: agregar la PK como último `.order()`. Sin
   desempate, dos filas iguales en la clave de orden se reordenan entre requests
   y se duplican o se pierden al cruzar el borde de un bloque.
-- `npm run check:queries` (incluido en `npm run lint`) falla si aparece un
-  SELECT de lista sin techo sobre una tabla que crece.
+- `npm run check:queries` falla si aparece un SELECT de lista sin techo sobre
+  una tabla que crece. Corre solo en cada `npm run build` (vía `prebuild`), así
+  que también corta el deploy. No está en `lint` porque `next lint` no funciona
+  desde Next 16.
 
 ### Formularios
 - React Hook Form + `zodResolver`. Schemas Zod compartidos entre cliente y server action.
