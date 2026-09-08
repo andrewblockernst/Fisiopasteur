@@ -203,6 +203,11 @@ export async function obtenerTurnosParaValidarBoxes(
 }
 
 // Obtener turnos con filtros avanzados (para la página principal)
+// Techo de filas por respuesta que impone PostgREST (`db-max-rows`).
+// Si en Supabase se sube ese valor, subirlo acá también: un valor MENOR al real
+// solo cuesta un request extra, uno MAYOR vuelve a truncar en silencio.
+const POSTGREST_MAX_ROWS = 1000;
+
 export async function obtenerTurnosConFiltros(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
@@ -237,90 +242,94 @@ export async function obtenerTurnosConFiltros(filtros?: {
       ? `paciente:id_paciente!inner(id_paciente, nombre, apellido, dni, telefono, email)`
       : `paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email)`;
 
-    let query = supabase
-      .from("turno")
-      .select(`
-        *,
-        ${pacienteSelect},
-        especialista:id_especialista!inner(
-          id_usuario,
-          nombre,
-          apellido,
-          color,
-          especialidad:id_especialidad(id_especialidad, nombre)
-        ),
-        especialidad:id_especialidad(id_especialidad, nombre),
-        box:id_box(id_box, numero),
-        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
-      `, shouldPaginate ? { count: "exact" } : undefined)
-      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
-      .order("fecha", { ascending: true })
-      .order("hora", { ascending: true });
-
-    // Aplicar filtros de rango de fechas
-    if (filtros?.fecha_desde) {
-      query = query.gte("fecha", filtros.fecha_desde);
-    }
-    if (filtros?.fecha_hasta) {
-      query = query.lte("fecha", filtros.fecha_hasta);
-    }
-
-    // Filtro por especialistas (múltiples valores)
-    if (filtros?.especialista_ids && filtros.especialista_ids.length > 0) {
-      query = query.in("id_especialista", filtros.especialista_ids);
-    }
-
     const idPilates = await obtenerIdPilates();
 
-    // Filtro por especialidades (múltiples valores)
-    if (filtros?.especialidad_ids && filtros.especialidad_ids.length > 0) {
-      query = query.in("id_especialidad", filtros.especialidad_ids);
-    } else if (!filtros?.es_pilates && idPilates) {
-      query = query.neq("id_especialidad", idPilates);
-    } else if (filtros?.es_pilates === true && idPilates) {
-      query = query.eq("id_especialidad", idPilates);
-    }
+    const buildQuery = () => {
+      let query = supabase
+        .from("turno")
+        .select(`
+          *,
+          ${pacienteSelect},
+          especialista:id_especialista!inner(
+            id_usuario,
+            nombre,
+            apellido,
+            color,
+            especialidad:id_especialidad(id_especialidad, nombre)
+          ),
+          especialidad:id_especialidad(id_especialidad, nombre),
+          box:id_box(id_box, numero),
+          grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
+        `, shouldPaginate ? { count: "exact" } : undefined)
+        .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
+        .order("fecha", { ascending: true })
+        .order("hora", { ascending: true })
+        // Desempate estable: sin él, dos turnos con misma fecha+hora pueden
+        // reordenarse entre requests y duplicarse/perderse al traer por bloques.
+        .order("id_turno", { ascending: true });
 
-    // Filtros de horario
-    if (filtros?.hora_desde) {
-      query = query.gte("hora", filtros.hora_desde);
-    }
-    if (filtros?.hora_hasta) {
-      query = query.lte("hora", filtros.hora_hasta);
-    }
+      // Aplicar filtros de rango de fechas
+      if (filtros?.fecha_desde) {
+        query = query.gte("fecha", filtros.fecha_desde);
+      }
+      if (filtros?.fecha_hasta) {
+        query = query.lte("fecha", filtros.fecha_hasta);
+      }
 
-    // Filtro por estados (múltiples valores)
-    if (filtros?.estados && filtros.estados.length > 0) {
-      query = query.in("estado", filtros.estados);
-    }
+      // Filtro por especialistas (múltiples valores)
+      if (filtros?.especialista_ids && filtros.especialista_ids.length > 0) {
+        query = query.in("id_especialista", filtros.especialista_ids);
+      }
 
-    // Filtro por pacientes (múltiples IDs)
-    if (filtros?.paciente_id) {
-      query = query.eq("id_paciente", filtros.paciente_id);
-    }
+      // Filtro por especialidades (múltiples valores)
+      if (filtros?.especialidad_ids && filtros.especialidad_ids.length > 0) {
+        query = query.in("id_especialidad", filtros.especialidad_ids);
+      } else if (!filtros?.es_pilates && idPilates) {
+        query = query.neq("id_especialidad", idPilates);
+      } else if (filtros?.es_pilates === true && idPilates) {
+        query = query.eq("id_especialidad", idPilates);
+      }
 
-    // Búsqueda libre por nombre/apellido del paciente (joined via !inner arriba).
-    if (hasSearch) {
-      query = query.or(
-        `nombre.ilike.%${search}%,apellido.ilike.%${search}%`,
-        { referencedTable: "paciente" }
-      );
-    }
+      // Filtros de horario
+      if (filtros?.hora_desde) {
+        query = query.gte("hora", filtros.hora_desde);
+      }
+      if (filtros?.hora_hasta) {
+        query = query.lte("hora", filtros.hora_hasta);
+      }
+
+      // Filtro por estados (múltiples valores)
+      if (filtros?.estados && filtros.estados.length > 0) {
+        query = query.in("estado", filtros.estados);
+      }
+
+      // Filtro por pacientes (múltiples IDs)
+      if (filtros?.paciente_id) {
+        query = query.eq("id_paciente", filtros.paciente_id);
+      }
+
+      // Búsqueda libre por nombre/apellido del paciente (joined via !inner arriba).
+      if (hasSearch) {
+        query = query.or(
+          `nombre.ilike.%${search}%,apellido.ilike.%${search}%`,
+          { referencedTable: "paciente" }
+        );
+      }
+
+      return query;
+    };
 
     if (shouldPaginate) {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
-      query = query.range(from, to);
-    }
 
-    const { data, error, count } = await query;
+      const { data, error, count } = await buildQuery().range(from, to);
 
-    if (error) {
-      console.error("Error al obtener turnos con filtros:", error);
-      return { success: false, error: error.message };
-    }
+      if (error) {
+        console.error("Error al obtener turnos con filtros:", error);
+        return { success: false, error: error.message };
+      }
 
-    if (shouldPaginate) {
       const total = count ?? 0;
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -336,7 +345,25 @@ export async function obtenerTurnosConFiltros(filtros?: {
       };
     }
 
-    return { success: true, data };
+    // Sin paginación explícita (calendario, pilates, dashboard) PostgREST corta
+    // la respuesta en `db-max-rows` (1000 por defecto en Supabase) SIN avisar:
+    // el rango pedido se truncaba a los turnos más antiguos y el resto del
+    // trimestre aparecía vacío. Traemos por bloques hasta agotar el rango.
+    const rows: any[] = [];
+    for (let offset = 0; ; offset += POSTGREST_MAX_ROWS) {
+      const { data, error } = await buildQuery().range(offset, offset + POSTGREST_MAX_ROWS - 1);
+
+      if (error) {
+        console.error("Error al obtener turnos con filtros:", error);
+        return { success: false, error: error.message };
+      }
+
+      rows.push(...(data ?? []));
+
+      if (!data || data.length < POSTGREST_MAX_ROWS) break;
+    }
+
+    return { success: true, data: rows };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };
