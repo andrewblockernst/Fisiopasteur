@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { selectAll } from "@/lib/supabase/select-all";
 import { Tables } from "@/types/database.types";
 import { obtenerUsuarioActual } from "@/lib/auth/usuario-actual";
 import { esAdmin } from "@/lib/constants/roles";
@@ -71,6 +72,36 @@ async function obtenerFiltroEspecialista(): Promise<
     return { ok: true, idEspecialista: usuario.id_usuario };
 }
 
+/**
+ * Trae TODOS los turnos del rango, no las primeras 1000.
+ *
+ * Las cinco métricas de este archivo cuentan en JS sobre las filas que llegan,
+ * así que un corte silencioso de PostgREST no da error: da números mal. Sobre
+ * un rango de meses eso pasa sin que nadie lo note.
+ */
+async function traerTurnosDelRango(
+    columnas: string,
+    fechaInicio: string,
+    fechaFin: string,
+    idEspecialista: string | null
+) {
+    const supabase = await createClient();
+
+    return selectAll<any>((from, to) => {
+        let query = supabase
+            .from("turno")
+            .select(columnas)
+            // Orden total para que el paginado por bloques sea estable.
+            .order("id_turno", { ascending: true })
+            .gte("fecha", fechaInicio)
+            .lte("fecha", fechaFin);
+
+        if (idEspecialista) query = query.eq("id_especialista", idEspecialista);
+
+        return query.range(from, to);
+    });
+}
+
 export async function getAnalisisNoShows(
     fechaInicio?: string,
     fechaFin?: string
@@ -90,22 +121,17 @@ export async function getAnalisisNoShows(
     const filtro = await obtenerFiltroEspecialista();
     if (!filtro.ok) return { success: false, error: filtro.error };
 
-    const supabase = await createClient();
-    let query = supabase
-        .from("turno")
-        .select("*")
-        .gte("fecha", fechaInicio)
-        .lte("fecha", fechaFin);
-    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
-    const { data: turnos, error } = await query;
+    const resultado = await traerTurnosDelRango("*", fechaInicio, fechaFin, filtro.idEspecialista);
 
     const duracion = performance.now() - inicio;
     console.log(`⏱️ Consulta tardó ${duracion.toFixed(2)}ms`);
 
-    if (error) {
-        console.error("Error consultando turnos:", error);
-        return { success: false, error: `Error en BD: ${error.message}` };
+    if (!resultado.success) {
+        console.error("Error consultando turnos:", resultado.error);
+        return { success: false, error: `Error en BD: ${resultado.error}` };
     }
+
+    const turnos = resultado.data;
 
     const totalTurnos = turnos?.length || 0;
     const turnosAtendidos = turnos?.filter((t: any) => t.estado === "atendido").length || 0;
@@ -138,10 +164,8 @@ export async function getNoShowsPorEspecialista(
     const filtro = await obtenerFiltroEspecialista();
     if (!filtro.ok) return { success: false, error: filtro.error };
 
-    const supabase = await createClient();
-    let query = supabase
-        .from("turno")
-        .select(`
+    const resultado = await traerTurnosDelRango(
+        `
       id_turno,
       estado,
       usuario:id_especialista (
@@ -149,16 +173,18 @@ export async function getNoShowsPorEspecialista(
         nombre,
         apellido
       )
-    `)
-        .gte("fecha", fechaInicio)
-        .lte("fecha", fechaFin);
-    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
-    const { data: turnos, error } = await query;
+    `,
+        fechaInicio,
+        fechaFin,
+        filtro.idEspecialista
+    );
 
-    if (error) {
-        console.error("Error consultando especialistas:", error);
-        return { success: false, error: `Error en BD: ${error.message}` };
+    if (!resultado.success) {
+        console.error("Error consultando especialistas:", resultado.error);
+        return { success: false, error: `Error en BD: ${resultado.error}` };
     }
+
+    const turnos = resultado.data;
 
     const especialistasMap = new Map<string, {
         id_especialista: string;
@@ -219,16 +245,11 @@ export async function getNoShowsPorHorario(
     const filtro = await obtenerFiltroEspecialista();
     if (!filtro.ok) return { success: false, error: filtro.error };
 
-    const supabase = await createClient();
-    let query = supabase
-        .from("turno")
-        .select("estado, hora")
-        .gte("fecha", fechaInicio)
-        .lte("fecha", fechaFin);
-    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
-    const { data: turnos, error } = await query;
+    const resultado = await traerTurnosDelRango("estado, hora", fechaInicio, fechaFin, filtro.idEspecialista);
 
-    if (error) return { success: false, error: `Error en BD: ${error.message}` };
+    if (!resultado.success) return { success: false, error: `Error en BD: ${resultado.error}` };
+
+    const turnos = resultado.data;
 
     const horarios: { [key: string]: { programados: number; atendidos: number; cancelados: number } } = {
         mañana: { programados: 0, atendidos: 0, cancelados: 0 },
@@ -270,16 +291,11 @@ export async function getNoShowsPorDia(
     const filtro = await obtenerFiltroEspecialista();
     if (!filtro.ok) return { success: false, error: filtro.error };
 
-    const supabase = await createClient();
-    let query = supabase
-        .from("turno")
-        .select("estado, fecha")
-        .gte("fecha", fechaInicio)
-        .lte("fecha", fechaFin);
-    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
-    const { data: turnos, error } = await query;
+    const resultado = await traerTurnosDelRango("estado, fecha", fechaInicio, fechaFin, filtro.idEspecialista);
 
-    if (error) return { success: false, error: `Error en BD: ${error.message}` };
+    if (!resultado.success) return { success: false, error: `Error en BD: ${resultado.error}` };
+
+    const turnos = resultado.data;
 
     const diasMap = new Map<string, { programados: number; atendidos: number; cancelados: number }>();
     const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -325,16 +341,11 @@ export async function getTendenciaNoShows(
     const filtro = await obtenerFiltroEspecialista();
     if (!filtro.ok) return { success: false, error: filtro.error };
 
-    const supabase = await createClient();
-    let query = supabase
-        .from("turno")
-        .select("estado, fecha")
-        .gte("fecha", fechaInicio)
-        .lte("fecha", fechaFin);
-    if (filtro.idEspecialista) query = query.eq("id_especialista", filtro.idEspecialista);
-    const { data: turnos, error } = await query;
+    const resultado = await traerTurnosDelRango("estado, fecha", fechaInicio, fechaFin, filtro.idEspecialista);
 
-    if (error) return { success: false, error: `Error en BD: ${error.message}` };
+    if (!resultado.success) return { success: false, error: `Error en BD: ${resultado.error}` };
+
+    const turnos = resultado.data;
 
     const tendenciaMap = new Map<string, { programados: number; atendidos: number; cancelados: number }>();
 

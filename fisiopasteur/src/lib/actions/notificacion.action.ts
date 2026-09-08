@@ -91,7 +91,11 @@ export async function obtenerEstadoNotificaciones(): Promise<Resultado> {
     .ilike("mensaje", "%[RECORDATORIO%")
     // Vencidas (pasado) + próximas hasta 7 días adelante; el resto queda fuera para no saturar.
     .lte("fecha_programada", en7d)
-    .order("fecha_programada", { ascending: true });
+    .order("fecha_programada", { ascending: true })
+    // Mismo cap explícito que `recientesQuery`: es un panel de monitoreo con
+    // paginación client-side, y el orden ascendente deja primero las urgentes.
+    // Sin esto el corte lo ponía db-max-rows en silencio.
+    .limit(500);
 
   let recientesQuery = supabase
     .from("notificacion")

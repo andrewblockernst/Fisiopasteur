@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { selectAll } from "@/lib/supabase/select-all";
 import { dayjs, todayYmd, ARG_TIMEZONE, parseYmd } from "@/lib/dayjs";
 import { ROLES } from "@/lib/constants/roles";
 import { obtenerUsuarioActual } from "@/lib/auth/usuario-actual";
@@ -131,16 +132,28 @@ async function fetchTurnosRango(
   selectFields: string,
 ) {
   const supabase = await createClient();
-  let query = supabase
-    .from("turno")
-    .select(selectFields)
-    .gte("fecha", rango.inicio.format("YYYY-MM-DD"))
-    .lte("fecha", rango.fin.format("YYYY-MM-DD"));
 
-  if (filtroEspecialistaId) {
-    query = query.eq("id_especialista", filtroEspecialistaId);
-  }
-  return await query;
+  // Los KPIs se agregan en JS sobre las filas que llegan, así que un corte
+  // silencioso en 1000 daría números mal sin ningún error visible. Devolvemos
+  // la misma forma { data, error } que esperaban los callers.
+  const resultado = await selectAll<any>((from, to) => {
+    let query = supabase
+      .from("turno")
+      .select(selectFields)
+      // Orden total para que el paginado por bloques sea estable.
+      .order("id_turno", { ascending: true })
+      .gte("fecha", rango.inicio.format("YYYY-MM-DD"))
+      .lte("fecha", rango.fin.format("YYYY-MM-DD"));
+
+    if (filtroEspecialistaId) {
+      query = query.eq("id_especialista", filtroEspecialistaId);
+    }
+    return query.range(from, to);
+  });
+
+  return resultado.success
+    ? { data: resultado.data, error: null }
+    : { data: null, error: { message: resultado.error } };
 }
 
 interface SnapshotRow {
@@ -320,6 +333,7 @@ export async function obtenerProximosTurnos(): Promise<ProximoTurno[]> {
     const ahora = dayjs().tz(ARG_TIMEZONE).format("HH:mm:ss");
 
     let query = supabase
+      // unbounded-ok: turnos que faltan de HOY, un solo día.
       .from("turno")
       .select(
         `
@@ -413,15 +427,23 @@ export async function obtenerOcupacionBoxes(
     const numeroByBox = new Map(boxes.map((b) => [b.id_box, b.numero]));
 
     // 2. Turnos del rango que ocupan box (con hora).
-    const { data: turnosRaw, error: errorTurnos } = await supabase
-      .from("turno")
-      .select("id_turno, fecha, hora, id_box")
-      .gte("fecha", inicioStr)
-      .lte("fecha", finStr)
-      .in("estado", ["programado", "pendiente", "atendido"])
-      .not("id_box", "is", null);
+    // Sin filtro de especialista, un rango de meses pasa las 1000 filas y la
+    // ocupación de boxes saldría subestimada sin ningún error.
+    const resultadoTurnos = await selectAll<any>((from, to) =>
+      supabase
+        .from("turno")
+        .select("id_turno, fecha, hora, id_box")
+        .order("id_turno", { ascending: true })
+        .gte("fecha", inicioStr)
+        .lte("fecha", finStr)
+        .in("estado", ["programado", "pendiente", "atendido"])
+        .not("id_box", "is", null)
+        .range(from, to)
+    );
 
-    if (errorTurnos) return { success: false, error: errorTurnos.message };
+    if (!resultadoTurnos.success) return { success: false, error: resultadoTurnos.error };
+
+    const turnosRaw = resultadoTurnos.data;
 
     type TurnoRaw = { id_turno: number; fecha: string; hora: string | null; id_box: number };
     const turnos: OcupacionTurno[] = ((turnosRaw as TurnoRaw[] | null) ?? [])

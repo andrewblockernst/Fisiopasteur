@@ -56,6 +56,21 @@ src/
 ### Supabase
 - Tipos auto-generados con `npm run types:generate` — no editar `database.types.ts`.
 - Tres clients distintos en `src/lib/supabase/`: server, browser, middleware. Usar el correcto según contexto.
+- **Toda query que devuelva una lista necesita techo explícito.** PostgREST corta
+  en `db-max-rows` (1000) y NO devuelve error: entrega las primeras 1000 filas y
+  listo. Sin techo explícito, una tabla que crece empieza a perder datos en
+  silencio (fue el bug del calendario: medio trimestre invisible, dos veces).
+  Opciones: `selectAll()` de `@/lib/supabase/select-all` para traer el rango
+  completo por bloques, `.range()`/`.limit()` si el corte es una decisión, o
+  `.single()`/`.maybeSingle()` si es una fila. Si la tabla no puede crecer,
+  marcarlo con `// unbounded-ok: <razón>`.
+- `selectAll()` exige **orden total**: agregar la PK como último `.order()`. Sin
+  desempate, dos filas iguales en la clave de orden se reordenan entre requests
+  y se duplican o se pierden al cruzar el borde de un bloque.
+- `npm run check:queries` falla si aparece un SELECT de lista sin techo sobre
+  una tabla que crece. Corre solo en cada `npm run build` (vía `prebuild`), así
+  que también corta el deploy. No está en `lint` porque `next lint` no funciona
+  desde Next 16.
 
 ### Formularios
 - React Hook Form + `zodResolver`. Schemas Zod compartidos entre cliente y server action.

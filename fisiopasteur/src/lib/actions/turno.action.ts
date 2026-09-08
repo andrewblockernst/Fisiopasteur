@@ -2,6 +2,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { selectAll } from "@/lib/supabase/select-all";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import type { Database } from "@/types/database.types";
@@ -104,64 +105,6 @@ export async function obtenerTurno(id: number): Promise<
   }
 }
 
-// Obtener todos los turnos (con filtros básicos)
-export async function obtenerTurnos(filtros?: {
-  fecha?: string;
-  especialista_id?: string;
-  paciente_id?: number;
-  estado?: string;
-}) {
-  const supabase = await createClient();
-
-  try {
-    let query = supabase
-      .from("turno")
-      .select(`
-        *,
-        paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email),
-        especialista:id_especialista(id_usuario, nombre, apellido, color),
-        especialidad:id_especialidad(id_especialidad, nombre),
-        box:id_box(id_box, numero),
-        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
-      `)
-      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
-      .order("fecha", { ascending: true })
-      .order("hora", { ascending: true });
-
-    // Aplicar filtros si existen
-    if (filtros?.fecha) {
-      query = query.eq("fecha", filtros.fecha);
-    }
-    if (typeof filtros?.especialista_id === "string" && filtros.especialista_id !== undefined) {
-      query = query.eq("id_especialista", filtros.especialista_id);
-    }
-    if (typeof filtros?.paciente_id === "number") {
-      query = query.eq("id_paciente", filtros.paciente_id);
-    }
-    if (typeof filtros?.estado === "string") {
-      query = query.eq("estado", filtros.estado);
-    }
-
-    const idPilates = await obtenerIdPilates();
-
-    if (idPilates) {
-      query = query.neq("id_especialidad", idPilates);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error al obtener turnos:", error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, data };
-  } catch (error) {
-    console.error("Error inesperado:", error);
-    return { success: false, error: "Error inesperado" };
-  }
-}
-
 // Obtener ids de boxes disponibles para validar disponibilidad
 export async function obtenerTurnosParaValidarBoxes(
   fecha: string,
@@ -237,90 +180,96 @@ export async function obtenerTurnosConFiltros(filtros?: {
       ? `paciente:id_paciente!inner(id_paciente, nombre, apellido, dni, telefono, email)`
       : `paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, email)`;
 
-    let query = supabase
-      .from("turno")
-      .select(`
-        *,
-        ${pacienteSelect},
-        especialista:id_especialista!inner(
-          id_usuario,
-          nombre,
-          apellido,
-          color,
-          especialidad:id_especialidad(id_especialidad, nombre)
-        ),
-        especialidad:id_especialidad(id_especialidad, nombre),
-        box:id_box(id_box, numero),
-        grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
-      `, shouldPaginate ? { count: "exact" } : undefined)
-      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
-      .order("fecha", { ascending: true })
-      .order("hora", { ascending: true });
-
-    // Aplicar filtros de rango de fechas
-    if (filtros?.fecha_desde) {
-      query = query.gte("fecha", filtros.fecha_desde);
-    }
-    if (filtros?.fecha_hasta) {
-      query = query.lte("fecha", filtros.fecha_hasta);
-    }
-
-    // Filtro por especialistas (múltiples valores)
-    if (filtros?.especialista_ids && filtros.especialista_ids.length > 0) {
-      query = query.in("id_especialista", filtros.especialista_ids);
-    }
-
     const idPilates = await obtenerIdPilates();
 
-    // Filtro por especialidades (múltiples valores)
-    if (filtros?.especialidad_ids && filtros.especialidad_ids.length > 0) {
-      query = query.in("id_especialidad", filtros.especialidad_ids);
-    } else if (!filtros?.es_pilates && idPilates) {
-      query = query.neq("id_especialidad", idPilates);
-    } else if (filtros?.es_pilates === true && idPilates) {
-      query = query.eq("id_especialidad", idPilates);
-    }
+    const buildQuery = () => {
+      let query = supabase
+        // unbounded-ok: buildQuery() no ejecuta nada. El .range() lo aplican sus
+        // dos consumidores: el paginado explícito y el selectAll() de más abajo.
+        .from("turno")
+        .select(`
+          *,
+          ${pacienteSelect},
+          especialista:id_especialista!inner(
+            id_usuario,
+            nombre,
+            apellido,
+            color,
+            especialidad:id_especialidad(id_especialidad, nombre)
+          ),
+          especialidad:id_especialidad(id_especialidad, nombre),
+          box:id_box(id_box, numero),
+          grupo_tratamiento:id_grupo_tratamiento(id_grupo, cantidad_turnos_planificados)
+        `, shouldPaginate ? { count: "exact" } : undefined)
+        .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
+        .order("fecha", { ascending: true })
+        .order("hora", { ascending: true })
+        // Desempate estable: sin él, dos turnos con misma fecha+hora pueden
+        // reordenarse entre requests y duplicarse/perderse al traer por bloques.
+        .order("id_turno", { ascending: true });
 
-    // Filtros de horario
-    if (filtros?.hora_desde) {
-      query = query.gte("hora", filtros.hora_desde);
-    }
-    if (filtros?.hora_hasta) {
-      query = query.lte("hora", filtros.hora_hasta);
-    }
+      // Aplicar filtros de rango de fechas
+      if (filtros?.fecha_desde) {
+        query = query.gte("fecha", filtros.fecha_desde);
+      }
+      if (filtros?.fecha_hasta) {
+        query = query.lte("fecha", filtros.fecha_hasta);
+      }
 
-    // Filtro por estados (múltiples valores)
-    if (filtros?.estados && filtros.estados.length > 0) {
-      query = query.in("estado", filtros.estados);
-    }
+      // Filtro por especialistas (múltiples valores)
+      if (filtros?.especialista_ids && filtros.especialista_ids.length > 0) {
+        query = query.in("id_especialista", filtros.especialista_ids);
+      }
 
-    // Filtro por pacientes (múltiples IDs)
-    if (filtros?.paciente_id) {
-      query = query.eq("id_paciente", filtros.paciente_id);
-    }
+      // Filtro por especialidades (múltiples valores)
+      if (filtros?.especialidad_ids && filtros.especialidad_ids.length > 0) {
+        query = query.in("id_especialidad", filtros.especialidad_ids);
+      } else if (!filtros?.es_pilates && idPilates) {
+        query = query.neq("id_especialidad", idPilates);
+      } else if (filtros?.es_pilates === true && idPilates) {
+        query = query.eq("id_especialidad", idPilates);
+      }
 
-    // Búsqueda libre por nombre/apellido del paciente (joined via !inner arriba).
-    if (hasSearch) {
-      query = query.or(
-        `nombre.ilike.%${search}%,apellido.ilike.%${search}%`,
-        { referencedTable: "paciente" }
-      );
-    }
+      // Filtros de horario
+      if (filtros?.hora_desde) {
+        query = query.gte("hora", filtros.hora_desde);
+      }
+      if (filtros?.hora_hasta) {
+        query = query.lte("hora", filtros.hora_hasta);
+      }
+
+      // Filtro por estados (múltiples valores)
+      if (filtros?.estados && filtros.estados.length > 0) {
+        query = query.in("estado", filtros.estados);
+      }
+
+      // Filtro por pacientes (múltiples IDs)
+      if (filtros?.paciente_id) {
+        query = query.eq("id_paciente", filtros.paciente_id);
+      }
+
+      // Búsqueda libre por nombre/apellido del paciente (joined via !inner arriba).
+      if (hasSearch) {
+        query = query.or(
+          `nombre.ilike.%${search}%,apellido.ilike.%${search}%`,
+          { referencedTable: "paciente" }
+        );
+      }
+
+      return query;
+    };
 
     if (shouldPaginate) {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
-      query = query.range(from, to);
-    }
 
-    const { data, error, count } = await query;
+      const { data, error, count } = await buildQuery().range(from, to);
 
-    if (error) {
-      console.error("Error al obtener turnos con filtros:", error);
-      return { success: false, error: error.message };
-    }
+      if (error) {
+        console.error("Error al obtener turnos con filtros:", error);
+        return { success: false, error: error.message };
+      }
 
-    if (shouldPaginate) {
       const total = count ?? 0;
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -336,7 +285,17 @@ export async function obtenerTurnosConFiltros(filtros?: {
       };
     }
 
-    return { success: true, data };
+    // Sin paginación explícita (calendario, pilates, dashboard) PostgREST corta
+    // la respuesta en `db-max-rows` SIN avisar: el rango pedido se truncaba a
+    // los turnos más antiguos y el resto del trimestre aparecía vacío.
+    const resultado = await selectAll<any>((from, to) => buildQuery().range(from, to));
+
+    if (!resultado.success) {
+      console.error("Error al obtener turnos con filtros:", resultado.error);
+      return { success: false, error: resultado.error };
+    }
+
+    return { success: true, data: resultado.data };
   } catch (error) {
     console.error("Error inesperado:", error);
     return { success: false, error: "Error inesperado" };
@@ -753,6 +712,7 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
       after(async () => {
         try {
           const { data: notifAntiguas } = await supabase
+            // unbounded-ok: notificaciones de UN turno, son un puñado.
             .from("notificacion")
             .select("id_notificacion, mensaje")
             .eq("id_turno", id)
@@ -1152,6 +1112,7 @@ export async function obtenerAgendaEspecialista(
     const idPilates = await obtenerIdPilates();
 
     const { data, error } = await supabase
+      // unbounded-ok: un especialista en UN día, nunca llega a 1000 turnos.
       .from("turno")
       // Campos minimos requeridos por los consumidores actuales del frontend
       .select("id_turno, hora, estado")
@@ -1198,6 +1159,7 @@ export async function obtenerSlotsOcupados(
     const idPilates = await obtenerIdPilates();
 
     let queryEspecialista = supabase
+      // unbounded-ok: un especialista en UN día.
       .from("turno")
       .select("id_turno, hora")
       .eq("id_especialista", especialista_id!)
@@ -1228,6 +1190,7 @@ export async function obtenerSlotsOcupados(
 
     if (hayPacienteSeleccionado) {
       const { data: turnosPaciente, error: errorPaciente } = await supabase
+        // unbounded-ok: un paciente en UN día.
         .from("turno")
         .select("id_turno, hora")
         .eq("id_paciente", pacienteId)
@@ -1306,6 +1269,7 @@ export async function verificarDisponibilidadPilates(
     const horasSolapadas = horasOverlapPilates(horaSinSeg);
 
     const { data, error } = await supabase
+      // unbounded-ok: UN día y un puñado de horas solapadas.
       .from("turno")
       .select("id_turno, id_especialista, estado, hora")
       .eq("fecha", fecha)
@@ -1369,6 +1333,7 @@ export async function verificarDisponibilidad(
       const horasSolapadas = horasOverlapPilates(horaSinSeg);
 
       const { data: pilatesTurnos, error: errorPilates } = await supabase
+        // unbounded-ok: UN día y un puñado de horas solapadas.
         .from("turno")
         .select("id_turno, hora, id_especialista")
         .eq("fecha", fecha)
@@ -1392,6 +1357,7 @@ export async function verificarDisponibilidad(
 
     // ============= LÓGICA NORMAL PARA OTRAS ESPECIALIDADES =============
     let query = supabase
+      // unbounded-ok: un especialista en UN día y UNA hora.
       .from("turno")
       .select("id_turno, estado, hora, id_especialidad")
       .eq("fecha", fecha)
@@ -1533,28 +1499,36 @@ export async function verificarDisponibilidadPaquete(params: {
     const minMinutos = Math.min(...minutosObjetivo) - DISPONIBILIDAD_MINUTOS_RANGO;
     const maxMinutos = Math.max(...minutosObjetivo) + DISPONIBILIDAD_MINUTOS_RANGO;
 
-    let query = supabase
-      .from("turno")
-      .select("fecha, hora, id_especialista, id_box")
-      .gte("fecha", fechas[0])
-      .lte("fecha", fechas[fechas.length - 1])
-      .gte("hora", fromMinutesToTime(minMinutos))
-      .lte("hora", fromMinutesToTime(maxMinutos))
-      .neq("estado", "cancelado")
-      .neq("estado", "eliminado");
+    // Detección de conflictos: si la respuesta se truncara, dejaríamos pasar
+    // superposiciones. Un paquete largo con horarios variados abre una ventana
+    // de meses × muchas horas, así que el techo de 1000 es alcanzable.
+    const resultado = await selectAll<any>((from, to) => {
+      let query = supabase
+        .from("turno")
+        .select("fecha, hora, id_especialista, id_box")
+        .order("id_turno", { ascending: true })
+        .gte("fecha", fechas[0])
+        .lte("fecha", fechas[fechas.length - 1])
+        .gte("hora", fromMinutesToTime(minMinutos))
+        .lte("hora", fromMinutesToTime(maxMinutos))
+        .neq("estado", "cancelado")
+        .neq("estado", "eliminado");
 
-    if (id_box !== null && id_box !== undefined) {
-      query = query.or(`id_especialista.eq.${id_especialista},id_box.eq.${id_box}`);
-    } else {
-      query = query.eq("id_especialista", id_especialista);
+      if (id_box !== null && id_box !== undefined) {
+        query = query.or(`id_especialista.eq.${id_especialista},id_box.eq.${id_box}`);
+      } else {
+        query = query.eq("id_especialista", id_especialista);
+      }
+
+      return query.range(from, to);
+    });
+
+    if (!resultado.success) {
+      console.error("Error al verificar disponibilidad por paquete:", resultado.error);
+      return { success: false, error: resultado.error };
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error al verificar disponibilidad por paquete:", error);
-      return { success: false, error: error.message };
-    }
+    const data = resultado.data;
 
     const turnosPorFecha = new Map<string, Array<{ inicio: number; id_especialista: string; id_box: number | null }>>();
 
@@ -1720,24 +1694,32 @@ export async function verificarDisponibilidadPaquetePilates(params: {
     const fechasUnicas = Array.from(new Set(slots.map((s) => s.fecha))).sort();
 
     // Query: todos los turnos de Pilates en el rango, sin filtrar por especialista.
-    let query = supabase
-      .from("turno")
-      .select("id_turno, fecha, hora")
-      .eq("id_especialidad", idPilates)
-      .gte("fecha", fechasUnicas[0])
-      .lte("fecha", fechasUnicas[fechasUnicas.length - 1])
-      .neq("estado", "cancelado")
-      .neq("estado", "eliminado");
+    // Sin especialista y sobre un rango de meses esto pasa las 1000 filas, y un
+    // corte silencioso haría pasar conflictos como si no existieran.
+    const resultado = await selectAll<any>((from, to) => {
+      let query = supabase
+        .from("turno")
+        .select("id_turno, fecha, hora")
+        .order("id_turno", { ascending: true })
+        .eq("id_especialidad", idPilates)
+        .gte("fecha", fechasUnicas[0])
+        .lte("fecha", fechasUnicas[fechasUnicas.length - 1])
+        .neq("estado", "cancelado")
+        .neq("estado", "eliminado");
 
-    if (id_turno_excluir != null) {
-      query = query.neq("id_turno", id_turno_excluir);
+      if (id_turno_excluir != null) {
+        query = query.neq("id_turno", id_turno_excluir);
+      }
+
+      return query.range(from, to);
+    });
+
+    if (!resultado.success) {
+      console.error("Error verificarDisponibilidadPaquetePilates:", resultado.error);
+      return { success: false as const, error: resultado.error };
     }
 
-    const { data, error } = await query;
-    if (error) {
-      console.error("Error verificarDisponibilidadPaquetePilates:", error);
-      return { success: false as const, error: error.message };
-    }
+    const data = resultado.data;
 
     const toMinutes = (hm: string): number => {
       const [h, m] = hm.slice(0, 5).split(":").map(Number);
@@ -1803,6 +1785,7 @@ export async function verificarDisponibilidadParaActualizacion(
       const horasSolapadas = horasOverlapPilates(horaSinSeg);
 
       const { data: pilatesTurnos, error: errorPilates } = await supabase
+        // unbounded-ok: UN día y un puñado de horas solapadas.
         .from("turno")
         .select("id_turno, hora")
         .eq("fecha", fecha)
@@ -1826,6 +1809,7 @@ export async function verificarDisponibilidadParaActualizacion(
     }
 
     let query = supabase
+      // unbounded-ok: un especialista en UN día.
       .from("turno")
       .select("id_turno, id_especialidad")
       .eq("fecha", fecha)
@@ -2206,24 +2190,31 @@ export async function obtenerEstadisticasTurnos(fecha_desde?: string, fecha_hast
   const supabase = await createClient();
 
   try {
-    let query = supabase
-      .from("turno")
-      .select("estado, created_at, fecha, id_especialista")
-      .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
+    // Los totales se cuentan en JS y las fechas son opcionales: sin rango esto
+    // lee la tabla entera, y truncada daría estadísticas mal sin ningún error.
+    const resultado = await selectAll<any>((from, to) => {
+      let query = supabase
+        .from("turno")
+        .select("estado, created_at, fecha, id_especialista")
+        .order("id_turno", { ascending: true })
+        .neq("estado", "eliminado"); // ✅ Excluir turnos eliminados
 
-    if (fecha_desde) {
-      query = query.gte("fecha", fecha_desde);
-    }
-    if (fecha_hasta) {
-      query = query.lte("fecha", fecha_hasta);
+      if (fecha_desde) {
+        query = query.gte("fecha", fecha_desde);
+      }
+      if (fecha_hasta) {
+        query = query.lte("fecha", fecha_hasta);
+      }
+
+      return query.range(from, to);
+    });
+
+    if (!resultado.success) {
+      console.error("Error al obtener estadísticas:", resultado.error);
+      return { success: false, error: resultado.error };
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error al obtener estadísticas:", error);
-      return { success: false, error: error.message };
-    }
+    const data = resultado.data;
 
     const total = data.length;
     const porEstado = data.reduce((acc: any, turno) => {
@@ -2274,24 +2265,32 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
 
     console.log("obtenerHistorialClinicoPorPaciente - pacienteId:", pacienteId, " (tipo:", typeof pacienteId, ")");
 
-    // 1️⃣ Obtener TODOS los turnos del paciente (con y sin grupo)
-    const { data, error } = await supabase
-      .from("turno")
-      .select(`
-        *,
-        especialista:id_especialista(id_usuario, nombre, apellido),
-        especialidad:id_especialidad(id_especialidad, nombre),
-        paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, direccion, fecha_nacimiento)
-      `)
-      .eq("id_paciente", pacienteId)
-      .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
-      .order("fecha", { ascending: true })
-      .order("hora", { ascending: true });
+    // 1️⃣ Obtener TODOS los turnos del paciente (con y sin grupo).
+    // Es el historial clínico completo: un paciente de Pilates de varios años
+    // pasa las 1000 filas, y truncarlo le borraría historia en silencio.
+    const resultado = await selectAll<any>((from, to) =>
+      supabase
+        .from("turno")
+        .select(`
+          *,
+          especialista:id_especialista(id_usuario, nombre, apellido),
+          especialidad:id_especialidad(id_especialidad, nombre),
+          paciente:id_paciente(id_paciente, nombre, apellido, dni, telefono, direccion, fecha_nacimiento)
+        `)
+        .eq("id_paciente", pacienteId)
+        .neq("estado", "eliminado") // ✅ Excluir turnos eliminados
+        .order("fecha", { ascending: true })
+        .order("hora", { ascending: true })
+        .order("id_turno", { ascending: true })
+        .range(from, to)
+    );
 
-    if (error) {
-      console.error("❌ Error obteniendo historial:", error);
-      return { success: false, error: error.message };
+    if (!resultado.success) {
+      console.error("❌ Error obteniendo historial:", resultado.error);
+      return { success: false, error: resultado.error };
     }
+
+    const data = resultado.data;
 
     // 2️⃣ Obtener los IDs únicos de grupos de tratamiento (filtrar nulls)
     const gruposIds = [...new Set(
@@ -2300,6 +2299,7 @@ export async function obtenerHistorialClinicoPorPaciente(id_paciente: string | n
 
     // 3️⃣ Obtener información de los grupos de tratamiento
     const { data: gruposTratamiento, error: errorGrupos } = await supabase
+      // unbounded-ok: acotado por gruposIds (los grupos de un solo paciente).
       .from("grupo_tratamiento")
       .select("id_grupo, nombre")
       .in("id_grupo", gruposIds);
@@ -2440,6 +2440,9 @@ export async function crearTurnosEnLote(turnos: Array<{
     // ponytail: cargar prefs en bulk una vez. Single source of truth en server.
     const idsPacientesUnicos = Array.from(new Set(turnos.map((t) => parseInt(t.id_paciente))));
     const { data: prefsPacientes } = await supabase
+      // unbounded-ok: acotado por idsPacientesUnicos, que sale de los turnos
+      // de un mismo lote. Un lote de >1000 pacientes distintos rompería la URL
+      // del .in() antes que el techo de filas.
       .from("paciente")
       .select("id_paciente, notif_confirmacion, notif_recordatorios, activo")
       .in("id_paciente", idsPacientesUnicos);
@@ -3263,6 +3266,7 @@ export async function crearPaquetePilates(params: {
     // ponytail: bulk-load prefs (igual que crearTurnosEnLote). Single source of truth.
     const idsPacientesPaquete = Array.from(new Set(turnosCreados.map((t: any) => t.id_paciente).filter((id: any): id is number => typeof id === 'number')));
     const { data: prefsPacientesPaquete } = await supabase
+      // unbounded-ok: acotado por idsPacientesPaquete (los pacientes de un paquete).
       .from("paciente")
       .select("id_paciente, notif_confirmacion, notif_recordatorios, activo")
       .in("id_paciente", idsPacientesPaquete);
