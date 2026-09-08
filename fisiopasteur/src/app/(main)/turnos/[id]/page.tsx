@@ -1,4 +1,4 @@
-import { obtenerTurno, obtenerTurnos } from "@/lib/actions/turno.action";
+import { obtenerTurno } from "@/lib/actions/turno.action";
 import TurnoDetailMobile from "@/componentes/turnos/turno-detail-mobile";
 import { notFound } from "next/navigation";
 import type { TurnoWithRelations } from "@/types";

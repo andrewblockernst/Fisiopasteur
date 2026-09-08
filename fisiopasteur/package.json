@@ -9,7 +9,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "next lint && npm run check:queries",
+    "check:queries": "node scripts/check-unbounded-queries.mjs",
+    "test:select-all": "node --test src/lib/supabase/select-all.test.ts",
     "types:generate": "npx supabase gen types typescript --project-id qasrvhpdcerymjtvcfed > src/lib/database.types.ts"
   },
   "dependencies": {

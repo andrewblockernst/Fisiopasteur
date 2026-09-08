@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { POSTGREST_MAX_ROWS, selectAll } from "@/lib/supabase/select-all";
 import { dayjs, nowIso } from "@/lib/dayjs";
 import { revalidatePath } from "next/cache";
 import type { Database } from "@/lib/database.types";
@@ -85,6 +86,7 @@ export async function obtenerNotificacionesTurno(idTurno: number) {
   
   try {
     const { data, error } = await supabase
+      // unbounded-ok: notificaciones de UN turno, son un puñado.
       .from("notificacion")
       .select("*")
       .eq("id_turno", idTurno)
@@ -124,7 +126,11 @@ export async function obtenerNotificacionesPendientes() {
       `)
       .eq("estado", "pendiente")
       .lte("fecha_programada", ahora)
-      .order("fecha_programada", { ascending: true });
+      .order("fecha_programada", { ascending: true })
+      // Batch explícito: el cron envía y marca como enviadas, así que lo que
+      // no entra en esta corrida lo toma la siguiente. El límite está acá y no
+      // implícito en db-max-rows para que se lea como decisión, no como corte.
+      .limit(POSTGREST_MAX_ROWS);
 
     if (error) {
       console.error("Error obteniendo notificaciones pendientes:", error);
@@ -281,23 +287,32 @@ export async function obtenerEstadisticasNotificaciones(fechaDesde?: string, fec
   const supabase = await getSupabase();
   
   try {
-    let query = supabase
-      .from("notificacion")
-      .select("estado, medio, fecha_envio, fecha_programada");
+    // Las estadísticas se cuentan en JS sobre todas las filas, así que un corte
+    // silencioso en 1000 daría totales mal sin ningún error visible.
+    const resultado = await selectAll<Pick<NotificacionRow, "estado" | "medio" | "fecha_envio" | "fecha_programada">>(
+      (from, to) => {
+        let query = supabase
+          .from("notificacion")
+          .select("estado, medio, fecha_envio, fecha_programada")
+          .order("id_notificacion", { ascending: true });
 
-    if (fechaDesde) {
-      query = query.gte("fecha_programada", fechaDesde);
-    }
-    if (fechaHasta) {
-      query = query.lte("fecha_programada", fechaHasta);
+        if (fechaDesde) {
+          query = query.gte("fecha_programada", fechaDesde);
+        }
+        if (fechaHasta) {
+          query = query.lte("fecha_programada", fechaHasta);
+        }
+
+        return query.range(from, to);
+      }
+    );
+
+    if (!resultado.success) {
+      console.error("Error obteniendo estadísticas:", resultado.error);
+      return { success: false, error: resultado.error };
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error obteniendo estadísticas:", error);
-      return { success: false, error: error.message };
-    }
+    const data = resultado.data;
 
     // Procesar estadísticas
     const total = data.length;
