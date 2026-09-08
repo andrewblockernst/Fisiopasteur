@@ -29,58 +29,58 @@ function validatePacienteData(
   return result.error.issues.map((i) => i.message);
 }
 
-// Verificar si el email ya existe
-async function checkEmailExists(email: string, excludeId?: number): Promise<boolean> {
-    const supabase = await createClient();
+type ChequeoUnicidad =
+  | { ok: true; existe: boolean }
+  | { ok: false; error: string };
 
-    let query = supabase
-    // unbounded-ok: chequeo de unicidad, se resuelve con .single() más abajo.
-    .from("paciente")
-    .select("id_paciente")
-    .eq("email", email);
+const ETIQUETA_CAMPO = {
+  email: "email",
+  dni: "DNI",
+  telefono: "teléfono",
+} as const;
 
-    if (excludeId) {
-    query = query.neq("id_paciente", excludeId);
-  }
-
-  const { data } = await query.single();
-  return !!data;
-}
-
-// Verificar si el documento ya existe
-async function checkDocumentoExists(documento: string, excludeId?: number): Promise<boolean> {
+/**
+ * ¿Ya hay otro paciente con este valor en esta columna?
+ *
+ * Usa `.limit(1)` y mira el largo del array, NO `.single()`. `.single()` pide
+ * `Accept: application/vnd.pgrst.object+json`, con lo cual PostgREST responde
+ * 406/PGRST116 tanto con 0 filas como con 2 o más, y en los tres casos deja
+ * `data` en null. El código anterior descartaba ese error y hacía `!!data`, así
+ * que con 2+ duplicados ya cargados devolvía `false` = "no existe": en cuanto
+ * entraba un duplicado, el chequeo dejaba de detectar duplicados para siempre.
+ * `.maybeSingle()` tampoco alcanza — también da PGRST116 con 2+ filas.
+ *
+ * El error de la query se propaga en vez de hacerse pasar por "no existe":
+ * en un control de unicidad, "no pude verificar" nunca es "está libre".
+ */
+async function existeOtroPacienteCon(
+  columna: keyof typeof ETIQUETA_CAMPO,
+  valor: string,
+  excludeId?: number,
+): Promise<ChequeoUnicidad> {
   const supabase = await createClient();
-  
+
   let query = supabase
-    // unbounded-ok: chequeo de unicidad, se resuelve con .single() más abajo.
     .from("paciente")
     .select("id_paciente")
-    .eq("dni", documento);
+    .eq(columna, valor)
+    .limit(1);
 
   if (excludeId) {
     query = query.neq("id_paciente", excludeId);
   }
 
-  const { data } = await query.single();
-  return !!data;
-}
+  const { data, error } = await query;
 
-// Verificar si el teléfono ya existe
-async function checkTelefonoExists(telefono: string, excludeId?: number): Promise<boolean> {
-  const supabase = await createClient();
-  
-  let query = supabase
-    // unbounded-ok: chequeo de unicidad, se resuelve con .single() más abajo.
-    .from("paciente")
-    .select("id_paciente")
-    .eq("telefono", telefono);
-
-  if (excludeId) {
-    query = query.neq("id_paciente", excludeId);
+  if (error) {
+    console.error(`Error verificando unicidad de ${columna}:`, error);
+    return {
+      ok: false,
+      error: `No se pudo verificar si el ${ETIQUETA_CAMPO[columna]} ya está en uso. Intentá de nuevo.`,
+    };
   }
 
-  const { data } = await query.single();
-  return !!data;
+  return { ok: true, existe: (data?.length ?? 0) > 0 };
 }
 
 // Obtener todos los pacientes con paginación y filtros
@@ -325,18 +325,26 @@ export async function createPaciente(formData: FormData): Promise<CreatePaciente
   }
 
   // Verificar email único
-  if (pacienteData.email && await checkEmailExists(pacienteData.email)) {
-    return { success: false, error: "Ya existe un paciente con este email" };
+  if (pacienteData.email) {
+    const chequeo = await existeOtroPacienteCon("email", pacienteData.email);
+    if (!chequeo.ok) return { success: false, error: chequeo.error };
+    if (chequeo.existe) return { success: false, error: "Ya existe un paciente con este email" };
   }
 
   // Verificar DNI único
-  if (pacienteData.dni && await checkDocumentoExists(pacienteData.dni)) {
-    return { success: false, error: "Ya existe un paciente con este DNI" };
+  if (pacienteData.dni) {
+    const chequeo = await existeOtroPacienteCon("dni", pacienteData.dni);
+    if (!chequeo.ok) return { success: false, error: chequeo.error };
+    if (chequeo.existe) return { success: false, error: "Ya existe un paciente con este DNI" };
   }
 
   // Verificar teléfono único
-  if (await checkTelefonoExists(telefonoNormalizado)) {
-    return { success: false, error: "Ya existe un paciente con este número de teléfono" };
+  {
+    const chequeo = await existeOtroPacienteCon("telefono", telefonoNormalizado);
+    if (!chequeo.ok) return { success: false, error: chequeo.error };
+    if (chequeo.existe) {
+      return { success: false, error: "Ya existe un paciente con este número de teléfono" };
+    }
   }
 
   try {
@@ -410,18 +418,26 @@ export async function updatePaciente(id: number, formData: FormData): Promise<Ac
   }
 
   // Verificar email único (excluyendo el actual)
-  if (updateData.email && await checkEmailExists(updateData.email, id)) {
-    return { success: false, error: "Ya existe otro paciente con este email" };
+  if (updateData.email) {
+    const chequeo = await existeOtroPacienteCon("email", updateData.email, id);
+    if (!chequeo.ok) return { success: false, error: chequeo.error };
+    if (chequeo.existe) return { success: false, error: "Ya existe otro paciente con este email" };
   }
 
   // Verificar documento único (excluyendo el actual)
-  if (updateData.dni && await checkDocumentoExists(updateData.dni, id)) {
-    return { success: false, error: "Ya existe otro paciente con este DNI" };
+  if (updateData.dni) {
+    const chequeo = await existeOtroPacienteCon("dni", updateData.dni, id);
+    if (!chequeo.ok) return { success: false, error: chequeo.error };
+    if (chequeo.existe) return { success: false, error: "Ya existe otro paciente con este DNI" };
   }
 
   // Verificar teléfono único (excluyendo el actual)
-  if (await checkTelefonoExists(telefonoNormalizado, id)) {
-    return { success: false, error: "Ya existe otro paciente con este número de teléfono" };
+  {
+    const chequeo = await existeOtroPacienteCon("telefono", telefonoNormalizado, id);
+    if (!chequeo.ok) return { success: false, error: chequeo.error };
+    if (chequeo.existe) {
+      return { success: false, error: "Ya existe otro paciente con este número de teléfono" };
+    }
   }
 
   try {
