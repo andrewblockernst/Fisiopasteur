@@ -81,10 +81,33 @@ interface TurnoData {
 
 // Función auxiliar para formatear mensajes de turno
 const formatearMensajeTurno = (turno: TurnoData, tipo: 'confirmacion' | 'recordatorio'): string => {
-    const verbo = tipo === 'confirmacion' ? 'confirmarte' : 'recordarte'
+    if (tipo === 'confirmacion') {
+        const nombreCompleto = [turno.pacienteNombre, turno.pacienteApellido].filter(Boolean).join(' ')
+        const mensajeFinal = [
+            'Hola! Soy la secretaria virtual de Fisioterapia Pasteur y te escribo para ✅ *confirmarte tu turno*',
+            '',
+            `Paciente: ${nombreCompleto}`,
+            `Fecha: ${turno.fecha}`,
+            `Hora: ${turno.hora}`,
+            `Profesional: ${turno.profesional}`,
+            `Especialidad: ${turno.especialidad}`,
+            '',
+            '✔️ *Recomendaciones* para tu turno:',
+            '• Llegá 10 minutos antes',
+            '• Traé ropa cómoda',
+            '• *Si no vas a poder asistir, te pedimos que nos avises con al menos 2 horas de anticipación.*',
+            'En caso de no avisar o hacerlo fuera de ese plazo, se cobrará la consulta y te enviaremos los datos para realizar la transferencia.',
+            '',
+            '📍 Pasteur 206, Libertador San Martín',
+            'Ante cualquier consulta, *comunicate directamente con tu especialista, no respondas a este mensaje*',
+            '',
+            '💪 ¡Te esperamos!.'
+        ]
+        return mensajeFinal.join('\n')
+    }
 
     const mensajeFinal = [
-        `Hola! Soy la secretaria virtual de Fisioterapia Pasteur y te escribo para ✅ *${verbo} tu turno*`,
+        'Hola! Soy la secretaria virtual de Fisioterapia Pasteur y te escribo para ✅ *recordarte tu turno*',
         `Paciente: ${turno.pacienteNombre} ${turno.pacienteApellido}`,
         `Fecha: ${turno.fecha}`,
         `Hora: ${turno.hora}`,
