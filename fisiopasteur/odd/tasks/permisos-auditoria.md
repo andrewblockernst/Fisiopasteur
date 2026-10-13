@@ -77,6 +77,10 @@ sanitizar `.or()` (S5).
       Después: 4 triggers, RLS on, SELECT solo authenticated, sin INSERT ni EXECUTE para anon/authenticated.
       Smoke con rollback (UPDATE de paciente con JWT de un usuario): 1 fila UPDATE, actor correcto,
       `cambios` solo `nombre`; 0 filas tras rollback.
+      Prueba manual del usuario (`npm run dev` contra develop): INSERT/UPDATE de paciente y turno, borrado
+      lógico (`estado = eliminado`, se audita como UPDATE), evaluación inicial (INSERT) y evolución (UPDATE de
+      `turno.evolucion_clinica`), todos con el actor correcto. Turno 1253 creado por un usuario para otro
+      especialista: el actor es quien opera, no el especialista. Cron 12/12 `succeeded`.
 - [x] T4. Estampa visible en diálogos de turno, evolución y paciente.
       Ruta: delegated (writer trigger: action + component + 3+ dialogs). Action `obtenerEstampaAuditoria`
       (`auditoria.action.ts`, `requireUsuario`, Zod, 2 queries `.limit(1)`; cast con `// ponytail:` porque
