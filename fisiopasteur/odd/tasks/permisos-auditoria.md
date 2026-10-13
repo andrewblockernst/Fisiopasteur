@@ -72,6 +72,11 @@ sanitizar `.or()` (S5).
       Volumen: el cron (cada 15 min) solo toca turnos que pasan de programado a pendiente: ~1 fila por turno, aceptable.
       TDD: RED `supabase test db` (tabla inexistente, 17 fail) -> GREEN 16/16 (`supabase/tests/auditoria.test.sql`).
       Checks: `supabase db reset --local` exit 0 (37 migraciones), services/guard tests 4 pass, `npm run build` exit 0.
+      Develop (2026-10-13): `supabase test db` local 23/23; precheck sin objetos previos; aplicada en una
+      transacción vía `db query --linked -f` + `migration repair --status applied 20261013120000`.
+      Después: 4 triggers, RLS on, SELECT solo authenticated, sin INSERT ni EXECUTE para anon/authenticated.
+      Smoke con rollback (UPDATE de paciente con JWT de un usuario): 1 fila UPDATE, actor correcto,
+      `cambios` solo `nombre`; 0 filas tras rollback.
 - [x] T4. Estampa visible en diálogos de turno, evolución y paciente.
       Ruta: delegated (writer trigger: action + component + 3+ dialogs). Action `obtenerEstampaAuditoria`
       (`auditoria.action.ts`, `requireUsuario`, Zod, 2 queries `.limit(1)`; cast con `// ponytail:` porque
@@ -117,7 +122,7 @@ sanitizar `.or()` (S5).
 
 ## Hallazgos en develop (fisiopasteur-dev, lectura 2026-10-13)
 
-- Develop tiene las 36 migraciones del repo; solo falta `20261013120000_auditoria`.
+- Develop tiene las 36 migraciones del repo; faltaba `20261013120000_auditoria` (aplicada después, ver T3).
 - Drift: `paciente.notif_confirmacion` y `paciente.notif_recordatorios` existen en develop y el código
   las usa, pero ninguna migración las crea.
 - Seguridad: `anon` conserva EXECUTE sobre todas las funciones de `public` (incluida
