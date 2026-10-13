@@ -85,6 +85,19 @@ sanitizar `.or()` (S5).
       Verificado en Supabase local: embed `usuario:actor(nombre,apellido)` vía PostgREST con JWT authenticated
       devuelve el nombre; anon recibe 42501. Datos de prueba borrados.
       Checks: node --test 11 pass, `supabase test db` 16/16, `tsc --noEmit` 75 errores, `npm run build` exit 0.
+- [x] T5. Fixes de develop: columnas `notif_*` sin migración y EXECUTE de `anon` en RPC.
+      Ruta: inline (2 migraciones SQL chicas + 1 test). Usuario autorizó aplicar en develop
+      (gtrkgzkxxsxaxafxsvcw), sumado a esta rama.
+      `20261013100000_paciente_notif_columns.sql`: `add column if not exists` boolean not null default true
+      (definición copiada de develop). `20261013110000_revoke_execute_anon_rpc.sql`: default privileges de
+      `postgres` (sin anon ni PUBLIC en funciones nuevas; grant explícito a authenticated/service_role porque
+      en local esa entrada no existe) + revoke `public, anon` en las funciones existentes. Solo quita acceso:
+      un grant a authenticated en el loop pisaba el revoke deliberado de la función de trigger de auditoria
+      (lo detectó `auditoria.test.sql` al re-ejecutar).
+      Timestamps anteriores a `auditoria` para que develop quede lineal (auditoria sigue sin aplicar ahí).
+      TDD: RED `rpc_anon.test.sql` 5/7 fallan (columnas ausentes; función nueva ejecutable por anon) ->
+      GREEN tras `db reset`: `supabase test db` 23/23. Re-ejecución de ambas migraciones: sin error, 23/23.
+      Nota: `auditoria` no es re-ejecutable (trigger ya existe); irrelevante para el flujo normal.
 
 ## Progreso
 
@@ -105,7 +118,7 @@ sanitizar `.or()` (S5).
 - Seguridad: `anon` conserva EXECUTE sobre todas las funciones de `public` (incluida
   `actualizar_turnos_pendientes`, SECURITY DEFINER). `fase3` solo revoca `from public`; en cloud
   `anon` tiene grant explícito. El replay local no lo reproduce.
-- Pendiente de decisión del usuario: sumar ambos fixes a esta feature o a una aparte.
+- Resuelto en T5 (misma rama).
 
 ## Próximo paso
 
