@@ -44,8 +44,12 @@ sanitizar `.or()` (S5).
       `usuario_organizacion` ya dropeada) y `20260415140500` (DROP antes de cambiar tipo de retorno).
       Evidencia: `supabase start -x vector,logflare` exit 0; 11 tablas = `database.types.ts`;
       funciones: local tiene 2 extra (`actualizar_clase_pilates_rpc`, `bulk_actualizar_estado_turnos`)
-      → tipos desactualizados, no migraciones (deuda de tipos, fase 1).
-- [ ] T1. Sacar `"use server"` de las services; confirmar que ningún client component las importa.
+      → tipos desactualizados, no migraciones (deuda de tipos, fase 1). Commit: `347c194`.
+- [x] T1. Sacar `"use server"` de las services; confirmar que ningún client component las importa.
+      Ruta: inline (3 ediciones mecánicas de 1 línea). Importadores: solo `turno.action.ts` y 3 route
+      handlers ya protegidos (`requireSesion` / `requireCronSecret`).
+      TDD: RED `services-no-server-actions.test.ts` (3 expuestas) → GREEN (1 pass).
+      Checks: `tsc --noEmit` 76 errores (= base), `npm run build` exit 0. RDD: off (global).
 - [ ] T2. Guards: `requireUsuario` en actions de escritura; `requireOwnerOfTurno` → sesión válida.
 - [ ] T3. Migración `auditoria` + trigger sobre turno, evolucion_clinica, paciente, evaluacion_inicial; test en local.
 - [ ] T4. Estampa visible en diálogos de turno, evolución y paciente.
