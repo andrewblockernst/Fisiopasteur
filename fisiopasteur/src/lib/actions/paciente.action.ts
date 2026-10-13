@@ -7,7 +7,7 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types"
 import { normalizePhoneNumber } from "@/lib/utils/phone.utils";
 import type { ActionResult } from "@/lib/actions/action-result";
 import { pacienteCreateSchema, pacienteUpdateSchema } from "@/lib/schemas/paciente.schema";
-import { requireAdmin } from "@/lib/auth/guards";
+import { requireUsuario, requireAdmin } from "@/lib/auth/guards";
 
 type Paciente = Tables<"paciente">;
 type PacienteInsert = TablesInsert<"paciente">;
@@ -298,6 +298,9 @@ export async function searchPacientes(searchTerm: string): Promise<
 
 // Crear nuevo paciente
 export async function createPaciente(formData: FormData): Promise<CreatePacienteResult> {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
 
   // ✅ Normalizar número de teléfono al formato internacional
@@ -391,6 +394,9 @@ export async function createPaciente(formData: FormData): Promise<CreatePaciente
 
 // Actualizar paciente
 export async function updatePaciente(id: number, formData: FormData): Promise<ActionResult<Paciente>> {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
 
   // ✅ Normalizar número de teléfono al formato internacional
@@ -556,6 +562,9 @@ export async function getHistorialClinico(idPaciente: number) {
 
 // Agregar observación a la historia clínica
 export async function agregarObservacion(idPaciente: number, observaciones: string): Promise<ActionResult<any>> {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
 
   // 1. Buscar el último turno del paciente
@@ -591,6 +600,9 @@ export async function agregarObservacion(idPaciente: number, observaciones: stri
 
 // Editar observación (solo si está dentro de los 5 minutos)
 export async function editarObservacion(idEvolucion: number, texto: string): Promise<ActionResult<any>> {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
 
   // Buscar la evolución clínica en la tabla correcta
@@ -658,6 +670,9 @@ export async function getEvolucionesClinicas(idPaciente: number) {
 
 // Agregar evolución clínica
 export async function agregarEvolucionClinica(idTurno: number, observaciones: string): Promise<ActionResult<any>> {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
   
   const { data, error } = await supabase
@@ -702,6 +717,9 @@ export async function actualizarPreferenciasNotificacion(
   id: number,
   prefs: { notif_confirmacion: boolean; notif_recordatorios: boolean },
 ): Promise<{ success: boolean; error?: string }> {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("paciente")

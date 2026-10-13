@@ -50,7 +50,17 @@ sanitizar `.or()` (S5).
       handlers ya protegidos (`requireSesion` / `requireCronSecret`).
       TDD: RED `services-no-server-actions.test.ts` (3 expuestas) → GREEN (1 pass).
       Checks: `tsc --noEmit` 76 errores (= base), `npm run build` exit 0. RDD: off (global). Commit: `fb782d3`.
-- [ ] T2. Guards: `requireUsuario` en actions de escritura; `requireOwnerOfTurno` → sesión válida.
+- [x] T2. Guards: `requireUsuario` en actions de escritura; `requireOwnerOfTurno` → sesión válida.
+      Ruta: delegated (writer trigger: ~12 action files). `requireOwnerOfTurno` eliminado; sus 4 usos
+      en `turno.action.ts` ahora usan `requireUsuario()` (el "no encontrado" lo siguen reportando los
+      SELECT posteriores de cada action; `actualizarTurno` no cambia). 19 actions nuevas con guard:
+      turno 12, paciente 6, evaluacionInicial 1. Exentas (con razón en el test): `resetPassword`,
+      `sincronizarUsuarioAuth` (sin sesión por diseño), `guardarPrecioUsuarioEspecialidad` y
+      `actualizarPerfil` (ya validan `auth.getUser()` inline). No tocado: `updatePassword`.
+      TDD: RED `actions-escritura-con-guard.test.ts` (24 actions sin guard + `requireOwnerOfTurno`
+      presente, 2 fail) → GREEN (3 pass).
+      Checks: `tsc --noEmit` 75 errores (base 76), `npm run build` exit 0, services test 1 pass,
+      select-all 4 tests pass (el proceso `node --test` no termina en esta máquina; ver Entorno).
 - [ ] T3. Migración `auditoria` + trigger sobre turno, evolucion_clinica, paciente, evaluacion_inicial; test en local.
 - [ ] T4. Estampa visible en diálogos de turno, evolución y paciente.
 
@@ -66,4 +76,4 @@ sanitizar `.or()` (S5).
 
 ## Próximo paso
 
-T2.
+T3.
