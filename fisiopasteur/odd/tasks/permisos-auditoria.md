@@ -72,7 +72,19 @@ sanitizar `.or()` (S5).
       Volumen: el cron (cada 15 min) solo toca turnos que pasan de programado a pendiente: ~1 fila por turno, aceptable.
       TDD: RED `supabase test db` (tabla inexistente, 17 fail) -> GREEN 16/16 (`supabase/tests/auditoria.test.sql`).
       Checks: `supabase db reset --local` exit 0 (37 migraciones), services/guard tests 4 pass, `npm run build` exit 0.
-- [ ] T4. Estampa visible en diálogos de turno, evolución y paciente.
+- [x] T4. Estampa visible en diálogos de turno, evolución y paciente.
+      Ruta: delegated (writer trigger: action + component + 3+ dialogs). Action `obtenerEstampaAuditoria`
+      (`auditoria.action.ts`, `requireUsuario`, Zod, 2 queries `.limit(1)`; cast con `// ponytail:` porque
+      `database.types.ts` no incluye `auditoria`), reducción pura en `src/lib/auditoria/estampa.ts`, componente
+      `EstampaAuditoria` (TanStack Query, `['auditoria', tabla, id]`; sin invalidación: refetch al remontar).
+      Montada en: `detalle-turno-dialog` (turno), `turno-detail-mobile` (turno), `datos-paciente` y footer de
+      `editar-paciente-dialog` (paciente), `tabla-historial` y `historial-clinico-mobile` (evolución: es el campo
+      `turno.evolucion_clinica`, estampa de `turno`, solo al editar para no hacer N consultas por fila).
+      No cableada: `evaluacion-inicial-modal` (recibe `idGrupo`, no el id de `evaluacion_inicial`).
+      TDD: RED `estampa.test.ts` (módulo inexistente) -> GREEN 7 pass.
+      Verificado en Supabase local: embed `usuario:actor(nombre,apellido)` vía PostgREST con JWT authenticated
+      devuelve el nombre; anon recibe 42501. Datos de prueba borrados.
+      Checks: node --test 11 pass, `supabase test db` 16/16, `tsc --noEmit` 75 errores, `npm run build` exit 0.
 
 ## Progreso
 
@@ -87,4 +99,4 @@ sanitizar `.or()` (S5).
 
 ## Próximo paso
 
-T4.
+Cerrar feature: revisión del usuario en local, luego PR a develop (con su OK). Aplicar migración en prod solo con aprobación.

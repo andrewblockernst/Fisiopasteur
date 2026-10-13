@@ -7,6 +7,7 @@ import { dayjs, diffMsFromNow } from "@/lib/dayjs";
 import { Check, Edit2, X, Calendar, Ban, Clock, ClipboardList } from "lucide-react";
 import { EvaluacionInicialModal } from "./evaluacion-inicial-modal";
 import BaseDialog from "@/componentes/dialog/base-dialog";
+import { EstampaAuditoria } from "@/componentes/auditoria/estampa-auditoria";
 import { Input, Textarea, IconButton } from "@/componentes/ui";
 
 interface Turno {
@@ -338,7 +339,8 @@ export function TablaHistorialClinico({ grupo, onActualizar }: Props) {
                           </p>
                         )}
                       </div>
-                      
+                      <EstampaAuditoria tabla="turno" id={turno.id_turno} />
+
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => handleGuardarEvolucion(turno.id_turno)}

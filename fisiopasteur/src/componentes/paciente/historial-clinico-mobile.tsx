@@ -6,6 +6,7 @@ import { useToastStore } from "@/stores/toast-store";
 import { dayjs, diffMsFromNow } from "@/lib/dayjs";
 import { Check, Edit2, X, ChevronDown, ChevronUp } from "lucide-react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
+import { EstampaAuditoria } from "@/componentes/auditoria/estampa-auditoria";
 import { Input, Textarea, IconButton, Button } from "@/componentes/ui";
 
 interface Turno {
@@ -356,6 +357,7 @@ export function HistorialClinicoMobile({ pacienteId }: HistorialClinicoMobilePro
                                     Solo editable durante los primeros 5 minutos.
                                   </p>
                                 )}
+                                <EstampaAuditoria tabla="turno" id={turno.id_turno} />
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => handleGuardarEvolucion(turno.id_turno)}
