@@ -98,6 +98,11 @@ sanitizar `.or()` (S5).
       TDD: RED `rpc_anon.test.sql` 5/7 fallan (columnas ausentes; función nueva ejecutable por anon) ->
       GREEN tras `db reset`: `supabase test db` 23/23. Re-ejecución de ambas migraciones: sin error, 23/23.
       Nota: `auditoria` no es re-ejecutable (trigger ya existe); irrelevante para el flujo normal.
+      Develop (2026-10-13 ~23:07 UTC): aplicadas vía `db query --linked -f` + `migration repair --status applied`
+      (no `db push`, que habría aplicado también `auditoria`). Antes: anon HTTP 200 en `auth_bcrypt_hash`.
+      Después: anon 401/42501 en `auth_bcrypt_hash` y `actualizar_turnos_pendientes`; anon 0/19, authenticated
+      19/19; `obtener_boxes_disponibles_rpc` y `dashboard_kpis_snapshot` OK como authenticated; cron
+      (`postgres`, */15) `succeeded` a las 23:15. `fisio-bot` usa SERVICE_ROLE_KEY: no afectado.
 
 ## Progreso
 
@@ -122,5 +127,5 @@ sanitizar `.or()` (S5).
 
 ## Próximo paso
 
-Decidir los fixes de develop; luego revisión del usuario, PR a develop (con su OK). Migraciones en
-remoto solo con aprobación.
+Prod (qasrvhpdcerymjtvcfed, PG15): precheck de solo lectura (columnas `notif_*`, última migración,
+owner de funciones, anon EXECUTE, rol del cron) y aplicar solo con OK del usuario. Luego PR a develop.
