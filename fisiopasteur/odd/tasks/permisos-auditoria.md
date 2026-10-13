@@ -97,6 +97,17 @@ sanitizar `.or()` (S5).
 - `supabase start -x vector,logflare` (vector no monta el socket de Colima).
 - `node --test select-all.test.ts` se cuelga en Node 26 (preexistente, fuera de alcance).
 
+## Hallazgos en develop (fisiopasteur-dev, lectura 2026-10-13)
+
+- Develop tiene las 36 migraciones del repo; solo falta `20261013120000_auditoria`.
+- Drift: `paciente.notif_confirmacion` y `paciente.notif_recordatorios` existen en develop y el código
+  las usa, pero ninguna migración las crea.
+- Seguridad: `anon` conserva EXECUTE sobre todas las funciones de `public` (incluida
+  `actualizar_turnos_pendientes`, SECURITY DEFINER). `fase3` solo revoca `from public`; en cloud
+  `anon` tiene grant explícito. El replay local no lo reproduce.
+- Pendiente de decisión del usuario: sumar ambos fixes a esta feature o a una aparte.
+
 ## Próximo paso
 
-Cerrar feature: revisión del usuario en local, luego PR a develop (con su OK). Aplicar migración en prod solo con aprobación.
+Decidir los fixes de develop; luego revisión del usuario, PR a develop (con su OK). Migraciones en
+remoto solo con aprobación.
