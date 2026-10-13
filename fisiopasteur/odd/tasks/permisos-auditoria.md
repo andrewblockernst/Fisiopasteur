@@ -40,8 +40,9 @@ sanitizar `.or()` (S5).
 
 - [x] T0. Verificar que las migraciones del repo levantan el schema completo en Supabase local.
       Ruta: inline. No levantaban; el usuario aprobó guards de replay en migraciones históricas
-      (no cambian prod: Supabase rastrea por versión). Guards: `20260306172743` (UPDATE desde
-      `usuario_organizacion` ya dropeada) y `20260415140500` (DROP antes de cambiar tipo de retorno).
+      (no cambian prod: Supabase rastrea por versión). `20260306172743`: se ELIMINÓ el backfill
+      duplicado desde `usuario_organizacion` (white label dado de baja; el backfill real está en
+      `remove_multi_org`). `20260415140500`: DROP antes de cambiar tipo de retorno.
       Evidencia: `supabase start -x vector,logflare` exit 0; 11 tablas = `database.types.ts`;
       funciones: local tiene 2 extra (`actualizar_clase_pilates_rpc`, `bulk_actualizar_estado_turnos`)
       → tipos desactualizados, no migraciones (deuda de tipos, fase 1). Commit: `347c194`.
