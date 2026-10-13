@@ -62,7 +62,16 @@ sanitizar `.or()` (S5).
       presente, 2 fail) → GREEN (3 pass).
       Checks: `tsc --noEmit` 75 errores (base 76), `npm run build` exit 0, services test 1 pass,
       select-all 4 tests pass (el proceso `node --test` no termina en esta máquina; ver Entorno).
-- [ ] T3. Migración `auditoria` + trigger sobre turno, evolucion_clinica, paciente, evaluacion_inicial; test en local.
+- [x] T3. Migración `auditoria` + trigger sobre turno, evolucion_clinica, paciente, evaluacion_inicial; test en local.
+      Ruta: delegated (preparation + migration + pgTAP). Migración `20261013120000_auditoria.sql`.
+      Diseño: tabla `auditoria(id, tabla, registro_id, operacion, actor, fecha, cambios)`; una función
+      `registrar_auditoria()` SECURITY DEFINER (PK por `TG_ARGV[0]`), trigger AFTER I/U/D por fila en las 4 tablas.
+      `actor` = `auth.uid()` solo si existe en `usuario` (si no, NULL = Sistema). UPDATE guarda solo columnas
+      cambiadas `{col:{old,new}}`; si solo cambió `updated_at` no escribe; DELETE guarda la fila vieja.
+      RLS: SELECT authenticated `using(true)`; sin policies de escritura; grants revocados salvo SELECT.
+      Volumen: el cron (cada 15 min) solo toca turnos que pasan de programado a pendiente: ~1 fila por turno, aceptable.
+      TDD: RED `supabase test db` (tabla inexistente, 17 fail) -> GREEN 16/16 (`supabase/tests/auditoria.test.sql`).
+      Checks: `supabase db reset --local` exit 0 (37 migraciones), services/guard tests 4 pass, `npm run build` exit 0.
 - [ ] T4. Estampa visible en diálogos de turno, evolución y paciente.
 
 ## Progreso
@@ -74,7 +83,8 @@ sanitizar `.or()` (S5).
 - Docker vía Colima (`colima start`). El Supabase de `san3dblock` usa los mismos puertos: frenarlo antes.
 - `supabase/.temp/storage-version` (cache de `supabase link`) fija una imagen no pública; se movió a un lado.
 - `supabase start -x vector,logflare` (vector no monta el socket de Colima).
+- `node --test select-all.test.ts` se cuelga en Node 26 (preexistente, fuera de alcance).
 
 ## Próximo paso
 
-T3.
+T4.
