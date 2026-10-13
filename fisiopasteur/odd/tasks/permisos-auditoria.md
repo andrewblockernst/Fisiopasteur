@@ -49,7 +49,7 @@ sanitizar `.or()` (S5).
       Ruta: inline (3 ediciones mecánicas de 1 línea). Importadores: solo `turno.action.ts` y 3 route
       handlers ya protegidos (`requireSesion` / `requireCronSecret`).
       TDD: RED `services-no-server-actions.test.ts` (3 expuestas) → GREEN (1 pass).
-      Checks: `tsc --noEmit` 76 errores (= base), `npm run build` exit 0. RDD: off (global).
+      Checks: `tsc --noEmit` 76 errores (= base), `npm run build` exit 0. RDD: off (global). Commit: `fb782d3`.
 - [ ] T2. Guards: `requireUsuario` en actions de escritura; `requireOwnerOfTurno` → sesión válida.
 - [ ] T3. Migración `auditoria` + trigger sobre turno, evolucion_clinica, paciente, evaluacion_inicial; test en local.
 - [ ] T4. Estampa visible en diálogos de turno, evolución y paciente.
@@ -66,4 +66,4 @@ sanitizar `.or()` (S5).
 
 ## Próximo paso
 
-T1.
+T2.
