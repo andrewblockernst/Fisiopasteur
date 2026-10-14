@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { nowIso } from "@/lib/dayjs";
 import { revalidatePath } from "next/cache";
+import { requireUsuario } from "@/lib/auth/guards";
 import { evaluacionInicialSchema } from "@/lib/schemas/evaluacion-inicial.schema";
 
 // Los turnos sin grupo de tratamiento llegan con un ID sintético "individual-<id_turno>"
@@ -45,6 +46,9 @@ export async function obtenerEvaluacionInicial(idGrupo: string) {
 }
 
 export async function guardarEvaluacionInicial(idGrupo: string, datos: any) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
 
   // Validación contra schema (textos con cota máx, TA con formato, booleans).

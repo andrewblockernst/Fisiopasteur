@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import BaseDialog from "@/componentes/dialog/base-dialog";
+import { EstampaAuditoria } from "@/componentes/auditoria/estampa-auditoria";
 import { actualizarTurno } from "@/lib/actions/turno.action";
 import { useToastStore } from "@/stores/toast-store";
 import {
@@ -364,6 +365,9 @@ export function DetalleTurnoDialog({
               {dayjs(turno.updated_at).format("DD/MM/YYYY HH:mm")}
             </div>
           )}
+        </div>
+        <div className="mt-2">
+          <EstampaAuditoria tabla="turno" id={turno.id_turno} />
         </div>
       </div>
     </div>

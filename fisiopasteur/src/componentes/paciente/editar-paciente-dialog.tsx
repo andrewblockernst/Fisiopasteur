@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Tables } from "@/types/database.types";
 import BaseDialog from "../dialog/base-dialog";
+import { EstampaAuditoria } from "@/componentes/auditoria/estampa-auditoria";
 import { DiscardChangesDialog } from "../dialog/discard-changes-dialog";
 import {
     Button,
@@ -197,6 +198,8 @@ export function EditarPacienteDialog({ isOpen, onClose, paciente, handleToast }:
                     </div>
                 }
                 footer={
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <EstampaAuditoria tabla="paciente" id={paciente.id_paciente} />
                     <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
                         <Button type="button" variant="outline" onClick={form.requestClose} disabled={form.isSubmitting}>
                             Cancelar
@@ -204,6 +207,7 @@ export function EditarPacienteDialog({ isOpen, onClose, paciente, handleToast }:
                         <Button form={FORM_ID} variant="primary" {...form.submitButtonProps}>
                             Actualizar paciente
                         </Button>
+                    </div>
                     </div>
                 }
                 isOpen={isOpen}

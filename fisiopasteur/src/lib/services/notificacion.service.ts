@@ -1,5 +1,3 @@
-"use server";
-
 import { createClient } from "@/lib/supabase/server";
 import { POSTGREST_MAX_ROWS, selectAll } from "@/lib/supabase/select-all";
 import { dayjs, nowIso } from "@/lib/dayjs";

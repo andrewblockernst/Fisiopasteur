@@ -1,5 +1,6 @@
 "use client";
 
+import { EstampaAuditoria } from "@/componentes/auditoria/estampa-auditoria";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -332,6 +333,10 @@ export default function TurnoDetailMobile({
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="px-4 pb-4">
+        <EstampaAuditoria tabla="turno" id={turno.id_turno} />
       </div>
 
       {/* Modal de Edición */}

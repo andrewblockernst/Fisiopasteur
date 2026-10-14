@@ -1,5 +1,3 @@
-"use server";
-
 // import { WhatsAppService } from './whatsapp.service';
 import { createClient } from "../supabase/server";
 import type { TurnoConDetalles } from "@/stores/turno-store";

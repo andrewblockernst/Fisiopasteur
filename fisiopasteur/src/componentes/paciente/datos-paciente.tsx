@@ -1,5 +1,6 @@
 import { formatoNumeroTelefono } from "@/lib/utils";
 import { Tables } from "@/types/database.types";
+import { EstampaAuditoria } from "@/componentes/auditoria/estampa-auditoria";
 import { Printer } from "lucide-react";
 import { TablaHistorialClinico } from "./tabla-historial";
 import { obtenerHistorialClinicoPorPaciente } from "@/lib/actions/turno.action";
@@ -72,6 +73,9 @@ export default function DatosPaciente({ paciente, observaciones }: Props) {
             {paciente.historia_clinica}
           </div>
         )}
+        <div className="sm:col-span-2">
+          <EstampaAuditoria tabla="paciente" id={paciente.id_paciente} />
+        </div>
         <div className="sm:col-span-2 mt-2">
           <Button
             variant="primary"

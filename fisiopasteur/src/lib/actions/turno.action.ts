@@ -15,7 +15,7 @@ import {
   turnoUpdateSchema,
   paqueteSesionesSchema,
 } from "@/lib/schemas/turno.schema";
-import { requireOwnerOfTurno, requireAdmin } from "@/lib/auth/guards";
+import { requireUsuario, requireAdmin } from "@/lib/auth/guards";
 
 type Turno = Database["public"]["Tables"]["turno"]["Row"];
 type TurnoInsert = Database["public"]["Tables"]["turno"]["Insert"];
@@ -314,6 +314,9 @@ export async function crearTurno(
   id_grupo_tratamiento?: string,
   opciones?: { enviarConfirmacion?: boolean },
 ) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
 
   // console.log('Iniciando creación de turno con datos:', datos, 'y recordatorios:', recordatorios);
 
@@ -551,9 +554,9 @@ export async function crearTurno(
 
 
 export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?: { notificar?: boolean }) {
-  const autorizado = await requireOwnerOfTurno(id);
+  const autorizado = await requireUsuario();
   if (!autorizado) {
-    return { success: false, error: "No autorizado para modificar este turno" };
+    return { success: false, error: "No autorizado" };
   }
   const supabase = await createClient();
 
@@ -814,9 +817,9 @@ export async function actualizarTurno(id: number, datos: TurnoUpdate, opciones?:
 
 // Eliminar un turno (soft delete - cambia estado a "eliminado")
 export async function eliminarTurno(id: number, opciones?: { notificar?: boolean }) {
-  const autorizado = await requireOwnerOfTurno(id);
+  const autorizado = await requireUsuario();
   if (!autorizado) {
-    return { success: false, error: "No autorizado para eliminar este turno" };
+    return { success: false, error: "No autorizado" };
   }
   const supabase = await createClient();
 
@@ -908,9 +911,9 @@ export async function eliminarTurno(id: number, opciones?: { notificar?: boolean
 }
 
 export async function marcarComoAtendido(id_turno: number) {
-  const autorizado = await requireOwnerOfTurno(id_turno);
+  const autorizado = await requireUsuario();
   if (!autorizado) {
-    return { success: false, error: "No autorizado para modificar este turno" };
+    return { success: false, error: "No autorizado" };
   }
   const supabase = await createClient();
 
@@ -1025,9 +1028,9 @@ export async function actualizarEstadoTurnosMasivo(
  * Permite cambiar desde: programado, pendiente o atendido (corrección).
  */
 export async function cancelarTurno(id: number, motivo?: string) {
-  const autorizado = await requireOwnerOfTurno(id);
+  const autorizado = await requireUsuario();
   if (!autorizado) {
-    return { success: false, error: "No autorizado para cancelar este turno" };
+    return { success: false, error: "No autorizado" };
   }
   const supabase = await createClient();
 
@@ -2359,6 +2362,9 @@ export async function actualizarEvolucionClinica(
   id_turno: number,
   evolucion_clinica: string
 ) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
 
   try {
@@ -2429,6 +2435,9 @@ export async function crearTurnosEnLote(turnos: Array<{
   dificultad?: 'principiante' | 'intermedio' | 'avanzado';
   es_pilates?: boolean;
 }>, opciones?: { enviarNotificacion?: boolean; tiposRecordatorio?: ('1d' | '2h' | '1h')[] }) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   try {
     const supabase = await createClient();
 
@@ -2618,6 +2627,9 @@ async function enviarNotificacionGrupal(id_paciente: string, turnos: any[]) {
  * con el formato Pilates en lugar de confirmaciones individuales.
  */
 export async function notificarParticipantesPilates(turnosCreados: any[]) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   if (!turnosCreados?.length) return { success: true };
   after(async () => {
     await procesarNotificacionesRepeticion(turnosCreados);
@@ -2630,6 +2642,9 @@ export async function notificarParticipantesPilates(turnosCreados: any[]) {
  * Enviar ANTES de llamar a eliminarTurno para tener los datos disponibles.
  */
 export async function notificarCancelacionPilates(turnoId: number) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   try {
     const supabase = await createClient();
     const { data: turno } = await supabase
@@ -2671,6 +2686,9 @@ export async function notificarCancelacionPilates(turnoId: number) {
 export async function notificarCancelacionesPilates(
   notifs: Array<{ nombre: string; telefono: string; fecha: string; hora: string }>
 ) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   if (!notifs?.length) return { success: true };
   after(async () => {
     for (let i = 0; i < notifs.length; i++) {
@@ -2700,6 +2718,9 @@ export async function notificarModificacionesPilates(
     actual: SnapshotTurnoParaAviso;
   }>
 ) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   if (!notifs?.length) return { success: true };
   after(async () => {
     for (let i = 0; i < notifs.length; i++) {
@@ -2728,6 +2749,9 @@ export async function actualizarGrupoTratamiento(
   id_grupo: string,
   datos: { nombre?: string }
 ) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
 
   try {
@@ -2784,6 +2808,9 @@ export async function actualizarGrupoTratamiento(
  * Solo actualiza turnos en estado "programado"
  */
 export async function actualizarTurnosPendientes() {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   const supabase = await createClient();
 
   try {
@@ -2863,6 +2890,9 @@ export async function crearPaqueteSesiones(params: {
   titulo_tratamiento?: string;
   recordatorios?: ('1h' | '2h' | '3h' | '1d' | '2d')[];
 }) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   try {
     // ============= VALIDACIONES TEMPRANAS =============
     const parsed = paqueteSesionesSchema.safeParse({
@@ -3197,6 +3227,9 @@ export async function crearPaquetePilates(params: {
   enviarNotificacion?: boolean;
   tiposRecordatorio?: ('1h' | '2h' | '3h' | '1d' | '2d')[];
 }) {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   try {
     if (!params.id_pacientes || params.id_pacientes.length === 0) {
       return { success: false, error: 'Seleccioná al menos un participante' };
@@ -3393,6 +3426,9 @@ export async function actualizarClasePilates(params: {
     }
   | { success: false; error: string }
 > {
+  const usuario = await requireUsuario();
+  if (!usuario) return { success: false, error: "No autorizado" };
+
   try {
     if (!params.turno_ids || params.turno_ids.length === 0) {
       return { success: false, error: 'No hay turnos para editar' };

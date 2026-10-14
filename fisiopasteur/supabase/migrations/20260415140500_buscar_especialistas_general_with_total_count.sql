@@ -1,5 +1,9 @@
 -- Devuelve filas de especialista + total_count en una sola RPC para evitar query adicional de conteo.
 
+-- Replay guard: the return type changes from SETOF usuario (20260415124500), which
+-- CREATE OR REPLACE cannot do.
+DROP FUNCTION IF EXISTS public.buscar_especialistas_general(text, integer, text, text, text, integer);
+
 CREATE OR REPLACE FUNCTION public.buscar_especialistas_general(
   search_term text,
   max_rows integer,
