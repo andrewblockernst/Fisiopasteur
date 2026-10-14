@@ -12,7 +12,6 @@ pilates, facturación). **Instancia única — no es multi-tenant.**
 - **React Hook Form + Zod** para formularios
 - **Tailwind v4** + Radix UI primitives + `class-variance-authority`
 - **dayjs** para fechas (NO date-fns, NO moment)
-- **MercadoPago** para pagos
 - Deploy: Vercel · Node >= 24
 
 ## Estructura
