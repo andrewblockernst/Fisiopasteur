@@ -19,8 +19,7 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     // CSP arranca en Report-Only: reporta violaciones en la consola SIN
-    // bloquear, así no rompe nada. Validar en dev (ojo con MercadoPago si se
-    // usa checkout client-side) y después promover la key a
+    // bloquear, así no rompe nada. Validar en dev y después promover la key a
     // "Content-Security-Policy" para que sea enforcing.
     const csp = [
       "default-src 'self'",
